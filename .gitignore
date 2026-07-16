@@ -7,3 +7,6 @@ dist-ssr
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ビルド成果物の配布用zip（リポジトリには含めない）
+*.zip
