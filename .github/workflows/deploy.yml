@@ -40,13 +40,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Pages がまだ有効化されていなくても、公開リポジトリであれば
-      # enablement: true で自動的に有効化する（手動設定を不要にする）
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
