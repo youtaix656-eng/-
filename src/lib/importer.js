@@ -150,7 +150,8 @@ function parseCsv(text) {
   let row = [];
   let field = '';
   let inQuotes = false;
-  const src = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  // 先頭の BOM（Excel 等が付与）を除去してから解析する
+  const src = text.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
@@ -230,7 +231,7 @@ export function importCsv(text) {
 export function importJson(text) {
   let data;
   try {
-    data = JSON.parse(text);
+    data = JSON.parse(String(text).replace(/^﻿/, '')); // 先頭 BOM を除去
   } catch (e) {
     return { questions: [], errors: ['JSONの解析に失敗しました: ' + e.message], warnings: [] };
   }

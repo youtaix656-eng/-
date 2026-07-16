@@ -96,6 +96,24 @@ test('exportCsv → importCsv で四択/○×が保たれる', () => {
   assert.equal(questions[1].answer, 1);
 });
 
+test('先頭のBOM付きCSVでもヘッダを認識する', () => {
+  const csv = '﻿科目,問題文,選択肢,正解,解説\n生理,問X,あ|い|う|え|お,5,解説';
+  const { questions, errors } = importCsv(csv);
+  assert.equal(errors.length, 0);
+  assert.equal(questions[0].subject, '生理');
+  assert.equal(questions[0].answer, 4); // 5番 → index 4（5択）
+});
+
+test('5択を正しく取り込める', () => {
+  const csv = `科目,問題文,選択肢,正解,解説
+経穴,問Y,ア|イ|ウ|エ|オ,3,解説`;
+  const { questions, warnings } = importCsv(csv);
+  assert.equal(questions[0].choices.length, 5);
+  assert.equal(questions[0].answer, 2);
+  // 5択では「選択肢が多い」警告は出ない
+  assert.ok(!warnings.some((w) => w.includes('選択肢が')));
+});
+
 test('問題文が空の行はエラーとして報告される', () => {
   const csv = `科目,問題文,選択肢,正解,解説
 生理,,あ|い,1,解説`;
