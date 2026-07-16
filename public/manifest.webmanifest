@@ -1,0 +1,17 @@
+{
+  "name": "鍼灸国試 対策アプリ",
+  "short_name": "鍼灸国試",
+  "description": "鍼灸国家試験対策の問題演習アプリ。一問一答・音声学習・模擬試験・弱点分析に対応。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f9",
+  "theme_color": "#1f3a5f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

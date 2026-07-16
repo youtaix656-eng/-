@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from './lib/useStore.js';
+import { exportAll } from './lib/storage.js';
 import Home from './components/Home.jsx';
 import Quiz from './components/Quiz.jsx';
 import Review from './components/Review.jsx';
@@ -8,6 +9,7 @@ import Exam from './components/Exam.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Memos from './components/Memos.jsx';
 import Settings from './components/Settings.jsx';
+import Ocr from './components/Ocr.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -17,31 +19,110 @@ const NAV = [
   { id: 'exam', label: '模試', ico: '📝' },
 ];
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function triggerDownload(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function App() {
   const store = useStore();
   const [view, setView] = useState('home');
   const [toast, setToast] = useState(null);
+  const [importText, setImportText] = useState('');
+  const [installPrompt, setInstallPrompt] = useState(null);
 
-  const showToast = (msg) => {
-    setToast(msg);
-  };
+  const showToast = (msg) => setToast(msg);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2200);
     return () => clearTimeout(t);
   }, [toast]);
 
-  // ビュー切り替え時に先頭へスクロール
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view]);
 
+  // PWA インストールプロンプトを捕捉
+  useEffect(() => {
+    const onBip = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', onBip);
+    return () => window.removeEventListener('beforeinstallprompt', onBip);
+  }, []);
+
+  // 全データバックアップ（reminder / 自動バックアップ共通）
+  const doBackup = async (silent = false) => {
+    const data = await exportAll();
+    const stamp = new Date().toISOString().slice(0, 10);
+    triggerDownload(
+      JSON.stringify(data, null, 2),
+      `shinkyu_backup_${stamp}.json`,
+      'application/json'
+    );
+    store.markBackedUp();
+    if (!silent) showToast('バックアップを保存しました');
+  };
+
+  // 起動時の自動バックアップ（1日1回まで）
+  const autoBackupDone = useRef(false);
+  useEffect(() => {
+    if (!store.loaded || autoBackupDone.current) return;
+    autoBackupDone.current = true;
+    const { autoBackupOnStart, lastAutoBackup } = store.settings;
+    if (autoBackupOnStart && Date.now() - (lastAutoBackup || 0) > DAY_MS) {
+      // 履歴が空のときは何もしない
+      if (store.history.length > 0) doBackup(true);
+    }
+  }, [store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const installApp = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  };
+
+  const openOcr = () => setView('ocr');
+  const sendOcrToImport = (csv) => {
+    setImportText(csv);
+    setView('settings');
+  };
+
+  // ---- 初期ロード中 ----
+  if (!store.loaded) {
+    return (
+      <div className="splash">
+        <div className="splash-logo">🩺</div>
+        <div className="splash-title">鍼灸国試 対策アプリ</div>
+        <div className="splash-sub">データを読み込んでいます…</div>
+      </div>
+    );
+  }
+
   const reviewCount = store.reviewQuestions.length;
+  const needBackup =
+    (store.settings.answersSinceBackup || 0) >= (store.settings.backupReminderEvery || 50);
 
   const renderView = () => {
     switch (view) {
       case 'home':
-        return <Home store={store} onNavigate={setView} />;
+        return (
+          <Home
+            store={store}
+            onNavigate={setView}
+            installPrompt={installPrompt}
+            onInstall={installApp}
+          />
+        );
       case 'quiz':
         return <Quiz store={store} />;
       case 'review':
@@ -54,8 +135,18 @@ export default function App() {
         return <Dashboard store={store} />;
       case 'memos':
         return <Memos store={store} />;
+      case 'ocr':
+        return <Ocr onToast={showToast} onSendToImport={sendOcrToImport} />;
       case 'settings':
-        return <Settings store={store} onToast={showToast} />;
+        return (
+          <Settings
+            store={store}
+            onToast={showToast}
+            onOpenOcr={openOcr}
+            importText={importText}
+            onConsumeImportText={() => setImportText('')}
+          />
+        );
       default:
         return <Home store={store} onNavigate={setView} />;
     }
@@ -70,6 +161,7 @@ export default function App() {
       exam: '模擬試験',
       dashboard: '弱点分析',
       memos: 'メモ一覧',
+      ocr: '写真から取り込み',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';
@@ -85,14 +177,7 @@ export default function App() {
             <>
               <button
                 onClick={() => setView('home')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#fff',
-                  fontSize: 18,
-                  padding: 0,
-                  marginRight: 2,
-                }}
+                className="back-btn"
                 aria-label="ホームへ"
               >
                 ‹
@@ -101,12 +186,32 @@ export default function App() {
             </>
           )}
         </h1>
-        {view === 'home' && (
-          <p className="subtitle">過去問ベースで、合格まで着実に。</p>
-        )}
+        {view === 'home' && <p className="subtitle">過去問ベースで、合格まで着実に。</p>}
       </header>
 
-      <main>{renderView()}</main>
+      <main>
+        {/* バックアップ促しバナー */}
+        {needBackup && view !== 'settings' && (
+          <div className="reminder-banner">
+            <span>
+              📌 前回のバックアップから{store.settings.answersSinceBackup}問解きました。データ消失に備えて保存しましょう。
+            </span>
+            <div className="reminder-actions">
+              <button className="btn sm primary" onClick={() => doBackup(false)}>
+                今すぐ保存
+              </button>
+              <button
+                className="btn sm ghost"
+                onClick={() => store.markBackedUp()}
+                aria-label="あとで"
+              >
+                あとで
+              </button>
+            </div>
+          </div>
+        )}
+        {renderView()}
+      </main>
 
       {toast && <div className="toast">{toast}</div>}
 

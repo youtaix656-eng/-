@@ -29,27 +29,27 @@ function normalizeKey(obj, candidates) {
   return '';
 }
 
-// ○×の正解表記を index(0=○, 1=×) に変換
+// ○×の正解表記を index(0=○, 1=×) に変換。判別不能なら -1。
 function parseOxAnswer(raw) {
   const v = String(raw).trim().toLowerCase();
   if (['○', 'o', '◯', '正', '正しい', 'true', '1', '○（正しい）', 'まる'].includes(v)) return 0;
   if (['×', 'x', '✕', '誤', '誤り', 'false', '2', '0', '×（誤り）', 'ばつ'].includes(v)) return 1;
-  return 0;
+  return -1;
 }
 
-// 四択の正解表記を index に変換
+// 四択の正解表記を index に変換。判別不能なら -1。
 function parseChoiceAnswer(raw, choices) {
   const v = String(raw).trim();
   // 番号指定（1始まり）
   const num = Number(v);
-  if (Number.isInteger(num) && num >= 1 && num <= choices.length) return num - 1;
+  if (v !== '' && Number.isInteger(num) && num >= 1 && num <= choices.length) return num - 1;
   // 文字列一致
   const idx = choices.findIndex((c) => c.trim() === v);
   if (idx >= 0) return idx;
   // ア/イ/ウ/エ, a/b/c/d 表記
   const map = { ア: 0, イ: 1, ウ: 2, エ: 3, a: 0, b: 1, c: 2, d: 3, A: 0, B: 1, C: 2, D: 3 };
   if (v in map && map[v] < choices.length) return map[v];
-  return 0;
+  return -1;
 }
 
 let autoId = 0;
@@ -58,11 +58,13 @@ function makeId() {
   return `imp-${Date.now().toString(36)}-${autoId}`;
 }
 
-// 汎用の1レコード → 問題オブジェクト変換
+// 汎用の1レコード → { question, warnings }。取り込み不能なら { error }。
 function recordToQuestion(rec) {
+  const warnings = [];
   const subject = normalizeKey(rec, ['科目', 'subject', 'Subject']) || 'その他';
   const question = normalizeKey(rec, ['問題文', 'question', 'Question', '問題']);
-  if (!question) return null;
+  const image = normalizeKey(rec, ['画像', 'image', 'Image', '画像URL', 'imageUrl']);
+  if (!question && !image) return { error: '問題文が空です。' };
   const explanation = normalizeKey(rec, ['解説', 'explanation', 'Explanation', '説明']);
 
   // すでに choices が配列で来ている場合（JSON）
@@ -84,24 +86,52 @@ function recordToQuestion(rec) {
   let type, answer;
   if (!choices || choices.length < 2) {
     // ○×問題
+    if (choices && choices.length === 1) {
+      warnings.push('選択肢が1つだけのため ○× 問題として扱いました。');
+    }
     type = 'ox';
     choices = OX_CHOICES;
-    // JSON で answer が数値インデックスの場合はそのまま尊重
     if (typeof rec.answer === 'number') {
       answer = rec.answer === 0 ? 0 : 1;
     } else {
       answer = parseOxAnswer(answerRaw);
+      if (answer < 0) {
+        warnings.push(`正解「${answerRaw}」を判別できず ○（正しい）と仮定しました。`);
+        answer = 0;
+      }
     }
   } else {
     type = 'choice';
-    if (typeof rec.answer === 'number' && rec.answer >= 0 && rec.answer < choices.length) {
-      answer = rec.answer;
+    if (typeof rec.answer === 'number') {
+      if (rec.answer >= 0 && rec.answer < choices.length) {
+        answer = rec.answer;
+      } else {
+        warnings.push(`正解番号 ${rec.answer} が選択肢の範囲外です。1番目を仮の正解にしました。`);
+        answer = 0;
+      }
     } else {
       answer = parseChoiceAnswer(answerRaw, choices);
+      if (answer < 0) {
+        // 数字だが範囲外なのか、そもそも一致しないのかを区別して警告する
+        const asNum = Number(String(answerRaw).trim());
+        if (String(answerRaw).trim() !== '' && Number.isInteger(asNum)) {
+          warnings.push(
+            `正解番号 ${answerRaw} が選択肢の範囲外です（1〜${choices.length}）。1番目を仮の正解にしました。`
+          );
+        } else {
+          warnings.push(`正解「${answerRaw}」が選択肢と一致しません。1番目を仮の正解にしました。`);
+        }
+        answer = 0;
+      }
+    }
+    if (choices.length > 4) {
+      warnings.push(`選択肢が${choices.length}個あります（通常は4択）。`);
     }
   }
 
-  return {
+  if (!explanation) warnings.push('解説が空です。');
+
+  const q = {
     id: rec.id ? String(rec.id) : makeId(),
     subject,
     type,
@@ -110,6 +140,8 @@ function recordToQuestion(rec) {
     answer,
     explanation,
   };
+  if (image) q.image = image;
+  return { question: q, warnings };
 }
 
 // ---- CSV パーサ（引用符・改行・カンマのエスケープ対応の簡易実装） ----
@@ -155,13 +187,27 @@ function parseCsv(text) {
   return rows.filter((r) => r.some((c) => String(c).trim() !== ''));
 }
 
+// 取り込んだ問題群の妥当性チェック（ID重複など）
+function collectGlobalWarnings(questions) {
+  const warnings = [];
+  const ids = new Map();
+  questions.forEach((q, i) => {
+    if (ids.has(q.id)) {
+      warnings.push(`ID「${q.id}」が重複しています。`);
+    }
+    ids.set(q.id, i);
+  });
+  return warnings;
+}
+
 export function importCsv(text) {
   const rows = parseCsv(text);
-  if (rows.length === 0) return { questions: [], errors: ['データが空です。'] };
+  if (rows.length === 0) return { questions: [], errors: ['データが空です。'], warnings: [] };
 
   const header = rows[0].map((h) => h.trim());
   const dataRows = rows.slice(1);
   const errors = [];
+  const warnings = [];
   const questions = [];
 
   dataRows.forEach((cols, idx) => {
@@ -169,12 +215,16 @@ export function importCsv(text) {
     header.forEach((h, i) => {
       rec[h] = cols[i] != null ? cols[i] : '';
     });
-    const q = recordToQuestion(rec);
-    if (q) questions.push(q);
-    else errors.push(`${idx + 2}行目: 問題文が空のため取り込めませんでした。`);
+    const res = recordToQuestion(rec);
+    if (res.question) {
+      questions.push(res.question);
+      res.warnings.forEach((w) => warnings.push(`${idx + 2}行目: ${w}`));
+    } else {
+      errors.push(`${idx + 2}行目: ${res.error || '取り込めませんでした。'}`);
+    }
   });
 
-  return { questions, errors };
+  return { questions, errors, warnings: [...warnings, ...collectGlobalWarnings(questions)] };
 }
 
 export function importJson(text) {
@@ -182,19 +232,24 @@ export function importJson(text) {
   try {
     data = JSON.parse(text);
   } catch (e) {
-    return { questions: [], errors: ['JSONの解析に失敗しました: ' + e.message] };
+    return { questions: [], errors: ['JSONの解析に失敗しました: ' + e.message], warnings: [] };
   }
   const arr = Array.isArray(data) ? data : Array.isArray(data.questions) ? data.questions : null;
-  if (!arr) return { questions: [], errors: ['配列形式のJSONを指定してください。'] };
+  if (!arr) return { questions: [], errors: ['配列形式のJSONを指定してください。'], warnings: [] };
 
   const errors = [];
+  const warnings = [];
   const questions = [];
   arr.forEach((rec, idx) => {
-    const q = recordToQuestion(rec);
-    if (q) questions.push(q);
-    else errors.push(`${idx + 1}番目: 問題文が空のため取り込めませんでした。`);
+    const res = recordToQuestion(rec);
+    if (res.question) {
+      questions.push(res.question);
+      res.warnings.forEach((w) => warnings.push(`${idx + 1}番目: ${w}`));
+    } else {
+      errors.push(`${idx + 1}番目: ${res.error || '取り込めませんでした。'}`);
+    }
   });
-  return { questions, errors };
+  return { questions, errors, warnings: [...warnings, ...collectGlobalWarnings(questions)] };
 }
 
 // ファイル内容と名前からフォーマットを判定して取り込む
@@ -219,11 +274,17 @@ export function exportCsv(questions) {
     const s = String(v ?? '');
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
-  const lines = ['科目,問題文,選択肢,正解,解説'];
+  // 画像を含む問題が1つでもあれば画像列を追加する
+  const hasImage = questions.some((q) => q.image);
+  const headerCols = ['科目', '問題文', '選択肢', '正解', '解説'];
+  if (hasImage) headerCols.push('画像');
+  const lines = [headerCols.join(',')];
   questions.forEach((q) => {
     const choices = q.type === 'ox' ? '' : q.choices.join('|');
     const answer = q.type === 'ox' ? (q.answer === 0 ? '○' : '×') : q.answer + 1;
-    lines.push([q.subject, q.question, choices, answer, q.explanation].map(esc).join(','));
+    const row = [q.subject, q.question, choices, answer, q.explanation];
+    if (hasImage) row.push(q.image || '');
+    lines.push(row.map(esc).join(','));
   });
   return lines.join('\n');
 }

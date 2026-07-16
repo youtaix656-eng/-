@@ -1,36 +1,57 @@
-// 学習データの永続化レイヤー
+// 学習データの永続化レイヤー（IndexedDB バックエンド）
 //
-// 端末を閉じても学習履歴が残るよう、以下を localStorage に保存する:
-//   - 取り込んだ問題データ（インポートした問題を含む）
-//   - 学習進捗 / 間隔反復（SRS）状態
+// 端末を閉じても学習履歴が残るよう、以下を IndexedDB に保存する:
+//   - 取り込んだ問題データ（インポートした問題・画像を含む）
+//   - 学習進捗 / 間隔反復（SM-2）状態
 //   - 解答履歴（弱点分析に利用）
 //   - 各問題へのメモ
-//   - アプリ設定（音声速度など）
+//   - アプリ設定
 //
-// localStorage は容量制限（約5MB）があるため、大量データを扱う場合は
-// IndexedDB への移行余地を残しているが、通常の問題数（数千問規模）であれば
-// localStorage で十分永続化できる。
+// 以前のバージョンで localStorage に保存されたデータは、初回アクセス時に
+// 自動で IndexedDB へ移行する。IndexedDB が使えない環境では localStorage に
+// フォールバックする。
 
-const KEYS = {
+import { idbGet, idbSet, idbDelete, idbGetAll, isIdbSupported } from './db.js';
+
+export const KEYS = {
   questions: 'shinkyu:questions',
   srs: 'shinkyu:srs',
   history: 'shinkyu:history',
   memos: 'shinkyu:memos',
   settings: 'shinkyu:settings',
+  migrated: 'shinkyu:migrated',
 };
 
-function read(key, fallback) {
+const useIdb = isIdbSupported();
+
+// ---- 低レベル read/write（IDB優先・localStorageフォールバック） ----
+async function read(key, fallback) {
+  try {
+    if (useIdb) {
+      const v = await idbGet(key);
+      return v === undefined ? fallback : v;
+    }
+  } catch (e) {
+    console.warn('idb read failed, fallback to localStorage', key, e);
+  }
   try {
     const raw = localStorage.getItem(key);
-    if (raw == null) return fallback;
-    return JSON.parse(raw);
+    return raw == null ? fallback : JSON.parse(raw);
   } catch (e) {
     console.warn('storage read failed', key, e);
     return fallback;
   }
 }
 
-function write(key, value) {
+async function write(key, value) {
+  try {
+    if (useIdb) {
+      await idbSet(key, value);
+      return true;
+    }
+  } catch (e) {
+    console.warn('idb write failed, fallback to localStorage', key, e);
+  }
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
@@ -40,60 +61,100 @@ function write(key, value) {
   }
 }
 
+async function remove(key) {
+  try {
+    if (useIdb) await idbDelete(key);
+  } catch (e) {
+    /* noop */
+  }
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    /* noop */
+  }
+}
+
+// ---- localStorage からの一度きりの移行 ----
+export async function migrateFromLocalStorage() {
+  if (!useIdb) return;
+  try {
+    const already = await idbGet(KEYS.migrated);
+    if (already) return;
+    const legacyKeys = [KEYS.questions, KEYS.srs, KEYS.history, KEYS.memos, KEYS.settings];
+    for (const k of legacyKeys) {
+      const raw = localStorage.getItem(k);
+      if (raw != null) {
+        try {
+          await idbSet(k, JSON.parse(raw));
+        } catch (e) {
+          /* 壊れた値はスキップ */
+        }
+      }
+    }
+    await idbSet(KEYS.migrated, true);
+  } catch (e) {
+    console.warn('migration failed', e);
+  }
+}
+
 // ---- 問題データ ----
-export function loadQuestions() {
-  return read(KEYS.questions, null); // null = 未初期化（サンプル投入前）
-}
-export function saveQuestions(questions) {
-  return write(KEYS.questions, questions);
-}
+export const loadQuestions = () => read(KEYS.questions, null);
+export const saveQuestions = (q) => write(KEYS.questions, q);
 
 // ---- SRS 状態 ----
-// srs[questionId] = { box, due, correctStreak, wrongCount, seen, lastResult, lastAnswered }
-export function loadSrs() {
-  return read(KEYS.srs, {});
-}
-export function saveSrs(srs) {
-  return write(KEYS.srs, srs);
-}
+export const loadSrs = () => read(KEYS.srs, {});
+export const saveSrs = (s) => write(KEYS.srs, s);
 
 // ---- 解答履歴 ----
-// history = [{ questionId, subject, correct, at }]
-export function loadHistory() {
-  return read(KEYS.history, []);
-}
-export function saveHistory(history) {
-  return write(KEYS.history, history);
-}
+export const loadHistory = () => read(KEYS.history, []);
+export const saveHistory = (h) => write(KEYS.history, h);
 
 // ---- メモ ----
-// memos[questionId] = 'メモ本文'
-export function loadMemos() {
-  return read(KEYS.memos, {});
-}
-export function saveMemos(memos) {
-  return write(KEYS.memos, memos);
-}
+export const loadMemos = () => read(KEYS.memos, {});
+export const saveMemos = (m) => write(KEYS.memos, m);
 
 // ---- 設定 ----
 const DEFAULT_SETTINGS = {
-  speechRate: 1.0,      // 音声の再生速度
-  speechPitch: 1.0,     // 音声の高さ
-  gapSeconds: 3,        // 問題文→解答の間の秒数
-  voiceURI: '',         // 使用する音声（空なら既定）
+  speechRate: 1.0,
+  speechPitch: 1.0,
+  gapSeconds: 3,
+  voiceURI: '',
+  backupReminderEvery: 50, // この解答数ごとにバックアップを促す
+  answersSinceBackup: 0, // 前回バックアップからの解答数
+  autoBackupOnStart: false, // 起動時に自動でバックアップを書き出す
+  lastAutoBackup: 0, // 最終自動バックアップ日時
 };
-export function loadSettings() {
-  return { ...DEFAULT_SETTINGS, ...read(KEYS.settings, {}) };
+export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await read(KEYS.settings, {})) });
+export const saveSettings = (s) => write(KEYS.settings, s);
+export { DEFAULT_SETTINGS };
+
+// ---- リセット ----
+export async function resetProgress() {
+  await remove(KEYS.srs);
+  await remove(KEYS.history);
 }
-export function saveSettings(settings) {
-  return write(KEYS.settings, settings);
+export async function resetAll() {
+  for (const k of Object.values(KEYS)) await remove(k);
 }
 
-// ---- 全データリセット（設定画面から利用） ----
-export function resetProgress() {
-  localStorage.removeItem(KEYS.srs);
-  localStorage.removeItem(KEYS.history);
+// ---- 全データのバックアップ / 復元 ----
+export async function exportAll() {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    questions: await loadQuestions(),
+    srs: await loadSrs(),
+    history: await loadHistory(),
+    memos: await loadMemos(),
+    settings: await read(KEYS.settings, {}),
+  };
 }
-export function resetAll() {
-  Object.values(KEYS).forEach((k) => localStorage.removeItem(k));
+
+export async function importAll(data) {
+  if (!data || typeof data !== 'object') throw new Error('不正なバックアップデータです');
+  if (Array.isArray(data.questions)) await saveQuestions(data.questions);
+  if (data.srs && typeof data.srs === 'object') await saveSrs(data.srs);
+  if (Array.isArray(data.history)) await saveHistory(data.history);
+  if (data.memos && typeof data.memos === 'object') await saveMemos(data.memos);
+  if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
 }

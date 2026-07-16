@@ -36,6 +36,7 @@ export default function AudioMode({ store }) {
   const indexRef = useRef(0);
   const rateRef = useRef(rate);
   const gapRef = useRef(gap);
+  const wakeLockRef = useRef(null);
 
   useEffect(() => {
     rateRef.current = rate;
@@ -49,12 +50,41 @@ export default function AudioMode({ store }) {
 
   useEffect(() => {
     loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
+    // 画面が復帰したら（再生中なら）WakeLock を取り直す
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && playingRef.current) requestWakeLock();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     // アンマウント時に必ず停止
     return () => {
+      document.removeEventListener('visibilitychange', onVisible);
       cancelSpeech();
       if (abortRef.current) abortRef.current.abort();
+      releaseWakeLock();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 画面スリープを抑止（対応ブラウザのみ）。ながら再生中に画面が消えるのを緩和する。
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator && !wakeLockRef.current) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        wakeLockRef.current.addEventListener?.('release', () => {
+          wakeLockRef.current = null;
+        });
+      }
+    } catch (e) {
+      // 取得できなくても再生は継続する
+    }
+  };
+  const releaseWakeLock = () => {
+    try {
+      wakeLockRef.current?.release();
+    } catch (e) {
+      /* noop */
+    }
+    wakeLockRef.current = null;
+  };
 
   const selectedVoice = () => {
     if (!settings.voiceURI) return voices[0] || null;
@@ -70,12 +100,19 @@ export default function AudioMode({ store }) {
     return t;
   };
 
+  // 問題文（図のみの問題にも対応）
+  const questionText = (q) => {
+    if (q.question) return q.question;
+    if (q.image) return '図を見て答える問題です。画面をご確認ください。';
+    return '';
+  };
+
   // 1問を読み上げる（問題→間→解答）。中断されたら例外を投げる。
   const playOne = async (q, signal) => {
     const voice = selectedVoice();
 
     setPhase(PHASES.QUESTION);
-    await speak(`問題。${q.question}`, { rate: rateRef.current, voice, signal });
+    await speak(`問題。${questionText(q)}`, { rate: rateRef.current, voice, signal });
 
     setPhase(PHASES.GAP);
     await wait(gapRef.current * 1000, signal);
@@ -118,10 +155,12 @@ export default function AudioMode({ store }) {
   const startPlayback = () => {
     if (list.length === 0) return;
     updateSettings({ speechRate: rate, gapSeconds: gap });
+    requestWakeLock();
     runFrom(indexRef.current < list.length ? indexRef.current : 0);
   };
 
   const stopPlayback = () => {
+    releaseWakeLock();
     playingRef.current = false;
     setPlaying(false);
     if (abortRef.current) abortRef.current.abort();
@@ -229,7 +268,10 @@ export default function AudioMode({ store }) {
           </span>
         </div>
         <div className="now-subject">{current.subject}</div>
-        <div className="now-text">{current.question}</div>
+        {current.image && (
+          <img className="now-image" src={current.image} alt="問題の図" loading="lazy" />
+        )}
+        <div className="now-text">{current.question || (current.image ? '図を見て答える問題' : '')}</div>
         {phase === PHASES.ANSWER && (
           <div className="now-answer">
             <strong>
@@ -308,9 +350,12 @@ export default function AudioMode({ store }) {
         </div>
       </div>
 
-      <p className="inline-note" style={{ marginTop: 4 }}>
-        ※ 端末の画面がOFF・ブラウザがバックグラウンドになると、OSの仕様で音声が止まる場合があります。アプリを開いた状態でご利用ください。
-      </p>
+      <div className="audio-note">
+        <strong>🔆 画面をつけたままご利用ください</strong>
+        <p>
+          再生中は画面が消えないように自動で抑制します（対応ブラウザのみ）。ただし端末の画面を手動でOFFにしたり、ブラウザをバックグラウンドにすると、OSの仕様で音声が止まります。ポケットに入れての“ながら再生”には向きません。
+        </p>
+      </div>
     </div>
   );
 }

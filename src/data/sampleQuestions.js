@@ -204,6 +204,17 @@ const sampleQuestions = [
       '得気（響き）にはポリモーダル受容器など深部の感覚受容器が関与するとされる。鍼刺激の鎮痛機序の説明に用いられる。',
   },
   {
+    id: 'sample-image-1',
+    subject: '経絡経穴概論',
+    type: 'choice',
+    question: '図の赤点で示す部位（手関節から上方約2寸、前腕前面のほぼ正中）に位置する経穴はどれか。',
+    image: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSczMjAnIGhlaWdodD0nMjAwJyB2aWV3Qm94PScwIDAgMzIwIDIwMCc+PHJlY3Qgd2lkdGg9JzMyMCcgaGVpZ2h0PScyMDAnIGZpbGw9JyNlZWYyZjcnLz48dGV4dCB4PScxNicgeT0nMjgnIGZvbnQtZmFtaWx5PSdzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjNWI2YjdjJz7liY3ohZXvvIjmiYvjga7jgbLjgonlgbTvvInmqKHlvI/lm7M8L3RleHQ+PHJlY3QgeD0nMTIwJyB5PSc0MCcgd2lkdGg9JzgwJyBoZWlnaHQ9JzE0MCcgcng9JzQwJyBmaWxsPScjZjNkOWMwJyBzdHJva2U9JyNjOGE4ODgnLz48bGluZSB4MT0nMTYwJyB5MT0nNDAnIHgyPScxNjAnIHkyPScxODAnIHN0cm9rZT0nI2M4YTg4OCcgc3Ryb2tlLWRhc2hhcnJheT0nNCA0Jy8+PGNpcmNsZSBjeD0nMTYwJyBjeT0nMTIwJyByPSc3JyBmaWxsPScjYzAzOTJiJy8+PHRleHQgeD0nMTcyJyB5PScxMjQnIGZvbnQtZmFtaWx5PSdzYW5zLXNlcmlmJyBmb250LXNpemU9JzE0JyBmaWxsPScjMWYyYTM3Jz4/PC90ZXh0Pjx0ZXh0IHg9JzYwJyB5PScxNTAnIGZvbnQtZmFtaWx5PSdzYW5zLXNlcmlmJyBmb250LXNpemU9JzEyJyBmaWxsPScjNWI2YjdjJz7miYvplqLnr4DjgYvjgonkuIrmlrkg57SEMuWvuDwvdGV4dD48L3N2Zz4=',
+    choices: ['内関', '外関', '太淵', '神門'],
+    answer: 0,
+    explanation:
+      '内関は手厥陰心包経の絡穴で、手関節横紋の上方2寸、長掌筋腱と橈側手根屈筋腱の間に取る。悪心・動悸などに用いる。外関は前腕後面、太淵・神門は手関節部の穴。',
+  },
+  {
     id: 'sample-kyu-1',
     subject: 'きゅう理論',
     type: 'ox',

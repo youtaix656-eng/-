@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
-import { INTERVALS_DAYS, MAX_BOX } from '../lib/srs.js';
+import { normalize, MATURE_INTERVAL } from '../lib/srs.js';
 
-// 間違えた問題だけを解くモード（間隔反復）
+// 間違えた問題だけを解くモード（間隔反復 / SM-2）
 export default function Review({ store }) {
-  const { dueReviewQuestions, reviewQuestions, memos, recordAnswer, setMemo, srs } = store;
+  const { dueReviewQuestions, reviewQuestions, memos, recordAnswer, setMemo, srs, GRADES } = store;
 
   const [started, setStarted] = useState(false);
   const [order, setOrder] = useState([]);
@@ -19,8 +19,8 @@ export default function Review({ store }) {
     setStarted(true);
   };
 
-  const handleAnswered = (correct) => {
-    recordAnswer(order[idx], correct);
+  const handleAnswered = (correct, grade) => {
+    recordAnswer(order[idx], correct, grade);
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
   };
 
@@ -68,7 +68,7 @@ export default function Review({ store }) {
           </div>
           <div className="tile">
             <div className="num">
-              {reviewQuestions.filter((q) => (srs[q.id]?.box || 0) >= 3).length}
+              {reviewQuestions.filter((q) => normalize(srs[q.id]).interval >= 7).length}
             </div>
             <div className="lbl">定着間近</div>
           </div>
@@ -83,16 +83,15 @@ export default function Review({ store }) {
           復習リストの問題
         </div>
         {reviewQuestions.map((q) => {
-          const st = srs[q.id];
-          const box = st?.box || 0;
-          const nextDays = INTERVALS_DAYS[Math.min(box, MAX_BOX)];
+          const st = normalize(srs[q.id]);
+          const pct = Math.min(100, Math.round((st.interval / MATURE_INTERVAL) * 100));
           return (
             <div className="list-item" key={q.id}>
               <div className="li-subject">{q.subject}</div>
-              <div className="li-q">{q.question}</div>
+              <div className="li-q">{q.question || '（図の問題）'}</div>
               <div className="li-stat">
-                誤答 {st?.wrongCount || 0}回 ・ 定着度 {box}/{MAX_BOX}
-                {box > 0 && ` ・ 次回間隔 約${nextDays}日`}
+                誤答 {st.wrongCount || 0}回 ・ 定着度 {pct}%
+                {st.interval > 0 && ` ・ 次回間隔 約${st.interval}日`}
               </div>
               {memos[q.id] && <div className="li-memo">📝 {memos[q.id]}</div>}
             </div>
@@ -154,6 +153,8 @@ export default function Review({ store }) {
         onSetMemo={setMemo}
         onAnswered={handleAnswered}
         onNext={handleNext}
+        gradeMode
+        GRADES={GRADES}
         isLast={idx + 1 >= order.length}
       />
     </div>

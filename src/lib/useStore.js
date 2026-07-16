@@ -1,55 +1,92 @@
 // アプリ全体の学習データを管理するカスタムフック
-// 問題・SRS・履歴・メモ・設定を保持し、変更を localStorage に永続化する。
+// 問題・SRS・履歴・メモ・設定を保持し、変更を IndexedDB に永続化する。
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as storage from './storage.js';
-import { applyAnswer, emptyState, isInReview, isDue, sortByPriority } from './srs.js';
+import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES } from './srs.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 
 export function useStore() {
-  const [questions, setQuestions] = useState(() => {
-    const saved = storage.loadQuestions();
-    if (saved && saved.length > 0) return saved;
-    // 初回はサンプル問題を投入
-    storage.saveQuestions(sampleQuestions);
-    return sampleQuestions;
-  });
-  const [srs, setSrs] = useState(() => storage.loadSrs());
-  const [history, setHistory] = useState(() => storage.loadHistory());
-  const [memos, setMemos] = useState(() => storage.loadMemos());
-  const [settings, setSettings] = useState(() => storage.loadSettings());
+  const [loaded, setLoaded] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [srs, setSrs] = useState({});
+  const [history, setHistory] = useState([]);
+  const [memos, setMemos] = useState({});
+  const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
 
-  // 永続化（副作用のみ。effect が値を返すと React が cleanup と誤認するため波括弧で包む）
+  // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
   useEffect(() => {
-    storage.saveQuestions(questions);
+    let alive = true;
+    (async () => {
+      await storage.migrateFromLocalStorage();
+      const [q, s, h, m, cfg] = await Promise.all([
+        storage.loadQuestions(),
+        storage.loadSrs(),
+        storage.loadHistory(),
+        storage.loadMemos(),
+        storage.loadSettings(),
+      ]);
+      if (!alive) return;
+      if (q && q.length > 0) {
+        setQuestions(q);
+      } else {
+        setQuestions(sampleQuestions);
+        storage.saveQuestions(sampleQuestions);
+      }
+      setSrs(s || {});
+      setHistory(h || []);
+      setMemos(m || {});
+      setSettings(cfg);
+      setLoaded(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 永続化（初期ロード完了後のみ）
+  const persist = useRef(false);
+  useEffect(() => {
+    persist.current = loaded;
+  }, [loaded]);
+
+  useEffect(() => {
+    if (persist.current) storage.saveQuestions(questions);
   }, [questions]);
   useEffect(() => {
-    storage.saveSrs(srs);
+    if (persist.current) storage.saveSrs(srs);
   }, [srs]);
   useEffect(() => {
-    storage.saveHistory(history);
+    if (persist.current) storage.saveHistory(history);
   }, [history]);
   useEffect(() => {
-    storage.saveMemos(memos);
+    if (persist.current) storage.saveMemos(memos);
   }, [memos]);
   useEffect(() => {
-    storage.saveSettings(settings);
+    if (persist.current) storage.saveSettings(settings);
   }, [settings]);
 
-  // 解答を記録する（履歴とSRSを更新）
-  const recordAnswer = useCallback((question, correct) => {
+  // 解答を記録（grade 省略時は正誤から自動判定）
+  const recordAnswer = useCallback((question, correct, grade) => {
     const now = Date.now();
     setSrs((prev) => ({
       ...prev,
-      [question.id]: applyAnswer(prev[question.id], correct, now),
+      [question.id]:
+        grade != null
+          ? applyGrade(prev[question.id], grade, now)
+          : applyAnswer(prev[question.id], correct, now),
     }));
     setHistory((prev) => [
       ...prev,
       { questionId: question.id, subject: question.subject, correct, at: now },
     ]);
+    // バックアップ促し用のカウンタ
+    setSettings((prev) => ({
+      ...prev,
+      answersSinceBackup: (prev.answersSinceBackup || 0) + 1,
+    }));
   }, []);
 
-  // メモの保存
   const setMemo = useCallback((questionId, text) => {
     setMemos((prev) => {
       const next = { ...prev };
@@ -59,13 +96,11 @@ export function useStore() {
     });
   }, []);
 
-  // 問題データの置き換え / 追加
-  const replaceQuestions = useCallback((newQuestions) => {
-    setQuestions(newQuestions);
-  }, []);
-  const appendQuestions = useCallback((newQuestions) => {
-    setQuestions((prev) => [...prev, ...newQuestions]);
-  }, []);
+  const replaceQuestions = useCallback((newQuestions) => setQuestions(newQuestions), []);
+  const appendQuestions = useCallback(
+    (newQuestions) => setQuestions((prev) => [...prev, ...newQuestions]),
+    []
+  );
 
   const updateSettings = useCallback((patch) => {
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -82,12 +117,37 @@ export function useStore() {
     setQuestions(sampleQuestions);
   }, []);
 
-  // 「間違えた問題（復習対象）」のリスト
-  const reviewQuestions = useMemo(() => {
-    return questions.filter((q) => isInReview(srs[q.id]));
-  }, [questions, srs]);
+  // バックアップ実行後にカウンタをリセット
+  const markBackedUp = useCallback(() => {
+    setSettings((prev) => ({
+      ...prev,
+      answersSinceBackup: 0,
+      lastAutoBackup: Date.now(),
+    }));
+  }, []);
 
-  // いま出題すべき復習問題（期限到来のものを優先度順に）
+  // バックアップから全復元し、state に反映
+  const importBackup = useCallback(async (data) => {
+    await storage.importAll(data);
+    const [q, s, h, m, cfg] = await Promise.all([
+      storage.loadQuestions(),
+      storage.loadSrs(),
+      storage.loadHistory(),
+      storage.loadMemos(),
+      storage.loadSettings(),
+    ]);
+    setQuestions(q || sampleQuestions);
+    setSrs(s || {});
+    setHistory(h || []);
+    setMemos(m || {});
+    setSettings(cfg);
+  }, []);
+
+  const reviewQuestions = useMemo(
+    () => questions.filter((q) => isInReview(srs[q.id])),
+    [questions, srs]
+  );
+
   const dueReviewQuestions = useMemo(() => {
     const inReview = reviewQuestions;
     const due = inReview.filter((q) => isDue(srs[q.id]));
@@ -96,6 +156,7 @@ export function useStore() {
   }, [reviewQuestions, srs]);
 
   return {
+    loaded,
     questions,
     srs,
     history,
@@ -110,6 +171,9 @@ export function useStore() {
     updateSettings,
     resetProgress,
     restoreSamples,
+    markBackedUp,
+    importBackup,
     emptyState,
+    GRADES,
   };
 }

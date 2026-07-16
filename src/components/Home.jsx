@@ -1,13 +1,20 @@
 import { overallStats } from '../lib/stats.js';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
-export default function Home({ store, onNavigate }) {
+export default function Home({ store, onNavigate, installPrompt, onInstall }) {
   const { questions, history, reviewQuestions } = store;
   const overall = overallStats(history);
   const reviewCount = reviewQuestions.length;
 
   return (
     <div className="view">
+      {installPrompt && (
+        <button className="install-btn" onClick={onInstall}>
+          <span>📲 ホーム画面に追加してアプリとして使う</span>
+          <span className="install-cta">追加</span>
+        </button>
+      )}
+
       <div className="home-hero">
         <h2>今日も一歩ずつ</h2>
         <p>合格へ向けて、着実に積み上げましょう。</p>

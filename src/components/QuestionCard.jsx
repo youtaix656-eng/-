@@ -1,39 +1,54 @@
 import { useEffect, useState } from 'react';
 
 // 1問を表示し、解答・正誤判定・解説・メモを扱う共通コンポーネント
-// onAnswered(correct) は解答が確定した時に呼ばれる。
+//
+// gradeMode=false: 選択と同時に記録し「次へ」ボタンを表示（一問一答向け）
+// gradeMode=true : 正解時に むずかしい/ふつう/かんたん の自己評価ボタンを表示し、
+//                  その評価で SM-2 の間隔を調整する（復習モード向け）
 export default function QuestionCard({
   question,
   memo,
   onSetMemo,
-  onAnswered,
+  onAnswered, // (correct, grade?) 解答確定時
   onNext,
   showMemo = true,
-  autoFocusNext = true,
-  nextLabel = '次の問題',
+  gradeMode = false,
+  GRADES,
   isLast = false,
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
+  const [recorded, setRecorded] = useState(false);
   const [memoOpen, setMemoOpen] = useState(false);
   const [memoText, setMemoText] = useState(memo || '');
 
-  // 問題が切り替わったら状態をリセット
   useEffect(() => {
     setSelected(null);
     setRevealed(false);
+    setRecorded(false);
     setMemoOpen(false);
     setMemoText(memo || '');
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const correct = selected === question.answer;
 
   const handleSelect = (idx) => {
     if (revealed) return;
     setSelected(idx);
     setRevealed(true);
-    onAnswered?.(idx === question.answer);
+    if (!gradeMode) {
+      // 通常モードは即記録
+      onAnswered?.(idx === question.answer);
+      setRecorded(true);
+    }
   };
 
-  const correct = selected === question.answer;
+  // 評価ボタン（復習モード）
+  const grade = (g) => {
+    onAnswered?.(correct, g);
+    setRecorded(true);
+    onNext?.();
+  };
 
   const saveMemo = () => {
     onSetMemo?.(question.id, memoText);
@@ -49,7 +64,16 @@ export default function QuestionCard({
         <span className="q-subject">{question.subject}</span>
       </div>
 
-      <div className="q-text">{question.question}</div>
+      {question.image && (
+        <img
+          className="q-image"
+          src={question.image}
+          alt="問題の図"
+          loading="lazy"
+        />
+      )}
+
+      {question.question && <div className="q-text">{question.question}</div>}
 
       <div className="choices">
         {question.choices.map((choice, idx) => {
@@ -125,15 +149,39 @@ export default function QuestionCard({
             </div>
           )}
 
-          <div style={{ marginTop: 16 }}>
-            <button
-              className="btn primary block lg"
-              onClick={onNext}
-              autoFocus={autoFocusNext}
-            >
-              {isLast ? '結果を見る' : nextLabel} →
-            </button>
-          </div>
+          {/* 復習モードの自己評価。正解なら難易度、不正解は「もう一度」。 */}
+          {gradeMode && GRADES ? (
+            <div style={{ marginTop: 16 }}>
+              <div className="grade-label">記憶度は？（次回の出題間隔が変わります）</div>
+              {correct ? (
+                <div className="btn-row grade-row">
+                  <button className="btn grade-hard" onClick={() => grade(GRADES.hard)}>
+                    むずかしい
+                  </button>
+                  <button className="btn grade-good" onClick={() => grade(GRADES.good)}>
+                    ふつう
+                  </button>
+                  <button className="btn grade-easy" onClick={() => grade(GRADES.easy)}>
+                    かんたん
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn primary block lg"
+                  onClick={() => grade(GRADES.again)}
+                  autoFocus
+                >
+                  もう一度（近いうちに再出題）→
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ marginTop: 16 }}>
+              <button className="btn primary block lg" onClick={onNext} autoFocus>
+                {isLast ? '結果を見る' : '次の問題'} →
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
