@@ -124,8 +124,8 @@ function recordToQuestion(rec) {
         answer = 0;
       }
     }
-    if (choices.length > 4) {
-      warnings.push(`選択肢が${choices.length}個あります（通常は4択）。`);
+    if (choices.length > 5) {
+      warnings.push(`選択肢が${choices.length}個あります（国試は通常5択まで）。`);
     }
   }
 

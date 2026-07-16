@@ -232,7 +232,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           <p className="inline-note">
             <strong>選択肢</strong>は半角パイプ <span className="mono">|</span> で区切ります。
             空欄にすると ○×（正誤）問題になります。<br />
-            <strong>正解</strong>は 四択なら番号（1〜4）、○×なら
+            <strong>正解</strong>は 選択肢の番号（国試は1〜5）、○×なら
             <span className="mono">○</span> / <span className="mono">×</span> で指定します。<br />
             <strong>画像</strong>列（任意）に画像URLやデータURIを入れると、経穴図などの
             図表問題に対応できます。

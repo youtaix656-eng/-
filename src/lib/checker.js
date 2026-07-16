@@ -45,8 +45,8 @@ export function checkFormat(q) {
     if (typeof q.answer !== 'number' || q.answer < 0 || q.answer >= q.choices.length) {
       push('error', 'format', `正解の指定（${q.answer}）が選択肢の範囲外です。`);
     }
-    if (q.type === 'choice' && q.choices.length > 4) {
-      push('info', 'format', `選択肢が${q.choices.length}個あります（通常は4択）。`);
+    if (q.type === 'choice' && q.choices.length > 5) {
+      push('info', 'format', `選択肢が${q.choices.length}個あります（国試は通常5択まで）。`);
     }
   }
   if (!q.explanation || !q.explanation.trim()) {
