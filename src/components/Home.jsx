@@ -75,6 +75,12 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">付箋を残した問題をまとめて確認。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('tools')}>
+          <span className="ico">🧪</span>
+          <span className="title">問題ツール（自動生成・誤りチェック）</span>
+          <span className="desc">経穴マスタから問題を自動生成。既存問題の形式・重複・矛盾・経穴×経絡の誤りを点検。</span>
+        </button>
+
         <button className="menu-item wide" onClick={() => onNavigate('settings')}>
           <span className="ico">⚙️</span>
           <span className="title">設定・問題データ管理</span>

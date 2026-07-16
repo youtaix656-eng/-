@@ -1132,3 +1132,74 @@ code.block {
     color: #67b6c7;
   }
 }
+
+/* ==== 問題ツール ==== */
+.gen-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+.draft-choices {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.draft-choices li.correct {
+  color: var(--correct);
+  font-weight: 700;
+}
+.finding {
+  border-left: 4px solid var(--border);
+}
+.finding.error {
+  border-left-color: var(--wrong);
+}
+.finding.warn {
+  border-left-color: var(--warn);
+}
+.finding.info {
+  border-left-color: var(--text-mute);
+}
+.finding-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.sev-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 6px;
+}
+.sev-badge.error {
+  background: var(--wrong-bg);
+  color: var(--wrong);
+}
+.sev-badge.warn {
+  background: #fff4e0;
+  color: var(--warn);
+}
+.sev-badge.info {
+  background: var(--surface-2);
+  color: var(--text-sub);
+}
+.finding-msg {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-top: 4px;
+  line-height: 1.6;
+}
+@media (prefers-color-scheme: dark) {
+  .sev-badge.warn {
+    background: #2a2410;
+  }
+}
