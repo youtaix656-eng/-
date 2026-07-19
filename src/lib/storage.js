@@ -18,6 +18,7 @@ export const KEYS = {
   srs: 'shinkyu:srs',
   history: 'shinkyu:history',
   memos: 'shinkyu:memos',
+  links: 'shinkyu:links',
   settings: 'shinkyu:settings',
   migrated: 'shinkyu:migrated',
 };
@@ -80,7 +81,7 @@ export async function migrateFromLocalStorage() {
   try {
     const already = await idbGet(KEYS.migrated);
     if (already) return;
-    const legacyKeys = [KEYS.questions, KEYS.srs, KEYS.history, KEYS.memos, KEYS.settings];
+    const legacyKeys = [KEYS.questions, KEYS.srs, KEYS.history, KEYS.memos, KEYS.links, KEYS.settings];
     for (const k of legacyKeys) {
       const raw = localStorage.getItem(k);
       if (raw != null) {
@@ -113,6 +114,11 @@ export const saveHistory = (h) => write(KEYS.history, h);
 export const loadMemos = () => read(KEYS.memos, {});
 export const saveMemos = (m) => write(KEYS.memos, m);
 
+// ---- 連結リンク（連結学習法） ----
+// links[questionId] = { keywords: string[], note: string, related: string[] }
+export const loadLinks = () => read(KEYS.links, {});
+export const saveLinks = (l) => write(KEYS.links, l);
+
 // ---- 設定 ----
 const DEFAULT_SETTINGS = {
   speechRate: 1.0,
@@ -123,6 +129,8 @@ const DEFAULT_SETTINGS = {
   answersSinceBackup: 0, // 前回バックアップからの解答数
   autoBackupOnStart: false, // 起動時に自動でバックアップを書き出す
   lastAutoBackup: 0, // 最終自動バックアップ日時
+  lastDeepDive: '', // 最後に「今日の1問」を深掘りした日（YYYY-MM-DD）
+  deepDiveStreak: 0, // 連結学習の連続日数
 };
 export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await read(KEYS.settings, {})) });
 export const saveSettings = (s) => write(KEYS.settings, s);
@@ -146,6 +154,7 @@ export async function exportAll() {
     srs: await loadSrs(),
     history: await loadHistory(),
     memos: await loadMemos(),
+    links: await loadLinks(),
     settings: await read(KEYS.settings, {}),
   };
 }
@@ -156,5 +165,6 @@ export async function importAll(data) {
   if (data.srs && typeof data.srs === 'object') await saveSrs(data.srs);
   if (Array.isArray(data.history)) await saveHistory(data.history);
   if (data.memos && typeof data.memos === 'object') await saveMemos(data.memos);
+  if (data.links && typeof data.links === 'object') await saveLinks(data.links);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
 }

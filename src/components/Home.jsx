@@ -37,6 +37,14 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
       </div>
 
       <div className="menu-grid">
+        <button className="menu-item wide featured" onClick={() => onNavigate('connect')}>
+          <span className="ico">🔗</span>
+          <span className="title">連結学習（今日の1問）</span>
+          <span className="desc">
+            過去問を一生モノの知識に。1日1問を深掘りし、キーワードでつなげて知識の地図を育てる。
+          </span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('quiz')}>
           <span className="ico">✏️</span>
           <span className="title">一問一答</span>

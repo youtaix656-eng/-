@@ -12,6 +12,7 @@ import Settings from './components/Settings.jsx';
 import Ocr from './components/Ocr.jsx';
 import QuestionTools from './components/QuestionTools.jsx';
 import ExamScope from './components/ExamScope.jsx';
+import ConnectedLearning from './components/ConnectedLearning.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -160,6 +161,8 @@ export default function App() {
             onOpenSettings={() => setView('settings')}
           />
         );
+      case 'connect':
+        return <ConnectedLearning store={store} onToast={showToast} />;
       case 'settings':
         return (
           <Settings
@@ -187,6 +190,7 @@ export default function App() {
       ocr: '写真から取り込み',
       tools: '問題ツール',
       scope: '試験範囲',
+      connect: '連結学習',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';
