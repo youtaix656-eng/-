@@ -9,6 +9,9 @@ export default function QuestionCard({
   question,
   memo,
   onSetMemo,
+  link, // { keywords, note, related } 連結学習データ
+  onSetLink, // (questionId, patch)
+  onOpenKeyword, // (keyword) 連結マップへ飛ぶ
   onAnswered, // (correct, grade?) 解答確定時
   onNext,
   showMemo = true,
@@ -149,6 +152,16 @@ export default function QuestionCard({
             </div>
           )}
 
+          {/* 連結学習：キーワード（タップで連結マップへ）＋ 連結メモ */}
+          {onSetLink && (
+            <ConnectEditor
+              question={question}
+              link={link}
+              onSetLink={onSetLink}
+              onOpenKeyword={onOpenKeyword}
+            />
+          )}
+
           {/* 復習モードの自己評価。正解なら難易度、不正解は「もう一度」。 */}
           {gradeMode && GRADES ? (
             <div style={{ marginTop: 16 }}>
@@ -184,6 +197,95 @@ export default function QuestionCard({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// 連結学習の編集（キーワード＋連結メモ）。キーワードはタップで連結マップへ飛べる。
+function ConnectEditor({ question, link, onSetLink, onOpenKeyword }) {
+  const cur = link || { keywords: [], note: '', related: [] };
+  const [open, setOpen] = useState(false);
+  const [kwInput, setKwInput] = useState('');
+  const [note, setNote] = useState(cur.note || '');
+
+  useEffect(() => {
+    setNote((link && link.note) || '');
+    setKwInput('');
+    setOpen(false);
+  }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const keywords = cur.keywords || [];
+
+  const addKeyword = () => {
+    const kw = kwInput.trim();
+    if (!kw) return;
+    if (!keywords.includes(kw)) onSetLink(question.id, { keywords: [...keywords, kw] });
+    setKwInput('');
+  };
+  const removeKeyword = (kw) =>
+    onSetLink(question.id, { keywords: keywords.filter((k) => k !== kw) });
+  const saveNote = () => {
+    onSetLink(question.id, { note });
+    setOpen(false);
+  };
+
+  return (
+    <div className="connect-box">
+      {/* 既存キーワードは常に表示。タップで連結マップへ */}
+      {keywords.length > 0 && (
+        <div className="chip-row" style={{ marginTop: 12 }}>
+          {keywords.map((kw) => (
+            <span className="kw-chip" key={kw}>
+              <button className="kw-chip-label" onClick={() => onOpenKeyword?.(kw)}>
+                🔗 {kw}
+              </button>
+              <button className="kw-chip-x" onClick={() => removeKeyword(kw)} aria-label="削除">
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {!open ? (
+        <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => setOpen(true)}>
+          🔗 {keywords.length || cur.note ? '連結を編集' : 'キーワード・連結メモを追加'}
+        </button>
+      ) : (
+        <div style={{ marginTop: 10 }}>
+          <label className="cb-label">キーワード（タップで連結マップへ）</label>
+          <div className="kw-add">
+            <input
+              type="text"
+              value={kwInput}
+              onChange={(e) => setKwInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
+              placeholder="例）四総穴、原穴、大腸経"
+            />
+            <button className="btn sm" onClick={addKeyword}>
+              追加
+            </button>
+          </div>
+          <label className="cb-label" style={{ marginTop: 10 }}>
+            連結メモ（この知識のつながり・任意メモ）
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="関連する知識やつながり、覚え方を自由に記録"
+          />
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button className="btn sm" onClick={() => setOpen(false)}>
+              閉じる
+            </button>
+            <button className="btn primary sm" onClick={saveNote}>
+              保存
+            </button>
+          </div>
+        </div>
+      )}
+
+      {cur.note && !open && <div className="li-memo">🔗 {cur.note}</div>}
     </div>
   );
 }

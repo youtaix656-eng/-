@@ -3,8 +3,8 @@ import QuestionCard from './QuestionCard.jsx';
 import { normalize, MATURE_INTERVAL } from '../lib/srs.js';
 
 // 間違えた問題だけを解くモード（間隔反復 / SM-2）
-export default function Review({ store }) {
-  const { dueReviewQuestions, reviewQuestions, memos, recordAnswer, setMemo, srs, GRADES } = store;
+export default function Review({ store, onOpenKeyword }) {
+  const { dueReviewQuestions, reviewQuestions, memos, links, recordAnswer, setMemo, setLink, srs, GRADES } = store;
 
   const [started, setStarted] = useState(false);
   const [order, setOrder] = useState([]);
@@ -151,6 +151,9 @@ export default function Review({ store }) {
         question={current}
         memo={memos[current.id]}
         onSetMemo={setMemo}
+        link={links[current.id]}
+        onSetLink={setLink}
+        onOpenKeyword={onOpenKeyword}
         onAnswered={handleAnswered}
         onNext={handleNext}
         gradeMode

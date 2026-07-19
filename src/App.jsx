@@ -41,6 +41,7 @@ export default function App() {
   const [importText, setImportText] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [quizSubject, setQuizSubject] = useState(null);
+  const [focusKeyword, setFocusKeyword] = useState(null);
 
   const showToast = (msg) => setToast(msg);
   useEffect(() => {
@@ -100,6 +101,10 @@ export default function App() {
     setQuizSubject(subjectName);
     setView('quiz');
   };
+  const openKeyword = (kw) => {
+    setFocusKeyword(kw);
+    setView('connect');
+  };
   const sendOcrToImport = (csv) => {
     setImportText(csv);
     setView('settings');
@@ -137,10 +142,11 @@ export default function App() {
             store={store}
             initialSubject={quizSubject}
             onConsumed={() => setQuizSubject(null)}
+            onOpenKeyword={openKeyword}
           />
         );
       case 'review':
-        return <Review store={store} />;
+        return <Review store={store} onOpenKeyword={openKeyword} />;
       case 'audio':
         return <AudioMode store={store} />;
       case 'exam':
@@ -162,7 +168,14 @@ export default function App() {
           />
         );
       case 'connect':
-        return <ConnectedLearning store={store} onToast={showToast} />;
+        return (
+          <ConnectedLearning
+            store={store}
+            onToast={showToast}
+            focusKeyword={focusKeyword}
+            onConsumeKeyword={() => setFocusKeyword(null)}
+          />
+        );
       case 'settings':
         return (
           <Settings

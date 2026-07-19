@@ -1398,3 +1398,51 @@ code.block {
   .streak-num { color: #e8a94a; }
   .streak-note { color: #c9a25e; }
 }
+
+/* ==== 問題カードの連結編集 ==== */
+.connect-box {
+  margin-top: 6px;
+}
+.cb-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+}
+.kw-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.kw-chip-label {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 4px 4px 11px;
+}
+.kw-chip-x {
+  border: none;
+  background: none;
+  color: var(--text-mute);
+  font-size: 11px;
+  padding: 4px 9px 4px 4px;
+}
+.kw-chip-x:active {
+  color: var(--wrong);
+}
+
+.cluster.focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(47, 125, 143, 0.35), var(--shadow);
+  animation: pulse 1.2s ease;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 6px rgba(47, 125, 143, 0.28), var(--shadow); }
+  100% { box-shadow: 0 0 0 2px rgba(47, 125, 143, 0.35), var(--shadow); }
+}

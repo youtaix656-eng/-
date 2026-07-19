@@ -23,8 +23,8 @@ function poolForSubject(questions, subject) {
 }
 
 // 一問一答モード
-export default function Quiz({ store, initialSubject, onConsumed }) {
-  const { questions, memos, recordAnswer, setMemo } = store;
+export default function Quiz({ store, initialSubject, onConsumed, onOpenKeyword }) {
+  const { questions, memos, links, recordAnswer, setMemo, setLink } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
 
   const [subject, setSubject] = useState(initialSubject || 'all'); // 'all' or 科目名
@@ -163,6 +163,9 @@ export default function Quiz({ store, initialSubject, onConsumed }) {
         question={current}
         memo={memos[current.id]}
         onSetMemo={setMemo}
+        link={links[current.id]}
+        onSetLink={setLink}
+        onOpenKeyword={onOpenKeyword}
         onAnswered={handleAnswered}
         onNext={handleNext}
         isLast={idx + 1 >= order.length}

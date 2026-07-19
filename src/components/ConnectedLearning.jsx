@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { dateKey, dailyPick, keywordClusters, relatedPairs } from '../lib/connect.js';
 
 // 連結学習法（つなげて一生モノの知識に）
 //  - 今日の1問：日替わりで1問を深掘り。連結ポイント・キーワード・関連問題を記録
 //  - 連結マップ：キーワードと問題どうしのつながりを可視化
-export default function ConnectedLearning({ store, onToast }) {
-  const [tab, setTab] = useState('daily');
+export default function ConnectedLearning({ store, onToast, focusKeyword, onConsumeKeyword }) {
+  // 問題からキーワードで飛んで来たときは連結マップを開く
+  const [tab, setTab] = useState(focusKeyword ? 'map' : 'daily');
   return (
     <div className="view">
       <h2 className="view-title">連結学習</h2>
@@ -26,7 +27,7 @@ export default function ConnectedLearning({ store, onToast }) {
       {tab === 'daily' ? (
         <Daily store={store} onToast={onToast} />
       ) : (
-        <MapView store={store} />
+        <MapView store={store} focusKeyword={focusKeyword} onConsumeKeyword={onConsumeKeyword} />
       )}
     </div>
   );
@@ -191,11 +192,23 @@ function Daily({ store, onToast }) {
 }
 
 // ===== 連結マップ =====
-function MapView({ store }) {
+function MapView({ store, focusKeyword, onConsumeKeyword }) {
   const { questions, links } = store;
   const byId = useMemo(() => Object.fromEntries(questions.map((q) => [q.id, q])), [questions]);
   const clusters = useMemo(() => keywordClusters(questions, links), [questions, links]);
   const pairs = useMemo(() => relatedPairs(questions, links), [questions, links]);
+  const focusRef = useRef(null);
+
+  // 問題からキーワードで飛んで来たら、そのクラスタへスクロール
+  useEffect(() => {
+    if (focusKeyword && focusRef.current) {
+      focusRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (focusKeyword) {
+      const t = setTimeout(() => onConsumeKeyword?.(), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [focusKeyword]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const linkedCount = Object.keys(links).length;
 
@@ -231,8 +244,14 @@ function MapView({ store }) {
       <div className="section-label" style={{ marginTop: 0 }}>
         キーワードでつながる知識
       </div>
-      {clusters.map((cl) => (
-        <div className="card cluster" key={cl.keyword}>
+      {clusters.map((cl) => {
+        const focused = focusKeyword && cl.keyword === focusKeyword;
+        return (
+        <div
+          className={`card cluster ${focused ? 'focused' : ''}`}
+          key={cl.keyword}
+          ref={focused ? focusRef : null}
+        >
           <div className="cluster-head">
             <span className="cluster-kw">🔗 {cl.keyword}</span>
             <span className="cluster-count">{cl.questionIds.length}問</span>
@@ -244,7 +263,8 @@ function MapView({ store }) {
             </div>
           ))}
         </div>
-      ))}
+        );
+      })}
 
       {pairs.length > 0 && (
         <>
