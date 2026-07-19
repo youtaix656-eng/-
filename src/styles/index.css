@@ -1203,3 +1203,61 @@ code.block {
     background: #2a2410;
   }
 }
+
+/* ==== 試験範囲 ==== */
+.scope-session {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 18px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--navy);
+}
+.scope-session-label {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy-dark);
+}
+.scope-session-note {
+  font-size: 11.5px;
+  color: var(--text-sub);
+}
+.scope-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+}
+.scope-main {
+  flex: 1;
+  min-width: 0;
+}
+.scope-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.scope-note {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-mute);
+}
+.scope-stat {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 2px;
+}
+.scope-empty {
+  color: var(--text-mute);
+}
+.scope-action {
+  flex: 0 0 auto;
+}
+.scope-action .btn {
+  min-width: 64px;
+}

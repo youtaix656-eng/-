@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import { getSubjects } from '../lib/stats.js';
+import { subjectMatches } from '../data/examScope.js';
 
 // 科目をシャッフルして出題順を作る
 function shuffle(arr) {
@@ -12,19 +13,44 @@ function shuffle(arr) {
   return a;
 }
 
+// 指定科目に一致する問題を集める（表記の揺れ・別名も許容）
+function poolForSubject(questions, subject) {
+  if (subject === 'all') return questions;
+  const exact = questions.filter((q) => q.subject === subject);
+  if (exact.length > 0) return exact;
+  // 完全一致が無ければ別名照合（試験範囲の正式名などから来た場合）
+  return questions.filter((q) => subjectMatches(q.subject, { name: subject }));
+}
+
 // 一問一答モード
-export default function Quiz({ store }) {
+export default function Quiz({ store, initialSubject, onConsumed }) {
   const { questions, memos, recordAnswer, setMemo } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
 
-  const [subject, setSubject] = useState('all'); // 'all' or 科目名
+  const [subject, setSubject] = useState(initialSubject || 'all'); // 'all' or 科目名
   const [started, setStarted] = useState(false);
   const [order, setOrder] = useState([]);
   const [idx, setIdx] = useState(0);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
 
+  // 試験範囲画面などから科目指定で来たときは自動で開始する
+  useEffect(() => {
+    if (initialSubject) {
+      const pool = poolForSubject(questions, initialSubject);
+      if (pool.length > 0) {
+        setSubject(initialSubject);
+        setOrder(shuffle(pool));
+        setIdx(0);
+        setSessionStats({ total: 0, correct: 0 });
+        setStarted(true);
+      }
+      onConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const start = () => {
-    const pool = subject === 'all' ? questions : questions.filter((q) => q.subject === subject);
+    const pool = poolForSubject(questions, subject);
     if (pool.length === 0) return;
     setOrder(shuffle(pool));
     setIdx(0);

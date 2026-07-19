@@ -69,6 +69,12 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">科目別の正答率をグラフで確認。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('scope')}>
+          <span className="ico">🗂️</span>
+          <span className="title">試験範囲</span>
+          <span className="desc">全13科目（午前/午後）と収録状況・合格ライン。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('memos')}>
           <span className="ico">📌</span>
           <span className="title">メモ一覧</span>

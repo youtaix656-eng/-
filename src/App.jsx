@@ -11,6 +11,7 @@ import Memos from './components/Memos.jsx';
 import Settings from './components/Settings.jsx';
 import Ocr from './components/Ocr.jsx';
 import QuestionTools from './components/QuestionTools.jsx';
+import ExamScope from './components/ExamScope.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -38,6 +39,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [importText, setImportText] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [quizSubject, setQuizSubject] = useState(null);
 
   const showToast = (msg) => setToast(msg);
   useEffect(() => {
@@ -93,6 +95,10 @@ export default function App() {
   };
 
   const openOcr = () => setView('ocr');
+  const startSubjectQuiz = (subjectName) => {
+    setQuizSubject(subjectName);
+    setView('quiz');
+  };
   const sendOcrToImport = (csv) => {
     setImportText(csv);
     setView('settings');
@@ -125,7 +131,13 @@ export default function App() {
           />
         );
       case 'quiz':
-        return <Quiz store={store} />;
+        return (
+          <Quiz
+            store={store}
+            initialSubject={quizSubject}
+            onConsumed={() => setQuizSubject(null)}
+          />
+        );
       case 'review':
         return <Review store={store} />;
       case 'audio':
@@ -140,6 +152,14 @@ export default function App() {
         return <Ocr onToast={showToast} onSendToImport={sendOcrToImport} />;
       case 'tools':
         return <QuestionTools store={store} onToast={showToast} />;
+      case 'scope':
+        return (
+          <ExamScope
+            store={store}
+            onStartSubject={startSubjectQuiz}
+            onOpenSettings={() => setView('settings')}
+          />
+        );
       case 'settings':
         return (
           <Settings
@@ -166,6 +186,7 @@ export default function App() {
       memos: 'メモ一覧',
       ocr: '写真から取り込み',
       tools: '問題ツール',
+      scope: '試験範囲',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';
