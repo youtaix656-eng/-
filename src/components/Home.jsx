@@ -51,6 +51,12 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">科目別に問題演習。○×・四択に対応。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('builder')}>
+          <span className="ico">🎛️</span>
+          <span className="title">出題を作る</span>
+          <span className="desc">科目・回次・ジャンル・問題数を指定して出題。検索も。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('review')}>
           <span className="ico">🔁</span>
           <span className="title">間違えた問題</span>

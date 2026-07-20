@@ -16,12 +16,22 @@ import {
 const PHASES = { QUESTION: 'question', GAP: 'gap', ANSWER: 'answer' };
 
 export default function AudioMode({ store }) {
-  const { reviewQuestions, questions, settings, updateSettings } = store;
+  const { reviewQuestions, questions, links, settings, updateSettings } = store;
 
-  // 読み上げ対象：復習リストが空ならデバッグ用に全問から選べるようにする
+  // タグ（連結キーワード）が付いた問題
+  const taggedQuestions = questions.filter(
+    (q) => (q.tags && q.tags.length) || (links[q.id] && links[q.id].keywords && links[q.id].keywords.length)
+  );
   const hasReview = reviewQuestions.length > 0;
-  const [source, setSource] = useState('review'); // 'review' | 'all'
-  const list = source === 'review' && hasReview ? reviewQuestions : questions;
+  const hasTagged = taggedQuestions.length > 0;
+  // 読み上げ対象：間違えた問題 / タグ付き / 全問
+  const [source, setSource] = useState('review'); // 'review' | 'tagged' | 'all'
+  const list =
+    source === 'review' && hasReview
+      ? reviewQuestions
+      : source === 'tagged' && hasTagged
+      ? taggedQuestions
+      : questions;
 
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
@@ -238,14 +248,24 @@ export default function AudioMode({ store }) {
         間違えた問題を読み上げます。「問題 → 数秒の間 → 正解と解説」の順で自動再生します。
       </p>
 
-      {hasReview && (
+      {(hasReview || hasTagged) && (
         <div className="chip-row">
-          <button
-            className={`chip ${source === 'review' ? 'active' : ''}`}
-            onClick={() => changeSource('review')}
-          >
-            間違えた問題（{reviewQuestions.length}）
-          </button>
+          {hasReview && (
+            <button
+              className={`chip ${source === 'review' ? 'active' : ''}`}
+              onClick={() => changeSource('review')}
+            >
+              間違えた問題（{reviewQuestions.length}）
+            </button>
+          )}
+          {hasTagged && (
+            <button
+              className={`chip ${source === 'tagged' ? 'active' : ''}`}
+              onClick={() => changeSource('tagged')}
+            >
+              タグ付き（{taggedQuestions.length}）
+            </button>
+          )}
           <button
             className={`chip ${source === 'all' ? 'active' : ''}`}
             onClick={() => changeSource('all')}

@@ -13,6 +13,7 @@ import Ocr from './components/Ocr.jsx';
 import QuestionTools from './components/QuestionTools.jsx';
 import ExamScope from './components/ExamScope.jsx';
 import ConnectedLearning from './components/ConnectedLearning.jsx';
+import Builder from './components/Builder.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -41,6 +42,7 @@ export default function App() {
   const [importText, setImportText] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [quizSubject, setQuizSubject] = useState(null);
+  const [quizQuestions, setQuizQuestions] = useState(null);
   const [focusKeyword, setFocusKeyword] = useState(null);
 
   const showToast = (msg) => setToast(msg);
@@ -105,6 +107,10 @@ export default function App() {
     setFocusKeyword(kw);
     setView('connect');
   };
+  const startCustomQuiz = (questionsList) => {
+    setQuizQuestions(questionsList);
+    setView('quiz');
+  };
   const sendOcrToImport = (csv) => {
     setImportText(csv);
     setView('settings');
@@ -141,7 +147,11 @@ export default function App() {
           <Quiz
             store={store}
             initialSubject={quizSubject}
-            onConsumed={() => setQuizSubject(null)}
+            initialQuestions={quizQuestions}
+            onConsumed={() => {
+              setQuizSubject(null);
+              setQuizQuestions(null);
+            }}
             onOpenKeyword={openKeyword}
           />
         );
@@ -167,6 +177,8 @@ export default function App() {
             onOpenSettings={() => setView('settings')}
           />
         );
+      case 'builder':
+        return <Builder store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':
         return (
           <ConnectedLearning
@@ -204,6 +216,7 @@ export default function App() {
       tools: '問題ツール',
       scope: '試験範囲',
       connect: '連結学習',
+      builder: '出題を作る',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';

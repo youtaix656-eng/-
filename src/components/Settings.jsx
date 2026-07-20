@@ -22,6 +22,9 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
   const [importMode, setImportMode] = useState('append'); // append | replace
   const [preview, setPreview] = useState(null); // { questions, errors, warnings, fileName }
   const [voices, setVoices] = useState([]);
+  const [deckName, setDeckName] = useState(''); // 取り込み先ファイル（デッキ）名
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
 
   useEffect(() => {
     loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
@@ -48,14 +51,25 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
 
   const confirmImport = () => {
     if (!preview || preview.questions.length === 0) return;
+    // 取り込み先ファイル名が指定されていれば全問に付与（未指定の既存デッキは尊重）
+    const qs = deckName.trim()
+      ? preview.questions.map((q) => ({ ...q, deck: q.deck || deckName.trim() }))
+      : preview.questions;
     if (importMode === 'replace') {
-      replaceQuestions(preview.questions);
-      onToast(`${preview.questions.length}問に置き換えました`);
+      replaceQuestions(qs);
+      onToast(`${qs.length}問に置き換えました`);
     } else {
-      appendQuestions(preview.questions);
-      onToast(`${preview.questions.length}問を追加しました`);
+      appendQuestions(qs);
+      onToast(`${qs.length}問を追加しました`);
     }
     setPreview(null);
+  };
+
+  const importPaste = () => {
+    if (!pasteText.trim()) return;
+    const result = importFile(pasteText, pasteText.trim().startsWith('[') ? 'paste.json' : 'paste.csv');
+    setPreview({ ...result, fileName: '貼り付けデータ' });
+    setPasteOpen(false);
   };
 
   const download = (content, filename, type) => {
@@ -170,14 +184,42 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           onChange={handleFile}
           style={{ display: 'none' }}
         />
+        <div className="field" style={{ marginTop: 10, marginBottom: 8 }}>
+          <label>取り込み先ファイル名（任意）</label>
+          <input
+            type="text"
+            value={deckName}
+            onChange={(e) => setDeckName(e.target.value)}
+            placeholder="例）2027過去問・医療概論 など"
+          />
+          <div className="hint">名前を付けると、その名前のファイルにまとめて出題ビルダーで絞り込めます。</div>
+        </div>
+
         <div className="btn-row" style={{ marginTop: 10 }}>
           <button className="btn primary" onClick={() => fileRef.current?.click()}>
-            📁 ファイルを選択
+            📁 ファイル
+          </button>
+          <button className="btn" onClick={() => setPasteOpen((v) => !v)}>
+            📝 文章を貼付
           </button>
           <button className="btn" onClick={onOpenOcr}>
-            📷 写真から（OCR）
+            📷 写真OCR
           </button>
         </div>
+
+        {pasteOpen && (
+          <div style={{ marginTop: 10 }}>
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              placeholder={'CSV や JSON を貼り付け\n例）科目,問題文,選択肢,正解,解説'}
+              style={{ minHeight: 120 }}
+            />
+            <button className="btn primary block sm" style={{ marginTop: 8 }} onClick={importPaste}>
+              貼り付けた内容を読み込む
+            </button>
+          </div>
+        )}
 
         {preview && (
           <div style={{ marginTop: 14 }}>

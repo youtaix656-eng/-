@@ -131,6 +131,19 @@ function recordToQuestion(rec) {
 
   if (!explanation) warnings.push('解説が空です。');
 
+  // 任意項目：回次（第何回）・ジャンル/タグ・ファイル（デッキ）
+  const round = normalizeKey(rec, ['回', '回次', '出題回', 'round', 'Round']);
+  const deck = normalizeKey(rec, ['ファイル', 'デッキ', 'deck', 'Deck', 'file']);
+  let tags = [];
+  if (Array.isArray(rec.tags)) {
+    tags = rec.tags.map((t) => String(t).trim()).filter(Boolean);
+  } else {
+    const rawTags = normalizeKey(rec, ['ジャンル', 'タグ', 'tags', 'Tags', 'genre']);
+    if (rawTags.trim()) {
+      tags = rawTags.split(/\s*[|｜,、]\s*/).map((t) => t.trim()).filter(Boolean);
+    }
+  }
+
   const q = {
     id: rec.id ? String(rec.id) : makeId(),
     subject,
@@ -141,6 +154,9 @@ function recordToQuestion(rec) {
     explanation,
   };
   if (image) q.image = image;
+  if (round) q.round = round;
+  if (tags.length) q.tags = tags;
+  if (deck) q.deck = deck;
   return { question: q, warnings };
 }
 
@@ -275,16 +291,25 @@ export function exportCsv(questions) {
     const s = String(v ?? '');
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
-  // 画像を含む問題が1つでもあれば画像列を追加する
+  // 使われている任意項目だけ列を追加する
   const hasImage = questions.some((q) => q.image);
+  const hasRound = questions.some((q) => q.round);
+  const hasTags = questions.some((q) => q.tags && q.tags.length);
+  const hasDeck = questions.some((q) => q.deck);
   const headerCols = ['科目', '問題文', '選択肢', '正解', '解説'];
   if (hasImage) headerCols.push('画像');
+  if (hasRound) headerCols.push('回');
+  if (hasTags) headerCols.push('ジャンル');
+  if (hasDeck) headerCols.push('ファイル');
   const lines = [headerCols.join(',')];
   questions.forEach((q) => {
     const choices = q.type === 'ox' ? '' : q.choices.join('|');
     const answer = q.type === 'ox' ? (q.answer === 0 ? '○' : '×') : q.answer + 1;
     const row = [q.subject, q.question, choices, answer, q.explanation];
     if (hasImage) row.push(q.image || '');
+    if (hasRound) row.push(q.round || '');
+    if (hasTags) row.push((q.tags || []).join('|'));
+    if (hasDeck) row.push(q.deck || '');
     lines.push(row.map(esc).join(','));
   });
   return lines.join('\n');

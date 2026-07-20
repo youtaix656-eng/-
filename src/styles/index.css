@@ -1446,3 +1446,18 @@ code.block {
   0% { box-shadow: 0 0 0 6px rgba(47, 125, 143, 0.28), var(--shadow); }
   100% { box-shadow: 0 0 0 2px rgba(47, 125, 143, 0.35), var(--shadow); }
 }
+
+/* ==== 出題ビルダー ==== */
+.builder-summary {
+  font-size: 13px;
+  color: var(--text-sub);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 12px 0;
+  text-align: center;
+}
+.builder-summary strong {
+  color: var(--navy);
+  font-size: 15px;
+}

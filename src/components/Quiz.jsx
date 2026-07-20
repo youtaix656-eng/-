@@ -23,7 +23,7 @@ function poolForSubject(questions, subject) {
 }
 
 // 一問一答モード
-export default function Quiz({ store, initialSubject, onConsumed, onOpenKeyword }) {
+export default function Quiz({ store, initialSubject, initialQuestions, onConsumed, onOpenKeyword }) {
   const { questions, memos, links, recordAnswer, setMemo, setLink } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
 
@@ -33,9 +33,16 @@ export default function Quiz({ store, initialSubject, onConsumed, onOpenKeyword 
   const [idx, setIdx] = useState(0);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
 
-  // 試験範囲画面などから科目指定で来たときは自動で開始する
+  // 出題ビルダー等から「この問題群を出す」指定、または科目指定で来たら自動開始
   useEffect(() => {
-    if (initialSubject) {
+    if (initialQuestions && initialQuestions.length > 0) {
+      setSubject('all');
+      setOrder(initialQuestions); // 順序は呼び出し側で決定済み
+      setIdx(0);
+      setSessionStats({ total: 0, correct: 0 });
+      setStarted(true);
+      onConsumed?.();
+    } else if (initialSubject) {
       const pool = poolForSubject(questions, initialSubject);
       if (pool.length > 0) {
         setSubject(initialSubject);
