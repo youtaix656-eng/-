@@ -1461,3 +1461,42 @@ code.block {
   color: var(--navy);
   font-size: 15px;
 }
+
+/* ==== 取り込みハブ ==== */
+.import-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  transition: transform 0.1s;
+}
+.import-tile:active {
+  transform: scale(0.99);
+}
+.import-ico {
+  font-size: 28px;
+  flex: 0 0 auto;
+}
+.import-main {
+  display: flex;
+  flex-direction: column;
+}
+.import-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy-dark);
+}
+.import-desc {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 2px;
+  line-height: 1.5;
+}

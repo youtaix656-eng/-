@@ -14,6 +14,7 @@ import QuestionTools from './components/QuestionTools.jsx';
 import ExamScope from './components/ExamScope.jsx';
 import ConnectedLearning from './components/ConnectedLearning.jsx';
 import Builder from './components/Builder.jsx';
+import Import from './components/Import.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -179,6 +180,8 @@ export default function App() {
         );
       case 'builder':
         return <Builder store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
+      case 'import':
+        return <Import onSendToImport={sendOcrToImport} onOpenOcr={openOcr} onToast={showToast} />;
       case 'connect':
         return (
           <ConnectedLearning
@@ -217,6 +220,7 @@ export default function App() {
       scope: '試験範囲',
       connect: '連結学習',
       builder: '出題を作る',
+      import: '問題を取り込む',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';

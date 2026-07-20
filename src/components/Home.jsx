@@ -95,6 +95,12 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">付箋を残した問題をまとめて確認。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('import')}>
+          <span className="ico">📥</span>
+          <span className="title">問題を取り込む（PDF・写真・文章・ファイル）</span>
+          <span className="desc">PDFや本のページ写真、CSV/JSON、貼り付けた文章から問題を追加。</span>
+        </button>
+
         <button className="menu-item wide" onClick={() => onNavigate('tools')}>
           <span className="ico">🧪</span>
           <span className="title">問題ツール（自動生成・誤りチェック）</span>

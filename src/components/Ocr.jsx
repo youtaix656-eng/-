@@ -1,13 +1,16 @@
 import { useRef, useState } from 'react';
 
-// OCR 前処理ツール（実験的）
+// 写真・PDF からの取り込み補助（実験的）
 //
-// 本のページ写真から文字を抽出する下処理を、ブラウザ内で行う。
-// 文字認識には tesseract.js を用いるが、バンドルを重くしないため
-// 使用時に CDN から動的読み込みする（＝この機能のみネット接続が必要）。
+// 本のページの写真や PDF から文字を抽出する下処理を、ブラウザ内で行う。
+//  - 写真: tesseract.js で OCR（CDNから動的読み込み）
+//  - PDF : pdf.js でテキスト抽出（CDNから動的読み込み）。文字が埋め込まれていない
+//          スキャンPDFは抽出できないため、その場合は写真OCRを使う。
 // 抽出テキストは編集でき、CSV に整形してインポート画面へ渡せる。
+// ※ この機能のみインターネット接続が必要。
 export default function Ocr({ onToast, onSendToImport }) {
   const fileRef = useRef(null);
+  const pdfRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [text, setText] = useState('');
@@ -42,9 +45,50 @@ export default function Ocr({ onToast, onSendToImport }) {
     }
   };
 
+  const runPdf = async (file) => {
+    setError('');
+    setBusy(true);
+    setProgress(0);
+    setPreview('');
+    try {
+      // CDN から pdf.js を動的読み込み
+      const pdfjs = await import(
+        /* @vite-ignore */ 'https://esm.sh/pdfjs-dist@4.7.76/build/pdf.min.mjs'
+      );
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        'https://esm.sh/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs';
+      const buf = await file.arrayBuffer();
+      const doc = await pdfjs.getDocument({ data: buf }).promise;
+      let out = '';
+      for (let p = 1; p <= doc.numPages; p++) {
+        const page = await doc.getPage(p);
+        const content = await page.getTextContent();
+        out += content.items.map((i) => i.str).join(' ') + '\n';
+        setProgress(Math.round((p / doc.numPages) * 100));
+      }
+      if (!out.trim()) {
+        setError(
+          'このPDFには文字データが埋め込まれていません（スキャン画像のPDFの可能性）。その場合は「写真（OCR）」で各ページを撮影して取り込んでください。'
+        );
+      } else {
+        setText((prev) => (prev ? prev + '\n' + out : out));
+        onToast?.('PDFから文字を抽出しました');
+      }
+    } catch (e) {
+      console.error(e);
+      setError('PDFの読み取りに失敗しました。ネット接続をご確認ください。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleFile = (e) => {
     const file = e.target.files?.[0];
-    if (file) runOcr(file);
+    if (file) {
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      if (isPdf) runPdf(file);
+      else runOcr(file);
+    }
     e.target.value = '';
   };
 
@@ -71,9 +115,9 @@ export default function Ocr({ onToast, onSendToImport }) {
 
   return (
     <div className="view">
-      <h2 className="view-title">写真から問題を取り込む（OCR）</h2>
+      <h2 className="view-title">写真・PDFから取り込む</h2>
       <p className="view-desc">
-        本のページを撮影した画像から文字を抽出します。抽出後にご自身で
+        本のページの写真や PDF から文字を抽出します。抽出後にご自身で
         「科目・選択肢・正解・解説」を整えて取り込んでください。
       </p>
 
@@ -86,13 +130,25 @@ export default function Ocr({ onToast, onSendToImport }) {
           onChange={handleFile}
           style={{ display: 'none' }}
         />
-        <button
-          className="btn primary block lg"
-          onClick={() => fileRef.current?.click()}
-          disabled={busy}
-        >
-          📷 画像を選択 / 撮影
-        </button>
+        <input
+          ref={pdfRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          onChange={handleFile}
+          style={{ display: 'none' }}
+        />
+        <div className="btn-row">
+          <button
+            className="btn primary"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+          >
+            📷 写真を撮影 / 選択
+          </button>
+          <button className="btn" onClick={() => pdfRef.current?.click()} disabled={busy}>
+            📄 PDFを選択
+          </button>
+        </div>
 
         {busy && (
           <div style={{ marginTop: 14 }}>

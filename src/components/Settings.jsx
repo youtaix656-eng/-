@@ -30,11 +30,11 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
   }, []);
 
-  // OCR から渡された CSV テキストをプレビューに流し込む
+  // 取り込みハブ/OCR から渡されたテキストをプレビューに流し込む（形式は内容から自動判定）
   useEffect(() => {
     if (importText) {
-      const result = importFile(importText, 'ocr.csv');
-      setPreview({ ...result, fileName: 'OCR抽出データ' });
+      const result = importFile(importText, '');
+      setPreview({ ...result, fileName: '取り込みデータ' });
       setImportMode('append');
       onConsumeImportText?.();
     }
