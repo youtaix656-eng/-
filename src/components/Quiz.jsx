@@ -32,37 +32,43 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
   const [order, setOrder] = useState([]);
   const [idx, setIdx] = useState(0);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
+  // このセッションの母集団（「もう一度」で同じ条件を再現するため保持）
+  const [sessionPool, setSessionPool] = useState(null);
+
+  const beginWith = (pool, doShuffle = true) => {
+    if (!pool || pool.length === 0) return;
+    setSessionPool(pool);
+    setOrder(doShuffle ? shuffle(pool) : pool);
+    setIdx(0);
+    setSessionStats({ total: 0, correct: 0 });
+    setStarted(true);
+  };
 
   // 出題ビルダー等から「この問題群を出す」指定、または科目指定で来たら自動開始
   useEffect(() => {
     if (initialQuestions && initialQuestions.length > 0) {
       setSubject('all');
-      setOrder(initialQuestions); // 順序は呼び出し側で決定済み
-      setIdx(0);
-      setSessionStats({ total: 0, correct: 0 });
-      setStarted(true);
+      beginWith(initialQuestions, false); // 順序は呼び出し側で決定済み
       onConsumed?.();
     } else if (initialSubject) {
       const pool = poolForSubject(questions, initialSubject);
       if (pool.length > 0) {
         setSubject(initialSubject);
-        setOrder(shuffle(pool));
-        setIdx(0);
-        setSessionStats({ total: 0, correct: 0 });
-        setStarted(true);
+        beginWith(pool);
       }
       onConsumed?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 科目選択から開始
   const start = () => {
-    const pool = poolForSubject(questions, subject);
-    if (pool.length === 0) return;
-    setOrder(shuffle(pool));
-    setIdx(0);
-    setSessionStats({ total: 0, correct: 0 });
-    setStarted(true);
+    beginWith(poolForSubject(questions, subject));
+  };
+  // 「もう一度」＝同じ母集団を再シャッフルして再演習
+  const restart = () => {
+    if (sessionPool) beginWith(sessionPool);
+    else start();
   };
 
   const handleAnswered = (correct) => {
@@ -137,10 +143,16 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
             {sessionStats.total}問中 {sessionStats.correct}問 正解
           </p>
           <div className="btn-row" style={{ marginTop: 8 }}>
-            <button className="btn" onClick={() => setStarted(false)}>
+            <button
+              className="btn"
+              onClick={() => {
+                setStarted(false);
+                setSessionPool(null);
+              }}
+            >
               科目を選び直す
             </button>
-            <button className="btn primary" onClick={start}>
+            <button className="btn primary" onClick={restart}>
               もう一度
             </button>
           </div>

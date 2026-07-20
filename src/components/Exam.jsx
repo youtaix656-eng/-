@@ -82,11 +82,13 @@ export default function Exam({ store }) {
   };
 
   // 結果ステージに入ったら履歴へ記録（1回だけ）
+  // 未解答（skip）はSRS・復習リストを汚さないよう記録しない（採点上は別途、不正解として集計）。
   const recordedRef = useRef(false);
   useEffect(() => {
     if (stage === 'result' && !recordedRef.current) {
       recordedRef.current = true;
       order.forEach((q, i) => {
+        if (answers[i] == null) return; // 未解答は記録しない
         const correct = answers[i] === q.answer;
         recordAnswer(q, correct);
       });
