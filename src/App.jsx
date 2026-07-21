@@ -21,6 +21,8 @@ import Calendar from './components/Calendar.jsx';
 import Venues from './components/Venues.jsx';
 import ExamContent from './components/ExamContent.jsx';
 import Experiences from './components/Experiences.jsx';
+import MindMap from './components/MindMap.jsx';
+import TableOfContents from './components/TableOfContents.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -217,6 +219,10 @@ export default function App() {
         return <ExamContent store={store} onToast={showToast} />;
       case 'experiences':
         return <Experiences store={store} onToast={showToast} />;
+      case 'mindmap':
+        return <MindMap store={store} onOpenKeyword={openKeyword} />;
+      case 'toc':
+        return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':
         return (
           <ConnectedLearning
@@ -262,6 +268,8 @@ export default function App() {
       venues: '試験会場・ホテル',
       examcontent: '鍼灸国家試験の内容',
       experiences: '体験談ノート',
+      mindmap: 'マインドマップ',
+      toc: '目次',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';

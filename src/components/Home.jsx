@@ -57,6 +57,18 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">科目・回次・ジャンル・問題数を指定して出題。検索も。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('mindmap')}>
+          <span className="ico">🧠</span>
+          <span className="title">マインドマップ</span>
+          <span className="desc">つながる語・比較・数値注意を1枚に。引っかけに強くなる。</span>
+        </button>
+
+        <button className="menu-item" onClick={() => onNavigate('toc')}>
+          <span className="ico">📖</span>
+          <span className="title">目次</span>
+          <span className="desc">取り込んだ問題を科目・キーワードで一覧。範囲を選んで演習。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('review')}>
           <span className="ico">🔁</span>
           <span className="title">間違えた問題</span>

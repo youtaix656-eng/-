@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { parseFreeText } from '../lib/freetext.js';
 import { dedupeAgainst } from '../lib/importer.js';
+import { buildTermDict, suggestKeywords } from '../lib/connectlab.js';
 
 // 自由文（本のOCR・PDF抽出・ネットからコピーした文章）を自動で問題化し、
 // 1問ずつプレビュー編集してから追加する。
 export default function Parse({ store, onToast, onDone }) {
-  const { questions, appendQuestions } = store;
+  const { questions, appendQuestions, userDict } = store;
   const [raw, setRaw] = useState('');
   const [parsed, setParsed] = useState(null); // 編集可能な問題配列
   const [warnings, setWarnings] = useState([]);
@@ -14,6 +15,8 @@ export default function Parse({ store, onToast, onDone }) {
   const [round, setRound] = useState('');
   const [genre, setGenre] = useState('');
   const [deck, setDeck] = useState('');
+  const [autoKw, setAutoKw] = useState(true); // キーワードを自動で拾う
+  const dict = useMemo(() => buildTermDict(userDict), [userDict]);
 
   const doParse = () => {
     const { questions: qs, warnings: w } = parseFreeText(raw);
@@ -53,7 +56,13 @@ export default function Parse({ store, onToast, onDone }) {
       if (!out.subject && subject) out.subject = subject;
       if (!out.subject) out.subject = 'その他';
       if (round) out.round = round;
-      if (tags.length) out.tags = tags;
+      let finalTags = [...tags];
+      if (autoKw) {
+        const text = `${out.question || ''} ${(out.choices || []).join(' ')} ${out.explanation || ''}`;
+        const auto = suggestKeywords(text, finalTags, dict).slice(0, 3);
+        finalTags = Array.from(new Set([...finalTags, ...auto]));
+      }
+      if (finalTags.length) out.tags = finalTags;
       if (deck) out.deck = deck;
       return out;
     });
@@ -101,6 +110,10 @@ export default function Parse({ store, onToast, onDone }) {
               <input value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="ジャンル（| 区切り）" />
               <input value={deck} onChange={(e) => setDeck(e.target.value)} placeholder="ファイル名" />
             </div>
+            <label className="autokw-row">
+              <input type="checkbox" checked={autoKw} onChange={(e) => setAutoKw(e.target.checked)} />
+              <span>✨ キーワードを自動で拾って、目次・連結学習・マインドマップにつなげる</span>
+            </label>
           </div>
 
           {warnings.map((w, i) => (
