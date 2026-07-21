@@ -2192,3 +2192,15 @@ code.block {
 /* 連結クイズ */
 .quiz-qs { display: flex; flex-direction: column; gap: 6px; }
 .quiz-q { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; }
+
+/* ---- 連結学習：整理（統合・改名）・リコール採点 ---- */
+.tidy-suggest { background: rgba(230,182,79,0.10); border-color: rgba(230,182,79,0.4); }
+.tidy-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 0; border-top: 1px solid var(--border); flex-wrap: wrap;
+}
+.tidy-row:first-of-type { border-top: none; }
+.tidy-vars { font-size: 13px; font-weight: 600; color: var(--text); }
+.kw-add select { flex: 1; min-width: 0; }
+.btn.ok-btn { border-color: var(--correct); color: var(--text); }
+.btn.ng-btn { border-color: var(--wrong); color: var(--text); }

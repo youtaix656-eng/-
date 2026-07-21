@@ -1,21 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { dateKey, dailyPick, keywordClusters } from '../lib/connect.js';
+import { useEffect, useMemo, useState } from 'react';
+import { dateKey, dailyPick } from '../lib/connect.js';
 import { effectiveTags } from '../lib/query.js';
 import {
+  buildTermDict,
   suggestKeywords,
-  relatedQuestions,
+  bulkAutoTagPlan,
+  detectVariantPairs,
   isolatedReport,
   keywordHeat,
   heatColor,
-  graphData,
-  circleLayout,
   buildConnectQuiz,
 } from '../lib/connectlab.js';
-import { fileToDataUrl } from '../lib/image.js';
-import PhotoSource from './PhotoSource.jsx';
 
-// 連結学習法（つなげて一生モノの知識に）— 強化版
-//   今日 / 地図 / 深掘り / 点検 / クイズ の5つで、知識の地図を育てて試す。
+// 連結学習法（つなげて一生モノの知識に）— 改善版
+//   今日の1問 / 深掘り（1語まとめ＋整理＋ヒートマップ）/ 点検（一括タグ）/ クイズ（復習連動）
+//   ・キーワード自動提案は全13科目＋自分辞書に対応
+//   ・表記ゆれは「統合・改名」でまとめられる
+//   ・クイズとリコールの結果は復習（正答率）に反映される
 
 const NOTE_TEMPLATES = [
   { label: '経穴テンプレ', text: '【経絡】\n【部位】\n【要穴分類】\n【主治】\n【つながり】' },
@@ -25,7 +26,6 @@ const NOTE_TEMPLATES = [
 
 const TABS = [
   { id: 'daily', label: '今日の1問' },
-  { id: 'map', label: '地図' },
   { id: 'depth', label: '深掘り' },
   { id: 'inspect', label: '点検' },
   { id: 'quiz', label: 'クイズ' },
@@ -65,8 +65,7 @@ export default function ConnectedLearning({ store, onToast, focusKeyword, onCons
         ))}
       </div>
 
-      {tab === 'daily' && <Daily store={store} onToast={onToast} onOpenKeyword={openKeyword} />}
-      {tab === 'map' && <GraphMap store={store} onOpenKeyword={openKeyword} />}
+      {tab === 'daily' && <Daily store={store} onToast={onToast} />}
       {tab === 'depth' && (
         <Depth store={store} onToast={onToast} selectedKw={selectedKw} setSelectedKw={setSelectedKw} />
       )}
@@ -76,19 +75,19 @@ export default function ConnectedLearning({ store, onToast, focusKeyword, onCons
   );
 }
 
-// ===== 今日の1問（深掘り） =====
-function Daily({ store, onToast, onOpenKeyword }) {
-  const { questions, reviewQuestions, links, setLink, markDeepDive, settings } = store;
+// ===== 今日の1問 =====
+function Daily({ store, onToast }) {
+  const { questions, reviewQuestions, links, setLink, markDeepDive, settings, userDict } = store;
   const today = dateKey();
   const pool = reviewQuestions.length > 0 ? reviewQuestions : questions;
   const q = useMemo(() => dailyPick(pool, today), [pool, today]);
+  const dict = useMemo(() => buildTermDict(userDict), [userDict]);
 
   const link = (q && links[q.id]) || { keywords: [], note: '', related: [] };
   const [kwInput, setKwInput] = useState('');
   const [note, setNote] = useState(link.note || '');
   const [showAnswer, setShowAnswer] = useState(false);
 
-  // 深掘り対象が変わったらメモを同期
   useEffect(() => {
     setNote((q && links[q.id]?.note) || '');
     setShowAnswer(false);
@@ -97,10 +96,8 @@ function Daily({ store, onToast, onOpenKeyword }) {
   const suggestions = useMemo(() => {
     if (!q) return [];
     const text = `${q.question || ''} ${(q.choices || []).join(' ')} ${q.explanation || ''}`;
-    return suggestKeywords(text, link.keywords);
-  }, [q?.id, link.keywords]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const related = useMemo(() => (q ? relatedQuestions(q, questions, links, { limit: 6 }) : []), [q?.id, questions, links]);
+    return suggestKeywords(text, link.keywords, dict);
+  }, [q?.id, link.keywords, dict]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!q) {
     return (
@@ -119,10 +116,6 @@ function Daily({ store, onToast, onOpenKeyword }) {
     setKwInput('');
   };
   const removeKeyword = (kw) => setLink(q.id, { keywords: link.keywords.filter((k) => k !== kw) });
-  const toggleRelated = (rid) => {
-    const cur = link.related || [];
-    setLink(q.id, { related: cur.includes(rid) ? cur.filter((x) => x !== rid) : [...cur, rid] });
-  };
   const insertTemplate = (t) => setNote((n) => (n ? n + '\n' + t : t));
   const saveNote = () => {
     setLink(q.id, { note });
@@ -157,9 +150,7 @@ function Daily({ store, onToast, onOpenKeyword }) {
           <div className="explanation">
             <span className="label">正解</span>
             {q.type === 'ox' ? q.choices[q.answer] : `${q.answer + 1}. ${q.choices[q.answer]}`}
-            {q.explanation && (
-              <div style={{ marginTop: 8 }}><span className="label">解説</span>{q.explanation}</div>
-            )}
+            {q.explanation && <div style={{ marginTop: 8 }}><span className="label">解説</span>{q.explanation}</div>}
           </div>
         )}
       </div>
@@ -205,86 +196,31 @@ function Daily({ store, onToast, onOpenKeyword }) {
           <button className="btn sm" onClick={() => addKeyword()}>追加</button>
         </div>
 
-        {related.length > 0 && (
-          <>
-            <label className="section-label">関連する問題（自動提案・つなげる）</label>
-            {related.map((r) => (
-              <label key={r.q.id} className="related-cand">
-                <input type="checkbox" checked={(link.related || []).includes(r.q.id)} onChange={() => toggleRelated(r.q.id)} />
-                <span>
-                  <span className="rel-reason">{r.reason}</span>
-                  {r.q.question || '（図の問題）'}
-                </span>
-              </label>
-            ))}
-          </>
-        )}
-
         <button className="btn primary block lg" style={{ marginTop: 12 }} onClick={saveNote}>この深掘りを記録する</button>
       </div>
     </>
   );
 }
 
-// ===== 地図（ビジュアル・ヒートマップ） =====
-function GraphMap({ store, onOpenKeyword }) {
-  const { questions, links, history } = store;
-  const linkedCount = Object.keys(links).length;
-  const { nodes, edges } = useMemo(() => graphData(questions, links, history), [questions, links, history]);
-  // 見やすさのため上位24語まで
-  const top = useMemo(() => {
-    const keep = new Set([...nodes].sort((a, b) => b.count - a.count).slice(0, 24).map((n) => n.id));
-    const ns = circleLayout(nodes.filter((n) => keep.has(n.id)));
-    const pos = new Map(ns.map((n) => [n.id, n]));
-    const es = edges.filter((e) => pos.has(e.source) && pos.has(e.target));
-    return { ns, es, pos };
-  }, [nodes, edges]);
-
-  if (linkedCount === 0 || nodes.length === 0) {
-    return (
-      <div className="empty">
-        <div className="ico">🗺️</div>
-        <p>まだ地図は空っぽです。</p>
-        <p className="inline-note">「今日の1問」でキーワードを付けると、ここに知識のつながりが育ちます。</p>
-      </div>
-    );
-  }
-
-  const maxCount = Math.max(...top.ns.map((n) => n.count), 1);
-
-  return (
-    <>
-      <p className="inline-note">丸をタップすると、その言葉の深掘りページへ。色は正答率（🟢得意・🟡ふつう・🔴苦手・⚪未回答）。</p>
-      <div className="graph-wrap">
-        <svg viewBox="0 0 100 100" className="graph-svg" preserveAspectRatio="xMidYMid meet">
-          {top.es.map((e, i) => {
-            const a = top.pos.get(e.source);
-            const b = top.pos.get(e.target);
-            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="graph-edge" strokeWidth={Math.min(0.5 + e.weight * 0.3, 1.6)} />;
-          })}
-          {top.ns.map((n) => {
-            const r = 2.4 + (n.count / maxCount) * 3.2;
-            return (
-              <g key={n.id} className="graph-node" onClick={() => onOpenKeyword(n.id)}>
-                <circle cx={n.x} cy={n.y} r={r} fill={heatColor(n.accuracy)} />
-                <text x={n.x} y={n.y - r - 0.8} className="graph-label">{n.id}</text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-      <p className="inline-note">大きい丸ほど関連問題が多い言葉です。全{nodes.length}語のうち上位{top.ns.length}語を表示。</p>
-    </>
-  );
-}
-
-// ===== 深掘り（キーワード一覧 → 1語まとめ） =====
+// ===== 深掘り（一覧＝ヒートマップ ＋ 整理 ＋ 1語まとめ） =====
 function Depth({ store, onToast, selectedKw, setSelectedKw }) {
-  const { questions, links, history } = store;
+  const { questions, links, history, renameKeyword } = store;
   const heat = useMemo(() => keywordHeat(questions, links, history), [questions, links, history]);
+  const allKw = useMemo(() => heat.map((h) => h.keyword), [heat]);
+  const variants = useMemo(() => detectVariantPairs(allKw), [allKw]);
+  const [showTidy, setShowTidy] = useState(false);
 
   if (selectedKw) {
-    return <KeywordDetail store={store} onToast={onToast} keyword={selectedKw} onBack={() => setSelectedKw(null)} />;
+    return (
+      <KeywordDetail
+        store={store}
+        onToast={onToast}
+        keyword={selectedKw}
+        allKw={allKw}
+        onBack={() => setSelectedKw(null)}
+        onGoKeyword={(k) => setSelectedKw(k)}
+      />
+    );
   }
 
   if (heat.length === 0) {
@@ -292,14 +228,43 @@ function Depth({ store, onToast, selectedKw, setSelectedKw }) {
       <div className="empty">
         <div className="ico">🔍</div>
         <p>まだキーワードがありません。</p>
-        <p className="inline-note">「今日の1問」でキーワードを付けると、ここで1語ずつ深掘りできます。</p>
+        <p className="inline-note">「今日の1問」でキーワードを付けるか、「点検」で一括タグ付けから始めましょう。</p>
       </div>
     );
   }
 
+  const mergeVariant = (v) => {
+    v.variants.forEach((name) => {
+      if (name !== v.canonical) renameKeyword(name, v.canonical);
+    });
+    onToast(`「${v.canonical}」にまとめました`);
+  };
+
   return (
     <>
-      <p className="inline-note">言葉をタップすると、関連問題・つながり・語呂合わせをまとめた「1語まとめ」を開けます。</p>
+      {/* 表記ゆれの自動検出 → まとめる */}
+      {variants.length > 0 && (
+        <div className="card tidy-suggest">
+          <div className="section-label" style={{ marginTop: 0 }}>🧹 表記ゆれが見つかりました</div>
+          {variants.map((v) => (
+            <div key={v.canonical} className="tidy-row">
+              <span className="tidy-vars">{v.variants.join(' ・ ')}</span>
+              <button className="btn accent sm" onClick={() => mergeVariant(v)}>「{v.canonical}」にまとめる</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="section-label" style={{ marginTop: 0 }}>
+        キーワード（{heat.length}）
+        <button className="btn ghost sm" style={{ float: 'right' }} onClick={() => setShowTidy((v) => !v)}>
+          {showTidy ? '整理を閉じる' : '🧹 整理'}
+        </button>
+      </div>
+      {showTidy && (
+        <p className="inline-note">各キーワードを開くと、名前の変更や他の語への統合ができます。</p>
+      )}
+
       {heat.map((h) => (
         <button key={h.keyword} className="card kw-list-item" onClick={() => setSelectedKw(h.keyword)}>
           <span className="kw-dot" style={{ background: heatColor(h.accuracy) }} />
@@ -307,8 +272,7 @@ function Depth({ store, onToast, selectedKw, setSelectedKw }) {
             <span className="kw-list-name">🔗 {h.keyword}</span>
             <span className="kw-list-sub">
               {h.questions.length}問
-              {h.accuracy != null && ` ・ 正答率${Math.round(h.accuracy * 100)}%`}
-              {h.accuracy == null && ' ・ 未回答'}
+              {h.accuracy != null ? ` ・ 正答率${Math.round(h.accuracy * 100)}%` : ' ・ 未回答'}
             </span>
           </span>
           <span className="kw-list-chev">›</span>
@@ -318,17 +282,20 @@ function Depth({ store, onToast, selectedKw, setSelectedKw }) {
   );
 }
 
-// 1語まとめ（#4）＋ 語呂合わせ/画像（#9）＋ 連想リコール（#10）
-function KeywordDetail({ store, onToast, keyword, onBack }) {
-  const { questions, links, history, kwMeta, setKeywordMeta } = store;
-  const meta = kwMeta[keyword] || { mnemonic: '', image: '' };
+// 1語まとめ ＋ 語呂合わせ ＋ 連想リコール(復習連動) ＋ 改名/統合
+function KeywordDetail({ store, onToast, keyword, allKw, onBack, onGoKeyword }) {
+  const { questions, links, history, kwMeta, setKeywordMeta, renameKeyword, recordAnswer } = store;
+  const meta = kwMeta[keyword] || { mnemonic: '' };
   const [mnemonic, setMnemonic] = useState(meta.mnemonic || '');
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [recall, setRecall] = useState(false); // 連想リコール中は隠す
+  const [recall, setRecall] = useState(false);
+  const [renameTo, setRenameTo] = useState('');
+  const [mergeInto, setMergeInto] = useState('');
 
   useEffect(() => {
     setMnemonic((kwMeta[keyword]?.mnemonic) || '');
     setRecall(false);
+    setRenameTo('');
+    setMergeInto('');
   }, [keyword]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const linked = useMemo(
@@ -338,30 +305,38 @@ function KeywordDetail({ store, onToast, keyword, onBack }) {
   const relatedKw = useMemo(() => {
     const co = new Map();
     for (const q of linked) {
-      for (const t of new Set(effectiveTags(q, links))) {
-        if (t !== keyword) co.set(t, (co.get(t) || 0) + 1);
-      }
+      for (const t of new Set(effectiveTags(q, links))) if (t !== keyword) co.set(t, (co.get(t) || 0) + 1);
     }
     return [...co.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]).slice(0, 8);
   }, [linked, links, keyword]);
-  const heat = useMemo(() => keywordHeat(questions, links, history).find((h) => h.keyword === keyword), [questions, links, history, keyword]);
+  const heat = useMemo(
+    () => keywordHeat(questions, links, history).find((h) => h.keyword === keyword),
+    [questions, links, history, keyword]
+  );
 
   const saveMnemonic = () => {
     setKeywordMeta(keyword, { mnemonic });
     onToast('語呂合わせを保存しました');
   };
-  const addImage = async (files) => {
-    const f = files?.[0];
-    if (!f) return;
-    try {
-      const url = await fileToDataUrl(f);
-      setKeywordMeta(keyword, { image: url });
-      onToast('画像を追加しました');
-    } catch (e) {
-      onToast('画像の読み込みに失敗しました');
-    }
+  const doRename = () => {
+    const to = renameTo.trim();
+    if (!to || to === keyword) return;
+    renameKeyword(keyword, to);
+    onToast(`「${to}」に名前を変更しました`);
+    onGoKeyword(to);
   };
-  const removeImage = () => setKeywordMeta(keyword, { image: '' });
+  const doMerge = () => {
+    if (!mergeInto || mergeInto === keyword) return;
+    renameKeyword(keyword, mergeInto);
+    onToast(`「${mergeInto}」に統合しました`);
+    onGoKeyword(mergeInto);
+  };
+  // #10 リコールの自己採点 → 復習(正答率)に反映
+  const rateRecall = (ok) => {
+    linked.forEach((q) => recordAnswer(q, ok));
+    setRecall(false);
+    onToast(ok ? '「覚えていた」を記録（復習に反映）' : '「あやふや」を記録（復習に追加）');
+  };
 
   return (
     <>
@@ -371,68 +346,77 @@ function KeywordDetail({ store, onToast, keyword, onBack }) {
         <div className="kwd-head">
           <span className="kwd-title">🔗 {keyword}</span>
           <span className="kwd-stat" style={{ color: heatColor(heat?.accuracy) }}>
-            {linked.length}問
-            {heat?.accuracy != null ? ` ・ 正答率${Math.round(heat.accuracy * 100)}%` : ' ・ 未回答'}
+            {linked.length}問{heat?.accuracy != null ? ` ・ 正答率${Math.round(heat.accuracy * 100)}%` : ' ・ 未回答'}
           </span>
         </div>
-
         {relatedKw.length > 0 && (
           <div className="kwd-related">
             <span className="suggest-label">つながる言葉：</span>
             {relatedKw.map((k) => (
-              <span key={k} className="chip" style={{ marginRight: 6, marginBottom: 6, display: 'inline-block' }}>{k}</span>
+              <button key={k} className="chip" style={{ marginRight: 6, marginBottom: 6 }} onClick={() => onGoKeyword(k)}>{k}</button>
             ))}
           </div>
         )}
       </div>
 
-      {/* #10 連想リコール */}
+      {/* 連想リコール（復習連動） */}
       <div className="card">
         <div className="section-label" style={{ marginTop: 0 }}>🧠 連想リコール練習</div>
         <p className="inline-note" style={{ marginTop: 0 }}>
-          「{keyword}」から思い出せることを、頭の中（または紙）に書き出してから「めくる」で答え合わせ。
+          「{keyword}」から思い出せることを書き出してから「めくる」。自己採点は復習（正答率）に反映されます。
         </p>
         {!recall ? (
           <button className="btn primary block" onClick={() => setRecall(true)}>思い出す練習をはじめる</button>
         ) : (
-          <button className="btn accent block" onClick={() => setRecall(false)}>めくる（答え合わせ）</button>
+          <div className="btn-row">
+            <button className="btn ok-btn" onClick={() => rateRecall(true)}>⭕ 覚えていた</button>
+            <button className="btn ng-btn" onClick={() => rateRecall(false)}>❌ あやふや</button>
+          </div>
         )}
       </div>
 
-      {/* #9 語呂合わせ・イメージ */}
+      {/* 語呂合わせ */}
       <div className="card">
-        <div className="section-label" style={{ marginTop: 0 }}>🎴 語呂合わせ・イメージ記憶</div>
+        <div className="section-label" style={{ marginTop: 0 }}>🎴 語呂合わせ・覚え方</div>
         <textarea
           value={mnemonic}
           onChange={(e) => setMnemonic(e.target.value)}
           placeholder="覚え方・語呂合わせを自由に。例）四総穴＝『肚（足三里）・腰（委中）・頭（列缺）・顔（合谷）』"
           style={{ minHeight: 64 }}
         />
-        <div className="btn-row" style={{ marginTop: 8 }}>
-          <button className="btn sm" onClick={() => setSheetOpen(true)}>🖼️ 画像を追加</button>
-          <button className="btn primary sm" onClick={saveMnemonic}>保存</button>
-        </div>
-        {meta.image && (
-          <div className="kwd-image">
-            <img src={meta.image} alt="イメージ記憶" />
-            <button className="btn ghost sm" onClick={removeImage}>画像を削除</button>
-          </div>
-        )}
-        <PhotoSource open={sheetOpen} onClose={() => setSheetOpen(false)} onPick={addImage} multiple={false} title="イメージ画像を追加" />
+        <button className="btn primary sm" style={{ marginTop: 8 }} onClick={saveMnemonic}>保存</button>
       </div>
 
-      {/* 関連問題（リコール中は隠す） */}
+      {/* 整理：改名・統合 */}
+      <div className="card">
+        <div className="section-label" style={{ marginTop: 0 }}>🧹 整理（名前の変更・統合）</div>
+        <div className="kw-add">
+          <input type="text" value={renameTo} onChange={(e) => setRenameTo(e.target.value)} placeholder="新しい名前に変更" />
+          <button className="btn sm" onClick={doRename}>改名</button>
+        </div>
+        {allKw.length > 1 && (
+          <div className="kw-add" style={{ marginTop: 8 }}>
+            <select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)}>
+              <option value="">別の語に統合…</option>
+              {allKw.filter((k) => k !== keyword).map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+            <button className="btn sm" onClick={doMerge}>統合</button>
+          </div>
+        )}
+      </div>
+
+      {/* 関連問題 */}
       <div className="section-label">この言葉に関連する問題（{linked.length}）</div>
       {recall ? (
-        <div className="card recall-hidden">🙈 思い出せたら「めくる」を押してください。</div>
+        <div className="card recall-hidden">🙈 思い出せたら「覚えていた／あやふや」で自己採点してください。</div>
       ) : (
         linked.map((q) => (
           <div className="card cluster-q-card" key={q.id}>
             <div className="q-subject">{q.subject}</div>
             <div className="cqc-q">{q.question || '（図の問題）'}</div>
-            <div className="cqc-a">
-              正解：{q.type === 'ox' ? q.choices[q.answer] : `${q.answer + 1}. ${q.choices[q.answer]}`}
-            </div>
+            <div className="cqc-a">正解：{q.type === 'ox' ? q.choices[q.answer] : `${q.answer + 1}. ${q.choices[q.answer]}`}</div>
             {links[q.id]?.note && <div className="cqc-note">🔗 {links[q.id].note}</div>}
           </div>
         ))
@@ -441,12 +425,18 @@ function KeywordDetail({ store, onToast, keyword, onBack }) {
   );
 }
 
-// ===== 点検（孤立ノード検出 #7） =====
+// ===== 点検（孤立検出 ＋ 一括自動タグ ＋ 自分辞書） =====
 function Inspect({ store, onToast, onOpenKeyword }) {
-  const { questions, links, setLink } = store;
+  const { questions, links, setLink, bulkTag, userDict, addUserTerm } = store;
+  const dict = useMemo(() => buildTermDict(userDict), [userDict]);
   const rep = useMemo(() => isolatedReport(questions, links), [questions, links]);
-  const [addFor, setAddFor] = useState(null); // 問題ID
+  const autoPlan = useMemo(
+    () => bulkAutoTagPlan(questions, links, { onlyUntagged: true, perQuestion: 2, termDict: dict }),
+    [questions, links, dict]
+  );
+  const [addFor, setAddFor] = useState(null);
   const [kwInput, setKwInput] = useState('');
+  const [termInput, setTermInput] = useState('');
 
   const addKw = (q) => {
     const k = kwInput.trim();
@@ -457,10 +447,19 @@ function Inspect({ store, onToast, onOpenKeyword }) {
     setAddFor(null);
     onToast(`「${k}」を付けました`);
   };
-
-  const suggestFor = (q) => {
-    const text = `${q.question || ''} ${(q.choices || []).join(' ')} ${q.explanation || ''}`;
-    return suggestKeywords(text, links[q.id]?.keywords || []).slice(0, 6);
+  const suggestFor = (q) =>
+    suggestKeywords(`${q.question || ''} ${(q.choices || []).join(' ')} ${q.explanation || ''}`, links[q.id]?.keywords || [], dict).slice(0, 6);
+  const runBulk = () => {
+    if (autoPlan.length === 0) return;
+    bulkTag(autoPlan);
+    onToast(`${autoPlan.length}問に候補キーワードを付けました`);
+  };
+  const addTerm = () => {
+    const t = termInput.trim();
+    if (!t) return;
+    addUserTerm(t);
+    setTermInput('');
+    onToast(`「${t}」を候補辞書に追加しました`);
   };
 
   return (
@@ -470,7 +469,26 @@ function Inspect({ store, onToast, onOpenKeyword }) {
         <div className="tile"><div className="num">{rep.singletonCount}</div><div className="lbl">1問だけの語</div></div>
       </div>
 
-      <div className="section-label" style={{ marginTop: 8 }}>キーワードが付いていない問題</div>
+      {autoPlan.length > 0 && (
+        <div className="card" style={{ background: 'rgba(63,157,176,0.12)', borderColor: 'var(--accent)' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>🏷 一括で自動タグ付け</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            キーワードが無い <strong>{autoPlan.length}問</strong> に、本文から拾った候補を自動で付けます（あとで各問で編集できます）。
+          </p>
+          <button className="btn primary block" onClick={runBulk}>{autoPlan.length}問にまとめて付ける</button>
+        </div>
+      )}
+
+      <div className="card">
+        <div className="section-label" style={{ marginTop: 0 }}>📚 候補辞書に用語を追加</div>
+        <p className="inline-note" style={{ marginTop: 0 }}>自動提案に出したい自分の用語を登録できます（現在 {userDict.length} 語）。</p>
+        <div className="kw-add">
+          <input type="text" value={termInput} onChange={(e) => setTermInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTerm()} placeholder="例）募穴、井穴 など" />
+          <button className="btn sm" onClick={addTerm}>追加</button>
+        </div>
+      </div>
+
+      <div className="section-label">キーワードが付いていない問題</div>
       {rep.untagged.length === 0 ? (
         <p className="inline-note">すべての問題にキーワードが付いています。すばらしい！</p>
       ) : (
@@ -482,7 +500,7 @@ function Inspect({ store, onToast, onOpenKeyword }) {
               <>
                 <div className="chip-row" style={{ marginTop: 8, marginBottom: 6 }}>
                   {suggestFor(q).map((s) => (
-                    <button key={s} className="chip suggest" onClick={() => { setKwInput(s); }}>＋ {s}</button>
+                    <button key={s} className="chip suggest" onClick={() => setKwInput(s)}>＋ {s}</button>
                   ))}
                 </div>
                 <div className="kw-add">
@@ -511,9 +529,10 @@ function Inspect({ store, onToast, onOpenKeyword }) {
   );
 }
 
-// ===== 連結クイズ（#5） =====
+// ===== 連結クイズ（復習連動） =====
 function ConnectQuiz({ store, onToast }) {
-  const { questions, links } = store;
+  const { questions, links, recordAnswer } = store;
+  const byId = useMemo(() => Object.fromEntries(questions.map((q) => [q.id, q])), [questions]);
   const [items, setItems] = useState(null);
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState(null);
@@ -536,7 +555,7 @@ function ConnectQuiz({ store, onToast }) {
       <>
         <p className="inline-note">
           作った知識の地図から、逆にクイズを出題します。「共通するキーワードは？」「仲間はずれは？」で
-          <strong>つながり自体</strong>を確認できます。
+          <strong>つながり自体</strong>を確認。<strong>回答は復習（正答率）に反映</strong>されます。
         </p>
         <button className="btn primary block lg" onClick={start}>連結クイズをはじめる</button>
       </>
@@ -544,11 +563,11 @@ function ConnectQuiz({ store, onToast }) {
   }
 
   const item = items[i];
-  const done = i >= items.length;
-  if (done) {
+  if (i >= items.length) {
     return (
       <div className="card" style={{ textAlign: 'center' }}>
         <div className="q-text">結果：{score} / {items.length} 正解</div>
+        <p className="inline-note">結果は各キーワードの正答率に反映されました。</p>
         <button className="btn primary block lg" style={{ marginTop: 12 }} onClick={start}>もう一度</button>
       </div>
     );
@@ -557,7 +576,12 @@ function ConnectQuiz({ store, onToast }) {
   const choose = (idx) => {
     if (picked != null) return;
     setPicked(idx);
-    if (idx === item.answer) setScore((s) => s + 1);
+    const correct = idx === item.answer;
+    if (correct) setScore((s) => s + 1);
+    // 復習連動：関係する問題を正誤として記録
+    (item.qids || []).forEach((qid) => {
+      if (byId[qid]) recordAnswer(byId[qid], correct);
+    });
   };
   const next = () => { setPicked(null); setI((x) => x + 1); };
 

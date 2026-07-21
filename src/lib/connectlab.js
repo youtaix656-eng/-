@@ -1,113 +1,109 @@
 // 連結学習法を強化するための純粋ロジック群。
-//   - キーワード自動提案（用語辞書ベース）
-//   - 関連問題の自動抽出（共有キーワード＋共通用語）
-//   - 孤立ノード検出（キーワード無し問題／1問だけの語）
-//   - 習熟度（キーワード別正答率）ヒートマップ用データ
-//   - 連結マップのグラフ（ノード・エッジ）
-//   - 連結クイズ（共通キーワード当て／仲間はずれ）
+//   - キーワード自動提案（用語辞書ベース・全科目対応＋ユーザー辞書）
+//   - 一括自動タグ付けのプラン作成
+//   - 表記ゆれ（同義語）の検出 → 統合のためのデータ
+//   - 孤立ノード検出
+//   - キーワード別正答率（ヒートマップ用）
+//   - 連結クイズ（共通キーワード当て／仲間はずれ）＋復習連動用の問題ID
 //
 // 実際の表示はコンポーネント側。ここはデータのみ。
 
 import { effectiveTags } from './query.js';
-import {
-  meridians,
-  yuanPoints,
-  luoPoints,
-  xiPoints,
-  fourCommandPoints,
-  wuxingElements,
-  zangTable,
-} from '../data/knowledgeBase.js';
+import { meridians, yuanPoints, luoPoints, xiPoints, fourCommandPoints, wuxingElements, zangTable } from '../data/knowledgeBase.js';
 import { keywordAccuracy, clustersMap } from './audioplan.js';
 
-// ---- 用語辞書（キーワード候補になり得る標準用語） ----
-export function buildTermDict() {
-  const terms = new Set();
-  const add = (t) => {
-    if (t && String(t).trim()) terms.add(String(t).trim());
-  };
-  meridians.forEach((m) => {
-    add(m.name);
-    add(m.short);
-    add(m.organ);
-  });
+// 経穴・経絡系（KB由来）
+function kbTerms() {
+  const t = new Set();
+  const add = (x) => { if (x && String(x).trim()) t.add(String(x).trim()); };
+  meridians.forEach((m) => { add(m.name); add(m.short); add(m.organ); });
   [yuanPoints, luoPoints, xiPoints].forEach((obj) => Object.values(obj).forEach(add));
   fourCommandPoints.forEach((f) => add(f.point));
   wuxingElements.forEach(add);
-  zangTable.forEach((z) => {
-    add(z.zang);
-    add(z.kan);
-    add(z.tai);
-  });
-  [
-    '原穴', '絡穴', '郄穴', '四総穴', '五兪穴', '要穴', '募穴', '背部兪穴',
-    '八会穴', '八脈交会穴', '五行', '五臓', '六腑', '相生', '相剋',
-    '経絡', '経穴', '奇経', '正経十二経',
-  ].forEach(add);
-  return terms;
+  zangTable.forEach((z) => { add(z.zang); add(z.kan); add(z.tai); });
+  ['原穴','絡穴','郄穴','四総穴','五兪穴','要穴','募穴','背部兪穴','八会穴','八脈交会穴','五行','五臓','六腑','相生','相剋','経絡','経穴','奇経','正経十二経'].forEach(add);
+  return t;
+}
+
+// 全13科目をゆるくカバーする頻出用語（自動提案の守備範囲を広げる）
+const EXTRA_TERMS = [
+  // 解剖学
+  '大腿骨','上腕骨','脊柱','椎骨','肋骨','横隔膜','僧帽筋','三角筋','大腿四頭筋','アキレス腱',
+  '迷走神経','正中神経','橈骨神経','尺骨神経','坐骨神経','腕神経叢','三叉神経','顔面神経',
+  '大動脈','冠状動脈','門脈','心臓','肝臓','腎臓','膵臓','脾臓','小脳','延髄','大脳','脊髄',
+  // 生理学
+  'ホルモン','インスリン','グルカゴン','アドレナリン','甲状腺','副腎','交感神経','副交感神経','自律神経',
+  'ネフロン','糸球体','ヘモグロビン','赤血球','白血球','血小板','活動電位','反射','恒常性','体温調節',
+  // 病理学
+  '炎症','腫瘍','良性腫瘍','悪性腫瘍','壊死','浮腫','虚血','梗塞','血栓','アレルギー','免疫','感染','変性',
+  // 衛生・公衆衛生
+  '疫学','予防','感染症','生活習慣病','健康増進','母子保健','食中毒','消毒','滅菌','予防接種',
+  // 関係法規
+  '免許','守秘義務','施術所','あん摩マッサージ指圧師','はり師','きゅう師','医師法','業務独占',
+  // 東洋医学
+  '陰陽','気血水','虚実','寒熱','表裏','六淫','七情','証','弁証','望診','聞診','問診','切診','脈診','舌診',
+  // 東洋臨床・現代臨床
+  '腰痛','肩こり','頭痛','神経痛','関節リウマチ','坐骨神経痛','自律神経失調症','変形性関節症','五十肩',
+];
+
+export function buildTermDict(extra = []) {
+  const t = kbTerms();
+  EXTRA_TERMS.forEach((x) => t.add(x));
+  (extra || []).forEach((x) => { if (x && String(x).trim()) t.add(String(x).trim()); });
+  return t;
 }
 
 let _dict = null;
-function dict() {
+function baseDict() {
   if (!_dict) _dict = buildTermDict();
   return _dict;
 }
 
 // テキストから、辞書に載っている用語を拾って候補に（既存キーワードは除く）
-export function suggestKeywords(text, existing = [], termDict = dict()) {
+export function suggestKeywords(text, existing = [], termDict) {
+  const dict = termDict || baseDict();
   const hay = String(text || '');
   const ex = new Set(existing);
   const found = [];
-  for (const term of termDict) {
+  for (const term of dict) {
     if (ex.has(term)) continue;
     if (hay.includes(term)) found.push(term);
   }
-  // 長い語（具体的）を優先し、重複や部分包含を軽く整理
+  // 具体的な語（長い語）を先に。似た語は「表記ゆれ統合」で後からまとめられる。
   found.sort((a, b) => b.length - a.length);
-  const out = [];
-  for (const t of found) {
-    if (out.some((o) => o.includes(t))) continue; // すでに上位語に含まれるなら省く
-    out.push(t);
-  }
-  return out.slice(0, 12);
+  return found.slice(0, 12);
 }
 
-// 問題の「用語プロフィール」＝ 実効タグ ∪ 本文中の辞書用語
-function termsOf(q, links, termDict = dict()) {
-  const set = new Set(effectiveTags(q, links));
-  const hay = `${q.question || ''} ${(q.choices || []).join(' ')} ${q.explanation || ''}`;
-  for (const term of termDict) if (hay.includes(term)) set.add(term);
-  return set;
-}
-
-// 関連問題を自動抽出（共有キーワードを重く、共通用語を軽く加点）
-export function relatedQuestions(target, questions, links, opts = {}) {
-  const limit = opts.limit || 6;
-  const already = new Set((links[target.id]?.related) || []);
-  const tTags = new Set(effectiveTags(target, links));
-  const tTerms = termsOf(target, links);
-  const res = [];
+// 一括自動タグ付けのプラン。onlyUntagged=true でキーワード無しだけ対象。
+export function bulkAutoTagPlan(questions, links, opts = {}) {
+  const perQuestion = opts.perQuestion || 2;
+  const onlyUntagged = opts.onlyUntagged !== false; // 既定はキーワード無しのみ
+  const dict = opts.termDict || baseDict();
+  const plan = [];
   for (const q of questions) {
-    if (q.id === target.id) continue;
-    const tags = new Set(effectiveTags(q, links));
-    const terms = termsOf(q, links);
-    let sharedTags = 0;
-    for (const t of tags) if (tTags.has(t)) sharedTags += 1;
-    let sharedTerms = 0;
-    for (const t of terms) if (tTerms.has(t)) sharedTerms += 1;
-    const sameSubject = q.subject && q.subject === target.subject ? 1 : 0;
-    const score = sharedTags * 5 + sharedTerms * 2 + sameSubject;
-    if (score <= 0) continue;
-    const reasonTerms = [...tTags].filter((t) => tags.has(t)).slice(0, 3);
-    res.push({
-      q,
-      score,
-      alreadyLinked: already.has(q.id),
-      reason: reasonTerms.length ? reasonTerms.join('・') : '同じ科目',
-    });
+    const existing = effectiveTags(q, links);
+    if (onlyUntagged && existing.length > 0) continue;
+    const text = `${q.question || ''} ${(q.choices || []).join(' ')} ${q.explanation || ''}`;
+    const add = suggestKeywords(text, existing, dict).slice(0, perQuestion);
+    if (add.length) plan.push({ id: q.id, add });
   }
-  res.sort((a, b) => b.score - a.score);
-  return res.slice(0, limit);
+  return plan;
+}
+
+// 同義語グループ（経絡の正式名 ↔ 略称）
+export function synonymGroups() {
+  return meridians.map((m) => ({ canonical: m.short, variants: [m.name, m.short] }));
+}
+
+// 既存キーワードの中から「まとめられそうな表記ゆれ」を検出
+export function detectVariantPairs(keywords) {
+  const set = new Set(keywords);
+  const out = [];
+  for (const g of synonymGroups()) {
+    const present = g.variants.filter((v) => set.has(v));
+    if (present.length >= 2) out.push({ canonical: g.canonical, variants: present });
+  }
+  return out;
 }
 
 // 孤立ノード検出：キーワード無しの問題／1問だけの語
@@ -118,15 +114,9 @@ export function isolatedReport(questions, links) {
   for (const [keyword, qs] of clusters) {
     if (qs.length === 1) singletons.push({ keyword, question: qs[0] });
   }
-  return {
-    untagged,
-    singletons,
-    untaggedCount: untagged.length,
-    singletonCount: singletons.length,
-  };
+  return { untagged, singletons, untaggedCount: untagged.length, singletonCount: singletons.length };
 }
 
-// キーワード別の正答率（ヒートマップ用）。audioplan を再利用。
 export function keywordHeat(questions, links, history) {
   return keywordAccuracy(questions, links, history);
 }
@@ -139,43 +129,7 @@ export function heatColor(accuracy) {
   return '#3aa878';
 }
 
-// 連結マップのグラフ（キーワードをノード、共起をエッジに）
-export function graphData(questions, links, history) {
-  const heat = keywordHeat(questions, links, history);
-  const nodes = heat.map((h) => ({
-    id: h.keyword,
-    count: h.questions.length,
-    accuracy: h.accuracy,
-  }));
-  const idx = new Map(nodes.map((n, i) => [n.id, i]));
-  // 共起エッジ
-  const edgeMap = new Map();
-  for (const q of questions) {
-    const tags = [...new Set(effectiveTags(q, links))].filter((t) => idx.has(t));
-    for (let i = 0; i < tags.length; i++) {
-      for (let j = i + 1; j < tags.length; j++) {
-        const key = [tags[i], tags[j]].sort().join('');
-        edgeMap.set(key, (edgeMap.get(key) || 0) + 1);
-      }
-    }
-  }
-  const edges = [...edgeMap.entries()].map(([k, w]) => {
-    const [a, b] = k.split('');
-    return { source: a, target: b, weight: w };
-  });
-  return { nodes, edges };
-}
-
-// 円周レイアウト（決定的）。半径 R の円周上にノードを等間隔配置。
-export function circleLayout(nodes, R = 46, cx = 50, cy = 50) {
-  const n = nodes.length || 1;
-  return nodes.map((node, i) => {
-    const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
-    return { ...node, x: cx + R * Math.cos(ang), y: cy + R * Math.sin(ang) };
-  });
-}
-
-// 連結クイズを作る（共通キーワード当て / 仲間はずれ）
+// 連結クイズ（共通キーワード当て／仲間はずれ）。復習連動のため問題IDを含める。
 export function buildConnectQuiz(questions, links, opts = {}) {
   const rng = opts.rng || Math.random;
   const max = opts.max || 8;
@@ -196,13 +150,10 @@ export function buildConnectQuiz(questions, links, opts = {}) {
   const clusters = [...clustersMap(questions, links).entries()]
     .map(([keyword, qs]) => ({ keyword, qs }))
     .filter((c) => c.qs.length >= 2);
+  if (clusters.length < 2) return [];
+
   const items = [];
-  if (clusters.length < 2) return items; // クイズを作るには最低2クラスタ必要
-
-  const bigEnough = clusters.filter((c) => c.qs.length >= 2);
-
-  // 1) 共通キーワード当て
-  for (const c of shuffle(bigEnough)) {
+  for (const c of shuffle(clusters)) {
     if (items.length >= max) break;
     const qs = shuffle(c.qs).slice(0, Math.min(3, c.qs.length));
     const others = clusters.filter((x) => x.keyword !== c.keyword);
@@ -212,14 +163,14 @@ export function buildConnectQuiz(questions, links, opts = {}) {
     items.push({
       type: 'common',
       prompt: 'これらの問題に共通するキーワードはどれ？',
+      keyword: c.keyword,
       questions: qs.map(stem),
+      qids: qs.map((q) => q.id),
       options,
       answer: options.indexOf(c.keyword),
     });
   }
-
-  // 2) 仲間はずれ（3問は同じ語、1問だけ別）
-  for (const c of shuffle(bigEnough)) {
+  for (const c of shuffle(clusters)) {
     if (items.length >= max) break;
     if (c.qs.length < 3) continue;
     const others = clusters.filter((x) => x.keyword !== c.keyword);
@@ -233,9 +184,9 @@ export function buildConnectQuiz(questions, links, opts = {}) {
       prompt: `「${c.keyword}」の仲間はずれはどれ？`,
       keyword: c.keyword,
       options: cards.map(stem),
+      qids: inGroup.map((q) => q.id), // 復習連動は「仲間（同キーワード）」側
       answer: cards.indexOf(outQ),
     });
   }
-
   return shuffle(items).slice(0, max);
 }

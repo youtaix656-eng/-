@@ -38,6 +38,7 @@ export function useStore() {
   const [examContent, setExamContent] = useState(DEFAULT_EXAM_CONTENT);
   const [selfNotes, setSelfNotes] = useState([]);
   const [kwMeta, setKwMeta] = useState({});
+  const [userDict, setUserDict] = useState([]);
   const [seedToast, setSeedToast] = useState(0); // 取り込んだ件数（App でトースト表示）
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
 
@@ -46,7 +47,7 @@ export function useStore() {
     let alive = true;
     (async () => {
       await storage.migrateFromLocalStorage();
-      const [q, s, h, m, lk, sch, vn, ec, sn, km, cfg] = await Promise.all([
+      const [q, s, h, m, lk, sch, vn, ec, sn, km, ud, cfg] = await Promise.all([
         storage.loadQuestions(),
         storage.loadSrs(),
         storage.loadHistory(),
@@ -57,6 +58,7 @@ export function useStore() {
         storage.loadExamContent(),
         storage.loadSelfNotes(),
         storage.loadKwMeta(),
+        storage.loadUserDict(),
         storage.loadSettings(),
       ]);
       if (!alive) return;
@@ -88,6 +90,7 @@ export function useStore() {
         setSelfNotes(base);
       }
       setKwMeta(km || {});
+      setUserDict(ud || []);
 
       setSettings(cfg);
       setLoaded(true);
@@ -133,6 +136,9 @@ export function useStore() {
   useEffect(() => {
     if (persist.current) storage.saveKwMeta(kwMeta);
   }, [kwMeta]);
+  useEffect(() => {
+    if (persist.current) storage.saveUserDict(userDict);
+  }, [userDict]);
   useEffect(() => {
     if (persist.current) storage.saveSettings(settings);
   }, [settings]);
@@ -216,17 +222,65 @@ export function useStore() {
   }, []);
   const clearSeedToast = useCallback(() => setSeedToast(0), []);
 
-  // キーワードのメタ（語呂合わせ・画像）を更新
+  // キーワードのメタ（語呂合わせ）を更新
   const setKeywordMeta = useCallback((keyword, patch) => {
     setKwMeta((prev) => {
-      const cur = prev[keyword] || { mnemonic: '', image: '' };
+      const cur = prev[keyword] || { mnemonic: '' };
       const next = { ...cur, ...patch };
-      const empty = !next.mnemonic && !next.image;
+      const empty = !next.mnemonic;
       const out = { ...prev };
       if (empty) delete out[keyword];
       else out[keyword] = next;
       return out;
     });
+  }, []);
+
+  // キーワードの改名／統合（from を to に置き換える）。tags と links の両方を更新。
+  const renameKeyword = useCallback((from, to) => {
+    const f = String(from || '').trim();
+    const t = String(to || '').trim();
+    if (!f || !t || f === t) return;
+    const repl = (arr) => Array.from(new Set((arr || []).map((k) => (k === f ? t : k))));
+    setQuestions((prev) =>
+      prev.map((q) => (q.tags && q.tags.includes(f) ? { ...q, tags: repl(q.tags) } : q))
+    );
+    setLinks((prev) => {
+      const out = {};
+      for (const [qid, l] of Object.entries(prev)) {
+        out[qid] = l.keywords && l.keywords.includes(f) ? { ...l, keywords: repl(l.keywords) } : l;
+      }
+      return out;
+    });
+    setKwMeta((prev) => {
+      if (!prev[f]) return prev;
+      const out = { ...prev };
+      const mnemonic = (prev[t]?.mnemonic || prev[f]?.mnemonic || '').trim();
+      delete out[f];
+      if (mnemonic) out[t] = { mnemonic };
+      return out;
+    });
+  }, []);
+
+  // 自動タグ付けの一括適用（plan: [{ id, add:[kw] }]）
+  const bulkTag = useCallback((plan) => {
+    if (!plan || plan.length === 0) return;
+    const byId = new Map(plan.map((p) => [p.id, p.add]));
+    setLinks((prev) => {
+      const out = { ...prev };
+      for (const [qid, add] of byId) {
+        const cur = out[qid] || { keywords: [], note: '', related: [] };
+        const kws = Array.from(new Set([...(cur.keywords || []), ...add]));
+        out[qid] = { ...cur, keywords: kws };
+      }
+      return out;
+    });
+  }, []);
+
+  // ユーザー辞書に用語を追加
+  const addUserTerm = useCallback((term) => {
+    const t = String(term || '').trim();
+    if (!t) return;
+    setUserDict((prev) => (prev.includes(t) ? prev : [...prev, t]));
   }, []);
 
   const resetProgress = useCallback(() => {
@@ -275,6 +329,7 @@ export function useStore() {
     setExamContent(ec && ec.length ? ec : DEFAULT_EXAM_CONTENT);
     setSelfNotes(sn || []);
     setKwMeta(km || {});
+    setUserDict(ud || []);
     setSettings(cfg);
   }, []);
 
@@ -308,6 +363,10 @@ export function useStore() {
     addSelfNotes,
     kwMeta,
     setKeywordMeta,
+    renameKeyword,
+    bulkTag,
+    userDict,
+    addUserTerm,
     seedToast,
     clearSeedToast,
     settings,

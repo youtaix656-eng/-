@@ -24,7 +24,8 @@ export const KEYS = {
   venues: 'shinkyu:venues', // 試験会場・近くのホテル
   examContent: 'shinkyu:examContent', // 国家試験の内容メモ（枠）
   selfNotes: 'shinkyu:selfNotes', // セルフケア・体調メモ（端末内のみ）
-  kwMeta: 'shinkyu:kwMeta', // キーワード別のメタ（語呂合わせ・画像）
+  kwMeta: 'shinkyu:kwMeta', // キーワード別のメタ（語呂合わせ）
+  userDict: 'shinkyu:userDict', // 自動提案に使うユーザー辞書
   migrated: 'shinkyu:migrated',
 };
 
@@ -88,7 +89,7 @@ export async function migrateFromLocalStorage() {
     if (already) return;
     const legacyKeys = [
       KEYS.questions, KEYS.srs, KEYS.history, KEYS.memos, KEYS.links, KEYS.settings,
-      KEYS.schedule, KEYS.venues, KEYS.examContent, KEYS.selfNotes, KEYS.kwMeta,
+      KEYS.schedule, KEYS.venues, KEYS.examContent, KEYS.selfNotes, KEYS.kwMeta, KEYS.userDict,
     ];
     for (const k of legacyKeys) {
       const raw = localStorage.getItem(k);
@@ -147,10 +148,14 @@ export const saveExamContent = (c) => write(KEYS.examContent, c);
 export const loadSelfNotes = () => read(KEYS.selfNotes, []);
 export const saveSelfNotes = (n) => write(KEYS.selfNotes, n);
 
-// ---- キーワード別メタ（語呂合わせ・イメージ画像） ----
-// kwMeta = { [keyword]: { mnemonic, image } }
+// ---- キーワード別メタ（語呂合わせ） ----
+// kwMeta = { [keyword]: { mnemonic } }
 export const loadKwMeta = () => read(KEYS.kwMeta, {});
 export const saveKwMeta = (m) => write(KEYS.kwMeta, m);
+
+// ---- ユーザー辞書（自動提案に足す自作用語） ----
+export const loadUserDict = () => read(KEYS.userDict, []);
+export const saveUserDict = (d) => write(KEYS.userDict, d);
 
 // ---- 設定 ----
 const DEFAULT_SETTINGS = {
@@ -193,6 +198,7 @@ export async function exportAll() {
     examContent: await loadExamContent(),
     selfNotes: await loadSelfNotes(),
     kwMeta: await loadKwMeta(),
+    userDict: await loadUserDict(),
     settings: await read(KEYS.settings, {}),
   };
 }
@@ -209,5 +215,6 @@ export async function importAll(data) {
   if (Array.isArray(data.examContent)) await saveExamContent(data.examContent);
   if (Array.isArray(data.selfNotes)) await saveSelfNotes(data.selfNotes);
   if (data.kwMeta && typeof data.kwMeta === 'object') await saveKwMeta(data.kwMeta);
+  if (Array.isArray(data.userDict)) await saveUserDict(data.userDict);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
 }
