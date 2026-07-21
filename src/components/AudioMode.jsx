@@ -1,32 +1,48 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { isSpeechSupported, loadVoices, speak, cancelSpeech, wait } from '../lib/speech.js';
+import { effectiveTags, shuffle } from '../lib/query.js';
+import { dateKey } from '../lib/connect.js';
 import {
-  isSpeechSupported,
-  loadVoices,
-  speak,
-  cancelSpeech,
-  wait,
-} from '../lib/speech.js';
-import { allTags, effectiveTags, shuffle } from '../lib/query.js';
+  allKeywords,
+  clustersMap,
+  relatedKeywordMap,
+  chainOrder,
+  keywordAccuracy,
+  dailyKeyword,
+} from '../lib/audioplan.js';
 
-// 音声学習モード（最重要機能）
-// 間違えた問題などを音声合成で読み上げる。
-//   基本フロー: 問題文 → （数秒間） → 正解＋解説 → 次の問題…
-// 連続再生・一時停止・スキップ・再生速度調整に対応。
-//
-// ★ 連結学習モード（キーワードで回す）
-//   同じキーワード（連結キーワード / タグ）を持つ問題をまとめて連続再生し、
-//   「つながりメモ」も読み上げる。ひとつのキーワードを多方面から強化できる。
-//   特定のキーワード1つを回す／全キーワードを順番に回す、を選べる。
-//
-// ※ アプリを開いた状態での利用を想定（画面OFF時の継続再生は不可）。
+// 音声学習モード × 連結学習法（強化版）
+//   基本フロー: 問題 →（間）→ 正解＋解説 → 次…
+//   連結の工夫:
+//     #2 科目も読む（横断ミックス） / #1 関連キーワードへ連鎖 /
+//     #5 答えの前にヒント / #6 逆向き確認 / #7 まとめ読み / #8 用語カード /
+//     #3 弱点キーワード順 / #9 今日の連結 / #10 聞きながら自己採点＆キーワード追加
+//   ※ アプリを開いた状態での利用を想定（画面OFF時の継続再生は不可）。
 
 const PHASES = { KEYWORD: 'keyword', QUESTION: 'question', GAP: 'gap', ANSWER: 'answer', NOTE: 'note' };
 const ALL_KW = '__all__';
 
-export default function AudioMode({ store }) {
-  const { reviewQuestions, questions, links, settings, updateSettings } = store;
+// 設定トグル1行（初心者向けの説明つき）
+function Opt({ on, onToggle, title, desc, disabled }) {
+  return (
+    <button
+      className={`opt-row ${on ? 'on' : ''}`}
+      onClick={onToggle}
+      disabled={disabled}
+      type="button"
+    >
+      <span className={`opt-switch ${on ? 'on' : ''}`}><span className="opt-knob" /></span>
+      <span className="opt-main">
+        <span className="opt-title">{title}</span>
+        <span className="opt-desc">{desc}</span>
+      </span>
+    </button>
+  );
+}
 
-  // タグ（連結キーワード）が付いた問題
+export default function AudioMode({ store, onToast }) {
+  const { reviewQuestions, questions, links, history, settings, updateSettings, recordAnswer, setLink } = store;
+
   const taggedQuestions = useMemo(
     () =>
       questions.filter(
@@ -39,52 +55,106 @@ export default function AudioMode({ store }) {
   const hasReview = reviewQuestions.length > 0;
   const hasTagged = taggedQuestions.length > 0;
 
-  // 連結キーワードの一覧（関連問題が多い順）
-  const keywordList = useMemo(() => {
-    const tags = allTags(questions, links);
-    return tags
-      .map((kw) => ({
-        keyword: kw,
-        count: questions.filter((q) => effectiveTags(q, links).includes(kw)).length,
-      }))
-      .filter((k) => k.count > 0)
-      .sort((a, b) => b.count - a.count);
-  }, [questions, links]);
-  const hasKeywords = keywordList.length > 0;
+  // 連結学習の下ごしらえ（キーワードのクラスタ・関連・弱点・今日の分）
+  const kwList = useMemo(() => allKeywords(questions, links), [questions, links]);
+  const kwNames = useMemo(() => kwList.map((k) => k.keyword), [kwList]);
+  const clusters = useMemo(() => clustersMap(questions, links), [questions, links]);
+  const relatedMap = useMemo(() => relatedKeywordMap(questions, links), [questions, links]);
+  const weakRanked = useMemo(() => keywordAccuracy(questions, links, history), [questions, links, history]);
+  const weakNames = useMemo(() => weakRanked.map((w) => w.keyword), [weakRanked]);
+  const dailyKw = useMemo(() => dailyKeyword(questions, links, dateKey()), [questions, links]);
+  const hasKeywords = kwNames.length > 0;
 
-  const [source, setSource] = useState('review'); // 'review' | 'tagged' | 'all' | 'keyword'
+  // ソース・キーワード選択
+  const [source, setSource] = useState('review'); // review|tagged|all|keyword|daily|weak
   const [selectedKeyword, setSelectedKeyword] = useState('');
-  const [loop, setLoop] = useState(false);
-  const [shuffleOn, setShuffleOn] = useState(false);
-  const [sleepMin, setSleepMin] = useState(0); // 0=オフ
 
-  // 再生プラン（読み上げ項目の配列）
-  //   item = { q, keyword?, intro?, note? }
+  // 連結の工夫（プラン構造を変えるもの＝再構築が必要）
+  const [chain, setChain] = useState(false); // #1 関連へ連鎖
+  const [summary, setSummary] = useState(true); // #7 まとめ読み
+  const [flashcard, setFlashcard] = useState(false); // #8 用語カード
+  const [shuffleOn, setShuffleOn] = useState(false);
+
+  // 読み上げの工夫（音声だけ＝再生中でも即反映）
+  const [readSubject, setReadSubject] = useState(true); // #2 科目も読む
+  const [readHint, setReadHint] = useState(false); // #5 ヒント
+  const [reverse, setReverse] = useState(false); // #6 逆向き
+
+  const [loop, setLoop] = useState(false);
+  const [sleepMin, setSleepMin] = useState(0);
+
+  // ---- 読み上げ文の部品 ----
+  const questionText = (q) => {
+    if (!q) return '';
+    if (q.question) return q.question;
+    if (q.image) return '図を見て答える問題です。画面をご確認ください。';
+    return '';
+  };
+  const answerText = (q) => {
+    const correct = q.choices[q.answer];
+    const label = q.type === 'ox' ? '正解は、' : `正解は、${q.answer + 1}番、`;
+    let t = `${label}${correct}。`;
+    if (q.explanation) t += ` 解説。${q.explanation}`;
+    return t;
+  };
+  const shortStem = (q) => {
+    const t = questionText(q).replace(/\s+/g, ' ').trim();
+    return t.length > 26 ? t.slice(0, 26) + '…' : t;
+  };
+  const shortAnswer = (q) => (q.choices ? q.choices[q.answer] || '' : '');
+  const flashcardText = (kw, qs) => {
+    const notes = qs.map((q) => (links[q.id]?.note || '').trim()).filter(Boolean);
+    if (notes.length) return notes.join('。 ');
+    const facts = qs.slice(0, 3).map(shortAnswer).filter(Boolean);
+    return facts.length ? `要点。${facts.join('。 ')}。` : 'この用語のメモはまだありません。';
+  };
+  const summaryText = (kw, qs) => {
+    const parts = qs.slice(0, 8).map((q) => `${shortStem(q)}は、${shortAnswer(q)}`).filter(Boolean);
+    return `キーワード、${kw}のまとめ。${parts.join('。 ')}。`;
+  };
+
+  // ---- 再生プラン ----
   const plan = useMemo(() => {
-    if (source === 'keyword') {
-      if (!hasKeywords) return [];
-      const kws =
-        selectedKeyword === ALL_KW || !selectedKeyword
-          ? keywordList.map((k) => k.keyword)
-          : [selectedKeyword];
+    const buildKw = (kwOrder) => {
       const items = [];
-      kws.forEach((kw) => {
-        let qs = questions.filter((q) => effectiveTags(q, links).includes(kw));
+      kwOrder.forEach((kw) => {
+        let qs = clusters.get(kw) || [];
+        if (qs.length === 0) return;
         if (shuffleOn) qs = shuffle(qs);
+        if (flashcard) {
+          items.push({ kind: 'flashcard', keyword: kw, text: flashcardText(kw, qs) });
+          return;
+        }
         qs.forEach((q, i) => {
-          const note = (links[q.id] && links[q.id].note && links[q.id].note.trim()) || '';
           items.push({
+            kind: 'question',
             q,
             keyword: kw,
             intro:
-              i === 0
-                ? `キーワード、${kw}。関連する問題を${qs.length}問、続けて確認します。`
-                : '',
-            note,
+              i === 0 ? `キーワード、${kw}。関連する問題を${qs.length}問、続けて確認します。` : '',
+            note: (links[q.id]?.note || '').trim(),
           });
         });
+        if (summary) items.push({ kind: 'summary', keyword: kw, text: summaryText(kw, qs) });
       });
       return items;
+    };
+
+    if (source === 'keyword') {
+      if (!hasKeywords) return [];
+      let order;
+      if (selectedKeyword === ALL_KW || !selectedKeyword) order = kwNames;
+      else if (chain) order = chainOrder(selectedKeyword, relatedMap, kwNames);
+      else order = [selectedKeyword];
+      return buildKw(order);
+    }
+    if (source === 'daily') {
+      if (!hasKeywords || !dailyKw) return [];
+      return buildKw(chain ? chainOrder(dailyKw, relatedMap, kwNames) : [dailyKw]);
+    }
+    if (source === 'weak') {
+      if (!hasKeywords) return [];
+      return buildKw(weakNames);
     }
     let base =
       source === 'review' && hasReview
@@ -93,9 +163,9 @@ export default function AudioMode({ store }) {
         ? taggedQuestions
         : questions;
     if (shuffleOn) base = shuffle(base);
-    return base.map((q) => ({ q }));
+    return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, selectedKeyword, shuffleOn, questions, links, reviewQuestions, taggedQuestions, keywordList]);
+  }, [source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, dailyKw, questions, links, reviewQuestions, taggedQuestions, hasKeywords, hasReview, hasTagged]);
 
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
@@ -103,8 +173,9 @@ export default function AudioMode({ store }) {
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
   const [voices, setVoices] = useState([]);
+  const [tagOpen, setTagOpen] = useState(false);
+  const [tagInput, setTagInput] = useState('');
 
-  // 再生ループの中断・参照用
   const abortRef = useRef(null);
   const playingRef = useRef(false);
   const indexRef = useRef(0);
@@ -112,6 +183,7 @@ export default function AudioMode({ store }) {
   const gapRef = useRef(gap);
   const loopRef = useRef(loop);
   const planRef = useRef(plan);
+  const optsRef = useRef({ readSubject, readHint, reverse });
   const wakeLockRef = useRef(null);
   const sleepTimerRef = useRef(null);
 
@@ -120,6 +192,7 @@ export default function AudioMode({ store }) {
   useEffect(() => { indexRef.current = index; }, [index]);
   useEffect(() => { loopRef.current = loop; }, [loop]);
   useEffect(() => { planRef.current = plan; }, [plan]);
+  useEffect(() => { optsRef.current = { readSubject, readHint, reverse }; }, [readSubject, readHint, reverse]);
 
   useEffect(() => {
     loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
@@ -140,28 +213,16 @@ export default function AudioMode({ store }) {
     try {
       if ('wakeLock' in navigator && !wakeLockRef.current) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
-        wakeLockRef.current.addEventListener?.('release', () => {
-          wakeLockRef.current = null;
-        });
+        wakeLockRef.current.addEventListener?.('release', () => { wakeLockRef.current = null; });
       }
-    } catch (e) {
-      /* 取得できなくても再生は継続する */
-    }
+    } catch (e) { /* 継続 */ }
   };
   const releaseWakeLock = () => {
-    try {
-      wakeLockRef.current?.release();
-    } catch (e) {
-      /* noop */
-    }
+    try { wakeLockRef.current?.release(); } catch (e) { /* noop */ }
     wakeLockRef.current = null;
   };
-
   const clearSleepTimer = () => {
-    if (sleepTimerRef.current) {
-      clearTimeout(sleepTimerRef.current);
-      sleepTimerRef.current = null;
-    }
+    if (sleepTimerRef.current) { clearTimeout(sleepTimerRef.current); sleepTimerRef.current = null; }
   };
 
   const selectedVoice = () => {
@@ -169,66 +230,81 @@ export default function AudioMode({ store }) {
     return voices.find((v) => v.voiceURI === settings.voiceURI) || voices[0] || null;
   };
 
-  const answerText = (q) => {
-    const correct = q.choices[q.answer];
-    const label = q.type === 'ox' ? '正解は、' : `正解は、${q.answer + 1}番、`;
-    let t = `${label}${correct}。`;
-    if (q.explanation) t += ` 解説。${q.explanation}`;
-    return t;
-  };
-
-  const questionText = (q) => {
-    if (q.question) return q.question;
-    if (q.image) return '図を見て答える問題です。画面をご確認ください。';
-    return '';
-  };
-
-  // 1項目を読み上げる（キーワード導入 → 問題 → 間 → 解答 → つながりメモ）
+  // 1項目を読み上げる
   const playOne = async (item, signal) => {
     const voice = selectedVoice();
-    const q = item.q;
+    const o = optsRef.current;
+    const say = (t) => speak(t, { rate: rateRef.current, voice, signal });
 
-    if (item.intro) {
+    if (item.kind === 'flashcard') {
       setPhase(PHASES.KEYWORD);
-      await speak(item.intro, { rate: rateRef.current, voice, signal });
-      await wait(300, signal);
+      await say(`用語。${item.keyword}。`);
+      setPhase(PHASES.GAP);
+      await wait(gapRef.current * 1000, signal);
+      setPhase(PHASES.ANSWER);
+      await say(item.text);
+      await wait(700, signal);
+      return;
+    }
+    if (item.kind === 'summary') {
+      setPhase(PHASES.NOTE);
+      await say(item.text);
+      await wait(700, signal);
+      return;
     }
 
+    const q = item.q;
+    if (item.intro) {
+      setPhase(PHASES.KEYWORD);
+      await say(item.intro);
+      await wait(300, signal);
+    }
     setPhase(PHASES.QUESTION);
-    await speak(`問題。${questionText(q)}`, { rate: rateRef.current, voice, signal });
+    const subj = o.readSubject && q.subject ? `${q.subject}。` : '';
+    await say(`${subj}問題。${questionText(q)}`);
 
     setPhase(PHASES.GAP);
     await wait(gapRef.current * 1000, signal);
 
+    if (o.readHint) {
+      const hint = item.keyword || effectiveTags(q, links)[0] || '';
+      if (hint) {
+        await say(`ヒント。キーワードは、${hint}。`);
+        await wait(600, signal);
+      }
+    }
+
     setPhase(PHASES.ANSWER);
-    await speak(answerText(q), { rate: rateRef.current, voice, signal });
+    await say(answerText(q));
 
     if (item.note) {
       setPhase(PHASES.NOTE);
-      await speak(`つながり。${item.note}`, { rate: rateRef.current, voice, signal });
+      await say(`つながり。${item.note}`);
+    }
+
+    if (o.reverse) {
+      setPhase(PHASES.QUESTION);
+      await say(`逆に確認。答えは、${shortAnswer(q)}。これは何を問う問題だったか思い出しましょう。`);
+      await wait(gapRef.current * 1000, signal);
+      await say(`問題は、${questionText(q)}`);
     }
 
     await wait(700, signal);
   };
 
-  // 連続再生ループ（loop 有効時は最後まで行くと先頭へ戻る）
   const runFrom = async (startIndex) => {
     const controller = new AbortController();
     abortRef.current = controller;
     const signal = controller.signal;
     playingRef.current = true;
     setPlaying(true);
-
     try {
       const list = planRef.current;
       let i = startIndex;
       while (playingRef.current) {
         if (i >= list.length) {
-          if (loopRef.current && list.length > 0) {
-            i = 0;
-          } else {
-            break;
-          }
+          if (loopRef.current && list.length > 0) i = 0;
+          else break;
         }
         setIndex(i);
         indexRef.current = i;
@@ -249,14 +325,10 @@ export default function AudioMode({ store }) {
     if (plan.length === 0) return;
     updateSettings({ speechRate: rate, gapSeconds: gap });
     requestWakeLock();
-    // スリープタイマー
     clearSleepTimer();
-    if (sleepMin > 0) {
-      sleepTimerRef.current = setTimeout(() => stopPlayback(), sleepMin * 60 * 1000);
-    }
+    if (sleepMin > 0) sleepTimerRef.current = setTimeout(() => stopPlayback(), sleepMin * 60 * 1000);
     runFrom(indexRef.current < plan.length ? indexRef.current : 0);
   };
-
   const stopPlayback = () => {
     releaseWakeLock();
     clearSleepTimer();
@@ -265,11 +337,7 @@ export default function AudioMode({ store }) {
     if (abortRef.current) abortRef.current.abort();
     cancelSpeech();
   };
-
-  const togglePlay = () => {
-    if (playing) stopPlayback();
-    else startPlayback();
-  };
+  const togglePlay = () => (playing ? stopPlayback() : startPlayback());
 
   const skip = (delta) => {
     const wasPlaying = playingRef.current;
@@ -281,8 +349,14 @@ export default function AudioMode({ store }) {
     setPhase(PHASES.QUESTION);
     if (wasPlaying) setTimeout(() => runFrom(next), 120);
   };
-
   const resetToStart = () => {
+    stopPlayback();
+    setIndex(0);
+    indexRef.current = 0;
+    setPhase(PHASES.QUESTION);
+  };
+  // プラン構造を変える操作は停止して先頭へ
+  const rebuildStop = () => {
     stopPlayback();
     setIndex(0);
     indexRef.current = 0;
@@ -290,32 +364,34 @@ export default function AudioMode({ store }) {
   };
 
   const changeSource = (s) => {
-    stopPlayback();
+    rebuildStop();
     setSource(s);
-    if (s === 'keyword' && !selectedKeyword && hasKeywords) {
-      setSelectedKeyword(keywordList[0].keyword);
-    }
-    setIndex(0);
-    indexRef.current = 0;
-    setPhase(PHASES.QUESTION);
+    if (s === 'keyword' && !selectedKeyword && hasKeywords) setSelectedKeyword(kwNames[0]);
+  };
+  const changeKeyword = (kw) => { rebuildStop(); setSelectedKeyword(kw); };
+  const toggleChain = () => { rebuildStop(); setChain((v) => !v); };
+  const toggleSummary = () => { rebuildStop(); setSummary((v) => !v); };
+  const toggleFlashcard = () => { rebuildStop(); setFlashcard((v) => !v); };
+  const toggleShuffle = () => { rebuildStop(); setShuffleOn((v) => !v); };
+
+  // #10 聞きながら自己採点／キーワード追加
+  const gradeCurrent = (ok) => {
+    const q = plan[index]?.q;
+    if (!q) return;
+    recordAnswer(q, ok);
+    onToast?.(ok ? '「できた」を記録しました' : '「できない」を記録（復習に追加）');
+  };
+  const addTag = () => {
+    const q = plan[index]?.q;
+    const kw = tagInput.trim();
+    if (!q || !kw) return;
+    const cur = (links[q.id]?.keywords) || [];
+    if (!cur.includes(kw)) setLink(q.id, { keywords: [...cur, kw] });
+    setTagInput('');
+    setTagOpen(false);
+    onToast?.(`「${kw}」をキーワードに追加しました`);
   };
 
-  const changeKeyword = (kw) => {
-    stopPlayback();
-    setSelectedKeyword(kw);
-    setIndex(0);
-    indexRef.current = 0;
-    setPhase(PHASES.QUESTION);
-  };
-
-  const toggleShuffle = () => {
-    stopPlayback();
-    setShuffleOn((v) => !v);
-    setIndex(0);
-    indexRef.current = 0;
-  };
-
-  // 未対応環境
   if (!isSpeechSupported()) {
     return (
       <div className="view">
@@ -323,28 +399,28 @@ export default function AudioMode({ store }) {
         <div className="empty">
           <div className="ico">🔇</div>
           <p>お使いのブラウザは音声合成（Web Speech API）に対応していません。</p>
-          <p className="inline-note">
-            iOS / Android の Safari・Chrome など、最新のブラウザでお試しください。
-          </p>
+          <p className="inline-note">iOS / Android の Safari・Chrome など、最新のブラウザでお試しください。</p>
         </div>
       </div>
     );
   }
 
-  const current = plan[index]?.q;
   const currentItem = plan[index];
+  const current = currentItem?.q;
   const rateOptions = [0.7, 0.85, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0];
   const sleepOptions = [0, 5, 10, 15, 20, 30];
+  const kwLike = source === 'keyword' || source === 'daily' || source === 'weak';
 
   return (
     <div className="view">
-      <h2 className="view-title">音声学習</h2>
+      <h2 className="view-title">音声学習 × 連結学習</h2>
       <p className="view-desc">
-        「問題 → 数秒の間 → 正解と解説」を自動で読み上げます。
-        連結モードなら、同じキーワードの問題をまとめて回して弱点を集中強化できます。
+        「問題 →（間）→ 正解と解説」を自動で読み上げます。連結の工夫で、ひとつの言葉を
+        いろいろな角度から耳で覚えられます。
       </p>
 
       {/* 読み上げ対象 */}
+      <div className="section-label" style={{ marginTop: 0 }}>何を読む？</div>
       <div className="chip-row">
         {hasReview && (
           <button className={`chip ${source === 'review' ? 'active' : ''}`} onClick={() => changeSource('review')}>
@@ -360,50 +436,60 @@ export default function AudioMode({ store }) {
           全問題（{questions.length}）
         </button>
         {hasKeywords && (
-          <button className={`chip ${source === 'keyword' ? 'active' : ''}`} onClick={() => changeSource('keyword')}>
-            🔗 キーワードで回す
-          </button>
+          <>
+            <button className={`chip ${source === 'keyword' ? 'active' : ''}`} onClick={() => changeSource('keyword')}>
+              🔗 キーワードで回す
+            </button>
+            <button className={`chip ${source === 'daily' ? 'active' : ''}`} onClick={() => changeSource('daily')}>
+              📅 今日の連結
+            </button>
+            <button className={`chip ${source === 'weak' ? 'active' : ''}`} onClick={() => changeSource('weak')}>
+              💪 弱点キーワード順
+            </button>
+          </>
         )}
       </div>
 
-      {/* 連結キーワードの選択 */}
-      {source === 'keyword' && (
+      {/* 各ソースの説明（初心者向け） */}
+      {source === 'daily' && (
+        <p className="inline-note">
+          📅 <strong>今日の連結</strong>：今日のキーワード「{dailyKw || '—'}」から始めます。毎日ちがう言葉が選ばれ、「関連へ連鎖」をオンにするとつながる言葉へ広がります。
+        </p>
+      )}
+      {source === 'weak' && (
+        <p className="inline-note">
+          💪 <strong>弱点キーワード順</strong>：これまでの正答率が低い言葉から順に読みます。苦手を先につぶせます。
+        </p>
+      )}
+
+      {/* キーワード選択 */}
+      {source === 'keyword' && hasKeywords && (
         <div className="card kw-picker">
           <div className="section-label" style={{ marginTop: 0 }}>回すキーワードを選ぶ</div>
-          {!hasKeywords ? (
-            <p className="inline-note">
-              連結キーワードがまだありません。問題を解いたあとに「キーワード・連結メモを追加」で
-              キーワードを付けると、ここでまとめて回せます。
-            </p>
-          ) : (
-            <div className="chip-row" style={{ marginBottom: 0 }}>
+          <div className="chip-row" style={{ marginBottom: 0 }}>
+            <button className={`chip ${selectedKeyword === ALL_KW ? 'active' : ''}`} onClick={() => changeKeyword(ALL_KW)}>
+              すべて順番に（{kwNames.length}語）
+            </button>
+            {kwList.map((k) => (
               <button
-                className={`chip ${selectedKeyword === ALL_KW ? 'active' : ''}`}
-                onClick={() => changeKeyword(ALL_KW)}
+                key={k.keyword}
+                className={`chip ${selectedKeyword === k.keyword ? 'active' : ''}`}
+                onClick={() => changeKeyword(k.keyword)}
               >
-                すべて順番に（{keywordList.length}語）
+                {k.keyword}（{k.count}）
               </button>
-              {keywordList.map((k) => (
-                <button
-                  key={k.keyword}
-                  className={`chip ${selectedKeyword === k.keyword ? 'active' : ''}`}
-                  onClick={() => changeKeyword(k.keyword)}
-                >
-                  {k.keyword}（{k.count}）
-                </button>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       )}
 
       {plan.length === 0 ? (
         <div className="empty">
           <div className="ico">🎧</div>
-          <p>読み上げる問題がありません。</p>
+          <p>読み上げる項目がありません。</p>
           <p className="inline-note">
-            {source === 'keyword'
-              ? 'キーワードを付けた問題を用意すると、ここで連続再生できます。'
+            {kwLike
+              ? 'キーワード（連結キーワード / タグ）を付けた問題を用意すると、ここで回せます。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
               : 'まずは一問一答や模擬試験で問題を解き、間違えた問題を溜めましょう。'}
           </p>
         </div>
@@ -411,27 +497,32 @@ export default function AudioMode({ store }) {
         <>
           {/* プレーヤー */}
           <div className="player">
-            {currentItem?.keyword && (
-              <div className="now-keyword">🔗 {currentItem.keyword}</div>
-            )}
+            {currentItem?.keyword && <div className="now-keyword">🔗 {currentItem.keyword}</div>}
             <div>
               <span className="now-phase">
-                {phase === PHASES.KEYWORD && 'キーワード'}
+                {phase === PHASES.KEYWORD && (currentItem?.kind === 'flashcard' ? '用語' : 'キーワード')}
                 {phase === PHASES.QUESTION && '問題'}
                 {phase === PHASES.GAP && '……考え中……'}
-                {phase === PHASES.ANSWER && '正解・解説'}
-                {phase === PHASES.NOTE && 'つながり'}
+                {phase === PHASES.ANSWER && (currentItem?.kind === 'flashcard' ? '意味・要点' : '正解・解説')}
+                {phase === PHASES.NOTE && (currentItem?.kind === 'summary' ? 'まとめ' : 'つながり')}
               </span>
-              <span className="now-index">
-                {index + 1} / {plan.length}
-              </span>
+              <span className="now-index">{index + 1} / {plan.length}</span>
             </div>
-            <div className="now-subject">{current.subject}</div>
-            {current.image && <img className="now-image" src={current.image} alt="問題の図" loading="lazy" />}
+
+            <div className="now-subject">
+              {current?.subject ||
+                (currentItem?.kind === 'flashcard' ? '用語カード' : currentItem?.kind === 'summary' ? 'まとめ' : '')}
+            </div>
+            {current?.image && <img className="now-image" src={current.image} alt="問題の図" loading="lazy" />}
             <div className="now-text">
-              {current.question || (current.image ? '図を見て答える問題' : '')}
+              {currentItem?.kind === 'flashcard'
+                ? `用語：${currentItem.keyword}`
+                : currentItem?.kind === 'summary'
+                ? `キーワード「${currentItem.keyword}」のまとめ`
+                : current?.question || (current?.image ? '図を見て答える問題' : '')}
             </div>
-            {phase === PHASES.ANSWER && (
+
+            {phase === PHASES.ANSWER && current && (
               <div className="now-answer">
                 <strong>
                   正解：
@@ -442,7 +533,13 @@ export default function AudioMode({ store }) {
                 {current.explanation && <div style={{ marginTop: 6 }}>{current.explanation}</div>}
               </div>
             )}
-            {phase === PHASES.NOTE && currentItem?.note && (
+            {phase === PHASES.ANSWER && currentItem?.kind === 'flashcard' && (
+              <div className="now-answer"><div>{currentItem.text}</div></div>
+            )}
+            {phase === PHASES.NOTE && currentItem?.kind === 'summary' && (
+              <div className="now-answer note"><div>{currentItem.text}</div></div>
+            )}
+            {phase === PHASES.NOTE && current && currentItem?.note && (
               <div className="now-answer note">
                 <strong>つながり：</strong>
                 <div style={{ marginTop: 4 }}>{currentItem.note}</div>
@@ -456,17 +553,75 @@ export default function AudioMode({ store }) {
             </div>
 
             <div className="player-controls">
-              <button onClick={() => skip(-1)} disabled={index === 0} aria-label="前の問題">⏮</button>
-              <button className="main" onClick={togglePlay} aria-label="再生 / 一時停止">
-                {playing ? '⏸' : '▶'}
-              </button>
-              <button onClick={() => skip(1)} disabled={index >= plan.length - 1} aria-label="次の問題">⏭</button>
+              <button onClick={() => skip(-1)} disabled={index === 0} aria-label="前へ">⏮</button>
+              <button className="main" onClick={togglePlay} aria-label="再生 / 一時停止">{playing ? '⏸' : '▶'}</button>
+              <button onClick={() => skip(1)} disabled={index >= plan.length - 1} aria-label="次へ">⏭</button>
             </div>
             {index > 0 && (
-              <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={resetToStart}>
-                最初から
-              </button>
+              <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={resetToStart}>最初から</button>
             )}
+
+            {/* #10 聞きながら自己採点＋キーワード追加 */}
+            {current && (
+              <div className="selfgrade">
+                <button className="sg-btn ok" onClick={() => gradeCurrent(true)}>⭕ できた</button>
+                <button className="sg-btn ng" onClick={() => gradeCurrent(false)}>❌ できない</button>
+                <button className="sg-btn" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
+              </div>
+            )}
+            {current && tagOpen && (
+              <div className="kw-add" style={{ marginTop: 8 }}>
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addTag()}
+                  placeholder="この問題に付けるキーワード"
+                />
+                <button className="btn sm primary" onClick={addTag}>追加</button>
+              </div>
+            )}
+          </div>
+
+          {/* 連結学習の工夫（初心者向け説明つき） */}
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>連結学習の工夫（読み上げ方）</div>
+            <Opt
+              on={readSubject}
+              onToggle={() => setReadSubject((v) => !v)}
+              title="科目もいっしょに読む（横断ミックス）"
+              desc="同じ言葉を、解剖・生理などいろいろな科目の問題で聞けます。多方面から覚えられます。"
+            />
+            <Opt
+              on={chain}
+              onToggle={toggleChain}
+              title="関連する言葉へ自動で続ける（芋づる式）"
+              desc="1つの言葉が終わると、つながりの強い言葉へ自動で進みます。（キーワードで回す／今日の連結のとき）"
+            />
+            <Opt
+              on={readHint}
+              onToggle={() => setReadHint((v) => !v)}
+              title="答えの前にヒントを読む"
+              desc="思い出すきっかけ（キーワード）を先に読み上げます。思い出す力が鍛えられます。"
+            />
+            <Opt
+              on={reverse}
+              onToggle={() => setReverse((v) => !v)}
+              title="逆向きにも確認する"
+              desc="答えから問題を思い出す練習を追加します。両方向で覚えられます。"
+            />
+            <Opt
+              on={summary}
+              onToggle={toggleSummary}
+              title="最後にまとめを読む"
+              desc="その言葉に関する要点を、最後にまとめて読み上げます。（キーワードで回すとき）"
+            />
+            <Opt
+              on={flashcard}
+              onToggle={toggleFlashcard}
+              title="用語カードモード"
+              desc="問題ではなく『言葉 → 意味・要点』だけを短く読みます。すき間時間の暗記に。（キーワードで回すとき）"
+            />
           </div>
 
           {/* 再生モード */}
@@ -511,33 +666,19 @@ export default function AudioMode({ store }) {
                   <button
                     key={r}
                     className={`chip ${Math.abs(rate - r) < 0.001 ? 'active' : ''}`}
-                    onClick={() => {
-                      setRate(r);
-                      rateRef.current = r;
-                      updateSettings({ speechRate: r });
-                    }}
+                    onClick={() => { setRate(r); rateRef.current = r; updateSettings({ speechRate: r }); }}
                   >
                     {r.toFixed(2)}×
                   </button>
                 ))}
               </div>
             </div>
-
             <div className="field" style={{ marginBottom: 0 }}>
               <label>問題文と正解の「間」（秒）</label>
               <div className="range-row">
                 <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="1"
-                  value={gap}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setGap(v);
-                    gapRef.current = v;
-                    updateSettings({ gapSeconds: v });
-                  }}
+                  type="range" min="0" max="10" step="1" value={gap}
+                  onChange={(e) => { const v = Number(e.target.value); setGap(v); gapRef.current = v; updateSettings({ gapSeconds: v }); }}
                 />
                 <span className="range-val">{gap}秒</span>
               </div>

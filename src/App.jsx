@@ -174,7 +174,7 @@ export default function App() {
       case 'review':
         return <Review store={store} onOpenKeyword={openKeyword} />;
       case 'audio':
-        return <AudioMode store={store} />;
+        return <AudioMode store={store} onToast={showToast} />;
       case 'exam':
         return <Exam store={store} />;
       case 'dashboard':
