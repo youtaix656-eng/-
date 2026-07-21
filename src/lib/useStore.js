@@ -6,6 +6,7 @@ import * as storage from './storage.js';
 import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import sampleQuestions from '../data/sampleQuestions.js';
+import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
 export function useStore() {
   const [loaded, setLoaded] = useState(false);
@@ -14,6 +15,9 @@ export function useStore() {
   const [history, setHistory] = useState([]);
   const [memos, setMemos] = useState({});
   const [links, setLinks] = useState({});
+  const [schedule, setSchedule] = useState([]);
+  const [venues, setVenues] = useState([]);
+  const [examContent, setExamContent] = useState(DEFAULT_EXAM_CONTENT);
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
@@ -21,12 +25,15 @@ export function useStore() {
     let alive = true;
     (async () => {
       await storage.migrateFromLocalStorage();
-      const [q, s, h, m, lk, cfg] = await Promise.all([
+      const [q, s, h, m, lk, sch, vn, ec, cfg] = await Promise.all([
         storage.loadQuestions(),
         storage.loadSrs(),
         storage.loadHistory(),
         storage.loadMemos(),
         storage.loadLinks(),
+        storage.loadSchedule(),
+        storage.loadVenues(),
+        storage.loadExamContent(),
         storage.loadSettings(),
       ]);
       if (!alive) return;
@@ -40,6 +47,9 @@ export function useStore() {
       setHistory(h || []);
       setMemos(m || {});
       setLinks(lk || {});
+      setSchedule(sch || []);
+      setVenues(vn || []);
+      setExamContent(ec && ec.length ? ec : DEFAULT_EXAM_CONTENT);
       setSettings(cfg);
       setLoaded(true);
     })();
@@ -69,6 +79,15 @@ export function useStore() {
   useEffect(() => {
     if (persist.current) storage.saveLinks(links);
   }, [links]);
+  useEffect(() => {
+    if (persist.current) storage.saveSchedule(schedule);
+  }, [schedule]);
+  useEffect(() => {
+    if (persist.current) storage.saveVenues(venues);
+  }, [venues]);
+  useEffect(() => {
+    if (persist.current) storage.saveExamContent(examContent);
+  }, [examContent]);
   useEffect(() => {
     if (persist.current) storage.saveSettings(settings);
   }, [settings]);
@@ -166,12 +185,15 @@ export function useStore() {
   // バックアップから全復元し、state に反映
   const importBackup = useCallback(async (data) => {
     await storage.importAll(data);
-    const [q, s, h, m, lk, cfg] = await Promise.all([
+    const [q, s, h, m, lk, sch, vn, ec, cfg] = await Promise.all([
       storage.loadQuestions(),
       storage.loadSrs(),
       storage.loadHistory(),
       storage.loadMemos(),
       storage.loadLinks(),
+      storage.loadSchedule(),
+      storage.loadVenues(),
+      storage.loadExamContent(),
       storage.loadSettings(),
     ]);
     setQuestions(q || sampleQuestions);
@@ -179,6 +201,9 @@ export function useStore() {
     setHistory(h || []);
     setMemos(m || {});
     setLinks(lk || {});
+    setSchedule(sch || []);
+    setVenues(vn || []);
+    setExamContent(ec && ec.length ? ec : DEFAULT_EXAM_CONTENT);
     setSettings(cfg);
   }, []);
 
@@ -201,6 +226,12 @@ export function useStore() {
     history,
     memos,
     links,
+    schedule,
+    setSchedule,
+    venues,
+    setVenues,
+    examContent,
+    setExamContent,
     settings,
     reviewQuestions,
     dueReviewQuestions,

@@ -1580,3 +1580,269 @@ code.block {
 @media (prefers-color-scheme: dark) {
   .parse-flag { background: #2a2410; }
 }
+
+/* =====================================================================
+   追加機能：文章から問題生成 / カレンダー / 会場・ホテル / 試験内容
+   ===================================================================== */
+
+/* ---- 汎用フォーム（label.field 版） ---- */
+.field > span {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+}
+.field > input,
+.field > textarea,
+.field > select {
+  width: 100%;
+}
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+.field-row .field {
+  flex: 1;
+  min-width: 0;
+}
+.mini-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.mini-field > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+.mini-field input,
+.mini-field select {
+  width: 100%;
+}
+
+/* ---- モーダル ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 22, 32, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+  padding: 0;
+}
+.modal {
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: var(--max-w);
+  padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+  max-height: 88vh;
+  overflow-y: auto;
+  animation: sheet-up 0.2s ease;
+}
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (min-width: 560px) {
+  .modal-backdrop { align-items: center; }
+  .modal { border-radius: 18px; }
+}
+.modal-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+  margin-bottom: 14px;
+}
+
+.link-danger {
+  display: inline-block;
+  margin-top: 12px;
+  background: none;
+  border: none;
+  color: var(--wrong);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.notice-card {
+  background: #fff8e8;
+  border: 1px solid #ecdcae;
+  color: #6b551f;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  margin-bottom: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  .notice-card { background: #2a2410; border-color: #4a3f1c; color: #d8c48a; }
+}
+
+/* ---- カレンダー ---- */
+.exam-countdown {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, var(--navy), var(--navy-light));
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.exam-countdown .cd-ico { font-size: 24px; }
+.exam-countdown .cd-title { font-weight: 700; font-size: 15px; }
+.exam-countdown .cd-sub { font-size: 12px; opacity: 0.8; }
+.exam-countdown .cd-days { margin-left: auto; font-size: 13px; text-align: right; }
+.exam-countdown .cd-days strong { font-size: 26px; margin: 0 3px; }
+
+.cal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cal-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+  flex: 1;
+  text-align: center;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+.cal-wd {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  padding: 4px 0;
+}
+.cal-wd.sun { color: var(--wrong); }
+.cal-wd.sat { color: var(--accent); }
+.cal-cell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 4px 0 0;
+  border-radius: 9px;
+  background: transparent;
+  border: 1.5px solid transparent;
+  min-height: 40px;
+}
+.cal-cell.dim { opacity: 0.35; }
+.cal-cell.today { background: var(--surface-2); }
+.cal-cell.sel { border-color: var(--navy); }
+.cal-date { font-size: 14px; font-weight: 600; color: var(--text); }
+.cal-date.sun { color: var(--wrong); }
+.cal-date.sat { color: var(--accent); }
+.cal-dots { display: flex; gap: 2px; margin-top: 3px; flex-wrap: wrap; justify-content: center; }
+.cal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-mute); }
+.cal-dot.k-study { background: #2f7d8f; }
+.cal-dot.k-exam { background: #c0392b; }
+.cal-dot.k-todo { background: #2f537f; }
+.cal-dot.k-deadline { background: #b8860b; }
+
+.cal-selected { margin-top: 14px; }
+.cal-sel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.cal-sel-head strong { font-size: 15px; color: var(--navy); }
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+.event-row.compact { padding: 8px 12px; }
+.event-kind {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+.event-kind.k-exam { background: var(--wrong-bg); }
+.event-kind.k-study { background: #e2f0f2; }
+.event-kind.k-deadline { background: #f6efd8; }
+.event-main { flex: 1; min-width: 0; }
+.event-title { display: block; font-weight: 600; font-size: 14px; }
+.event-sub { display: flex; gap: 8px; font-size: 12px; color: var(--text-sub); margin-top: 2px; flex-wrap: wrap; }
+.event-time { font-weight: 600; color: var(--accent); }
+.event-memo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-chev { color: var(--text-mute); font-size: 18px; }
+.event-count { font-size: 12px; font-weight: 700; color: var(--navy); flex: 0 0 auto; }
+
+.kind-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.kind-chip {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+.kind-chip.on { border-color: var(--navy); color: var(--navy); background: var(--surface-2); }
+
+/* ---- 会場・ホテル ---- */
+.venue-card { }
+.venue-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.venue-name { font-size: 16px; font-weight: 800; color: var(--navy); }
+.venue-addr { font-size: 13px; color: var(--text-sub); margin-top: 3px; }
+.venue-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.venue-memo {
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-top: 10px;
+  white-space: pre-wrap;
+}
+.hotel-list { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.hotel-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.hotel-row:last-of-type { border-bottom: none; }
+.hotel-main { flex: 1; min-width: 0; }
+.hotel-name { font-weight: 600; font-size: 14px; }
+.hotel-memo { font-size: 12.5px; color: var(--text-sub); margin-top: 2px; white-space: pre-wrap; }
+.hotel-link { display: inline-block; margin-top: 4px; font-size: 12.5px; color: var(--accent); font-weight: 600; }
+.hotel-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+
+/* ---- 試験内容 ---- */
+.content-sec { }
+.content-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.content-title { font-size: 15px; font-weight: 800; color: var(--navy); }
+.content-body { font-size: 14px; line-height: 1.8; color: var(--text); margin-top: 8px; white-space: pre-wrap; }
+.content-empty { font-size: 13px; color: var(--text-mute); margin-top: 8px; }

@@ -16,6 +16,10 @@ import ConnectedLearning from './components/ConnectedLearning.jsx';
 import Builder from './components/Builder.jsx';
 import Import from './components/Import.jsx';
 import Parse from './components/Parse.jsx';
+import NoteGen from './components/NoteGen.jsx';
+import Calendar from './components/Calendar.jsx';
+import Venues from './components/Venues.jsx';
+import ExamContent from './components/ExamContent.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -187,11 +191,20 @@ export default function App() {
             onSendToImport={sendOcrToImport}
             onOpenOcr={openOcr}
             onOpenParse={() => setView('parse')}
+            onOpenNoteGen={() => setView('notegen')}
             onToast={showToast}
           />
         );
       case 'parse':
         return <Parse store={store} onToast={showToast} onDone={() => setView('import')} />;
+      case 'notegen':
+        return <NoteGen store={store} onToast={showToast} onDone={() => setView('import')} />;
+      case 'calendar':
+        return <Calendar store={store} onToast={showToast} />;
+      case 'venues':
+        return <Venues store={store} onToast={showToast} />;
+      case 'examcontent':
+        return <ExamContent store={store} onToast={showToast} />;
       case 'connect':
         return (
           <ConnectedLearning
@@ -232,6 +245,10 @@ export default function App() {
       builder: '出題を作る',
       import: '問題を取り込む',
       parse: '自由文から自動作成',
+      notegen: '文章から問題を作る',
+      calendar: 'カレンダー',
+      venues: '試験会場・ホテル',
+      examcontent: '鍼灸国家試験の内容',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';

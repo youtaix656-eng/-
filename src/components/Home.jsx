@@ -101,6 +101,24 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">PDFや本のページ写真、CSV/JSON、貼り付けた文章から問題を追加。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('calendar')}>
+          <span className="ico">🗓️</span>
+          <span className="title">カレンダー</span>
+          <span className="desc">勉強や試験の予定を書き込み。試験までのカウントダウンも。</span>
+        </button>
+
+        <button className="menu-item" onClick={() => onNavigate('venues')}>
+          <span className="ico">🏛️</span>
+          <span className="title">試験会場・ホテル</span>
+          <span className="desc">受験会場と近くの宿泊候補を登録・メモ。</span>
+        </button>
+
+        <button className="menu-item wide" onClick={() => onNavigate('examcontent')}>
+          <span className="ico">📋</span>
+          <span className="title">鍼灸国家試験の内容</span>
+          <span className="desc">試験概要・出題基準・持ち物などを貼り付けて管理。</span>
+        </button>
+
         <button className="menu-item wide" onClick={() => onNavigate('tools')}>
           <span className="ico">🧪</span>
           <span className="title">問題ツール（自動生成・誤りチェック）</span>

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 // 問題の取り込みハブ
 // ファイル(CSV/JSON) / 文章の貼り付け / 写真・PDF の入口をまとめる。
 // 取り込んだ内容は設定画面のプレビューに渡り、そこで確認して追加する。
-export default function Import({ onSendToImport, onOpenOcr, onOpenParse, onToast }) {
+export default function Import({ onSendToImport, onOpenOcr, onOpenParse, onOpenNoteGen, onToast }) {
   const fileRef = useRef(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
@@ -75,12 +75,21 @@ export default function Import({ onSendToImport, onOpenOcr, onOpenParse, onToast
         </span>
       </button>
 
-      {/* 自由文から自動作成 */}
+      {/* 自由文から自動作成（問題形式の文章を読み取り） */}
       <button className="import-tile" onClick={onOpenParse}>
         <span className="import-ico">✨</span>
         <span className="import-main">
           <span className="import-title">自由文から自動作成</span>
-          <span className="import-desc">問題集の文章・ネットのコピーを貼ると、選択肢と正解を自動で読み取り</span>
+          <span className="import-desc">すでに問題形式の文章（問1／選択肢／正解）を貼ると自動で読み取り</span>
+        </span>
+      </button>
+
+      {/* 説明文から穴埋め問題を生成 */}
+      <button className="import-tile" onClick={onOpenNoteGen}>
+        <span className="import-ico">🧩</span>
+        <span className="import-main">
+          <span className="import-title">文章から問題を作る（穴埋め生成）</span>
+          <span className="import-desc">教科書のまとめやノートを貼ると、重要語を空欄にした四択を自動で作成</span>
         </span>
       </button>
 
