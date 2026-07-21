@@ -2124,3 +2124,71 @@ code.block {
 }
 .sg-btn.ok { border-color: var(--correct); }
 .sg-btn.ng { border-color: var(--wrong); }
+
+/* ===== 連結学習 強化版 ===== */
+.tmpl-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.suggest-box { margin: 8px 0; }
+.suggest-label { font-size: 12px; color: var(--text-sub); font-weight: 700; }
+.chip.suggest { background: rgba(63,157,176,0.16); border-color: var(--accent); color: var(--text); }
+.rel-reason {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(63,157,176,0.14);
+  border-radius: 6px;
+  padding: 1px 7px;
+  margin-right: 6px;
+}
+
+/* 地図（グラフ） */
+.graph-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+  margin: 8px 0;
+}
+.graph-svg { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
+.graph-edge { stroke: var(--border); opacity: 0.7; }
+.graph-node { cursor: pointer; }
+.graph-node circle { stroke: rgba(255,255,255,0.4); stroke-width: 0.4; }
+.graph-label { font-size: 2.6px; fill: var(--text); text-anchor: middle; font-weight: 700; }
+
+/* 深掘り：キーワード一覧 */
+.kw-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+}
+.kw-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+.kw-list-main { flex: 1; min-width: 0; }
+.kw-list-name { display: block; font-weight: 700; font-size: 15px; color: var(--text); }
+.kw-list-sub { display: block; font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+.kw-list-chev { color: var(--text-mute); font-size: 20px; }
+
+/* 1語まとめ */
+.kwd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.kwd-title { font-size: 18px; font-weight: 800; color: var(--text); }
+.kwd-stat { font-size: 13px; font-weight: 700; }
+.kwd-related { margin-top: 10px; }
+.kwd-image { margin-top: 10px; }
+.kwd-image img { width: 100%; border-radius: 10px; margin-bottom: 6px; }
+.recall-hidden { text-align: center; color: var(--text-sub); font-size: 14px; }
+.cluster-q-card .cqc-q { font-weight: 600; margin: 4px 0 6px; }
+.cluster-q-card .cqc-a { font-size: 13px; color: var(--correct); font-weight: 700; }
+.cluster-q-card .cqc-note {
+  font-size: 12.5px; color: var(--text-sub); margin-top: 6px;
+  background: var(--surface-2); border-radius: 8px; padding: 6px 8px; white-space: pre-wrap;
+}
+
+/* 点検 */
+.inspect-item .cqc-q { font-weight: 600; margin-top: 4px; }
+
+/* 連結クイズ */
+.quiz-qs { display: flex; flex-direction: column; gap: 6px; }
+.quiz-q { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; }

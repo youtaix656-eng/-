@@ -37,6 +37,7 @@ export function useStore() {
   const [venues, setVenues] = useState([]);
   const [examContent, setExamContent] = useState(DEFAULT_EXAM_CONTENT);
   const [selfNotes, setSelfNotes] = useState([]);
+  const [kwMeta, setKwMeta] = useState({});
   const [seedToast, setSeedToast] = useState(0); // 取り込んだ件数（App でトースト表示）
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
 
@@ -45,7 +46,7 @@ export function useStore() {
     let alive = true;
     (async () => {
       await storage.migrateFromLocalStorage();
-      const [q, s, h, m, lk, sch, vn, ec, sn, cfg] = await Promise.all([
+      const [q, s, h, m, lk, sch, vn, ec, sn, km, cfg] = await Promise.all([
         storage.loadQuestions(),
         storage.loadSrs(),
         storage.loadHistory(),
@@ -55,6 +56,7 @@ export function useStore() {
         storage.loadVenues(),
         storage.loadExamContent(),
         storage.loadSelfNotes(),
+        storage.loadKwMeta(),
         storage.loadSettings(),
       ]);
       if (!alive) return;
@@ -85,6 +87,7 @@ export function useStore() {
       } else {
         setSelfNotes(base);
       }
+      setKwMeta(km || {});
 
       setSettings(cfg);
       setLoaded(true);
@@ -127,6 +130,9 @@ export function useStore() {
   useEffect(() => {
     if (persist.current) storage.saveSelfNotes(selfNotes);
   }, [selfNotes]);
+  useEffect(() => {
+    if (persist.current) storage.saveKwMeta(kwMeta);
+  }, [kwMeta]);
   useEffect(() => {
     if (persist.current) storage.saveSettings(settings);
   }, [settings]);
@@ -210,6 +216,19 @@ export function useStore() {
   }, []);
   const clearSeedToast = useCallback(() => setSeedToast(0), []);
 
+  // キーワードのメタ（語呂合わせ・画像）を更新
+  const setKeywordMeta = useCallback((keyword, patch) => {
+    setKwMeta((prev) => {
+      const cur = prev[keyword] || { mnemonic: '', image: '' };
+      const next = { ...cur, ...patch };
+      const empty = !next.mnemonic && !next.image;
+      const out = { ...prev };
+      if (empty) delete out[keyword];
+      else out[keyword] = next;
+      return out;
+    });
+  }, []);
+
   const resetProgress = useCallback(() => {
     storage.resetProgress();
     setSrs({});
@@ -233,7 +252,7 @@ export function useStore() {
   // バックアップから全復元し、state に反映
   const importBackup = useCallback(async (data) => {
     await storage.importAll(data);
-    const [q, s, h, m, lk, sch, vn, ec, sn, cfg] = await Promise.all([
+    const [q, s, h, m, lk, sch, vn, ec, sn, km, cfg] = await Promise.all([
       storage.loadQuestions(),
       storage.loadSrs(),
       storage.loadHistory(),
@@ -243,6 +262,7 @@ export function useStore() {
       storage.loadVenues(),
       storage.loadExamContent(),
       storage.loadSelfNotes(),
+      storage.loadKwMeta(),
       storage.loadSettings(),
     ]);
     setQuestions(q || sampleQuestions);
@@ -254,6 +274,7 @@ export function useStore() {
     setVenues(vn || []);
     setExamContent(ec && ec.length ? ec : DEFAULT_EXAM_CONTENT);
     setSelfNotes(sn || []);
+    setKwMeta(km || {});
     setSettings(cfg);
   }, []);
 
@@ -285,6 +306,8 @@ export function useStore() {
     selfNotes,
     setSelfNotes,
     addSelfNotes,
+    kwMeta,
+    setKeywordMeta,
     seedToast,
     clearSeedToast,
     settings,
