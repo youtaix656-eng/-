@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { fileToDataUrl, isImageFile } from '../lib/image.js';
+import PhotoSource from './PhotoSource.jsx';
 
 // 試験会場と、その近くのホテルを任意で登録・メモ・写真つきで管理できる。
 // store.venues = [{ id, name, address, memo, photos:[dataURI],
@@ -11,13 +12,11 @@ function newId(prefix) {
 
 // フォーム内で写真を追加・削除できるサムネイル欄
 function PhotoEditor({ photos, onChange, onToast }) {
-  const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  const addFiles = async (e) => {
-    const files = [...(e.target.files || [])];
-    e.target.value = '';
-    if (files.length === 0) return;
+  const addFiles = async (files) => {
+    if (!files || files.length === 0) return;
     setBusy(true);
     try {
       const added = [];
@@ -45,18 +44,15 @@ function PhotoEditor({ photos, onChange, onToast }) {
             <button type="button" className="photo-x" onClick={() => remove(i)} aria-label="写真を削除">✕</button>
           </div>
         ))}
-        <button type="button" className="photo-add" onClick={() => inputRef.current?.click()} disabled={busy}>
+        <button type="button" className="photo-add" onClick={() => setSheetOpen(true)} disabled={busy}>
           {busy ? '…' : '＋\n写真'}
         </button>
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
+      <PhotoSource
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onPick={addFiles}
         multiple
-        onChange={addFiles}
-        style={{ display: 'none' }}
       />
     </div>
   );

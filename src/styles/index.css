@@ -1931,3 +1931,54 @@ code.block {
   font-size: 18px;
   border: none;
 }
+
+/* ---- 写真の取得元アクションシート ---- */
+.modal-backdrop.sheet-top { z-index: 70; align-items: flex-end; }
+@media (min-width: 560px) { .modal-backdrop.sheet-top { align-items: center; } }
+.action-sheet {
+  background: var(--surface);
+  width: 100%;
+  max-width: var(--max-w);
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow);
+  padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+  animation: sheet-up 0.2s ease;
+}
+@media (min-width: 560px) { .action-sheet { border-radius: 18px; } }
+.action-sheet .sheet-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+  text-align: center;
+  margin-bottom: 12px;
+}
+.sheet-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 13px 14px;
+  margin-bottom: 10px;
+}
+.sheet-btn .sheet-ico { font-size: 22px; flex: 0 0 auto; }
+.sheet-btn .sheet-main { display: block; font-weight: 700; font-size: 15px; color: var(--text); }
+.sheet-btn .sheet-sub { display: block; font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+.sheet-note {
+  font-size: 12px;
+  color: var(--text-mute);
+  line-height: 1.6;
+  margin: 4px 2px 12px;
+}
+.sheet-cancel {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+}

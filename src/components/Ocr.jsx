@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import PhotoSource from './PhotoSource.jsx';
 
 // 写真・PDF からの取り込み補助（実験的）
 //
@@ -9,8 +10,8 @@ import { useRef, useState } from 'react';
 // 抽出テキストは編集でき、CSV に整形してインポート画面へ渡せる。
 // ※ この機能のみインターネット接続が必要。
 export default function Ocr({ onToast, onSendToImport }) {
-  const fileRef = useRef(null);
   const pdfRef = useRef(null);
+  const [imgSheet, setImgSheet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [text, setText] = useState('');
@@ -92,6 +93,14 @@ export default function Ocr({ onToast, onSendToImport }) {
     e.target.value = '';
   };
 
+  // カメラ/フォルダから選ばれた画像を順番にOCR（複数ページまとめ取り込み対応）
+  const handlePickedImages = async (files) => {
+    for (const f of files) {
+      if (!/^image\//.test(f.type || '')) continue;
+      await runOcr(f);
+    }
+  };
+
   const copyText = async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -123,24 +132,23 @@ export default function Ocr({ onToast, onSendToImport }) {
 
       <div className="card">
         <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFile}
-          style={{ display: 'none' }}
-        />
-        <input
           ref={pdfRef}
           type="file"
           accept="application/pdf,.pdf"
           onChange={handleFile}
           style={{ display: 'none' }}
         />
+        <PhotoSource
+          open={imgSheet}
+          onClose={() => setImgSheet(false)}
+          onPick={handlePickedImages}
+          multiple
+          title="写真を取り込む"
+        />
         <div className="btn-row">
           <button
             className="btn primary"
-            onClick={() => fileRef.current?.click()}
+            onClick={() => setImgSheet(true)}
             disabled={busy}
           >
             📷 写真を撮影 / 選択
