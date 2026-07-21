@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { mindmapFor, centerCandidates, branchesOf, radialLayout } from '../lib/mindmap.js';
 import { MINDMAP_REFERENCES } from '../data/mindmapData.js';
+import { buildKanaIndex } from '../lib/yomi.js';
 
 // マインドマップ：センターのキーワードから
 //   🔗 つながる語（連結学習）/ ⚖️ 比較されやすいもの / 🔢 数値を変えられやすいもの
@@ -17,7 +18,8 @@ export default function MindMap({ store, onOpenKeyword }) {
   const branches = useMemo(() => branchesOf(mm), [mm]);
   const laid = useMemo(() => radialLayout(branches), [branches]);
 
-  const userSet = new Set(cands.user);
+  const [showIndex, setShowIndex] = useState(false);
+  const kanaIndex = useMemo(() => buildKanaIndex(cands.user), [cands.user]);
   const clickBranch = (b) => {
     if (b.type === 'linked') setCenter(b.id); // つながる語は再センター
     else {
@@ -33,6 +35,30 @@ export default function MindMap({ store, onOpenKeyword }) {
         キーワードを中心に、<strong>つながる語</strong>・<strong>比較されやすいもの</strong>・
         <strong>数値を変えられやすいもの</strong>を1枚に。違いと数字を確かめて、引っかけに強くなりましょう。
       </p>
+
+      {/* 索引（あ〜ん / A〜Z） */}
+      {cands.user.length > 0 && (
+        <button className="btn ghost sm block" onClick={() => setShowIndex((v) => !v)}>
+          🔤 索引（あ〜ん・A〜Z）{showIndex ? 'を閉じる' : `：${cands.user.length}語`}
+        </button>
+      )}
+      {showIndex && (
+        <div className="card kana-index">
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            読み込んだキーワードを読み順で並べました。タップすると、その言葉を中心にしたマインドマップを開きます。
+          </p>
+          {kanaIndex.map((sec) => (
+            <div className="kana-sec" key={sec.label}>
+              <div className="kana-head">{sec.label}</div>
+              <div className="chip-row" style={{ marginBottom: 0 }}>
+                {sec.items.map((kw) => (
+                  <button key={kw} className={`chip ${center === kw ? 'active' : ''}`} onClick={() => { setCenter(kw); setShowIndex(false); }}>{kw}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* センター選択 */}
       <div className="section-label" style={{ marginTop: 0 }}>中心にする言葉</div>

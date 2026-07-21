@@ -74,6 +74,15 @@ export default function App() {
     }
   }, [store.seedToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // チャットから投げた問題の取り込みリンク（#import=…）を反映したら目次を開く
+  useEffect(() => {
+    if (store.importedToast > 0) {
+      showToast(`問題を${store.importedToast}問、この端末に取り込みました`);
+      setView('toc');
+      store.clearImportedToast();
+    }
+  }, [store.importedToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // PWA インストールプロンプトを捕捉
   useEffect(() => {
     const onBip = (e) => {

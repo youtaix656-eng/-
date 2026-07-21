@@ -2253,3 +2253,15 @@ code.block {
 }
 .toc-kw-name { font-weight: 600; font-size: 14px; color: var(--text); }
 .toc-kw-count { font-size: 12px; color: var(--text-sub); }
+
+/* ---- マインドマップ：50音索引 ---- */
+.kana-index .kana-sec { margin-bottom: 12px; }
+.kana-index .kana-sec:last-child { margin-bottom: 0; }
+.kana-head {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  margin-bottom: 8px;
+}

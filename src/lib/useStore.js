@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as storage from './storage.js';
 import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
-import { readSeedFromHash, clearSeedHash } from './noteshare.js';
+import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
+import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -39,7 +40,8 @@ export function useStore() {
   const [selfNotes, setSelfNotes] = useState([]);
   const [kwMeta, setKwMeta] = useState({});
   const [userDict, setUserDict] = useState([]);
-  const [seedToast, setSeedToast] = useState(0); // 取り込んだ件数（App でトースト表示）
+  const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
+  const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
@@ -62,12 +64,23 @@ export function useStore() {
         storage.loadSettings(),
       ]);
       if (!alive) return;
-      if (q && q.length > 0) {
-        setQuestions(q);
-      } else {
-        setQuestions(sampleQuestions);
-        storage.saveQuestions(sampleQuestions);
+      let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
+      // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
+      const importSeed = readImportFromHash();
+      if (importSeed) {
+        const withIds = importSeed.map((x, i) => ({
+          id: x.id || `imp-${Date.now().toString(36)}-${i}`,
+          ...x,
+        }));
+        const { unique } = dedupeAgainst(withIds, baseQuestions);
+        if (unique.length) {
+          baseQuestions = [...baseQuestions, ...unique];
+          setImportedToast(unique.length);
+        }
+        clearSeedHash();
       }
+      setQuestions(baseQuestions);
+      if (!(q && q.length > 0) || importSeed) storage.saveQuestions(baseQuestions);
       setSrs(s || {});
       setHistory(h || []);
       setMemos(m || {});
@@ -221,6 +234,7 @@ export function useStore() {
     });
   }, []);
   const clearSeedToast = useCallback(() => setSeedToast(0), []);
+  const clearImportedToast = useCallback(() => setImportedToast(0), []);
 
   // キーワードのメタ（語呂合わせ）を更新
   const setKeywordMeta = useCallback((keyword, patch) => {
@@ -369,6 +383,8 @@ export function useStore() {
     addUserTerm,
     seedToast,
     clearSeedToast,
+    importedToast,
+    clearImportedToast,
     settings,
     reviewQuestions,
     dueReviewQuestions,

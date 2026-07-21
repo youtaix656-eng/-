@@ -30,6 +30,15 @@ export function readSeedFromHash(hash = (typeof location !== 'undefined' ? locat
   return notes.length ? notes : null;
 }
 
+// 現在の URL ハッシュ（#import=...）から問題配列を取り出す。無ければ null。
+// チャットで投げた問題集/文章から作った問題を、端末だけに取り込むためのリンク用。
+export function readImportFromHash(hash = (typeof location !== 'undefined' ? location.hash : '')) {
+  const m = /[#&]import=([^&]+)/.exec(hash || '');
+  if (!m) return null;
+  const qs = decodeNotes(m[1]);
+  return qs.length ? qs : null;
+}
+
 // 取り込み後にハッシュを消す（本文をURL/履歴に残さない）
 export function clearSeedHash() {
   try {
