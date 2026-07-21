@@ -2033,3 +2033,33 @@ code.block {
   color: var(--text);
   white-space: pre-wrap;
 }
+
+/* ---- 体験談ノートの検索ボックス ---- */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  margin-bottom: 12px;
+}
+.search-box .search-ico { font-size: 15px; opacity: 0.8; flex: 0 0 auto; }
+.search-box input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  padding: 8px 2px !important;
+}
+.search-box input:focus { outline: none; }
+.search-clear {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-sub);
+  font-size: 12px;
+}

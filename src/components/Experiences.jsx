@@ -21,7 +21,10 @@ function newId() {
 export default function Experiences({ store, onToast }) {
   const { selfNotes, setSelfNotes } = store;
   const [tab, setTab] = useState('all'); // 'all' | カテゴリID
+  const [q, setQ] = useState(''); // 検索キーワード
   const [editing, setEditing] = useState(null); // {id?, category, title, body}
+
+  const searching = q.trim().length > 0;
 
   const counts = useMemo(() => {
     const m = {};
@@ -29,10 +32,20 @@ export default function Experiences({ store, onToast }) {
     return m;
   }, [selfNotes]);
 
+  // 検索中は全カテゴリを横断してキーワード一致。未検索時は選択カテゴリで絞り込み。
   const shown = useMemo(() => {
-    const list = tab === 'all' ? selfNotes : selfNotes.filter((n) => n.category === tab);
+    const term = q.trim().toLowerCase();
+    let list;
+    if (term) {
+      list = selfNotes.filter((n) => {
+        const cat = catOf(n.category).label;
+        return [n.title, n.body, cat].filter(Boolean).join(' ').toLowerCase().includes(term);
+      });
+    } else {
+      list = tab === 'all' ? selfNotes : selfNotes.filter((n) => n.category === tab);
+    }
     return [...list].sort((a, b) => (b.at || 0) - (a.at || 0));
-  }, [selfNotes, tab]);
+  }, [selfNotes, tab, q]);
 
   const startNew = () =>
     setEditing({ id: null, category: tab === 'all' ? 'self' : tab, title: '', body: '' });
@@ -84,21 +97,42 @@ export default function Experiences({ store, onToast }) {
         🔒 ここに書いた内容は<strong>この端末の中だけ</strong>に保存されます（公開されません）。
       </div>
 
-      {/* カテゴリ切替 */}
-      <div className="chip-row">
-        <button className={`chip ${tab === 'all' ? 'active' : ''}`} onClick={() => setTab('all')}>
-          すべて（{selfNotes.length}）
-        </button>
-        {CATS.map((c) => (
-          <button
-            key={c.id}
-            className={`chip ${tab === c.id ? 'active' : ''}`}
-            onClick={() => setTab(c.id)}
-          >
-            {c.ico} {c.label}（{counts[c.id] || 0}）
-          </button>
-        ))}
+      {/* キーワード検索 */}
+      <div className="search-box">
+        <span className="search-ico">🔍</span>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="キーワードで検索（タイトル・本文・種類）"
+          aria-label="体験談を検索"
+        />
+        {searching && (
+          <button className="search-clear" onClick={() => setQ('')} aria-label="検索をクリア">✕</button>
+        )}
       </div>
+
+      {searching ? (
+        <div className="builder-summary" style={{ margin: '4px 0 12px' }}>
+          「{q.trim()}」の検索結果：<strong>{shown.length}</strong>件（全カテゴリ）
+        </div>
+      ) : (
+        /* カテゴリ切替 */
+        <div className="chip-row">
+          <button className={`chip ${tab === 'all' ? 'active' : ''}`} onClick={() => setTab('all')}>
+            すべて（{selfNotes.length}）
+          </button>
+          {CATS.map((c) => (
+            <button
+              key={c.id}
+              className={`chip ${tab === c.id ? 'active' : ''}`}
+              onClick={() => setTab(c.id)}
+            >
+              {c.ico} {c.label}（{counts[c.id] || 0}）
+            </button>
+          ))}
+        </div>
+      )}
 
       <button className="btn primary block" onClick={startNew}>
         ＋ 体験談を追加
@@ -106,7 +140,9 @@ export default function Experiences({ store, onToast }) {
 
       {shown.length === 0 ? (
         <p className="inline-note" style={{ marginTop: 12 }}>
-          まだ体験談がありません。「＋ 体験談を追加」から記録しましょう。
+          {searching
+            ? `「${q.trim()}」に一致する体験談は見つかりませんでした。`
+            : 'まだ体験談がありません。「＋ 体験談を追加」から記録しましょう。'}
         </p>
       ) : (
         shown.map((n) => {
