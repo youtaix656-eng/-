@@ -23,6 +23,7 @@ export const KEYS = {
   schedule: 'shinkyu:schedule', // カレンダーの予定
   venues: 'shinkyu:venues', // 試験会場・近くのホテル
   examContent: 'shinkyu:examContent', // 国家試験の内容メモ（枠）
+  selfNotes: 'shinkyu:selfNotes', // セルフケア・体調メモ（端末内のみ）
   migrated: 'shinkyu:migrated',
 };
 
@@ -86,7 +87,7 @@ export async function migrateFromLocalStorage() {
     if (already) return;
     const legacyKeys = [
       KEYS.questions, KEYS.srs, KEYS.history, KEYS.memos, KEYS.links, KEYS.settings,
-      KEYS.schedule, KEYS.venues, KEYS.examContent,
+      KEYS.schedule, KEYS.venues, KEYS.examContent, KEYS.selfNotes,
     ];
     for (const k of legacyKeys) {
       const raw = localStorage.getItem(k);
@@ -140,6 +141,11 @@ export const saveVenues = (v) => write(KEYS.venues, v);
 export const loadExamContent = () => read(KEYS.examContent, null);
 export const saveExamContent = (c) => write(KEYS.examContent, c);
 
+// ---- セルフケア・体調メモ（端末内のみ・非公開） ----
+// selfNotes = [{ id, category, title, body, at }]
+export const loadSelfNotes = () => read(KEYS.selfNotes, []);
+export const saveSelfNotes = (n) => write(KEYS.selfNotes, n);
+
 // ---- 設定 ----
 const DEFAULT_SETTINGS = {
   speechRate: 1.0,
@@ -179,6 +185,7 @@ export async function exportAll() {
     schedule: await loadSchedule(),
     venues: await loadVenues(),
     examContent: await loadExamContent(),
+    selfNotes: await loadSelfNotes(),
     settings: await read(KEYS.settings, {}),
   };
 }
@@ -193,5 +200,6 @@ export async function importAll(data) {
   if (Array.isArray(data.schedule)) await saveSchedule(data.schedule);
   if (Array.isArray(data.venues)) await saveVenues(data.venues);
   if (Array.isArray(data.examContent)) await saveExamContent(data.examContent);
+  if (Array.isArray(data.selfNotes)) await saveSelfNotes(data.selfNotes);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
 }

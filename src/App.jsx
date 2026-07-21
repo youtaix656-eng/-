@@ -20,6 +20,7 @@ import NoteGen from './components/NoteGen.jsx';
 import Calendar from './components/Calendar.jsx';
 import Venues from './components/Venues.jsx';
 import ExamContent from './components/ExamContent.jsx';
+import Experiences from './components/Experiences.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -61,6 +62,15 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view]);
+
+  // 端末だけに取り込む体験メモ（#notes=…）を反映したら知らせて画面を開く
+  useEffect(() => {
+    if (store.seedToast > 0) {
+      showToast(`体験談を${store.seedToast}件、この端末に取り込みました`);
+      setView('experiences');
+      store.clearSeedToast();
+    }
+  }, [store.seedToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // PWA インストールプロンプトを捕捉
   useEffect(() => {
@@ -205,6 +215,8 @@ export default function App() {
         return <Venues store={store} onToast={showToast} />;
       case 'examcontent':
         return <ExamContent store={store} onToast={showToast} />;
+      case 'experiences':
+        return <Experiences store={store} onToast={showToast} />;
       case 'connect':
         return (
           <ConnectedLearning
@@ -249,6 +261,7 @@ export default function App() {
       calendar: 'カレンダー',
       venues: '試験会場・ホテル',
       examcontent: '鍼灸国家試験の内容',
+      experiences: '体験談ノート',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';

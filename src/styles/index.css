@@ -1998,3 +1998,38 @@ code.block {
   max-height: 168px;
   overflow-y: auto;
 }
+
+/* ---- 体験談ノート ---- */
+.exp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.exp-cat {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.exp-cat.cat-self { background: rgba(63, 157, 176, 0.22); border-color: var(--accent); }
+.exp-cat.cat-others { background: rgba(53, 96, 143, 0.35); border-color: var(--navy-light); }
+.exp-cat.cat-pass { background: rgba(58, 168, 120, 0.22); border-color: var(--correct); }
+.exp-cat.cat-fail { background: rgba(226, 106, 94, 0.2); border-color: var(--wrong); }
+.exp-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.exp-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+  white-space: pre-wrap;
+}

@@ -5,8 +5,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as storage from './storage.js';
 import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
+import { readSeedFromHash, clearSeedHash } from './noteshare.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
+
+function newNoteId() {
+  return `sn-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+}
+// 既存メモと重複しないものだけ返す（category+title+body で判定）
+function mergeSelfNotes(existing, incoming) {
+  const key = (n) => `${n.category || ''}|${n.title || ''}|${n.body || ''}`;
+  const seen = new Set(existing.map(key));
+  const add = [];
+  for (const n of incoming) {
+    const k = key(n);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    add.push({ id: newNoteId(), at: Date.now(), category: '', title: '', body: '', ...n });
+  }
+  return add;
+}
 
 export function useStore() {
   const [loaded, setLoaded] = useState(false);
@@ -18,6 +36,8 @@ export function useStore() {
   const [schedule, setSchedule] = useState([]);
   const [venues, setVenues] = useState([]);
   const [examContent, setExamContent] = useState(DEFAULT_EXAM_CONTENT);
+  const [selfNotes, setSelfNotes] = useState([]);
+  const [seedToast, setSeedToast] = useState(0); // 取り込んだ件数（App でトースト表示）
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
@@ -25,7 +45,7 @@ export function useStore() {
     let alive = true;
     (async () => {
       await storage.migrateFromLocalStorage();
-      const [q, s, h, m, lk, sch, vn, ec, cfg] = await Promise.all([
+      const [q, s, h, m, lk, sch, vn, ec, sn, cfg] = await Promise.all([
         storage.loadQuestions(),
         storage.loadSrs(),
         storage.loadHistory(),
@@ -34,6 +54,7 @@ export function useStore() {
         storage.loadSchedule(),
         storage.loadVenues(),
         storage.loadExamContent(),
+        storage.loadSelfNotes(),
         storage.loadSettings(),
       ]);
       if (!alive) return;
@@ -50,6 +71,21 @@ export function useStore() {
       setSchedule(sch || []);
       setVenues(vn || []);
       setExamContent(ec && ec.length ? ec : DEFAULT_EXAM_CONTENT);
+
+      // 端末だけに取り込む「体調メモ」の種（#notes=...）を反映
+      const base = sn || [];
+      const seed = readSeedFromHash();
+      if (seed) {
+        const add = mergeSelfNotes(base, seed);
+        const next = [...base, ...add];
+        setSelfNotes(next);
+        storage.saveSelfNotes(next);
+        clearSeedHash();
+        if (add.length) setSeedToast(add.length);
+      } else {
+        setSelfNotes(base);
+      }
+
       setSettings(cfg);
       setLoaded(true);
     })();
@@ -88,6 +124,9 @@ export function useStore() {
   useEffect(() => {
     if (persist.current) storage.saveExamContent(examContent);
   }, [examContent]);
+  useEffect(() => {
+    if (persist.current) storage.saveSelfNotes(selfNotes);
+  }, [selfNotes]);
   useEffect(() => {
     if (persist.current) storage.saveSettings(settings);
   }, [settings]);
@@ -162,6 +201,15 @@ export function useStore() {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  // 体調メモを重複なく追加（貼り付け取り込みなどから）
+  const addSelfNotes = useCallback((incoming) => {
+    setSelfNotes((prev) => {
+      const add = mergeSelfNotes(prev, incoming);
+      return add.length ? [...prev, ...add] : prev;
+    });
+  }, []);
+  const clearSeedToast = useCallback(() => setSeedToast(0), []);
+
   const resetProgress = useCallback(() => {
     storage.resetProgress();
     setSrs({});
@@ -185,7 +233,7 @@ export function useStore() {
   // バックアップから全復元し、state に反映
   const importBackup = useCallback(async (data) => {
     await storage.importAll(data);
-    const [q, s, h, m, lk, sch, vn, ec, cfg] = await Promise.all([
+    const [q, s, h, m, lk, sch, vn, ec, sn, cfg] = await Promise.all([
       storage.loadQuestions(),
       storage.loadSrs(),
       storage.loadHistory(),
@@ -194,6 +242,7 @@ export function useStore() {
       storage.loadSchedule(),
       storage.loadVenues(),
       storage.loadExamContent(),
+      storage.loadSelfNotes(),
       storage.loadSettings(),
     ]);
     setQuestions(q || sampleQuestions);
@@ -204,6 +253,7 @@ export function useStore() {
     setSchedule(sch || []);
     setVenues(vn || []);
     setExamContent(ec && ec.length ? ec : DEFAULT_EXAM_CONTENT);
+    setSelfNotes(sn || []);
     setSettings(cfg);
   }, []);
 
@@ -232,6 +282,11 @@ export function useStore() {
     setVenues,
     examContent,
     setExamContent,
+    selfNotes,
+    setSelfNotes,
+    addSelfNotes,
+    seedToast,
+    clearSeedToast,
     settings,
     reviewQuestions,
     dueReviewQuestions,

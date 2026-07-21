@@ -119,6 +119,12 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">試験概要・出題基準・持ち物などを貼り付けて管理。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('experiences')}>
+          <span className="ico">🗣️</span>
+          <span className="title">体験談ノート（自分・他人・合格・不合格）</span>
+          <span className="desc">体験談や体調・生活の気づきを記録。端末内だけに保存（非公開）。</span>
+        </button>
+
         <button className="menu-item wide" onClick={() => onNavigate('tools')}>
           <span className="ico">🧪</span>
           <span className="title">問題ツール（自動生成・誤りチェック）</span>
