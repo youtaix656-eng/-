@@ -1,16 +1,72 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { fileToDataUrl, isImageFile } from '../lib/image.js';
 
-// 試験会場と、その近くのホテルを任意で登録・メモできる。
-// store.venues = [{ id, name, address, memo, hotels:[{ id, name, memo, url }] }]
+// 試験会場と、その近くのホテルを任意で登録・メモ・写真つきで管理できる。
+// store.venues = [{ id, name, address, memo, photos:[dataURI],
+//                   hotels:[{ id, name, memo, url, photos:[dataURI] }] }]
 
 function newId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
 }
 
+// フォーム内で写真を追加・削除できるサムネイル欄
+function PhotoEditor({ photos, onChange, onToast }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const addFiles = async (e) => {
+    const files = [...(e.target.files || [])];
+    e.target.value = '';
+    if (files.length === 0) return;
+    setBusy(true);
+    try {
+      const added = [];
+      for (const f of files) {
+        if (!isImageFile(f)) continue;
+        try {
+          added.push(await fileToDataUrl(f));
+        } catch (err) {
+          onToast?.('写真の読み込みに失敗しました');
+        }
+      }
+      if (added.length) onChange([...(photos || []), ...added]);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = (i) => onChange((photos || []).filter((_, k) => k !== i));
+
+  return (
+    <div className="photo-editor">
+      <div className="photo-strip">
+        {(photos || []).map((src, i) => (
+          <div className="photo-thumb" key={i}>
+            <img src={src} alt={`写真${i + 1}`} />
+            <button type="button" className="photo-x" onClick={() => remove(i)} aria-label="写真を削除">✕</button>
+          </div>
+        ))}
+        <button type="button" className="photo-add" onClick={() => inputRef.current?.click()} disabled={busy}>
+          {busy ? '…' : '＋\n写真'}
+        </button>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        onChange={addFiles}
+        style={{ display: 'none' }}
+      />
+    </div>
+  );
+}
+
 export default function Venues({ store, onToast }) {
   const { venues, setVenues } = store;
-  const [venueForm, setVenueForm] = useState(null); // {id?, name, address, memo}
-  const [hotelForm, setHotelForm] = useState(null); // {venueId, id?, name, memo, url}
+  const [venueForm, setVenueForm] = useState(null); // {id?, name, address, memo, photos}
+  const [hotelForm, setHotelForm] = useState(null); // {venueId, id?, name, memo, url, photos}
+  const [lightbox, setLightbox] = useState(null); // 拡大表示中の data URI
 
   // ---- 会場 ----
   const saveVenue = () => {
@@ -19,9 +75,11 @@ export default function Venues({ store, onToast }) {
       return;
     }
     if (venueForm.id) {
-      setVenues(venues.map((v) => (v.id === venueForm.id ? { ...v, name: venueForm.name, address: venueForm.address, memo: venueForm.memo } : v)));
+      setVenues(venues.map((v) => (v.id === venueForm.id
+        ? { ...v, name: venueForm.name, address: venueForm.address, memo: venueForm.memo, photos: venueForm.photos || [] }
+        : v)));
     } else {
-      setVenues([...venues, { id: newId('vn'), name: venueForm.name, address: venueForm.address, memo: venueForm.memo, hotels: [] }]);
+      setVenues([...venues, { id: newId('vn'), name: venueForm.name, address: venueForm.address, memo: venueForm.memo, photos: venueForm.photos || [], hotels: [] }]);
     }
     setVenueForm(null);
     onToast('会場を保存しました');
@@ -41,10 +99,11 @@ export default function Venues({ store, onToast }) {
       venues.map((v) => {
         if (v.id !== hotelForm.venueId) return v;
         const hotels = v.hotels || [];
+        const rec = { name: hotelForm.name, memo: hotelForm.memo, url: hotelForm.url, photos: hotelForm.photos || [] };
         if (hotelForm.id) {
-          return { ...v, hotels: hotels.map((h) => (h.id === hotelForm.id ? { id: h.id, name: hotelForm.name, memo: hotelForm.memo, url: hotelForm.url } : h)) };
+          return { ...v, hotels: hotels.map((h) => (h.id === hotelForm.id ? { id: h.id, ...rec } : h)) };
         }
-        return { ...v, hotels: [...hotels, { id: newId('ht'), name: hotelForm.name, memo: hotelForm.memo, url: hotelForm.url }] };
+        return { ...v, hotels: [...hotels, { id: newId('ht'), ...rec }] };
       })
     );
     setHotelForm(null);
@@ -57,14 +116,26 @@ export default function Venues({ store, onToast }) {
 
   const mapUrl = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 
+  // 保存済みの写真を横スクロールで表示（タップで拡大）
+  const PhotoRow = ({ photos }) =>
+    photos && photos.length > 0 ? (
+      <div className="photo-strip view-only">
+        {photos.map((src, i) => (
+          <button type="button" className="photo-thumb" key={i} onClick={() => setLightbox(src)}>
+            <img src={src} alt={`写真${i + 1}`} />
+          </button>
+        ))}
+      </div>
+    ) : null;
+
   return (
     <div className="view">
       <h2 className="view-title">試験会場・ホテル</h2>
       <p className="view-desc">
-        受験する会場と、近くの宿泊候補を自由に登録できます。持ち物や交通メモも残せます。
+        受験する会場と、近くの宿泊候補を写真つきで登録できます。持ち物や交通メモも残せます。
       </p>
 
-      <button className="btn primary block" onClick={() => setVenueForm({ id: null, name: '', address: '', memo: '' })}>
+      <button className="btn primary block" onClick={() => setVenueForm({ id: null, name: '', address: '', memo: '', photos: [] })}>
         ＋ 会場を追加
       </button>
 
@@ -83,9 +154,10 @@ export default function Venues({ store, onToast }) {
             </div>
             <div className="venue-actions">
               <a className="btn ghost sm" href={mapUrl(v.address || v.name)} target="_blank" rel="noopener noreferrer">地図</a>
-              <button className="btn ghost sm" onClick={() => setVenueForm({ ...v })}>編集</button>
+              <button className="btn ghost sm" onClick={() => setVenueForm({ id: v.id, name: v.name, address: v.address || '', memo: v.memo || '', photos: v.photos || [] })}>編集</button>
             </div>
           </div>
+          <PhotoRow photos={v.photos} />
           {v.memo && <div className="venue-memo">{v.memo}</div>}
 
           <div className="hotel-list">
@@ -96,17 +168,18 @@ export default function Venues({ store, onToast }) {
                 <div className="hotel-main">
                   <div className="hotel-name">{h.name}</div>
                   {h.memo && <div className="hotel-memo">{h.memo}</div>}
+                  <PhotoRow photos={h.photos} />
                   {h.url && (
                     <a className="hotel-link" href={h.url} target="_blank" rel="noopener noreferrer">予約ページを開く ↗</a>
                   )}
                 </div>
                 <div className="hotel-actions">
                   <a className="btn ghost sm" href={mapUrl(h.name)} target="_blank" rel="noopener noreferrer">地図</a>
-                  <button className="btn ghost sm" onClick={() => setHotelForm({ venueId: v.id, id: h.id, name: h.name, memo: h.memo || '', url: h.url || '' })}>編集</button>
+                  <button className="btn ghost sm" onClick={() => setHotelForm({ venueId: v.id, id: h.id, name: h.name, memo: h.memo || '', url: h.url || '', photos: h.photos || [] })}>編集</button>
                 </div>
               </div>
             ))}
-            <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={() => setHotelForm({ venueId: v.id, id: null, name: '', memo: '', url: '' })}>
+            <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={() => setHotelForm({ venueId: v.id, id: null, name: '', memo: '', url: '', photos: [] })}>
               ＋ ホテルを追加
             </button>
           </div>
@@ -132,6 +205,10 @@ export default function Venues({ store, onToast }) {
               <span>メモ（任意）</span>
               <textarea value={venueForm.memo} onChange={(e) => setVenueForm({ ...venueForm, memo: e.target.value })} placeholder="最寄り駅・交通・持ち物など" style={{ minHeight: 60 }} />
             </label>
+            <div className="field">
+              <span>写真（任意・複数可）</span>
+              <PhotoEditor photos={venueForm.photos} onChange={(p) => setVenueForm({ ...venueForm, photos: p })} onToast={onToast} />
+            </div>
             <div className="btn-row">
               <button className="btn" onClick={() => setVenueForm(null)}>キャンセル</button>
               <button className="btn primary" onClick={saveVenue}>保存</button>
@@ -157,6 +234,10 @@ export default function Venues({ store, onToast }) {
               <span>予約URL（任意）</span>
               <input value={hotelForm.url} onChange={(e) => setHotelForm({ ...hotelForm, url: e.target.value })} placeholder="https://…" inputMode="url" />
             </label>
+            <div className="field">
+              <span>写真（任意・複数可）</span>
+              <PhotoEditor photos={hotelForm.photos} onChange={(p) => setHotelForm({ ...hotelForm, photos: p })} onToast={onToast} />
+            </div>
             <div className="btn-row">
               {hotelForm.id && (
                 <button className="btn danger" onClick={() => deleteHotel(hotelForm.venueId, hotelForm.id)}>削除</button>
@@ -165,6 +246,14 @@ export default function Venues({ store, onToast }) {
               <button className="btn primary" onClick={saveHotel}>保存</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 写真の拡大表示 */}
+      {lightbox && (
+        <div className="lightbox" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="拡大表示" />
+          <button className="lightbox-close" onClick={() => setLightbox(null)} aria-label="閉じる">✕</button>
         </div>
       )}
     </div>
