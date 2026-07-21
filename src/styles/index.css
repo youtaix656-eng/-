@@ -1959,3 +1959,42 @@ code.block {
   font-weight: 700;
   color: var(--text-sub);
 }
+
+/* ---- 音声：連結キーワード・モード切替 ---- */
+.now-keyword {
+  display: inline-block;
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+.now-answer.note {
+  border-left: 3px solid var(--accent);
+}
+.mode-toggles {
+  display: flex;
+  gap: 10px;
+}
+.mode-toggle {
+  flex: 1;
+  border: 1.5px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-sub);
+  border-radius: var(--radius-sm);
+  padding: 11px 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.mode-toggle.on {
+  border-color: var(--accent);
+  color: #fff;
+  background: rgba(63, 157, 176, 0.22);
+}
+.kw-picker .chip-row {
+  max-height: 168px;
+  overflow-y: auto;
+}
