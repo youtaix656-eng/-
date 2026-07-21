@@ -1,22 +1,22 @@
 :root {
-  /* 落ち着いた信頼感のあるカラーパレット（藍・紺ベース） */
-  --navy: #1f3a5f;
+  /* 紺色ベースの高コントラスト配色（背景=紺 / 文字=白でメリハリ） */
+  --navy: #24456f;
   --navy-dark: #16293f;
-  --navy-light: #2f537f;
-  --accent: #2f7d8f;
-  --bg: #f4f6f9;
-  --surface: #ffffff;
-  --surface-2: #eef2f7;
-  --border: #dbe2ea;
-  --text: #1f2a37;
-  --text-sub: #5b6b7c;
-  --text-mute: #8a97a6;
-  --correct: #2e7d5b;
-  --correct-bg: #e6f4ec;
-  --wrong: #c0392b;
-  --wrong-bg: #fbeae8;
-  --warn: #b8860b;
-  --shadow: 0 1px 3px rgba(31, 58, 95, 0.08), 0 4px 12px rgba(31, 58, 95, 0.06);
+  --navy-light: #35608f;
+  --accent: #3f9db0;
+  --bg: #10233f;
+  --surface: #1c3a63;
+  --surface-2: #274a79;
+  --border: #3a5c8c;
+  --text: #f5f8fd;
+  --text-sub: #c6d4e6;
+  --text-mute: #90a4bd;
+  --correct: #3aa878;
+  --correct-bg: #14382a;
+  --wrong: #e26a5e;
+  --wrong-bg: #3d201c;
+  --warn: #e6b64f;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.28);
   --radius: 14px;
   --radius-sm: 9px;
   --nav-h: 62px;
@@ -106,7 +106,7 @@ button {
   font-size: 20px;
   font-weight: 700;
   margin: 4px 0 4px;
-  color: var(--navy-dark);
+  color: #ffffff;
 }
 .view-desc {
   font-size: 13px;
@@ -153,9 +153,9 @@ button {
   cursor: not-allowed;
 }
 .btn.primary {
-  background: var(--navy);
+  background: var(--navy-light);
   color: #fff;
-  border-color: var(--navy);
+  border-color: var(--navy-light);
 }
 .btn.accent {
   background: var(--accent);
@@ -200,7 +200,7 @@ button {
   padding: 3px 10px;
   border-radius: 999px;
   background: var(--surface-2);
-  color: var(--navy);
+  color: var(--text);
   border: 1px solid var(--border);
 }
 .chip.active {
@@ -223,7 +223,7 @@ button {
 }
 .badge.ox {
   background: #eaf1f7;
-  color: var(--navy);
+  color: var(--navy-dark);
 }
 .badge.choice {
   background: #eef3ec;
@@ -266,7 +266,7 @@ button {
   line-height: 1;
 }
 .bottom-nav button.active {
-  color: var(--navy);
+  color: var(--text);
 }
 .bottom-nav button .nav-dot {
   position: absolute;
@@ -408,8 +408,7 @@ button {
   margin-bottom: 6px;
 }
 textarea,
-input[type='text'],
-input[type='number'],
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
 select {
   width: 100%;
   font-family: inherit;
@@ -419,6 +418,11 @@ select {
   padding: 10px 12px;
   color: var(--text);
   background: var(--surface);
+}
+/* 日付・時刻ピッカーのアイコンを暗い背景でも見えるように */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
 }
 textarea:focus,
 input:focus,
@@ -511,7 +515,7 @@ textarea {
 .tile .num {
   font-size: 24px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--text);
   line-height: 1.1;
 }
 .tile .lbl {
@@ -672,7 +676,7 @@ textarea {
 .range-val {
   font-size: 14px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--text);
   min-width: 46px;
   text-align: right;
 }
@@ -752,7 +756,7 @@ textarea {
   display: block;
   font-size: 15px;
   font-weight: 700;
-  color: var(--navy-dark);
+  color: #ffffff;
 }
 .menu-item .desc {
   display: block;
@@ -797,7 +801,7 @@ textarea {
   font-size: 18px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--navy);
+  color: var(--text);
 }
 .exam-timer .time.warn {
   color: var(--wrong);
@@ -953,7 +957,7 @@ code.block {
 .splash-title {
   font-size: 18px;
   font-weight: 800;
-  color: var(--navy-dark);
+  color: #ffffff;
 }
 .splash-sub {
   font-size: 13px;
@@ -985,7 +989,7 @@ code.block {
   margin-bottom: 14px;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--navy-dark);
+  color: #ffffff;
   box-shadow: var(--shadow);
 }
 .install-btn .install-cta {
@@ -1000,12 +1004,12 @@ code.block {
 /* ---- バックアップ促しバナー ---- */
 .reminder-banner {
   margin: 14px 16px 0;
-  background: #fff8e6;
-  border: 1px solid #ecd9a6;
+  background: rgba(230, 182, 79, 0.14);
+  border: 1px solid rgba(230, 182, 79, 0.42);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   font-size: 13px;
-  color: #6b5510;
+  color: #f0d99f;
   line-height: 1.6;
 }
 .reminder-actions {
@@ -1059,7 +1063,7 @@ code.block {
   border-color: #e7c3bd;
 }
 .grade-good {
-  color: var(--navy);
+  color: var(--text);
   border-color: var(--navy-light);
 }
 .grade-easy {
@@ -1088,8 +1092,8 @@ code.block {
 
 /* ---- 音声モードの注意書き ---- */
 .audio-note {
-  background: #eef4f5;
-  border: 1px solid #cfe0e3;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   margin-top: 8px;
@@ -1106,32 +1110,8 @@ code.block {
 }
 
 /* ---- ダークテーマ対応（端末設定に追従） ---- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1620;
-    --surface: #182230;
-    --surface-2: #1f2b3a;
-    --border: #2b3a4d;
-    --text: #e6edf5;
-    --text-sub: #9fb0c2;
-    --text-mute: #6f8095;
-    --correct-bg: #14301f;
-    --wrong-bg: #331a17;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
-  }
-  .reminder-banner {
-    background: #2a2410;
-    border-color: #574c22;
-    color: #e6d8a8;
-  }
-  .audio-note {
-    background: #16242a;
-    border-color: #2b3f45;
-  }
-  .explanation .label {
-    color: #67b6c7;
-  }
-}
+/* 紺色テーマを既定にしたため、端末のダーク設定でも同じ紺色を維持する
+   （以前の near-black への上書きは行わない）。 */
 
 /* ==== 問題ツール ==== */
 .gen-badge {
@@ -1216,7 +1196,7 @@ code.block {
 .scope-session-label {
   font-size: 16px;
   font-weight: 800;
-  color: var(--navy-dark);
+  color: #ffffff;
 }
 .scope-session-note {
   font-size: 11.5px;
@@ -1340,7 +1320,7 @@ code.block {
 .cluster-kw {
   font-size: 15px;
   font-weight: 800;
-  color: var(--navy-dark);
+  color: #ffffff;
 }
 .cluster-count {
   font-size: 11px;
@@ -1458,7 +1438,7 @@ code.block {
   text-align: center;
 }
 .builder-summary strong {
-  color: var(--navy);
+  color: var(--text);
   font-size: 15px;
 }
 
@@ -1492,7 +1472,7 @@ code.block {
 .import-title {
   font-size: 15px;
   font-weight: 700;
-  color: var(--navy-dark);
+  color: #ffffff;
 }
 .import-desc {
   font-size: 12px;
@@ -1520,7 +1500,7 @@ code.block {
 .parse-num {
   font-size: 13px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--text);
 }
 .parse-flag {
   font-size: 10.5px;
@@ -1656,7 +1636,7 @@ code.block {
 .modal-title {
   font-size: 17px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--text);
   margin-bottom: 14px;
 }
 
@@ -1671,17 +1651,14 @@ code.block {
   text-decoration: underline;
 }
 .notice-card {
-  background: #fff8e8;
-  border: 1px solid #ecdcae;
-  color: #6b551f;
+  background: rgba(230, 182, 79, 0.12);
+  border: 1px solid rgba(230, 182, 79, 0.4);
+  color: #ecd7a4;
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   font-size: 13px;
   line-height: 1.7;
   margin-bottom: 14px;
-}
-@media (prefers-color-scheme: dark) {
-  .notice-card { background: #2a2410; border-color: #4a3f1c; color: #d8c48a; }
 }
 
 /* ---- カレンダー ---- */
@@ -1710,7 +1687,7 @@ code.block {
 .cal-title {
   font-size: 17px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--text);
   flex: 1;
   text-align: center;
 }
@@ -1764,7 +1741,7 @@ code.block {
   justify-content: space-between;
   margin-bottom: 8px;
 }
-.cal-sel-head strong { font-size: 15px; color: var(--navy); }
+.cal-sel-head strong { font-size: 15px; color: var(--text); }
 
 .event-row {
   display: flex;
@@ -1796,7 +1773,7 @@ code.block {
 .event-time { font-weight: 600; color: var(--accent); }
 .event-memo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-chev { color: var(--text-mute); font-size: 18px; }
-.event-count { font-size: 12px; font-weight: 700; color: var(--navy); flex: 0 0 auto; }
+.event-count { font-size: 12px; font-weight: 700; color: var(--text); flex: 0 0 auto; }
 
 .kind-picker { display: flex; gap: 8px; flex-wrap: wrap; }
 .kind-chip {
@@ -1808,12 +1785,12 @@ code.block {
   font-weight: 600;
   color: var(--text-sub);
 }
-.kind-chip.on { border-color: var(--navy); color: var(--navy); background: var(--surface-2); }
+.kind-chip.on { border-color: var(--navy); color: var(--text); background: var(--surface-2); }
 
 /* ---- 会場・ホテル ---- */
 .venue-card { }
 .venue-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.venue-name { font-size: 16px; font-weight: 800; color: var(--navy); }
+.venue-name { font-size: 16px; font-weight: 800; color: var(--text); }
 .venue-addr { font-size: 13px; color: var(--text-sub); margin-top: 3px; }
 .venue-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .venue-memo {
@@ -1843,7 +1820,7 @@ code.block {
 /* ---- 試験内容 ---- */
 .content-sec { }
 .content-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.content-title { font-size: 15px; font-weight: 800; color: var(--navy); }
+.content-title { font-size: 15px; font-weight: 800; color: var(--text); }
 .content-body { font-size: 14px; line-height: 1.8; color: var(--text); margin-top: 8px; white-space: pre-wrap; }
 .content-empty { font-size: 13px; color: var(--text-mute); margin-top: 8px; }
 
@@ -1948,7 +1925,7 @@ code.block {
 .action-sheet .sheet-title {
   font-size: 15px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--text);
   text-align: center;
   margin-bottom: 12px;
 }
