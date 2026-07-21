@@ -15,6 +15,7 @@ import ExamScope from './components/ExamScope.jsx';
 import ConnectedLearning from './components/ConnectedLearning.jsx';
 import Builder from './components/Builder.jsx';
 import Import from './components/Import.jsx';
+import Parse from './components/Parse.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -181,7 +182,16 @@ export default function App() {
       case 'builder':
         return <Builder store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'import':
-        return <Import onSendToImport={sendOcrToImport} onOpenOcr={openOcr} onToast={showToast} />;
+        return (
+          <Import
+            onSendToImport={sendOcrToImport}
+            onOpenOcr={openOcr}
+            onOpenParse={() => setView('parse')}
+            onToast={showToast}
+          />
+        );
+      case 'parse':
+        return <Parse store={store} onToast={showToast} onDone={() => setView('import')} />;
       case 'connect':
         return (
           <ConnectedLearning
@@ -221,6 +231,7 @@ export default function App() {
       connect: '連結学習',
       builder: '出題を作る',
       import: '問題を取り込む',
+      parse: '自由文から自動作成',
       settings: '設定',
     };
     return map[view] || '鍼灸国試 対策アプリ';

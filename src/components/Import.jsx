@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 // 問題の取り込みハブ
 // ファイル(CSV/JSON) / 文章の貼り付け / 写真・PDF の入口をまとめる。
 // 取り込んだ内容は設定画面のプレビューに渡り、そこで確認して追加する。
-export default function Import({ onSendToImport, onOpenOcr, onToast }) {
+export default function Import({ onSendToImport, onOpenOcr, onOpenParse, onToast }) {
   const fileRef = useRef(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
@@ -72,6 +72,15 @@ export default function Import({ onSendToImport, onOpenOcr, onToast }) {
         <span className="import-main">
           <span className="import-title">写真・PDFから取り込む</span>
           <span className="import-desc">本のページ写真やPDFから文字を抽出（要ネット接続）</span>
+        </span>
+      </button>
+
+      {/* 自由文から自動作成 */}
+      <button className="import-tile" onClick={onOpenParse}>
+        <span className="import-ico">✨</span>
+        <span className="import-main">
+          <span className="import-title">自由文から自動作成</span>
+          <span className="import-desc">問題集の文章・ネットのコピーを貼ると、選択肢と正解を自動で読み取り</span>
         </span>
       </button>
 

@@ -160,14 +160,23 @@ function recordToQuestion(rec) {
   return { question: q, warnings };
 }
 
-// ---- CSV パーサ（引用符・改行・カンマのエスケープ対応の簡易実装） ----
-function parseCsv(text) {
+// ---- CSV/TSV パーサ（引用符・改行・区切りのエスケープ対応の簡易実装） ----
+// delim は区切り文字（',' または '\t'）。省略時は先頭行から自動判定。
+function parseCsv(text, delim) {
   const rows = [];
   let row = [];
   let field = '';
   let inQuotes = false;
   // 先頭の BOM（Excel 等が付与）を除去してから解析する
   const src = text.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // 区切り自動判定：先頭行にタブが多ければ TSV とみなす
+  if (!delim) {
+    const firstLine = src.split('\n')[0] || '';
+    const tabs = (firstLine.match(/\t/g) || []).length;
+    const commas = (firstLine.match(/,/g) || []).length;
+    delim = tabs > 0 && tabs >= commas ? '\t' : ',';
+  }
 
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
@@ -184,7 +193,7 @@ function parseCsv(text) {
       }
     } else if (ch === '"') {
       inQuotes = true;
-    } else if (ch === ',') {
+    } else if (ch === delim) {
       row.push(field);
       field = '';
     } else if (ch === '\n') {
@@ -202,6 +211,35 @@ function parseCsv(text) {
     rows.push(row);
   }
   return rows.filter((r) => r.some((c) => String(c).trim() !== ''));
+}
+
+// 問題文を正規化（重複判定用）
+function normQ(q) {
+  return String(q && q.question ? q.question : '')
+    .replace(/\s+/g, '')
+    .replace(/[。、，．,.\-—・「」『』（）()\[\]:：]/g, '')
+    .toLowerCase();
+}
+
+// 取り込む問題を、既存問題と照合して重複/新規に分ける
+export function dedupeAgainst(newQuestions, existingQuestions = []) {
+  const existing = new Set(existingQuestions.map(normQ).filter(Boolean));
+  const seen = new Set();
+  const unique = [];
+  const duplicates = [];
+  newQuestions.forEach((q) => {
+    const key = normQ(q);
+    if (!key) {
+      unique.push(q);
+      return;
+    }
+    if (existing.has(key) || seen.has(key)) duplicates.push(q);
+    else {
+      unique.push(q);
+      seen.add(key);
+    }
+  });
+  return { unique, duplicates };
 }
 
 // 取り込んだ問題群の妥当性チェック（ID重複など）

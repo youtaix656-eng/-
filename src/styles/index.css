@@ -1500,3 +1500,83 @@ code.block {
   margin-top: 2px;
   line-height: 1.5;
 }
+
+/* ==== 自由文パース編集 ==== */
+.parse-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.parse-card.need {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 1px var(--warn), var(--shadow);
+}
+.parse-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.parse-num {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.parse-flag {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--warn);
+  background: #fff4e0;
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+.parse-dup {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--wrong);
+  background: var(--wrong-bg);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+.parse-del {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--text-mute);
+  font-size: 14px;
+  padding: 2px 6px;
+}
+.parse-subject {
+  font-size: 13px;
+}
+.parse-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.parse-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.parse-choice input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--correct);
+}
+.parse-choice-text {
+  flex: 1;
+}
+.parse-choice-x {
+  border: none;
+  background: none;
+  color: var(--text-mute);
+  font-size: 12px;
+  padding: 4px 6px;
+  flex: 0 0 auto;
+}
+@media (prefers-color-scheme: dark) {
+  .parse-flag { background: #2a2410; }
+}
