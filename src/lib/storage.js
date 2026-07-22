@@ -170,6 +170,7 @@ const DEFAULT_SETTINGS = {
   lastDeepDive: '', // 最後に「今日の1問」を深掘りした日（YYYY-MM-DD）
   deepDiveStreak: 0, // 連結学習の連続日数
   iryouSeeded: false, // 同梱の医療概論一問一答を初回取り込み済みか
+  eiseiVersion: 0, // 同梱の衛生学・公衆衛生学を取り込んだバージョン（増分反映）
   subjectTagsCleaned: false, // 以前自動付与した科目タグを除去済みか
   genreFolded: false, // genre（出題基準カテゴリ）を tags へ折り込み済みか
 };

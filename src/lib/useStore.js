@@ -9,6 +9,7 @@ import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
+import eiseiQuestions, { EISEI_VERSION } from '../data/eiseiQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -76,6 +77,13 @@ export function useStore() {
         cfg.iryouSeeded = true;
         mutated = true;
       }
+      // 同梱の衛生学・公衆衛生学（バッチ方式・増分）。EISEI_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.eiseiVersion || 0) < EISEI_VERSION) {
+        const { unique } = dedupeAgainst(eiseiQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.eiseiVersion = EISEI_VERSION;
+        mutated = true;
+      }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
       const importSeed = readImportFromHash();
       if (importSeed) {
@@ -91,9 +99,10 @@ export function useStore() {
         clearSeedHash();
       }
       // 【変更】医療概論の genre（出題基準カテゴリ）は廃止し、tags（キーワード）へ折り込む。初回のみ。
+      // 他科目（衛生学など）の genre はジャンル絞り込みに使うため折り込まない。
       if (!cfg.genreFolded) {
         baseQuestions = baseQuestions.map((qq) => {
-          if (!qq.genre) return qq;
+          if (!qq.genre || qq.subject !== '医療概論') return qq;
           const parts = String(qq.genre).split('｜').filter(Boolean);
           const tags = Array.from(new Set([...(qq.tags || []), ...parts]));
           const { genre, ...rest } = qq;
