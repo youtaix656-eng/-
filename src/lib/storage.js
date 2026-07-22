@@ -171,6 +171,7 @@ const DEFAULT_SETTINGS = {
   deepDiveStreak: 0, // 連結学習の連続日数
   iryouSeeded: false, // 同梱の医療概論一問一答を初回取り込み済みか
   subjectTagsCleaned: false, // 以前自動付与した科目タグを除去済みか
+  genreFolded: false, // genre（出題基準カテゴリ）を tags へ折り込み済みか
 };
 export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await read(KEYS.settings, {})) });
 export const saveSettings = (s) => write(KEYS.settings, s);

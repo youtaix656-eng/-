@@ -90,6 +90,18 @@ export function useStore() {
         }
         clearSeedHash();
       }
+      // 【変更】医療概論の genre（出題基準カテゴリ）は廃止し、tags（キーワード）へ折り込む。初回のみ。
+      if (!cfg.genreFolded) {
+        baseQuestions = baseQuestions.map((qq) => {
+          if (!qq.genre) return qq;
+          const parts = String(qq.genre).split('｜').filter(Boolean);
+          const tags = Array.from(new Set([...(qq.tags || []), ...parts]));
+          const { genre, ...rest } = qq;
+          return { ...rest, tags };
+        });
+        cfg.genreFolded = true;
+        mutated = true;
+      }
       // 【取り消し】以前に各問題へ自動付与していた「科目タグ」を取り除く（仕様変更）。
       // 科目での絞り込みは検索フィルタ（科目名）で行うため、tags には入れない。初回のみ。
       if (!cfg.subjectTagsCleaned) {

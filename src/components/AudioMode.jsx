@@ -66,8 +66,8 @@ export default function AudioMode({ store, onToast }) {
   const dailyKw = useMemo(() => dailyKeyword(questions, links, dateKey()), [questions, links]);
   const hasKeywords = kwNames.length > 0;
 
-  // ソース・キーワード選択
-  const [source, setSource] = useState('review'); // review|tagged|all|keyword|daily|weak|filter
+  // ソース・キーワード選択（既定は全問題。検索で絞ると filter）
+  const [source, setSource] = useState('all'); // all|filter（旧: review|tagged|keyword|daily|weak）
   const [selectedKeyword, setSelectedKeyword] = useState('');
 
   // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
@@ -104,6 +104,7 @@ export default function AudioMode({ store, onToast }) {
     [afterGenre, filterKeyword, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const filterActive = !!(filterSubject || filterGenre || filterKeyword);
+  const hasAnyGenre = useMemo(() => questions.some((q) => q.genre), [questions]);
 
   // 連結の工夫（プラン構造を変えるもの＝再構築が必要）
   const [chain, setChain] = useState(false); // #1 関連へ連鎖
@@ -496,15 +497,17 @@ export default function AudioMode({ store, onToast }) {
               ))}
             </select>
           </label>
-          <label className="mini-field">
-            <span>ジャンル</span>
-            <select value={filterGenre} onChange={(e) => applyFilter({ genre: e.target.value })} disabled={genreOptions.length === 0}>
-              <option value="">指定なし</option>
-              {genreOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </label>
+          {hasAnyGenre && (
+            <label className="mini-field">
+              <span>ジャンル</span>
+              <select value={filterGenre} onChange={(e) => applyFilter({ genre: e.target.value })} disabled={genreOptions.length === 0}>
+                <option value="">指定なし</option>
+                {genreOptions.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="mini-field">
             <span>キーワード</span>
             <select value={filterKeyword} onChange={(e) => applyFilter({ keyword: e.target.value })} disabled={keywordOptions.length === 0}>
@@ -527,69 +530,7 @@ export default function AudioMode({ store, onToast }) {
         </div>
       </div>
 
-      {/* 読み上げ対象 */}
-      <div className="section-label" style={{ marginTop: 0 }}>何を読む？</div>
-      <div className="chip-row">
-        {hasReview && (
-          <button className={`chip ${source === 'review' ? 'active' : ''}`} onClick={() => changeSource('review')}>
-            間違えた問題（{reviewQuestions.length}）
-          </button>
-        )}
-        {hasTagged && (
-          <button className={`chip ${source === 'tagged' ? 'active' : ''}`} onClick={() => changeSource('tagged')}>
-            タグ付き（{taggedQuestions.length}）
-          </button>
-        )}
-        <button className={`chip ${source === 'all' ? 'active' : ''}`} onClick={() => changeSource('all')}>
-          全問題（{questions.length}）
-        </button>
-        {hasKeywords && (
-          <>
-            <button className={`chip ${source === 'keyword' ? 'active' : ''}`} onClick={() => changeSource('keyword')}>
-              🔗 キーワードで回す
-            </button>
-            <button className={`chip ${source === 'daily' ? 'active' : ''}`} onClick={() => changeSource('daily')}>
-              📅 今日の連結
-            </button>
-            <button className={`chip ${source === 'weak' ? 'active' : ''}`} onClick={() => changeSource('weak')}>
-              💪 弱点キーワード順
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* 各ソースの説明（初心者向け） */}
-      {source === 'daily' && (
-        <p className="inline-note">
-          📅 <strong>今日の連結</strong>：今日のキーワード「{dailyKw || '—'}」から始めます。毎日ちがう言葉が選ばれ、「関連へ連鎖」をオンにするとつながる言葉へ広がります。
-        </p>
-      )}
-      {source === 'weak' && (
-        <p className="inline-note">
-          💪 <strong>弱点キーワード順</strong>：これまでの正答率が低い言葉から順に読みます。苦手を先につぶせます。
-        </p>
-      )}
-
-      {/* キーワード選択 */}
-      {source === 'keyword' && hasKeywords && (
-        <div className="card kw-picker">
-          <div className="section-label" style={{ marginTop: 0 }}>回すキーワードを選ぶ</div>
-          <div className="chip-row" style={{ marginBottom: 0 }}>
-            <button className={`chip ${selectedKeyword === ALL_KW ? 'active' : ''}`} onClick={() => changeKeyword(ALL_KW)}>
-              すべて順番に（{kwNames.length}語）
-            </button>
-            {kwList.map((k) => (
-              <button
-                key={k.keyword}
-                className={`chip ${selectedKeyword === k.keyword ? 'active' : ''}`}
-                onClick={() => changeKeyword(k.keyword)}
-              >
-                {k.keyword}（{k.count}）
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 検索で読み上げ対象をしぼり込みます。未選択なら全問題を読み上げます。 */}
 
       {plan.length === 0 ? (
         <div className="empty">
