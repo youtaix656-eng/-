@@ -214,9 +214,6 @@ export function TestView() {
           <p className="mt-1 text-sm leading-relaxed text-cocoa-700 dark:text-cream-100">
             {q.explanation}
           </p>
-          {q.note && (
-            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{q.note}</p>
-          )}
           <button
             onClick={next}
             className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-cocoa-600 px-6 text-base font-semibold text-white"
