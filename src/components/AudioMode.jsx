@@ -104,7 +104,6 @@ export default function AudioMode({ store, onToast }) {
     [afterGenre, filterKeyword, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const filterActive = !!(filterSubject || filterGenre || filterKeyword);
-  const hasAnyGenre = useMemo(() => questions.some((q) => q.genre), [questions]);
 
   // 連結の工夫（プラン構造を変えるもの＝再構築が必要）
   const [chain, setChain] = useState(false); // #1 関連へ連鎖
@@ -497,17 +496,15 @@ export default function AudioMode({ store, onToast }) {
               ))}
             </select>
           </label>
-          {hasAnyGenre && (
-            <label className="mini-field">
-              <span>ジャンル</span>
-              <select value={filterGenre} onChange={(e) => applyFilter({ genre: e.target.value })} disabled={genreOptions.length === 0}>
-                <option value="">指定なし</option>
-                {genreOptions.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label className="mini-field">
+            <span>ジャンル</span>
+            <select value={filterGenre} onChange={(e) => applyFilter({ genre: e.target.value })}>
+              <option value="">指定なし</option>
+              {genreOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
           <label className="mini-field">
             <span>キーワード</span>
             <select value={filterKeyword} onChange={(e) => applyFilter({ keyword: e.target.value })} disabled={keywordOptions.length === 0}>
