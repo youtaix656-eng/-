@@ -8,7 +8,11 @@ import { Icon } from "./Icon";
 // ============================================================
 export function CategoryCard({ category }: { category: Category }) {
   const href =
-    category.slug === "glossary" ? "/glossary" : `/category/${category.slug}`;
+    category.slug === "glossary"
+      ? "/glossary"
+      : category.slug === "hand"
+      ? "/hand"
+      : `/category/${category.slug}`;
 
   return (
     <Link

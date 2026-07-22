@@ -1,6 +1,7 @@
 import { items } from "@/data/items";
 import { categories } from "@/data/categories";
 import { glossary } from "@/data/glossary";
+import { handReflex } from "@/data/handReflex";
 
 // ============================================================
 // 全コンテンツ横断のあいまい検索
@@ -22,7 +23,12 @@ type Indexed = SearchResult & { haystack: string };
 const index: Indexed[] = [
   ...categories.map((c) => ({
     kind: "category" as const,
-    href: c.slug === "glossary" ? "/glossary" : `/category/${c.slug}`,
+    href:
+      c.slug === "glossary"
+        ? "/glossary"
+        : c.slug === "hand"
+        ? "/hand"
+        : `/category/${c.slug}`,
     title: c.title,
     subtitle: "カテゴリ",
     haystack: [c.title, c.description].join(" ").toLowerCase(),
@@ -51,6 +57,13 @@ const index: Indexed[] = [
     title: g.term,
     subtitle: "用語集",
     haystack: [g.term, g.reading, g.definition].join(" ").toLowerCase(),
+  })),
+  ...handReflex.map((s) => ({
+    kind: "item" as const,
+    href: "/hand",
+    title: `手順${s.no}：${s.name}`,
+    subtitle: `ハンドリフレ・${s.section}`,
+    haystack: [s.name, s.detail, s.section, "ハンドリフレ"].join(" ").toLowerCase(),
   })),
 ];
 

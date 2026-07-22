@@ -24,6 +24,12 @@ export const categories: Category[] = [
     icon: "Hand",
   },
   {
+    slug: "hand",
+    title: "ハンドリフレ",
+    description: "手順（通し番号1〜）と、順番の一問一答",
+    icon: "HandHelping",
+  },
+  {
     slug: "options",
     title: "オプションメニュー",
     description: "足つぼ・ヘッドスパ・ホットストーンなどの手順と提案タイミング",
