@@ -8,6 +8,7 @@ import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
+import iryouQuestions from '../data/iryouQuestions.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
 function newNoteId() {
@@ -65,6 +66,15 @@ export function useStore() {
       ]);
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
+      let seededBundled = false;
+      // アプリ同梱の医療概論 一問一答（92問）を初回だけ問題バンクへ取り込む。
+      // 既存ユーザーにも1回だけ追加され、削除しても再追加されないよう cfg にフラグを持つ。
+      if (!cfg.iryouSeeded) {
+        const { unique } = dedupeAgainst(iryouQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.iryouSeeded = true;
+        seededBundled = true;
+      }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
       const importSeed = readImportFromHash();
       if (importSeed) {
@@ -80,7 +90,8 @@ export function useStore() {
         clearSeedHash();
       }
       setQuestions(baseQuestions);
-      if (!(q && q.length > 0) || importSeed) storage.saveQuestions(baseQuestions);
+      if (!(q && q.length > 0) || importSeed || seededBundled) storage.saveQuestions(baseQuestions);
+      if (seededBundled) storage.saveSettings(cfg);
       setSrs(s || {});
       setHistory(h || []);
       setMemos(m || {});

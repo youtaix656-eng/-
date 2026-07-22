@@ -169,6 +169,7 @@ const DEFAULT_SETTINGS = {
   lastAutoBackup: 0, // 最終自動バックアップ日時
   lastDeepDive: '', // 最後に「今日の1問」を深掘りした日（YYYY-MM-DD）
   deepDiveStreak: 0, // 連結学習の連続日数
+  iryouSeeded: false, // 同梱の医療概論一問一答を初回取り込み済みか
 };
 export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await read(KEYS.settings, {})) });
 export const saveSettings = (s) => write(KEYS.settings, s);
