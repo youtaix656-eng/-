@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { isSpeechSupported, loadVoices, speak, cancelSpeech, wait } from '../lib/speech.js';
 import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
+import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import {
   allKeywords,
   clustersMap,
@@ -66,8 +67,38 @@ export default function AudioMode({ store, onToast }) {
   const hasKeywords = kwNames.length > 0;
 
   // ソース・キーワード選択
-  const [source, setSource] = useState('review'); // review|tagged|all|keyword|daily|weak
+  const [source, setSource] = useState('review'); // review|tagged|all|keyword|daily|weak|filter
   const [selectedKeyword, setSelectedKeyword] = useState('');
+
+  // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
+  const [filterSubject, setFilterSubject] = useState('');
+  const [filterGenre, setFilterGenre] = useState('');
+  const [filterKeyword, setFilterKeyword] = useState('');
+  const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
+  // 上の選択で段階的にしぼり込む（科目→ジャンル→キーワード）
+  // 科目名は公式13科目（はり/きゅうは分割）＋実際に収録されている科目を合わせて表示。
+  const subjectOptions = useMemo(
+    () => uniqJa([...SUBJECT_TAG_NAMES, ...questions.map((q) => q.subject)]),
+    [questions]
+  );
+  const afterSubject = useMemo(
+    () => (filterSubject ? questions.filter((q) => q.subject === filterSubject) : questions),
+    [questions, filterSubject]
+  );
+  const genreOptions = useMemo(() => uniqJa(afterSubject.flatMap((q) => q.tags || [])), [afterSubject]);
+  const afterGenre = useMemo(
+    () => (filterGenre ? afterSubject.filter((q) => (q.tags || []).includes(filterGenre)) : afterSubject),
+    [afterSubject, filterGenre]
+  );
+  const keywordOptions = useMemo(
+    () => uniqJa(afterGenre.flatMap((q) => (links[q.id]?.keywords) || [])),
+    [afterGenre, links]
+  );
+  const filteredPool = useMemo(
+    () => (filterKeyword ? afterGenre.filter((q) => (links[q.id]?.keywords || []).includes(filterKeyword)) : afterGenre),
+    [afterGenre, filterKeyword, links]
+  );
+  const filterActive = !!(filterSubject || filterGenre || filterKeyword);
 
   // 連結の工夫（プラン構造を変えるもの＝再構築が必要）
   const [chain, setChain] = useState(false); // #1 関連へ連鎖
@@ -140,6 +171,11 @@ export default function AudioMode({ store, onToast }) {
       return items;
     };
 
+    if (source === 'filter') {
+      let base = filteredPool;
+      if (shuffleOn) base = shuffle(base);
+      return base.map((q) => ({ kind: 'question', q }));
+    }
     if (source === 'keyword') {
       if (!hasKeywords) return [];
       let order;
@@ -165,7 +201,7 @@ export default function AudioMode({ store, onToast }) {
     if (shuffleOn) base = shuffle(base);
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, dailyKw, questions, links, reviewQuestions, taggedQuestions, hasKeywords, hasReview, hasTagged]);
+  }, [source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, dailyKw, questions, links, reviewQuestions, taggedQuestions, hasKeywords, hasReview, hasTagged, filteredPool]);
 
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
@@ -365,8 +401,31 @@ export default function AudioMode({ store, onToast }) {
 
   const changeSource = (s) => {
     rebuildStop();
+    // 6つのボタンを選んだら検索フィルタは解除（どちらか一方のモード）
+    setFilterSubject('');
+    setFilterGenre('');
+    setFilterKeyword('');
     setSource(s);
     if (s === 'keyword' && !selectedKeyword && hasKeywords) setSelectedKeyword(kwNames[0]);
+  };
+
+  // 検索フィルタの変更（科目→ジャンル→キーワードの順に段階的にしぼる）
+  const applyFilter = (patch) => {
+    rebuildStop();
+    const ns = { subject: filterSubject, genre: filterGenre, keyword: filterKeyword, ...patch };
+    if ('subject' in patch) { ns.genre = ''; ns.keyword = ''; } // 上位が変わったら下位をリセット
+    if ('genre' in patch) { ns.keyword = ''; }
+    setFilterSubject(ns.subject);
+    setFilterGenre(ns.genre);
+    setFilterKeyword(ns.keyword);
+    setSource(ns.subject || ns.genre || ns.keyword ? 'filter' : 'all');
+  };
+  const clearFilter = () => {
+    rebuildStop();
+    setFilterSubject('');
+    setFilterGenre('');
+    setFilterKeyword('');
+    setSource('all');
   };
   const changeKeyword = (kw) => { rebuildStop(); setSelectedKeyword(kw); };
   const toggleChain = () => { rebuildStop(); setChain((v) => !v); };
@@ -418,6 +477,50 @@ export default function AudioMode({ store, onToast }) {
         「問題 →（間）→ 正解と解説」を自動で読み上げます。連結の工夫で、ひとつの言葉を
         いろいろな角度から耳で覚えられます。
       </p>
+
+      {/* 上部の検索（科目名・ジャンル・キーワードでしぼり込む） */}
+      <div className="card audio-search">
+        <div className="section-label" style={{ marginTop: 0 }}>🔍 検索（しぼり込み）</div>
+        <div className="search-grid">
+          <label className="mini-field">
+            <span>科目名</span>
+            <select value={filterSubject} onChange={(e) => applyFilter({ subject: e.target.value })}>
+              <option value="">指定なし</option>
+              {subjectOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <label className="mini-field">
+            <span>ジャンル</span>
+            <select value={filterGenre} onChange={(e) => applyFilter({ genre: e.target.value })} disabled={genreOptions.length === 0}>
+              <option value="">指定なし</option>
+              {genreOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <label className="mini-field">
+            <span>キーワード</span>
+            <select value={filterKeyword} onChange={(e) => applyFilter({ keyword: e.target.value })} disabled={keywordOptions.length === 0}>
+              <option value="">指定なし</option>
+              {keywordOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="search-foot">
+          {filterActive ? (
+            <>
+              <span>この条件で <strong>{filteredPool.length}</strong> 問</span>
+              <button className="btn ghost sm" onClick={clearFilter}>クリア</button>
+            </>
+          ) : (
+            <span className="hint">科目・ジャンル・キーワードを選ぶと、その条件の問題だけを読み上げます（未選択でもOK）。</span>
+          )}
+        </div>
+      </div>
 
       {/* 読み上げ対象 */}
       <div className="section-label" style={{ marginTop: 0 }}>何を読む？</div>
@@ -488,7 +591,9 @@ export default function AudioMode({ store, onToast }) {
           <div className="ico">🎧</div>
           <p>読み上げる項目がありません。</p>
           <p className="inline-note">
-            {kwLike
+            {source === 'filter'
+              ? '選んだ条件に合う問題がありません。上の検索で条件をゆるめる（別の科目・ジャンルにする、キーワードを「指定なし」に戻す）か、「クリア」してください。'
+              : kwLike
               ? 'キーワード（連結キーワード / タグ）を付けた問題を用意すると、ここで回せます。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
               : 'まずは一問一答や模擬試験で問題を解き、間違えた問題を溜めましょう。'}
           </p>

@@ -9,7 +9,7 @@ import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
-import { SUBJECT_TAG_NAMES, subjectTagFor } from '../data/examScope.js';
+import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
 function newNoteId() {
@@ -90,17 +90,19 @@ export function useStore() {
         }
         clearSeedHash();
       }
-      // 科目を「タグ」として各問題に付与し、音声学習などで科目別に振り分けられるようにする。
-      // 初回のみ。既存問題・同梱問題・取り込み分すべてに、その問題の科目タグを付ける。
-      if (!cfg.subjectTagsSeeded) {
+      // 【取り消し】以前に各問題へ自動付与していた「科目タグ」を取り除く（仕様変更）。
+      // 科目での絞り込みは検索フィルタ（科目名）で行うため、tags には入れない。初回のみ。
+      if (!cfg.subjectTagsCleaned) {
+        const SUB = new Set(SUBJECT_TAG_NAMES);
         baseQuestions = baseQuestions.map((qq) => {
-          const tag = subjectTagFor(qq.subject);
-          if (!tag) return qq;
-          const tags = qq.tags || [];
-          if (tags.includes(tag)) return qq;
-          return { ...qq, tags: [...tags, tag] };
+          if (!qq.tags || !qq.tags.some((t) => SUB.has(t))) return qq;
+          const tags = qq.tags.filter((t) => !SUB.has(t));
+          const out = { ...qq };
+          if (tags.length) out.tags = tags;
+          else delete out.tags;
+          return out;
         });
-        cfg.subjectTagsSeeded = true;
+        cfg.subjectTagsCleaned = true;
         mutated = true;
       }
       setQuestions(baseQuestions);
@@ -128,15 +130,9 @@ export function useStore() {
         setSelfNotes(base);
       }
       setKwMeta(km || {});
-      // 科目タグを用語辞書にも登録（連結学習・マインドマップ・50音索引で扱えるように）
-      let dict = ud || [];
-      if (cfg.subjectTagsSeeded) {
-        const merged = Array.from(new Set([...dict, ...SUBJECT_TAG_NAMES]));
-        if (merged.length !== dict.length) {
-          dict = merged;
-          storage.saveUserDict(dict);
-        }
-      }
+      // 【取り消し】用語辞書に登録していた科目名を取り除く
+      let dict = (ud || []).filter((t) => !SUBJECT_TAG_NAMES.includes(t));
+      if (dict.length !== (ud || []).length) storage.saveUserDict(dict);
       setUserDict(dict);
 
       setSettings(cfg);

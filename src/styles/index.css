@@ -1657,6 +1657,33 @@ code.block {
   width: 100%;
 }
 
+/* 音声学習：上部の検索（科目・ジャンル・キーワード） */
+.audio-search {
+  padding: 14px;
+}
+.search-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 460px) {
+  .search-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.search-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-sub);
+}
+.search-foot strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
 /* ---- モーダル ---- */
 .modal-backdrop {
   position: fixed;
