@@ -85,18 +85,23 @@ export default function AudioMode({ store, onToast }) {
     () => (filterSubject ? questions.filter((q) => q.subject === filterSubject) : questions),
     [questions, filterSubject]
   );
-  const genreOptions = useMemo(() => uniqJa(afterSubject.flatMap((q) => q.tags || [])), [afterSubject]);
+  // ジャンル＝出題基準のカテゴリ（q.genre）。キーワード＝細かい語（タグ＋連結キーワード）。
+  const genreOptions = useMemo(
+    () => uniqJa(afterSubject.flatMap((q) => (q.genre ? [q.genre] : []))),
+    [afterSubject]
+  );
   const afterGenre = useMemo(
-    () => (filterGenre ? afterSubject.filter((q) => (q.tags || []).includes(filterGenre)) : afterSubject),
+    () => (filterGenre ? afterSubject.filter((q) => q.genre === filterGenre) : afterSubject),
     [afterSubject, filterGenre]
   );
+  const kwsOf = (q) => [...(q.tags || []), ...((links[q.id]?.keywords) || [])];
   const keywordOptions = useMemo(
-    () => uniqJa(afterGenre.flatMap((q) => (links[q.id]?.keywords) || [])),
-    [afterGenre, links]
+    () => uniqJa(afterGenre.flatMap(kwsOf)),
+    [afterGenre, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const filteredPool = useMemo(
-    () => (filterKeyword ? afterGenre.filter((q) => (links[q.id]?.keywords || []).includes(filterKeyword)) : afterGenre),
-    [afterGenre, filterKeyword, links]
+    () => (filterKeyword ? afterGenre.filter((q) => kwsOf(q).includes(filterKeyword)) : afterGenre),
+    [afterGenre, filterKeyword, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const filterActive = !!(filterSubject || filterGenre || filterKeyword);
 
