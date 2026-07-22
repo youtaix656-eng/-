@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { GraduationCap } from "lucide-react";
 import { categories } from "@/data/categories";
 import { CategoryCard } from "@/components/CategoryCard";
 import { SearchBar } from "@/components/SearchBar";
@@ -11,6 +13,22 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-6">
       <SearchBar />
+
+      {/* 自主基準クイズへの導線 */}
+      <Link
+        href="/quiz"
+        className="flex min-h-[44px] items-center gap-3 rounded-xl2 border border-cocoa-600 bg-cocoa-600 p-4 text-white shadow-sm active:bg-cocoa-700"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15">
+          <GraduationCap size={24} />
+        </span>
+        <span className="flex flex-col">
+          <span className="text-base font-semibold">問題で確認（自主基準）</span>
+          <span className="text-sm text-cream-100/90">
+            一問一答・○×で理解度チェック
+          </span>
+        </span>
+      </Link>
 
       <FavoritesSection />
 

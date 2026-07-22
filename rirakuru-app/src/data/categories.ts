@@ -30,6 +30,12 @@ export const categories: Category[] = [
     icon: "Sparkles",
   },
   {
+    slug: "standards",
+    title: "自主基準（サービス適正化）",
+    description: "第1〜4条：目的・定義・施術規定・禁止する手技／医業類似行為の範囲",
+    icon: "Scale",
+  },
+  {
     slug: "contraindications",
     title: "禁忌・注意事項",
     description: "施術を控える症状・妊娠中の対応・体調不良・圧の確認方法",

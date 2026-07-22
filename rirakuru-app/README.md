@@ -51,6 +51,7 @@ PWA（オフライン閲覧・ホーム画面追加）は `npm run build` → `n
 | カテゴリ | `/category/[slug]` | そのカテゴリの項目をアコーディオン表示 |
 | 詳細 | `/item/[id]` | 見出し・本文・手順・注意点・関連項目 |
 | チェックリスト | `/checklist` | 出勤／施術前後／退勤のチェック（日付が変わると自動リセット） |
+| 問題 | `/quiz` | 自主基準の一問一答・正誤問題（○×）で理解度チェック |
 | 用語集 | `/glossary` | 五十音順・頭文字ジャンプ付き |
 
 ---
@@ -68,6 +69,7 @@ PWA（オフライン閲覧・ホーム画面追加）は `npm run build` → `n
 | `src/data/items.ts` | 各項目の詳細（手順・注意点など）※ ここを一番よく編集します |
 | `src/data/checklists.ts` | チェックリストの項目 |
 | `src/data/glossary.ts` | 用語集 |
+| `src/data/quiz.ts` | 問題（一問一答 `qaList` と 正誤問題○× `oxList`） |
 | `src/data/types.ts` | データの「型」の説明（触らなくてOK・迷ったら読む） |
 
 ### 例：新しい項目を1つ追加する
@@ -116,6 +118,15 @@ PWA（オフライン閲覧・ホーム画面追加）は `npm run build` → `n
 `src/data/checklists.ts` / `src/data/glossary.ts` の中の
 サンプルをコピーして書き換えるだけです。用語集は `reading`（よみがな・ひらがな）で
 五十音順に自動で並びます。
+
+### 例：問題（一問一答・○×）を追加する
+
+`src/data/quiz.ts` を編集します。
+
+- 一問一答は `qaList` に追記：`{ id, q: "問い", a: "答え", ref: "第X条" }`
+- 正誤問題は `oxList` に追記：
+  `{ id, statement: "正誤を問う文", answer: true, explanation: "解説", ref: "第X条" }`
+  - `answer` は正しければ `true`（○）、誤りなら `false`（×）
 
 ---
 
