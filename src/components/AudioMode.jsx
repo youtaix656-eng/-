@@ -3,6 +3,21 @@ import { isSpeechSupported, loadVoices, speak, cancelSpeech, wait } from '../lib
 import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
+import { COMPARISONS, NUMBER_FACTS } from '../data/mindmapData.js';
+
+// 連結モード（検索窓の下に並ぶ10項目）。id=0 は通常（全部順に読む）。
+const MODES = [
+  { id: 1, icon: '🔗', title: 'キーワード連鎖（芋づる式）', desc: '同じキーワードの問題を続けて読み、関連の強い言葉へ自動でつなげます。', when: '知識を幅広く結びつけたい／通しで復習したい時' },
+  { id: 2, icon: '⚖️', title: '比較・対比読み', desc: 'まぎらわしい2つ以上を並べて読み、違いをはっきりさせます。', when: '似た用語を混同しがちな時' },
+  { id: 3, icon: '🔢', title: '数値まとめ読み', desc: '覚えにくい数字だけを続けて読み上げます。', when: '数字が苦手／試験直前の総ざらいに' },
+  { id: 4, icon: '⬜', title: '穴埋め音声', desc: 'キーワードを伏せて出題し、間をおいてから答えを読みます。', when: '思い出す力（想起）を鍛えたい時' },
+  { id: 5, icon: '💪', title: '弱点キーワード優先', desc: 'これまで正答率の低い言葉の問題から順に読みます。', when: '苦手を先につぶしたい時' },
+  { id: 6, icon: '📋', title: '選択肢読み上げ→解答', desc: '四択の選択肢まで読み、間をおいてから正解を言います。', when: '手が使えない移動中のミニテストに' },
+  { id: 7, icon: '📚', title: '章（カテゴリ）通し読み', desc: '出題基準のカテゴリごとにまとめて読みます。', when: '範囲の全体像を耳でつかみたい時' },
+  { id: 8, icon: '📝', title: 'つながりナレーション', desc: 'キーワードの要点を短い語りに再構成して読みます。', when: 'すき間時間でサッと要点確認したい時' },
+  { id: 9, icon: '🎯', title: '適応（弱点に自動集中）', desc: 'これまでの正誤に応じて、弱点の問題を厚めに読みます。', when: '解くほど自分専用にしたい時' },
+  { id: 10, icon: '📅', title: '今日の連結（デイリー）', desc: '今日の1キーワードと、復習期限が来た問題を優先して読みます。', when: '毎日3〜5分の習慣づけに' },
+];
 import {
   allKeywords,
   clustersMap,
@@ -68,6 +83,7 @@ export default function AudioMode({ store, onToast }) {
 
   // ソース・キーワード選択（既定は全問題。検索で絞ると filter）
   const [source, setSource] = useState('all'); // all|filter（旧: review|tagged|keyword|daily|weak）
+  const [mode, setMode] = useState(0); // 連結モード（0=通常, 1〜10）
   const [selectedKeyword, setSelectedKeyword] = useState('');
 
   // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
@@ -176,6 +192,95 @@ export default function AudioMode({ store, onToast }) {
       return items;
     };
 
+    // ===== 連結モード（検索の下の1〜10）=====
+    if (mode > 0) {
+      const pool = filterActive ? filteredPool : questions;
+      const poolIds = new Set(pool.map((q) => q.id));
+      // pool 内のキーワード → 問題 クラスタ
+      const cl = new Map();
+      pool.forEach((q) =>
+        effectiveTags(q, links).forEach((kw) => {
+          if (!cl.has(kw)) cl.set(kw, []);
+          cl.get(kw).push(q);
+        })
+      );
+      const poolKw = [...cl.keys()];
+      const byCount = poolKw.slice().sort((a, b) => cl.get(b).length - cl.get(a).length);
+      const seqQ = (qs) => {
+        let b = qs;
+        if (shuffleOn) b = shuffle(b);
+        return b;
+      };
+      const readCluster = (order, summaryOnly) => {
+        const items = [];
+        order.forEach((kw) => {
+          let qs = cl.get(kw) || [];
+          if (!qs.length) return;
+          if (shuffleOn) qs = shuffle(qs);
+          if (summaryOnly) {
+            items.push({ kind: 'summary', keyword: kw, text: summaryText(kw, qs) });
+            return;
+          }
+          qs.forEach((q, i) =>
+            items.push({
+              kind: 'question',
+              q,
+              keyword: kw,
+              intro: i === 0 ? `キーワード、${kw}。関連する問題を${qs.length}問、続けて確認します。` : '',
+              note: (links[q.id]?.note || '').trim(),
+            })
+          );
+          if (summary) items.push({ kind: 'summary', keyword: kw, text: summaryText(kw, qs) });
+        });
+        return items;
+      };
+      const weakSort = (qs) => {
+        const rank = new Map(weakRanked.map((w, i) => [w.keyword, i]));
+        return qs
+          .map((q) => {
+            const ks = effectiveTags(q, links);
+            const best = ks.length ? Math.min(...ks.map((k) => (rank.has(k) ? rank.get(k) : 9999))) : 9999;
+            return { q, best };
+          })
+          .sort((a, b) => a.best - b.best)
+          .map((x) => x.q);
+      };
+      const poolTerms = new Set(poolKw);
+      const relevant = (arr) => {
+        if (!filterActive) return arr;
+        const f = arr.filter((x) => (x.terms || []).some((t) => poolTerms.has(t)));
+        return f.length ? f : arr;
+      };
+      const fallback = () => seqQ(pool).map((q) => ({ kind: 'question', q }));
+
+      if (mode === 1) return poolKw.length ? readCluster(chainOrder(byCount[0], relatedMap, poolKw)) : fallback();
+      if (mode === 2) return relevant(COMPARISONS).map((c) => ({ kind: 'compare', comp: c }));
+      if (mode === 3) return relevant(NUMBER_FACTS).map((n) => ({ kind: 'number', num: n }));
+      if (mode === 4) return seqQ(pool).map((q) => ({ kind: 'cloze', q }));
+      if (mode === 5) return weakSort(pool).map((q) => ({ kind: 'question', q }));
+      if (mode === 6) return seqQ(pool).map((q) => ({ kind: 'choices', q }));
+      if (mode === 7) {
+        const CATS = ['現代の医療と社会', '社会保障制度', '医療倫理', '医療と社会', '医療従事者', '医療・福祉施設', '医療経済', '医療保険のしくみ', '公費負担医療', '介護サービス行政', '医療倫理教育', '施術者としての倫理'];
+        const order = CATS.filter((c) => cl.has(c));
+        return order.length ? readCluster(order) : fallback();
+      }
+      if (mode === 8) return poolKw.length ? readCluster(byCount, true) : fallback();
+      if (mode === 9) return weakSort(pool).map((q) => ({ kind: 'question', q }));
+      if (mode === 10) {
+        const dueFirst = reviewQuestions.filter((q) => poolIds.has(q.id)).map((q) => ({ kind: 'question', q }));
+        const seed = dailyKw && cl.has(dailyKw) ? dailyKw : byCount[0];
+        const chainItems = seed ? readCluster(chainOrder(seed, relatedMap, poolKw)) : [];
+        const seen = new Set();
+        return [...dueFirst, ...chainItems].filter((it) => {
+          if (it.kind !== 'question') return true;
+          if (seen.has(it.q.id)) return false;
+          seen.add(it.q.id);
+          return true;
+        });
+      }
+      return fallback();
+    }
+
     if (source === 'filter') {
       let base = filteredPool;
       if (shuffleOn) base = shuffle(base);
@@ -206,7 +311,7 @@ export default function AudioMode({ store, onToast }) {
     if (shuffleOn) base = shuffle(base);
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, dailyKw, questions, links, reviewQuestions, taggedQuestions, hasKeywords, hasReview, hasTagged, filteredPool]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewQuestions, taggedQuestions, hasKeywords, hasReview, hasTagged, filteredPool, filterActive]);
 
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
@@ -290,6 +395,59 @@ export default function AudioMode({ store, onToast }) {
     if (item.kind === 'summary') {
       setPhase(PHASES.NOTE);
       await say(item.text);
+      await wait(700, signal);
+      return;
+    }
+    if (item.kind === 'compare') {
+      const c = item.comp;
+      setPhase(PHASES.KEYWORD);
+      await say(`比較。${c.title}。`);
+      setPhase(PHASES.GAP);
+      await wait(Math.min(gapRef.current, 2) * 1000, signal);
+      setPhase(PHASES.ANSWER);
+      await say(`${(c.members || []).join('。 ')}。`);
+      if (c.note) await say(`ポイント。${c.note}`);
+      await wait(700, signal);
+      return;
+    }
+    if (item.kind === 'number') {
+      const n = item.num;
+      setPhase(PHASES.KEYWORD);
+      await say(`数字。${n.topic}。`);
+      setPhase(PHASES.GAP);
+      await wait(Math.min(gapRef.current, 2) * 1000, signal);
+      setPhase(PHASES.ANSWER);
+      await say(`${n.value}。${n.note || ''}`);
+      await wait(700, signal);
+      return;
+    }
+    if (item.kind === 'cloze') {
+      const cq = item.q;
+      const ans = cq.choices[cq.answer];
+      const base = cq.explanation || questionText(cq);
+      const blanked = ans && base.includes(ans) ? base.split(ans).join('○○（ピー）') : questionText(cq);
+      setPhase(PHASES.QUESTION);
+      await say(`穴埋め。${blanked}。○○に入るのは何でしょう。`);
+      setPhase(PHASES.GAP);
+      await wait(gapRef.current * 1000, signal);
+      setPhase(PHASES.ANSWER);
+      await say(`答えは、${ans}。`);
+      await wait(700, signal);
+      return;
+    }
+    if (item.kind === 'choices') {
+      const cq = item.q;
+      const o2 = optsRef.current;
+      setPhase(PHASES.QUESTION);
+      const subj2 = o2.readSubject && cq.subject ? `${cq.subject}。` : '';
+      let t = `${subj2}問題。${questionText(cq)}。`;
+      if (cq.type !== 'ox') cq.choices.forEach((c, i) => { t += `${i + 1}番、${c}。`; });
+      else t += '正しいか、誤りか。';
+      await say(t);
+      setPhase(PHASES.GAP);
+      await wait(gapRef.current * 1000, signal);
+      setPhase(PHASES.ANSWER);
+      await say(answerText(cq));
       await wait(700, signal);
       return;
     }
@@ -414,6 +572,12 @@ export default function AudioMode({ store, onToast }) {
     if (s === 'keyword' && !selectedKeyword && hasKeywords) setSelectedKeyword(kwNames[0]);
   };
 
+  // 連結モードの切り替え（同じものを再タップで通常へ戻す）
+  const changeMode = (m) => {
+    rebuildStop();
+    setMode((cur) => (cur === m ? 0 : m));
+  };
+
   // 検索フィルタの変更（科目→ジャンル→キーワードの順に段階的にしぼる）
   const applyFilter = (patch) => {
     rebuildStop();
@@ -527,7 +691,31 @@ export default function AudioMode({ store, onToast }) {
         </div>
       </div>
 
-      {/* 検索で読み上げ対象をしぼり込みます。未選択なら全問題を読み上げます。 */}
+      {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ */}
+      <div className="section-label">連結学習モード（読み方を選ぶ）</div>
+      <div className="mode-list">
+        <button className={`mode-card ${mode === 0 ? 'active' : ''}`} onClick={() => changeMode(0)}>
+          <span className="mode-ico">🎧</span>
+          <span className="mode-body">
+            <span className="mode-title">通常（そのまま順に読む）</span>
+            <span className="mode-desc">検索でしぼった問題を、問題→間→正解の順にそのまま読み上げます。</span>
+          </span>
+        </button>
+        {MODES.map((m) => (
+          <button
+            key={m.id}
+            className={`mode-card ${mode === m.id ? 'active' : ''}`}
+            onClick={() => changeMode(m.id)}
+          >
+            <span className="mode-ico">{m.icon}</span>
+            <span className="mode-body">
+              <span className="mode-title">{m.id}. {m.title}</span>
+              <span className="mode-desc">{m.desc}</span>
+              <span className="mode-when">✨ こんな時におすすめ：{m.when}</span>
+            </span>
+          </button>
+        ))}
+      </div>
 
       {plan.length === 0 ? (
         <div className="empty">
@@ -559,7 +747,15 @@ export default function AudioMode({ store, onToast }) {
 
             <div className="now-subject">
               {current?.subject ||
-                (currentItem?.kind === 'flashcard' ? '用語カード' : currentItem?.kind === 'summary' ? 'まとめ' : '')}
+                (currentItem?.kind === 'flashcard'
+                  ? '用語カード'
+                  : currentItem?.kind === 'summary'
+                  ? 'まとめ'
+                  : currentItem?.kind === 'compare'
+                  ? '比較・対比'
+                  : currentItem?.kind === 'number'
+                  ? '数値'
+                  : '')}
             </div>
             {current?.image && <img className="now-image" src={current.image} alt="問題の図" loading="lazy" />}
             <div className="now-text">
@@ -567,6 +763,12 @@ export default function AudioMode({ store, onToast }) {
                 ? `用語：${currentItem.keyword}`
                 : currentItem?.kind === 'summary'
                 ? `キーワード「${currentItem.keyword}」のまとめ`
+                : currentItem?.kind === 'compare'
+                ? `比較：${currentItem.comp.title}`
+                : currentItem?.kind === 'number'
+                ? `数字：${currentItem.num.topic}`
+                : currentItem?.kind === 'cloze'
+                ? `穴埋め：${current?.question || ''}`
                 : current?.question || (current?.image ? '図を見て答える問題' : '')}
             </div>
 
@@ -583,6 +785,20 @@ export default function AudioMode({ store, onToast }) {
             )}
             {phase === PHASES.ANSWER && currentItem?.kind === 'flashcard' && (
               <div className="now-answer"><div>{currentItem.text}</div></div>
+            )}
+            {phase === PHASES.ANSWER && currentItem?.kind === 'compare' && (
+              <div className="now-answer">
+                {(currentItem.comp.members || []).map((m, i) => (
+                  <div key={i}>・{m}</div>
+                ))}
+                {currentItem.comp.note && <div style={{ marginTop: 6 }}>💡 {currentItem.comp.note}</div>}
+              </div>
+            )}
+            {phase === PHASES.ANSWER && currentItem?.kind === 'number' && (
+              <div className="now-answer">
+                <strong>{currentItem.num.value}</strong>
+                {currentItem.num.note && <div style={{ marginTop: 6 }}>{currentItem.num.note}</div>}
+              </div>
             )}
             {phase === PHASES.NOTE && currentItem?.kind === 'summary' && (
               <div className="now-answer note"><div>{currentItem.text}</div></div>
