@@ -86,9 +86,42 @@ export const EXAM_INFO = {
   source: '厚生労働省 実施要項／公益財団法人 東洋療法研修試験財団',
 };
 
+// 音声学習・タグ用の科目タグ一覧（はり理論・きゅう理論は分割して扱う）
+export const SUBJECT_TAG_NAMES = [
+  '医療概論',
+  '衛生学・公衆衛生学',
+  '関係法規',
+  '解剖学',
+  '生理学',
+  '病理学概論',
+  '臨床医学総論',
+  '臨床医学各論',
+  'リハビリテーション医学',
+  '東洋医学概論',
+  '経絡経穴概論',
+  '東洋医学臨床論',
+  'はり理論',
+  'きゅう理論',
+];
+
 // 科目名の一致判定（アプリ内の科目名の揺れを吸収）
 function normalizeName(s) {
   return String(s || '').replace(/\s+/g, '').replace(/[・･]/g, '').toLowerCase();
+}
+
+// 問題の科目文字列から、付与すべき「科目タグ」を返す（該当なしは null）
+export function subjectTagFor(subject) {
+  const s = String(subject || '').trim();
+  if (!s) return null;
+  if (SUBJECT_TAG_NAMES.includes(s)) return s;
+  const n = normalizeName(s);
+  if (n.includes('はり') || n.includes('鍼')) return 'はり理論';
+  if (n.includes('きゅう') || n.includes('灸')) return 'きゅう理論';
+  const hit = SUBJECT_TAG_NAMES.find((name) => {
+    const nn = normalizeName(name);
+    return n === nn || n.includes(nn) || nn.includes(n);
+  });
+  return hit || null;
 }
 export function subjectMatches(questionSubject, examSubject) {
   const q = normalizeName(questionSubject);

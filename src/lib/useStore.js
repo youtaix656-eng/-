@@ -9,6 +9,7 @@ import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
+import { SUBJECT_TAG_NAMES, subjectTagFor } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
 function newNoteId() {
@@ -66,14 +67,14 @@ export function useStore() {
       ]);
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
-      let seededBundled = false;
+      let mutated = false; // 保存が必要な変更が入ったか
       // アプリ同梱の医療概論 一問一答（92問）を初回だけ問題バンクへ取り込む。
       // 既存ユーザーにも1回だけ追加され、削除しても再追加されないよう cfg にフラグを持つ。
       if (!cfg.iryouSeeded) {
         const { unique } = dedupeAgainst(iryouQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.iryouSeeded = true;
-        seededBundled = true;
+        mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
       const importSeed = readImportFromHash();
@@ -89,9 +90,22 @@ export function useStore() {
         }
         clearSeedHash();
       }
+      // 科目を「タグ」として各問題に付与し、音声学習などで科目別に振り分けられるようにする。
+      // 初回のみ。既存問題・同梱問題・取り込み分すべてに、その問題の科目タグを付ける。
+      if (!cfg.subjectTagsSeeded) {
+        baseQuestions = baseQuestions.map((qq) => {
+          const tag = subjectTagFor(qq.subject);
+          if (!tag) return qq;
+          const tags = qq.tags || [];
+          if (tags.includes(tag)) return qq;
+          return { ...qq, tags: [...tags, tag] };
+        });
+        cfg.subjectTagsSeeded = true;
+        mutated = true;
+      }
       setQuestions(baseQuestions);
-      if (!(q && q.length > 0) || importSeed || seededBundled) storage.saveQuestions(baseQuestions);
-      if (seededBundled) storage.saveSettings(cfg);
+      if (!(q && q.length > 0) || importSeed || mutated) storage.saveQuestions(baseQuestions);
+      if (mutated) storage.saveSettings(cfg);
       setSrs(s || {});
       setHistory(h || []);
       setMemos(m || {});
@@ -114,7 +128,16 @@ export function useStore() {
         setSelfNotes(base);
       }
       setKwMeta(km || {});
-      setUserDict(ud || []);
+      // 科目タグを用語辞書にも登録（連結学習・マインドマップ・50音索引で扱えるように）
+      let dict = ud || [];
+      if (cfg.subjectTagsSeeded) {
+        const merged = Array.from(new Set([...dict, ...SUBJECT_TAG_NAMES]));
+        if (merged.length !== dict.length) {
+          dict = merged;
+          storage.saveUserDict(dict);
+        }
+      }
+      setUserDict(dict);
 
       setSettings(cfg);
       setLoaded(true);
