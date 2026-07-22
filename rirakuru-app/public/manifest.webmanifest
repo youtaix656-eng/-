@@ -2,7 +2,8 @@
   "name": "りらくる 業務マニュアル",
   "short_name": "業務マニュアル",
   "description": "りらくる セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
-  "start_url": "/",
+  "start_url": "/-/rirakuru/",
+  "scope": "/-/rirakuru/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#faf7f2",
@@ -10,16 +11,22 @@
   "lang": "ja",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/-/rirakuru/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/-/rirakuru/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/-/rirakuru/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

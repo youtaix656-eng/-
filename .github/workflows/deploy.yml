@@ -37,8 +37,26 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build
+      - name: Build (鍼灸アプリ / ルート)
         run: npm run build
+
+      # りらくる業務マニュアル（Next.js）を /rirakuru サブパスへ書き出し、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (rirakuru)
+        run: npm ci
+        working-directory: rirakuru-app
+
+      - name: Build (りらくる業務マニュアル / /rirakuru)
+        run: npm run build
+        working-directory: rirakuru-app
+        env:
+          NEXT_PUBLIC_BASE_PATH: /-/rirakuru
+
+      - name: Assemble Pages output
+        run: |
+          rm -rf dist/rirakuru
+          cp -r rirakuru-app/out dist/rirakuru
+          touch dist/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

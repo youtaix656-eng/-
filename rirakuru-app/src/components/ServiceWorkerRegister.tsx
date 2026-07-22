@@ -15,7 +15,9 @@ export function ServiceWorkerRegister() {
     ) {
       return;
     }
-    navigator.serviceWorker.register("/sw.js").catch(() => {
+    // GitHub Pages のサブパス配信に対応（例: /-/rirakuru/sw.js）
+    const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+    navigator.serviceWorker.register(`${base}/sw.js`).catch(() => {
       // 登録に失敗してもアプリ自体は通常どおり動く
     });
   }, []);

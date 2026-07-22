@@ -38,8 +38,12 @@ self.addEventListener("fetch", (event) => {
       .catch(() =>
         caches.match(request).then((cached) => {
           if (cached) return cached;
-          // ページ遷移でキャッシュが無ければトップにフォールバック
-          if (request.mode === "navigate") return caches.match("/");
+          // ページ遷移でキャッシュが無ければアプリのトップにフォールバック。
+          // サブパス配信でも動くよう SW のスコープ（配信位置）を基準にする。
+          if (request.mode === "navigate") {
+            const root = new URL(self.registration.scope).pathname;
+            return caches.match(root);
+          }
           return new Response("", { status: 504, statusText: "offline" });
         })
       )

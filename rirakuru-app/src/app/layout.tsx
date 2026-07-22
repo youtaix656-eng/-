@@ -9,14 +9,23 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 // アプリ全体の共通レイアウト（ヘッダー・下部ナビ・テーマ）
 // ============================================================
 
+// GitHub Pages のサブパス（例: /-/rirakuru）。ローカルは空文字。
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export const metadata: Metadata = {
   title: "りらくる 業務マニュアル",
   description: "りらくる セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
-  manifest: "/manifest.json",
+  // manifest は <head> に手動で <link> を出す（basePath 付与のため）。
+  // metadata.manifest は静的書き出しで basePath が落ちるため使わない。
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "業務マニュアル",
+  },
+  icons: {
+    // iOS「ホーム画面に追加」用のアイコン
+    apple: `${basePath}/icons/icon-192.png`,
+    icon: `${basePath}/icons/icon-192.png`,
   },
 };
 
@@ -48,6 +57,8 @@ export default function RootLayout({
   return (
     <html lang="ja" suppressHydrationWarning>
       <head>
+        {/* basePath を確実に付けるため manifest リンクは手動で出力 */}
+        <link rel="manifest" href={`${basePath}/manifest.webmanifest`} />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>

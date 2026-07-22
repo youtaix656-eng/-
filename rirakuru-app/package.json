@@ -5,6 +5,7 @@
   "description": "りらくる セラピスト業務マニュアル（個人用・スマホファースト・PWA）",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/generate-manifest.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
