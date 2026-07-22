@@ -40,23 +40,25 @@ jobs:
       - name: Build (鍼灸アプリ / ルート)
         run: npm run build
 
-      # りらくる業務マニュアル（Next.js）を /rirakuru サブパスへ書き出し、
-      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
-      - name: Install dependencies (rirakuru)
-        run: npm ci
-        working-directory: rirakuru-app
-
-      - name: Build (りらくる業務マニュアル / /rirakuru)
-        run: npm run build
-        working-directory: rirakuru-app
-        env:
-          NEXT_PUBLIC_BASE_PATH: /-/rirakuru
-
-      - name: Assemble Pages output
-        run: |
-          rm -rf dist/rirakuru
-          cp -r rirakuru-app/out dist/rirakuru
-          touch dist/.nojekyll
+      # 【一時停止】りらくる業務マニュアルの公開を停止中。
+      # 内部資料（自主基準テスト等）を公開URLで配信しないため、
+      # りらくるのビルド・同梱ステップをコメントアウトしています。
+      # 再公開する場合は下記ブロックのコメントを外してください。
+      # - name: Install dependencies (rirakuru)
+      #   run: npm ci
+      #   working-directory: rirakuru-app
+      #
+      # - name: Build (りらくる業務マニュアル / /rirakuru)
+      #   run: npm run build
+      #   working-directory: rirakuru-app
+      #   env:
+      #     NEXT_PUBLIC_BASE_PATH: /-/rirakuru
+      #
+      # - name: Assemble Pages output
+      #   run: |
+      #     rm -rf dist/rirakuru
+      #     cp -r rirakuru-app/out dist/rirakuru
+      #     touch dist/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
