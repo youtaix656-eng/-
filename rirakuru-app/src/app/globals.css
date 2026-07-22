@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   ベースの見た目
+   - 落ち着いたベージュ／オフホワイト背景
+   - 文字は大きめ・行間ゆったり（読みやすさ優先）
+   ============================================================ */
+@layer base {
+  html {
+    /* iOS の自動文字拡大を防ぎつつ、基本サイズを少し大きめに */
+    -webkit-text-size-adjust: 100%;
+    font-size: 17px;
+  }
+
+  body {
+    @apply bg-cream-50 text-cocoa-800 antialiased dark:bg-cocoa-900 dark:text-cream-50;
+    line-height: 1.75;
+  }
+
+  /* リンク・ボタンのタップ時のハイライトを抑える */
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
