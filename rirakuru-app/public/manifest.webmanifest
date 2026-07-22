@@ -1,7 +1,7 @@
 {
-  "name": "りらくる 業務マニュアル",
-  "short_name": "業務マニュアル",
-  "description": "りらくる セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
+  "name": "るるくる 業務マニュアル",
+  "short_name": "るるくる",
+  "description": "セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
   "start_url": "/-/rirakuru/",
   "scope": "/-/rirakuru/",
   "display": "standalone",

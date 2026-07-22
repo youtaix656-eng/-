@@ -11,10 +11,10 @@ const path = require("path");
 const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const manifest = {
-  name: "りらくる 業務マニュアル",
-  short_name: "業務マニュアル",
+  name: "るるくる 業務マニュアル",
+  short_name: "るるくる",
   description:
-    "りらくる セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
+    "セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
   start_url: `${base}/`,
   scope: `${base}/`,
   display: "standalone",

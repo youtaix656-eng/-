@@ -13,14 +13,14 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 export const metadata: Metadata = {
-  title: "りらくる 業務マニュアル",
-  description: "りらくる セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
+  title: "るるくる 業務マニュアル",
+  description: "セラピストの業務手順・接客ルール・施術内容の個人用マニュアル",
   // manifest は <head> に手動で <link> を出す（basePath 付与のため）。
   // metadata.manifest は静的書き出しで basePath が落ちるため使わない。
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "業務マニュアル",
+    title: "るるくる",
   },
   icons: {
     // iOS「ホーム画面に追加」用のアイコン
@@ -71,7 +71,7 @@ export default function RootLayout({
               href="/"
               className="text-lg font-bold tracking-tight text-cocoa-700 dark:text-cream-50"
             >
-              りらくる 業務マニュアル
+              るるくる 業務マニュアル
             </Link>
             <ThemeToggle />
           </div>
