@@ -1204,6 +1204,7 @@ code.block {
 }
 .scope-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   background: var(--surface);
@@ -1240,6 +1241,59 @@ code.block {
 }
 .scope-action .btn {
   min-width: 64px;
+}
+
+/* 出題基準（試験範囲）の折りたたみ表示 */
+.scope-outline {
+  flex: 1 0 100%;
+  margin-top: 4px;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+.scope-outline > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  list-style: none;
+}
+.scope-outline > summary::-webkit-details-marker {
+  display: none;
+}
+.scope-outline[open] > summary {
+  margin-bottom: 8px;
+}
+.scope-outline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.scope-outline-sec {
+  margin-bottom: 8px;
+}
+.scope-outline-sec-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.scope-outline-items {
+  margin: 0;
+  padding-left: 14px;
+  list-style: none;
+}
+.scope-outline-items li {
+  font-size: 12.5px;
+  color: var(--text-sub);
+  line-height: 1.9;
+}
+.scope-outline-mark {
+  font-weight: 700;
+  color: var(--text);
+}
+.scope-outline-note {
+  font-size: 11px;
+  color: var(--text-mute);
 }
 
 /* ==== 連結学習 ==== */

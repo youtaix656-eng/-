@@ -17,7 +17,44 @@ export const EXAM_SESSIONS = {
 // 各科目: session（午前/午後）, category, aliases（アプリ内の科目名の揺れを吸収）
 export const EXAM_SUBJECTS = [
   // ---- 午前：専門基礎科目 ----
-  { id: 'iryou', name: '医療概論', note: '医学史を除く', session: 'am', category: '専門基礎' },
+  {
+    id: 'iryou',
+    name: '医療概論',
+    note: '医学史を除く',
+    session: 'am',
+    category: '専門基礎',
+    // 国家試験出題基準（大項目→中項目）。出典：徹底攻略！はり師きゅう師用 医療概論 p.2〜11。
+    outline: [
+      {
+        no: '1',
+        title: '現代の医療と社会',
+        items: [
+          { mark: 'A', name: '医療と社会' },
+          { mark: 'B', name: '医療従事者' },
+          { mark: 'C', name: '医療・福祉施設' },
+          { mark: 'D', name: '医療経済' },
+        ],
+      },
+      {
+        no: '2',
+        title: '社会保障制度',
+        items: [
+          { mark: 'A', name: '医療保険のしくみ' },
+          { mark: 'B', name: '公費負担医療' },
+          { mark: 'C', name: '介護サービス行政' },
+        ],
+      },
+      {
+        no: '3',
+        title: '医療倫理',
+        items: [
+          { mark: 'A', name: '医療の倫理', note: '出題なし' },
+          { mark: 'B', name: '医療倫理教育', note: '医療者と患者および社会の倫理' },
+          { mark: 'C', name: '施術者としての倫理' },
+        ],
+      },
+    ],
+  },
   { id: 'eisei', name: '衛生学・公衆衛生学', session: 'am', category: '専門基礎' },
   { id: 'houki', name: '関係法規', session: 'am', category: '専門基礎' },
   { id: 'kaibou', name: '解剖学', session: 'am', category: '専門基礎' },

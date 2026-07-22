@@ -60,6 +60,28 @@ export default function ExamScope({ store, onStartSubject, onOpenSettings }) {
             </button>
           )}
         </div>
+        {subj.outline && (
+          <details className="scope-outline">
+            <summary>📋 出題基準（試験範囲）を見る</summary>
+            <ol className="scope-outline-list">
+              {subj.outline.map((sec) => (
+                <li key={sec.no} className="scope-outline-sec">
+                  <div className="scope-outline-sec-title">
+                    {sec.no}. {sec.title}
+                  </div>
+                  <ul className="scope-outline-items">
+                    {sec.items.map((it) => (
+                      <li key={it.mark}>
+                        <span className="scope-outline-mark">{it.mark}.</span> {it.name}
+                        {it.note && <span className="scope-outline-note">（{it.note}）</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
       </div>
     );
   };
