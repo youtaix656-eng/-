@@ -2,7 +2,7 @@
   "name": "rirakuru-manual",
   "version": "0.1.0",
   "private": true,
-  "description": "りらくる セラピスト業務マニュアル（個人用・スマホファースト・PWA）",
+  "description": "るるくる セラピスト業務マニュアル（個人用・スマホファースト・PWA）",
   "scripts": {
     "dev": "next dev",
     "prebuild": "node scripts/generate-manifest.js",

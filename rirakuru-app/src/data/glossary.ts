@@ -9,7 +9,7 @@ export const glossary: GlossaryTerm[] = [
     id: "g-momihogushi",
     term: "もみほぐし",
     reading: "もみほぐし",
-    definition: "着衣のまま行う、筋肉のこりをほぐす施術。りらくるの基本メニュー。",
+    definition: "着衣のまま行う、筋肉のこりをほぐす施術。るるくるの基本メニュー。",
   },
   {
     id: "g-shimei",
