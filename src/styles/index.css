@@ -1071,6 +1071,41 @@ code.block {
   border-color: #b7d9c5;
 }
 
+/* ○△✕ 自己評価（毎問） */
+.selfgrade-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.selfgrade-row .btn {
+  justify-content: flex-start;
+  gap: 10px;
+  font-weight: 700;
+  padding: 13px 14px;
+  border-width: 1.5px;
+}
+.selfgrade-row .sg-mark {
+  font-size: 18px;
+  font-weight: 800;
+  width: 22px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.self-maru {
+  color: var(--correct);
+  border-color: var(--correct);
+  background: var(--correct-bg);
+}
+.self-sankaku {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.self-batsu {
+  color: var(--wrong);
+  border-color: var(--wrong);
+  background: var(--wrong-bg);
+}
+
 /* ---- 問題画像 ---- */
 .q-image {
   width: 100%;

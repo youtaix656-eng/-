@@ -16,6 +16,7 @@ export default function QuestionCard({
   onNext,
   showMemo = true,
   gradeMode = false,
+  selfGrade = false, // ○△✕ の自己評価（△✕は復習サイクルへ）
   GRADES,
   isLast = false,
 }) {
@@ -39,7 +40,7 @@ export default function QuestionCard({
     if (revealed) return;
     setSelected(idx);
     setRevealed(true);
-    if (!gradeMode) {
+    if (!gradeMode && !selfGrade) {
       // 通常モードは即記録
       onAnswered?.(idx === question.answer);
       setRecorded(true);
@@ -49,6 +50,14 @@ export default function QuestionCard({
   // 評価ボタン（復習モード）
   const grade = (g) => {
     onAnswered?.(correct, g);
+    setRecorded(true);
+    onNext?.();
+  };
+
+  // ○△✕ の自己評価（毎問）。△✕は「間違えた問題」として復習サイクルへ。
+  const pickSelf = (kind) => {
+    if (kind === 'maru') onAnswered?.(true, GRADES ? GRADES.easy : 5);
+    else onAnswered?.(false, GRADES ? GRADES.again : 0); // △・✕ とも復習対象に
     setRecorded(true);
     onNext?.();
   };
@@ -162,8 +171,23 @@ export default function QuestionCard({
             />
           )}
 
-          {/* 復習モードの自己評価。正解なら難易度、不正解は「もう一度」。 */}
-          {gradeMode && GRADES ? (
+          {/* ○△✕ の自己評価（毎問）。△✕は自動で復習に入ります。 */}
+          {selfGrade ? (
+            <div style={{ marginTop: 16 }}>
+              <div className="grade-label">この問題の理解度は？（△・✕は自動で復習リストに入ります）</div>
+              <div className="selfgrade-row">
+                <button className="btn self-maru" onClick={() => pickSelf('maru')}>
+                  <span className="sg-mark">○</span>完璧！自信あり
+                </button>
+                <button className="btn self-sankaku" onClick={() => pickSelf('sankaku')}>
+                  <span className="sg-mark">△</span>解説がわからない
+                </button>
+                <button className="btn self-batsu" onClick={() => pickSelf('batsu')}>
+                  <span className="sg-mark">✕</span>答えも解説もわからない
+                </button>
+              </div>
+            </div>
+          ) : gradeMode && GRADES ? (
             <div style={{ marginTop: 16 }}>
               <div className="grade-label">記憶度は？（次回の出題間隔が変わります）</div>
               {correct ? (

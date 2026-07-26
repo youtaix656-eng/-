@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import { getSubjects } from '../lib/stats.js';
 import { subjectMatches } from '../data/examScope.js';
+import { GRADES } from '../lib/srs.js';
 
 // 科目をシャッフルして出題順を作る
 function shuffle(arr) {
@@ -71,8 +72,8 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
     else start();
   };
 
-  const handleAnswered = (correct) => {
-    recordAnswer(order[idx], correct);
+  const handleAnswered = (correct, grade) => {
+    recordAnswer(order[idx], correct, grade);
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
   };
 
@@ -187,6 +188,8 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
         onOpenKeyword={onOpenKeyword}
         onAnswered={handleAnswered}
         onNext={handleNext}
+        selfGrade
+        GRADES={GRADES}
         isLast={idx + 1 >= order.length}
       />
     </div>
