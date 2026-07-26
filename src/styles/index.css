@@ -2632,3 +2632,84 @@ code.block {
 .unread-main { flex: 1; min-width: 0; }
 .unread-page { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
 .unread-done { flex: 0 0 auto; white-space: nowrap; }
+
+/* ===== ログイン画面（端末内ロック） ===== */
+.auth-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 24px 16px; background: var(--bg);
+}
+.auth-card {
+  width: 100%; max-width: 420px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px 20px;
+  box-shadow: var(--shadow);
+}
+.auth-logo { font-size: 40px; text-align: center; }
+.auth-title { font-size: 19px; font-weight: 800; text-align: center; margin: 6px 0 4px; color: #fff; }
+.auth-sub { font-size: 13px; color: var(--text-sub); text-align: center; margin-bottom: 16px; }
+.auth-field { display: block; margin-bottom: 12px; }
+.auth-field > span { display: block; font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 4px; }
+.auth-field input {
+  width: 100%; box-sizing: border-box; padding: 11px 12px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); font-size: 15px;
+}
+.auth-hint { display: block; font-size: 11px; margin-top: 4px; }
+.auth-hint.bad { color: var(--wrong); }
+.auth-hint.ok { color: var(--correct); }
+.auth-error {
+  background: var(--wrong-bg); color: var(--wrong);
+  border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px;
+  margin-bottom: 12px; font-weight: 600;
+}
+.auth-note { font-size: 11px; color: var(--text-mute); margin-top: 14px; line-height: 1.6; }
+.auth-question {
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  padding: 10px 12px; font-size: 14px; font-weight: 700; margin-bottom: 12px;
+}
+
+/* ===== ポモドーロタイマー（画面上部） ===== */
+:root { --pomo-h: 66px; }
+.app.has-pomo .app-header { top: var(--pomo-h); }
+.pomo-bar {
+  position: sticky; top: 0; z-index: 25;
+  background: linear-gradient(180deg, #2a2140, #211a34);
+  color: #fff; padding: 8px 12px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.pomo-bar.study { background: linear-gradient(180deg, #2b3f57, #1f2f43); }
+.pomo-bar.short { background: linear-gradient(180deg, #245046, #183a33); }
+.pomo-bar.long { background: linear-gradient(180deg, #4a3a24, #382b18); }
+.pomo-main { display: flex; align-items: center; gap: 10px; }
+.pomo-phase { font-size: 13px; font-weight: 700; white-space: nowrap; }
+.pomo-time { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+.pomo-controls { margin-left: auto; display: flex; gap: 3px; }
+.pomo-btn {
+  background: rgba(255,255,255,0.1); border: none; color: #fff;
+  width: 32px; height: 32px; border-radius: 8px; font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.pomo-btn.main { background: rgba(255,255,255,0.22); }
+.pomo-progress { height: 4px; background: rgba(255,255,255,0.15); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.pomo-progress > span { display: block; height: 100%; background: var(--accent); transition: width 1s linear; }
+.pomo-cycles { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+.pomo-cycles i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.25); }
+.pomo-cycles i.on { background: var(--accent); }
+.pomo-cycles-label { font-size: 10px; color: rgba(255,255,255,0.7); margin-left: auto; }
+
+.pomo-config {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 24;
+  background: var(--surface); border: 1px solid var(--border);
+  border-top: none; border-radius: 0 0 var(--radius) var(--radius);
+  padding: 12px; box-shadow: var(--shadow); color: var(--text);
+}
+.pomo-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pomo-config-grid label { font-size: 11px; color: var(--text-sub); font-weight: 700; display: flex; flex-direction: column; gap: 3px; }
+.pomo-config-grid input {
+  padding: 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); font-size: 15px; width: 100%; box-sizing: border-box;
+}
+.pomo-music { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.pomo-switch { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.pomo-music-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pomo-hint { font-size: 11px; color: var(--text-mute); margin-top: 6px; }

@@ -28,6 +28,8 @@ export const KEYS = {
   userDict: 'shinkyu:userDict', // 自動提案に使うユーザー辞書
   session: 'shinkyu:session', // 学習セッション（60/300/900）の続き位置
   unread: 'shinkyu:unread', // 読み取れなかったページ・問題の控え
+  auth: 'shinkyu:auth', // 端末内のログイン鍵（ID・パスワードハッシュ・秘密の質問）
+  pomoMusic: 'shinkyu:pomoMusic', // ポモドーロ開始Music（音声ファイルのBlob）
   migrated: 'shinkyu:migrated',
 };
 
@@ -164,6 +166,17 @@ export const saveUserDict = (d) => write(KEYS.userDict, d);
 export const loadUnread = () => read(KEYS.unread, []);
 export const saveUnread = (u) => write(KEYS.unread, u);
 
+// ---- ログイン鍵（端末内のみ・サーバー送信なし） ----
+// auth = { email, salt, passHash, question, ansSalt, ansHash, updatedAt }
+export const loadAuth = () => read(KEYS.auth, null);
+export const saveAuth = (a) => write(KEYS.auth, a);
+export const clearAuth = () => remove(KEYS.auth);
+
+// ---- ポモドーロ開始Music（音声ファイルの Blob） ----
+export const loadPomoMusic = () => read(KEYS.pomoMusic, null);
+export const savePomoMusic = (blob) => write(KEYS.pomoMusic, blob);
+export const clearPomoMusic = () => remove(KEYS.pomoMusic);
+
 // ---- 学習セッション（60/300/900 の続き位置） ----
 // session = { subject, ids:[qid], pos, target, round, startedAt, times:{qid:ms} }
 export const loadSession = () => read(KEYS.session, null);
@@ -186,6 +199,17 @@ const DEFAULT_SETTINGS = {
   eiseiVersion: 0, // 同梱の衛生学・公衆衛生学を取り込んだバージョン（増分反映）
   subjectTagsCleaned: false, // 以前自動付与した科目タグを除去済みか
   genreFolded: false, // genre（出題基準カテゴリ）を tags へ折り込み済みか
+  authSkipped: false, // 初回のログイン設定案内をスキップ済みか
+  // ポモドーロタイマー（全画面上部）
+  pomodoro: {
+    enabled: false, // 上部バーを表示するか
+    study: 25, // 勉強（分）
+    shortBreak: 5, // 短い休憩（分）
+    longBreak: 15, // 長い休憩（分）
+    cycles: 4, // 何回勉強したら長い休憩
+    notifyEvery: 0, // 勉強中この分ごとに通知（0=なし）
+    startMusic: false, // 勉強開始Musicを鳴らすか
+  },
 };
 export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await read(KEYS.settings, {})) });
 export const saveSettings = (s) => write(KEYS.settings, s);
@@ -217,6 +241,7 @@ export async function exportAll() {
     kwMeta: await loadKwMeta(),
     userDict: await loadUserDict(),
     unread: await loadUnread(),
+    auth: await loadAuth(),
     settings: await read(KEYS.settings, {}),
   };
 }
@@ -235,5 +260,6 @@ export async function importAll(data) {
   if (data.kwMeta && typeof data.kwMeta === 'object') await saveKwMeta(data.kwMeta);
   if (Array.isArray(data.userDict)) await saveUserDict(data.userDict);
   if (Array.isArray(data.unread)) await saveUnread(data.unread);
+  if (data.auth && typeof data.auth === 'object') await saveAuth(data.auth);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
 }

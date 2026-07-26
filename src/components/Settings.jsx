@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { importFile, exportCsv, exportJson } from '../lib/importer.js';
 import { exportAll } from '../lib/storage.js';
 import { loadVoices } from '../lib/speech.js';
+import {
+  validateEmail,
+  validatePassword,
+  passwordProblems,
+  makeAuthRecord,
+  verifyPassword,
+} from '../lib/auth.js';
 
 // 設定・問題データ管理画面
 export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText }) {
@@ -113,6 +120,28 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
   return (
     <div className="view">
       <h2 className="view-title">設定・問題データ管理</h2>
+
+      {/* ===== ログイン（端末内ロック） ===== */}
+      <div className="section-label" style={{ marginTop: 0 }}>ログイン設定</div>
+      <LoginSettings store={store} onToast={onToast} />
+
+      {/* ===== ポモドーロタイマー ===== */}
+      <div className="section-label">ポモドーロタイマー（画面上部）</div>
+      <div className="card">
+        <label className="switch-row">
+          <input
+            type="checkbox"
+            checked={!!(settings.pomodoro && settings.pomodoro.enabled)}
+            onChange={(e) =>
+              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: e.target.checked } })
+            }
+          />
+          <span>
+            画面上部にポモドーロタイマーを表示
+            <small>勉強／休憩の時間・通知・開始Musicは、表示されたバーの ⚙ から設定できます。</small>
+          </span>
+        </label>
+      </div>
 
       {/* ===== バックアップと復元（端末間の持ち運び） ===== */}
       <div className="section-label" style={{ marginTop: 0 }}>
@@ -394,6 +423,136 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           データはすべてこの端末のブラウザ内（IndexedDB）に保存されます。サーバーには送信されません。
         </p>
       </div>
+    </div>
+  );
+}
+
+// ログイン設定（新規設定・変更・解除）。端末内のみ。
+function LoginSettings({ store, onToast }) {
+  const { auth, setAuth, clearAuth } = store;
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const [email, setEmail] = useState(auth?.email || '');
+  const [curPw, setCurPw] = useState('');
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [question, setQuestion] = useState(auth?.question || '');
+  const [answer, setAnswer] = useState('');
+
+  const has = !!auth;
+
+  const save = async () => {
+    setMsg('');
+    if (!validateEmail(email)) return setMsg('メールアドレスの形式が正しくありません。');
+    // 変更時は現在のパスワード確認（パスワードを変える／解除しない場合も本人確認）
+    if (has) {
+      const ok = await verifyPassword(auth, curPw);
+      if (!ok) return setMsg('現在のパスワードが違います。');
+    }
+    // パスワード：新規は必須。変更時は空なら据え置き。
+    let newPw = pw;
+    if (!has || pw || pw2) {
+      if (!validatePassword(pw)) return setMsg('パスワードは' + passwordProblems(pw).join('、') + '。');
+      if (pw !== pw2) return setMsg('確認用パスワードが一致しません。');
+    } else {
+      newPw = null; // 据え置き
+    }
+    const q = question.trim();
+    if (!q) return setMsg('秘密の質問を入力してください。');
+    // 答え：新規は必須、変更時は空なら据え置き
+    setBusy(true);
+    if (!has) {
+      if (!answer.trim()) { setBusy(false); return setMsg('秘密の質問の答えを入力してください。'); }
+      const rec = await makeAuthRecord({ email, password: newPw, question: q, answer });
+      setAuth(rec);
+    } else {
+      // 既存を土台に更新
+      let rec = { ...auth, email: email.trim(), question: q, updatedAt: Date.now() };
+      if (newPw) {
+        const full = await makeAuthRecord({ email, password: newPw, question: q, answer: answer || 'x' });
+        rec.salt = full.salt;
+        rec.passHash = full.passHash;
+      }
+      if (answer.trim()) {
+        const full = await makeAuthRecord({ email, password: newPw || 'aaaa1111', question: q, answer });
+        rec.ansSalt = full.ansSalt;
+        rec.ansHash = full.ansHash;
+      }
+      setAuth(rec);
+    }
+    setBusy(false);
+    setCurPw(''); setPw(''); setPw2(''); setAnswer('');
+    setOpen(false);
+    onToast?.(has ? 'ログイン情報を変更しました' : 'ログインを設定しました');
+  };
+
+  const remove = async () => {
+    setMsg('');
+    if (has) {
+      const ok = await verifyPassword(auth, curPw);
+      if (!ok) return setMsg('解除するには現在のパスワードを入力してください。');
+    }
+    clearAuth();
+    try { sessionStorage.setItem('shinkyu:unlocked', '1'); } catch (e) { /* noop */ }
+    setCurPw('');
+    setOpen(false);
+    onToast?.('ログインを解除しました');
+  };
+
+  return (
+    <div className="card">
+      <p className="inline-note" style={{ marginBottom: 10 }}>
+        {has
+          ? `設定済み（ID：${auth.email}）。ログインID・パスワード・秘密の質問を変更できます。`
+          : 'ログインID（メール）・パスワード・秘密の質問を設定すると、次回からログインが必要になります。'}
+        <br />※ サーバー認証ではなく端末内のロックです。外部には送信されません。
+      </p>
+      {!open ? (
+        <button className="btn primary" onClick={() => { setOpen(true); setMsg(''); }}>
+          {has ? '🔒 ログイン情報を変更' : '🔒 ログインを設定'}
+        </button>
+      ) : (
+        <div>
+          <div className="field">
+            <label>ログインID（メールアドレス）</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+          </div>
+          {has && (
+            <div className="field">
+              <label>現在のパスワード（本人確認）</label>
+              <input type="password" value={curPw} onChange={(e) => setCurPw(e.target.value)} />
+            </div>
+          )}
+          <div className="field">
+            <label>{has ? '新しいパスワード（変えない場合は空欄）' : 'パスワード（アルファベット4＋数字4以上）'}</label>
+            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="例）study2024" />
+          </div>
+          <div className="field">
+            <label>パスワード（確認）</label>
+            <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>秘密の質問</label>
+            <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="例）初めて飼ったペットの名前は？" />
+          </div>
+          <div className="field">
+            <label>{has ? '秘密の質問の答え（変えない場合は空欄）' : '秘密の質問の答え'}</label>
+            <input type="text" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="答え（大文字小文字は区別しません）" />
+          </div>
+          {msg && <div className="auth-error" style={{ marginBottom: 10 }}>{msg}</div>}
+          <div className="btn-row">
+            <button className="btn primary" onClick={save} disabled={busy}>{has ? '変更を保存' : '設定する'}</button>
+            <button className="btn ghost" onClick={() => { setOpen(false); setMsg(''); }} disabled={busy}>キャンセル</button>
+          </div>
+          {has && (
+            <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={remove} disabled={busy}>
+              ログインを解除する（現在のパスワードが必要）
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

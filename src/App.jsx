@@ -27,6 +27,10 @@ import MindMap from './components/MindMap.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
 import UnreadPages from './components/UnreadPages.jsx';
+import AuthGate from './components/AuthGate.jsx';
+import Pomodoro from './components/Pomodoro.jsx';
+
+const UNLOCK_KEY = 'shinkyu:unlocked';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -58,6 +62,13 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
+  const [unlocked, setUnlocked] = useState(() => {
+    try {
+      return sessionStorage.getItem(UNLOCK_KEY) === '1';
+    } catch (e) {
+      return false;
+    }
+  });
 
   const showToast = (msg) => setToast(msg);
   useEffect(() => {
@@ -148,6 +159,15 @@ export default function App() {
     setView('settings');
   };
 
+  const unlock = () => {
+    try {
+      sessionStorage.setItem(UNLOCK_KEY, '1');
+    } catch (e) {
+      /* noop */
+    }
+    setUnlocked(true);
+  };
+
   // ---- 初期ロード中 ----
   if (!store.loaded) {
     return (
@@ -156,6 +176,23 @@ export default function App() {
         <div className="splash-title">鍼灸国試 対策アプリ</div>
         <div className="splash-sub">データを読み込んでいます…</div>
       </div>
+    );
+  }
+
+  // ---- ログイン（端末内ロック）----
+  // 鍵が設定済みで未解錠ならログイン画面。未設定なら初回のみ設定画面（スキップ可）。
+  if (store.auth && !unlocked) {
+    return <AuthGate mode="login" auth={store.auth} onSetAuth={store.setAuth} onUnlock={unlock} />;
+  }
+  if (!store.auth && !store.settings.authSkipped) {
+    return (
+      <AuthGate
+        mode="setup"
+        auth={null}
+        onSetAuth={store.setAuth}
+        onUnlock={unlock}
+        onSkip={() => store.updateSettings({ authSkipped: true })}
+      />
     );
   }
 
@@ -321,8 +358,11 @@ export default function App() {
     return map[view] || '鍼灸国試 対策アプリ';
   };
 
+  const pomoOn = !!(store.settings.pomodoro && store.settings.pomodoro.enabled);
+
   return (
-    <div className="app">
+    <div className={`app${pomoOn ? ' has-pomo' : ''}`}>
+      <Pomodoro store={store} onToast={showToast} />
       <header className="app-header">
         <h1>
           {view === 'home' ? (

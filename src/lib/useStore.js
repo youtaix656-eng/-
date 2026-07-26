@@ -45,6 +45,7 @@ export function useStore() {
   const [userDict, setUserDict] = useState([]);
   const [session, setSessionState] = useState(null); // 学習セッション（60/300/900）
   const [unread, setUnreadState] = useState([]); // 読み取れなかったページ・問題の控え
+  const [auth, setAuthState] = useState(null); // 端末内ログイン鍵
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
@@ -70,6 +71,7 @@ export function useStore() {
       ]);
       const ss = await storage.loadSession();
       const ur = await storage.loadUnread();
+      const au = await storage.loadAuth();
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか
@@ -156,6 +158,7 @@ export function useStore() {
       }
       setSessionState(ss || null);
       setUnreadState(ur || []);
+      setAuthState(au || null);
       setKwMeta(km || {});
       // 【取り消し】用語辞書に登録していた科目名を取り除く
       let dict = (ud || []).filter((t) => !SUBJECT_TAG_NAMES.includes(t));
@@ -225,6 +228,16 @@ export function useStore() {
   }, []);
   const removeUnread = useCallback((id) => {
     setUnreadState((cur) => cur.filter((x) => x.id !== id));
+  }, []);
+
+  // ログイン鍵（端末内）の保存・削除。即時に IndexedDB へ書き込む。
+  const setAuth = useCallback((record) => {
+    setAuthState(record);
+    storage.saveAuth(record);
+  }, []);
+  const clearAuth = useCallback(() => {
+    setAuthState(null);
+    storage.clearAuth();
   }, []);
 
   // 解答を記録（grade 省略時は正誤から自動判定）
@@ -461,6 +474,9 @@ export function useStore() {
     unread,
     addUnread,
     removeUnread,
+    auth,
+    setAuth,
+    clearAuth,
     schedule,
     setSchedule,
     venues,
