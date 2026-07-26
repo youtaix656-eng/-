@@ -26,6 +26,7 @@ export const KEYS = {
   selfNotes: 'shinkyu:selfNotes', // セルフケア・体調メモ（端末内のみ）
   kwMeta: 'shinkyu:kwMeta', // キーワード別のメタ（語呂合わせ）
   userDict: 'shinkyu:userDict', // 自動提案に使うユーザー辞書
+  session: 'shinkyu:session', // 学習セッション（60/300/900）の続き位置
   migrated: 'shinkyu:migrated',
 };
 
@@ -156,6 +157,12 @@ export const saveKwMeta = (m) => write(KEYS.kwMeta, m);
 // ---- ユーザー辞書（自動提案に足す自作用語） ----
 export const loadUserDict = () => read(KEYS.userDict, []);
 export const saveUserDict = (d) => write(KEYS.userDict, d);
+
+// ---- 学習セッション（60/300/900 の続き位置） ----
+// session = { subject, ids:[qid], pos, target, round, startedAt, times:{qid:ms} }
+export const loadSession = () => read(KEYS.session, null);
+export const saveSession = (s) => write(KEYS.session, s);
+export const clearSession = () => remove(KEYS.session);
 
 // ---- 設定 ----
 const DEFAULT_SETTINGS = {

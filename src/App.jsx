@@ -3,6 +3,7 @@ import { useStore } from './lib/useStore.js';
 import { exportAll } from './lib/storage.js';
 import Home from './components/Home.jsx';
 import Quiz from './components/Quiz.jsx';
+import Session from './components/Session.jsx';
 import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
@@ -180,6 +181,15 @@ export default function App() {
               setQuizQuestions(null);
             }}
             onOpenKeyword={openKeyword}
+          />
+        );
+      case 'session':
+        return (
+          <Session
+            store={store}
+            onToast={showToast}
+            onOpenKeyword={openKeyword}
+            onGoReview={() => setView('review')}
           />
         );
       case 'review':

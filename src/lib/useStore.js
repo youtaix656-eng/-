@@ -43,6 +43,7 @@ export function useStore() {
   const [selfNotes, setSelfNotes] = useState([]);
   const [kwMeta, setKwMeta] = useState({});
   const [userDict, setUserDict] = useState([]);
+  const [session, setSessionState] = useState(null); // 学習セッション（60/300/900）
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
@@ -66,6 +67,7 @@ export function useStore() {
         storage.loadUserDict(),
         storage.loadSettings(),
       ]);
+      const ss = await storage.loadSession();
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか
@@ -150,6 +152,7 @@ export function useStore() {
       } else {
         setSelfNotes(base);
       }
+      setSessionState(ss || null);
       setKwMeta(km || {});
       // 【取り消し】用語辞書に登録していた科目名を取り除く
       let dict = (ud || []).filter((t) => !SUBJECT_TAG_NAMES.includes(t));
@@ -265,6 +268,23 @@ export function useStore() {
         lastDeepDive: today,
       };
     });
+  }, []);
+
+  // 学習セッション（60/300/900）: 変更は即保存し、リロードで続きから復帰できるようにする
+  const startSession = useCallback((s) => {
+    setSessionState(s);
+    storage.saveSession(s);
+  }, []);
+  const updateSession = useCallback((patch) => {
+    setSessionState((prev) => {
+      const next = prev ? { ...prev, ...patch } : patch;
+      storage.saveSession(next);
+      return next;
+    });
+  }, []);
+  const clearSession = useCallback(() => {
+    setSessionState(null);
+    storage.clearSession();
   }, []);
 
   const replaceQuestions = useCallback((newQuestions) => setQuestions(newQuestions), []);
@@ -417,6 +437,10 @@ export function useStore() {
     history,
     memos,
     links,
+    session,
+    startSession,
+    updateSession,
+    clearSession,
     schedule,
     setSchedule,
     venues,

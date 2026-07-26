@@ -1071,6 +1071,40 @@ code.block {
   border-color: #b7d9c5;
 }
 
+/* ===== 学習セッション（60/300/900） ===== */
+.sess-targets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+.sess-target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 6px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+.sess-target:active { transform: scale(0.98); }
+.sess-target-n { font-size: 24px; font-weight: 800; color: var(--navy-light); }
+.sess-target-l { font-size: 11px; color: var(--text-sub); font-weight: 600; text-align: center; }
+.sess-resume-head { font-size: 12px; font-weight: 700; color: var(--text-sub); }
+.sess-resume-main { display: flex; align-items: baseline; justify-content: space-between; margin-top: 4px; }
+.sess-resume-main strong { font-size: 16px; }
+.sess-frac { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy-light); }
+.sess-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sess-topbar-sub { font-size: 13px; font-weight: 700; color: var(--text); }
+.sess-topbar-frac { font-size: 12.5px; color: var(--text-sub); font-variant-numeric: tabular-nums; }
+.sess-done, .sess-break { text-align: center; }
+.sess-done-ico { font-size: 44px; }
+.sess-done h2, .sess-break h2 { margin: 6px 0; color: var(--text); }
+.sess-break-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.sess-timer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); font-weight: 700; color: var(--text); }
+
 /* ○△✕ 自己評価（毎問） */
 .selfgrade-row {
   display: flex;

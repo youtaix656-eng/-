@@ -2,9 +2,10 @@ import { overallStats } from '../lib/stats.js';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
 export default function Home({ store, onNavigate, installPrompt, onInstall }) {
-  const { questions, history, reviewQuestions } = store;
+  const { questions, history, reviewQuestions, session } = store;
   const overall = overallStats(history);
   const reviewCount = reviewQuestions.length;
+  const sessionActive = session && session.pos < session.target;
 
   return (
     <div className="view">
@@ -37,6 +38,16 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
       </div>
 
       <div className="menu-grid">
+        <button className="menu-item wide featured" onClick={() => onNavigate('session')}>
+          <span className="ico">📚</span>
+          <span className="title">学習（60・300・900）</span>
+          <span className="desc">
+            {sessionActive
+              ? `続きから：${session.subject === 'all' ? '全科目' : session.subject}　${session.pos}/${session.target}問`
+              : '60問で区切り・300問で今日の目標・900問で1周。1問ごと自動保存で、いつでも続きから。'}
+          </span>
+        </button>
+
         <button className="menu-item wide featured" onClick={() => onNavigate('connect')}>
           <span className="ico">🔗</span>
           <span className="title">連結学習（今日の1問）</span>
