@@ -2335,6 +2335,7 @@ code.block {
   font-weight: 700;
 }
 .sg-btn.ok { border-color: var(--correct); }
+.sg-btn.mid { border-color: #d8a640; }
 .sg-btn.ng { border-color: var(--wrong); }
 
 /* ===== 連結学習 強化版 ===== */
@@ -2618,3 +2619,16 @@ code.block {
   0%, 100% { height: 5px; }
   50% { height: 16px; }
 }
+
+/* ===== 読み取れないページの控え ===== */
+.unread-group {
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  padding: 4px 2px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.unread-item {
+  display: flex; align-items: center; gap: 10px;
+}
+.unread-main { flex: 1; min-width: 0; }
+.unread-page { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.unread-done { flex: 0 0 auto; white-space: nowrap; }

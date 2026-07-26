@@ -27,6 +27,7 @@ export const KEYS = {
   kwMeta: 'shinkyu:kwMeta', // キーワード別のメタ（語呂合わせ）
   userDict: 'shinkyu:userDict', // 自動提案に使うユーザー辞書
   session: 'shinkyu:session', // 学習セッション（60/300/900）の続き位置
+  unread: 'shinkyu:unread', // 読み取れなかったページ・問題の控え
   migrated: 'shinkyu:migrated',
 };
 
@@ -158,6 +159,11 @@ export const saveKwMeta = (m) => write(KEYS.kwMeta, m);
 export const loadUserDict = () => read(KEYS.userDict, []);
 export const saveUserDict = (d) => write(KEYS.userDict, d);
 
+// ---- 読み取れなかったページ・問題の控え ----
+// unread = [{ id, source, page, detail, at }]
+export const loadUnread = () => read(KEYS.unread, []);
+export const saveUnread = (u) => write(KEYS.unread, u);
+
 // ---- 学習セッション（60/300/900 の続き位置） ----
 // session = { subject, ids:[qid], pos, target, round, startedAt, times:{qid:ms} }
 export const loadSession = () => read(KEYS.session, null);
@@ -210,6 +216,7 @@ export async function exportAll() {
     selfNotes: await loadSelfNotes(),
     kwMeta: await loadKwMeta(),
     userDict: await loadUserDict(),
+    unread: await loadUnread(),
     settings: await read(KEYS.settings, {}),
   };
 }
@@ -227,5 +234,6 @@ export async function importAll(data) {
   if (Array.isArray(data.selfNotes)) await saveSelfNotes(data.selfNotes);
   if (data.kwMeta && typeof data.kwMeta === 'object') await saveKwMeta(data.kwMeta);
   if (Array.isArray(data.userDict)) await saveUserDict(data.userDict);
+  if (Array.isArray(data.unread)) await saveUnread(data.unread);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
 }

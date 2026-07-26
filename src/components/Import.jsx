@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 // 問題の取り込みハブ
 // ファイル(CSV/JSON) / 文章の貼り付け / 写真・PDF の入口をまとめる。
 // 取り込んだ内容は設定画面のプレビューに渡り、そこで確認して追加する。
-export default function Import({ onSendToImport, onOpenOcr, onOpenParse, onOpenNoteGen, onToast }) {
+export default function Import({ onSendToImport, onOpenOcr, onOpenParse, onOpenNoteGen, onToast, onOpenUnread }) {
   const fileRef = useRef(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
@@ -107,6 +107,17 @@ export default function Import({ onSendToImport, onOpenOcr, onOpenParse, onOpenN
       <p className="inline-note">
         ※ 取り込み時に「取り込み先ファイル名」を付けると、出題ビルダーでファイル単位に絞り込めます（次の確認画面で指定できます）。
       </p>
+
+      {/* 読み取れなかったページの控えへ */}
+      {onOpenUnread && (
+        <button className="import-tile" onClick={onOpenUnread}>
+          <span className="import-ico">📄</span>
+          <span className="import-main">
+            <span className="import-title">読み取れなかったページを控える</span>
+            <span className="import-desc">うまく読めなかったページ・問題をメモ。あとで読めたら消せます。</span>
+          </span>
+        </button>
+      )}
     </div>
   );
 }

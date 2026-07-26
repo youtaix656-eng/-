@@ -2,9 +2,10 @@ import { overallStats } from '../lib/stats.js';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
 export default function Home({ store, onNavigate, installPrompt, onInstall }) {
-  const { questions, history, reviewQuestions, session } = store;
+  const { questions, history, reviewQuestions, session, unread } = store;
   const overall = overallStats(history);
   const reviewCount = reviewQuestions.length;
+  const unreadCount = (unread || []).length;
   const sessionActive = session && session.pos < session.target;
 
   return (
@@ -130,6 +131,15 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="ico">📥</span>
           <span className="title">問題を取り込む（PDF・写真・文章・ファイル）</span>
           <span className="desc">PDFや本のページ写真、CSV/JSON、貼り付けた文章から問題を追加。</span>
+        </button>
+
+        <button className="menu-item wide" onClick={() => onNavigate('unread')}>
+          <span className="ico">📄</span>
+          <span className="title">読み取れないページ</span>
+          <span className="desc">
+            取り込みで読み取れなかったページ・問題を控えておく。あとで読み取れたら消せる。
+          </span>
+          {unreadCount > 0 && <span className="count-pill">{unreadCount}件</span>}
         </button>
 
         <button className="menu-item" onClick={() => onNavigate('calendar')}>

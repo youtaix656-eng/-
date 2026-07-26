@@ -3,7 +3,7 @@ import QuestionCard from './QuestionCard.jsx';
 import { normalize, MATURE_INTERVAL } from '../lib/srs.js';
 
 // 間違えた問題だけを解くモード（間隔反復 / SM-2）
-export default function Review({ store, onOpenKeyword }) {
+export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const { dueReviewQuestions, reviewQuestions, memos, links, recordAnswer, setMemo, setLink, srs, GRADES } = store;
 
   const [started, setStarted] = useState(false);
@@ -74,9 +74,22 @@ export default function Review({ store, onOpenKeyword }) {
           </div>
         </div>
 
+        <div className="section-label" style={{ marginTop: 0 }}>復習のしかたを選ぶ</div>
         <button className="btn primary block lg" onClick={start} disabled={dueCount === 0}>
-          {dueCount > 0 ? `復習を始める（${dueCount}問）` : '今日の復習は完了しました'}
+          {dueCount > 0 ? `📝 一問一答で復習（${dueCount}問・○△✕）` : '今日の復習は完了しました'}
         </button>
+        <button
+          className="btn block lg"
+          style={{ marginTop: 10 }}
+          onClick={() => onGoAudio?.()}
+          disabled={reviewQuestions.length === 0}
+        >
+          🎧 音声で復習（{reviewQuestions.length}問を読み上げ）
+        </button>
+        <p className="inline-note" style={{ marginTop: 8 }}>
+          一問一答は、選択式・○×で答えたあと「○（完璧）／△（あいまい）／✕（わからない）」で理解度を記録します。
+          音声は、間違えた問題を読み上げます（他の画面へ移っても再生は続きます）。
+        </p>
 
         <hr className="sep" />
         <div className="section-label" style={{ marginTop: 0 }}>
@@ -156,7 +169,7 @@ export default function Review({ store, onOpenKeyword }) {
         onOpenKeyword={onOpenKeyword}
         onAnswered={handleAnswered}
         onNext={handleNext}
-        gradeMode
+        selfGrade
         GRADES={GRADES}
         isLast={idx + 1 >= order.length}
       />

@@ -58,7 +58,7 @@ function Opt({ on, onToggle, title, desc, disabled }) {
   );
 }
 
-export default function AudioMode({ store, onToast }) {
+export default function AudioMode({ store, onToast, reviewPreset, onConsumePreset }) {
   const { reviewQuestions, questions, links, history, settings, updateSettings, recordAnswer, setLink } = store;
 
   const taggedQuestions = useMemo(
@@ -444,6 +444,18 @@ export default function AudioMode({ store, onToast }) {
     // ※ 画面を離れても再生を続けるため、アンマウント時に停止しない（エンジンが保持）。
   }, []);
 
+  // 「間違えた問題」から音声で復習：復習セットに切り替える
+  useEffect(() => {
+    if (!reviewPreset) return;
+    engine.stop();
+    setFilterSubject('');
+    setFilterGenre('');
+    setFilterKeyword('');
+    setMode(0);
+    setSource('review');
+    onConsumePreset?.();
+  }, [reviewPreset]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const total = snap.total || builtPlan.length;
   const index = snap.index;
   const phase = snap.phase;
@@ -501,12 +513,19 @@ export default function AudioMode({ store, onToast }) {
   const toggleFlashcard = () => { rebuildStop(); setFlashcard((v) => !v); };
   const toggleShuffle = () => { rebuildStop(); setShuffleOn((v) => !v); };
 
-  // #10 聞きながら自己採点／キーワード追加
-  const gradeCurrent = (ok) => {
+  // #10 聞きながら自己採点／キーワード追加（○＝できた, △・✕＝復習へ）
+  const gradeCurrent = (kind) => {
     const q = current;
     if (!q) return;
+    const ok = kind === 'maru';
     recordAnswer(q, ok);
-    onToast?.(ok ? '「できた」を記録しました' : '「できない」を記録（復習に追加）');
+    onToast?.(
+      kind === 'maru'
+        ? '「○ できた」を記録しました'
+        : kind === 'sankaku'
+        ? '「△ あいまい」を記録（復習に追加）'
+        : '「✕ できない」を記録（復習に追加）'
+    );
   };
   const addTag = () => {
     const q = current;
@@ -589,6 +608,12 @@ export default function AudioMode({ store, onToast }) {
           )}
         </div>
       </div>
+
+      {source === 'review' && (
+        <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--surface-2)' }}>
+          🔁 「間違えた問題」を読み上げ中（{reviewQuestions.length}問）。上の検索で条件を選ぶと通常の読み上げに戻ります。
+        </div>
+      )}
 
       {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ */}
       <div className="section-label">連結学習モード（読み方を選ぶ）</div>
@@ -727,8 +752,9 @@ export default function AudioMode({ store, onToast }) {
             {/* #10 聞きながら自己採点＋キーワード追加 */}
             {current && (
               <div className="selfgrade">
-                <button className="sg-btn ok" onClick={() => gradeCurrent(true)}>⭕ できた</button>
-                <button className="sg-btn ng" onClick={() => gradeCurrent(false)}>❌ できない</button>
+                <button className="sg-btn ok" onClick={() => gradeCurrent('maru')}>○ できた</button>
+                <button className="sg-btn mid" onClick={() => gradeCurrent('sankaku')}>△ あいまい</button>
+                <button className="sg-btn ng" onClick={() => gradeCurrent('batsu')}>✕ できない</button>
                 <button className="sg-btn" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
               </div>
             )}

@@ -26,6 +26,7 @@ import Experiences from './components/Experiences.jsx';
 import MindMap from './components/MindMap.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
+import UnreadPages from './components/UnreadPages.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -56,6 +57,7 @@ export default function App() {
   const [quizSubject, setQuizSubject] = useState(null);
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [focusKeyword, setFocusKeyword] = useState(null);
+  const [audioReview, setAudioReview] = useState(false);
 
   const showToast = (msg) => setToast(msg);
   useEffect(() => {
@@ -195,15 +197,33 @@ export default function App() {
           />
         );
       case 'review':
-        return <Review store={store} onOpenKeyword={openKeyword} />;
+        return (
+          <Review
+            store={store}
+            onOpenKeyword={openKeyword}
+            onGoAudio={() => {
+              setAudioReview(true);
+              setView('audio');
+            }}
+          />
+        );
       case 'audio':
-        return <AudioMode store={store} onToast={showToast} />;
+        return (
+          <AudioMode
+            store={store}
+            onToast={showToast}
+            reviewPreset={audioReview}
+            onConsumePreset={() => setAudioReview(false)}
+          />
+        );
       case 'exam':
         return <Exam store={store} />;
       case 'dashboard':
         return <Dashboard store={store} />;
       case 'analytics':
         return <Analytics store={store} onNavigate={setView} />;
+      case 'unread':
+        return <UnreadPages store={store} onToast={showToast} onOpenImport={() => setView('import')} />;
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
@@ -227,6 +247,7 @@ export default function App() {
             onOpenOcr={openOcr}
             onOpenParse={() => setView('parse')}
             onOpenNoteGen={() => setView('notegen')}
+            onOpenUnread={() => setView('unread')}
             onToast={showToast}
           />
         );
@@ -279,6 +300,7 @@ export default function App() {
       exam: '模擬試験',
       dashboard: '弱点分析',
       analytics: '分析・攻略率・合格診断',
+      unread: '読み取れないページ',
       memos: 'メモ一覧',
       ocr: '写真から取り込み',
       tools: '問題ツール',
