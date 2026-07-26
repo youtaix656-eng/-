@@ -30,6 +30,8 @@ export const KEYS = {
   unread: 'shinkyu:unread', // 読み取れなかったページ・問題の控え
   auth: 'shinkyu:auth', // 端末内のログイン鍵（ID・パスワードハッシュ・秘密の質問）
   pomoMusic: 'shinkyu:pomoMusic', // ポモドーロ開始Music（音声ファイルのBlob）
+  lastView: 'shinkyu:lastView', // 前回開いていた画面（アプリ再開時に復元）
+  quizProgress: 'shinkyu:quizProgress', // 一問一答の途中経過（1問ごとに保存・続きから）
   migrated: 'shinkyu:migrated',
 };
 
@@ -165,6 +167,16 @@ export const saveUserDict = (d) => write(KEYS.userDict, d);
 // unread = [{ id, source, page, detail, at }]
 export const loadUnread = () => read(KEYS.unread, []);
 export const saveUnread = (u) => write(KEYS.unread, u);
+
+// ---- 前回開いていた画面（アプリ再開時に復元） ----
+export const loadLastView = () => read(KEYS.lastView, null);
+export const saveLastView = (v) => write(KEYS.lastView, v);
+
+// ---- 一問一答の途中経過（1問ごとに保存・続きから） ----
+// quizProgress = { subject, ids:[qid], idx, stats:{total,correct}, at }
+export const loadQuizProgress = () => read(KEYS.quizProgress, null);
+export const saveQuizProgress = (p) => write(KEYS.quizProgress, p);
+export const clearQuizProgress = () => remove(KEYS.quizProgress);
 
 // ---- ログイン鍵（端末内のみ・サーバー送信なし） ----
 // auth = { email, salt, passHash, question, ansSalt, ansHash, updatedAt }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import { getSubjects } from '../lib/stats.js';
 import { subjectMatches } from '../data/examScope.js';
+import * as storage from '../lib/storage.js';
 import { GRADES } from '../lib/srs.js';
 
 // 科目をシャッフルして出題順を作る
@@ -35,6 +36,8 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
   // このセッションの母集団（「もう一度」で同じ条件を再現するため保持）
   const [sessionPool, setSessionPool] = useState(null);
+  // 前回の途中経過（1問ごとに自動保存 → 続きから）
+  const [resume, setResume] = useState(null);
 
   const beginWith = (pool, doShuffle = true) => {
     if (!pool || pool.length === 0) return;
@@ -62,6 +65,55 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 保存済みの途中経過を読み込む（明示指定で来た時は対象外）
+  useEffect(() => {
+    if ((initialQuestions && initialQuestions.length) || initialSubject) return;
+    if (started || !questions.length) return;
+    let alive = true;
+    storage.loadQuizProgress().then((p) => {
+      if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length) return;
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      const rebuilt = p.ids.map((id) => byId.get(id)).filter(Boolean);
+      if (rebuilt.length === 0 || (p.idx || 0) >= rebuilt.length) return;
+      setResume({
+        subject: p.subject || 'all',
+        order: rebuilt,
+        idx: Math.min(p.idx || 0, rebuilt.length - 1),
+        stats: p.stats || { total: 0, correct: 0 },
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [questions, started]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 1問ごとに途中経過を保存（終了したら消す）
+  useEffect(() => {
+    if (!started) return;
+    if (idx >= order.length) {
+      storage.clearQuizProgress();
+      return;
+    }
+    storage.saveQuizProgress({
+      subject,
+      ids: order.map((q) => q.id),
+      idx,
+      stats: sessionStats,
+      at: Date.now(),
+    });
+  }, [started, idx, order, subject, sessionStats]);
+
+  const doResume = () => {
+    if (!resume) return;
+    setSubject(resume.subject);
+    setSessionPool(resume.order);
+    setOrder(resume.order);
+    setSessionStats(resume.stats);
+    setIdx(resume.idx);
+    setStarted(true);
+    setResume(null);
+  };
+
   // 科目選択から開始
   const start = () => {
     beginWith(poolForSubject(questions, subject));
@@ -88,6 +140,13 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
       <div className="view">
         <h2 className="view-title">一問一答</h2>
         <p className="view-desc">科目を選んで演習を始めましょう。ランダムに出題されます。</p>
+
+        {resume && (
+          <button className="btn primary block lg" style={{ marginBottom: 12 }} onClick={doResume}>
+            ▶ 前回の続きから（{resume.idx + 1}/{resume.order.length}問・
+            {resume.subject === 'all' ? '全科目' : resume.subject}）
+          </button>
+        )}
 
         <div className="card">
           <label className="section-label" style={{ marginTop: 0 }}>

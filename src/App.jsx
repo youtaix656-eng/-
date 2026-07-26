@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from './lib/useStore.js';
-import { exportAll } from './lib/storage.js';
+import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import Home from './components/Home.jsx';
 import Quiz from './components/Quiz.jsx';
 import Session from './components/Session.jsx';
@@ -80,6 +80,24 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view]);
+
+  // 前回開いていた画面を復元（アプリを閉じて開き直しても続きから）
+  const viewRestored = useRef(false);
+  useEffect(() => {
+    if (!store.loaded || viewRestored.current) return;
+    viewRestored.current = true;
+    loadLastView().then((v) => {
+      // ハッシュ経由の取り込み等で既に他画面へ切り替わっている場合は尊重
+      if (v && typeof v === 'string' && v !== 'home') {
+        setView((cur) => (cur === 'home' ? v : cur));
+      }
+    });
+  }, [store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 画面を切り替えるたびに保存（復元完了後のみ）
+  useEffect(() => {
+    if (store.loaded && viewRestored.current) saveLastView(view);
+  }, [view, store.loaded]);
 
   // 端末だけに取り込む体験メモ（#notes=…）を反映したら知らせて画面を開く
   useEffect(() => {
