@@ -25,6 +25,7 @@ import ExamContent from './components/ExamContent.jsx';
 import Experiences from './components/Experiences.jsx';
 import MindMap from './components/MindMap.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
+import MiniPlayer from './components/MiniPlayer.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
@@ -345,6 +346,9 @@ export default function App() {
       </main>
 
       {toast && <div className="toast">{toast}</div>}
+
+      {/* 音声ミニプレーヤー：他の画面へ移っても再生を続けられる（音声画面では非表示） */}
+      <MiniPlayer hidden={view === 'audio'} onOpen={() => setView('audio')} />
 
       <nav className="bottom-nav">
         {NAV.map((n) => (

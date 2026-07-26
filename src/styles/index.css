@@ -2562,3 +2562,59 @@ code.block {
 .ana-diag-block.advice li { color: var(--text); }
 
 .ana-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+
+/* ===== 音声ミニプレーヤー（画面遷移しても再生継続） ===== */
+.mini-player {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  max-width: var(--max-w);
+  margin: 0 auto;
+  z-index: 29;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, var(--navy-light), var(--navy));
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.28);
+}
+.mini-open {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  background: none; border: none; text-align: left;
+  color: #fff; padding: 0; cursor: pointer;
+}
+.mini-texts { min-width: 0; display: flex; flex-direction: column; }
+.mini-title {
+  font-size: 13px; font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mini-sub {
+  font-size: 11px; color: var(--text-sub);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mini-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.mini-controls button {
+  background: none; border: none; color: #fff;
+  font-size: 16px; width: 34px; height: 34px; border-radius: 8px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.mini-controls button:disabled { opacity: 0.35; }
+.mini-controls .mini-main {
+  background: rgba(255, 255, 255, 0.16); font-size: 15px;
+}
+.mini-controls .mini-close { font-size: 13px; color: var(--text-sub); }
+
+/* 再生中のイコライザー風インジケータ */
+.mini-eq { display: flex; align-items: flex-end; gap: 2px; height: 18px; flex: 0 0 auto; }
+.mini-eq i {
+  width: 3px; height: 6px; background: var(--accent); border-radius: 2px;
+}
+.mini-eq.on i { animation: mini-eq 0.9s ease-in-out infinite; }
+.mini-eq.on i:nth-child(2) { animation-delay: 0.25s; }
+.mini-eq.on i:nth-child(3) { animation-delay: 0.5s; }
+@keyframes mini-eq {
+  0%, 100% { height: 5px; }
+  50% { height: 16px; }
+}

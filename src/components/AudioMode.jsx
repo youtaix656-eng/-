@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { isSpeechSupported, loadVoices, speak, cancelSpeech, wait } from '../lib/speech.js';
+import { useEffect, useMemo, useState } from 'react';
+import { isSpeechSupported, loadVoices } from '../lib/speech.js';
+import * as engine from '../lib/audioEngine.js';
+import { useAudioEngine } from '../lib/audioEngine.js';
 import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
@@ -313,254 +315,151 @@ export default function AudioMode({ store, onToast }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewQuestions, taggedQuestions, hasKeywords, hasReview, hasTagged, filteredPool, filterActive]);
 
-  const [playing, setPlaying] = useState(false);
-  const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState(PHASES.QUESTION);
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
   const [voices, setVoices] = useState([]);
   const [tagOpen, setTagOpen] = useState(false);
   const [tagInput, setTagInput] = useState('');
 
-  const abortRef = useRef(null);
-  const playingRef = useRef(false);
-  const indexRef = useRef(0);
-  const rateRef = useRef(rate);
-  const gapRef = useRef(gap);
-  const loopRef = useRef(loop);
-  const planRef = useRef(plan);
-  const optsRef = useRef({ readSubject, readHint, reverse });
-  const wakeLockRef = useRef(null);
-  const sleepTimerRef = useRef(null);
-
-  useEffect(() => { rateRef.current = rate; }, [rate]);
-  useEffect(() => { gapRef.current = gap; }, [gap]);
-  useEffect(() => { indexRef.current = index; }, [index]);
-  useEffect(() => { loopRef.current = loop; }, [loop]);
-  useEffect(() => { planRef.current = plan; }, [plan]);
-  useEffect(() => { optsRef.current = { readSubject, readHint, reverse }; }, [readSubject, readHint, reverse]);
-
-  useEffect(() => {
-    loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && playingRef.current) requestWakeLock();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-      cancelSpeech();
-      if (abortRef.current) abortRef.current.abort();
-      releaseWakeLock();
-      clearSleepTimer();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const requestWakeLock = async () => {
-    try {
-      if ('wakeLock' in navigator && !wakeLockRef.current) {
-        wakeLockRef.current = await navigator.wakeLock.request('screen');
-        wakeLockRef.current.addEventListener?.('release', () => { wakeLockRef.current = null; });
-      }
-    } catch (e) { /* 継続 */ }
-  };
-  const releaseWakeLock = () => {
-    try { wakeLockRef.current?.release(); } catch (e) { /* noop */ }
-    wakeLockRef.current = null;
-  };
-  const clearSleepTimer = () => {
-    if (sleepTimerRef.current) { clearTimeout(sleepTimerRef.current); sleepTimerRef.current = null; }
-  };
+  // 画面を切り替えても途切れないよう、再生はモジュール外のエンジンが担当。
+  // ここではエンジンの状態を購読して表示・操作するだけ。
+  const snap = useAudioEngine();
+  const playing = snap.playing;
 
   const selectedVoice = () => {
     if (!settings.voiceURI) return voices[0] || null;
     return voices.find((v) => v.voiceURI === settings.voiceURI) || voices[0] || null;
   };
 
-  // 1項目を読み上げる
-  const playOne = async (item, signal) => {
-    const voice = selectedVoice();
-    const o = optsRef.current;
-    const say = (t) => speak(t, { rate: rateRef.current, voice, signal });
-
+  // 1項目を「読み上げステップ（phase／読む文／間）」の配列へ変換。
+  // 画面OFF・バックグラウンドではOSの仕様で停止する点は従来どおり。
+  const buildSteps = (item) => {
+    const K = PHASES.KEYWORD, Q = PHASES.QUESTION, G = PHASES.GAP, A = PHASES.ANSWER, N = PHASES.NOTE;
+    const steps = [];
     if (item.kind === 'flashcard') {
-      setPhase(PHASES.KEYWORD);
-      await say(`用語。${item.keyword}。`);
-      setPhase(PHASES.GAP);
-      await wait(gapRef.current * 1000, signal);
-      setPhase(PHASES.ANSWER);
-      await say(item.text);
-      await wait(700, signal);
-      return;
+      steps.push({ phase: K, say: `用語。${item.keyword}。` });
+      steps.push({ phase: G, waitGap: true });
+      steps.push({ phase: A, say: item.text });
+      steps.push({ wait: 700 });
+      return steps;
     }
     if (item.kind === 'summary') {
-      setPhase(PHASES.NOTE);
-      await say(item.text);
-      await wait(700, signal);
-      return;
+      steps.push({ phase: N, say: item.text });
+      steps.push({ wait: 700 });
+      return steps;
     }
     if (item.kind === 'compare') {
       const c = item.comp;
-      setPhase(PHASES.KEYWORD);
-      await say(`比較。${c.title}。`);
-      setPhase(PHASES.GAP);
-      await wait(Math.min(gapRef.current, 2) * 1000, signal);
-      setPhase(PHASES.ANSWER);
-      await say(`${(c.members || []).join('。 ')}。`);
-      if (c.note) await say(`ポイント。${c.note}`);
-      await wait(700, signal);
-      return;
+      steps.push({ phase: K, say: `比較。${c.title}。` });
+      steps.push({ phase: G, waitGap: 'cap2' });
+      steps.push({ phase: A, say: `${(c.members || []).join('。 ')}。` });
+      if (c.note) steps.push({ phase: A, say: `ポイント。${c.note}` });
+      steps.push({ wait: 700 });
+      return steps;
     }
     if (item.kind === 'number') {
       const n = item.num;
-      setPhase(PHASES.KEYWORD);
-      await say(`数字。${n.topic}。`);
-      setPhase(PHASES.GAP);
-      await wait(Math.min(gapRef.current, 2) * 1000, signal);
-      setPhase(PHASES.ANSWER);
-      await say(`${n.value}。${n.note || ''}`);
-      await wait(700, signal);
-      return;
+      steps.push({ phase: K, say: `数字。${n.topic}。` });
+      steps.push({ phase: G, waitGap: 'cap2' });
+      steps.push({ phase: A, say: `${n.value}。${n.note || ''}` });
+      steps.push({ wait: 700 });
+      return steps;
     }
     if (item.kind === 'cloze') {
       const cq = item.q;
       const ans = cq.choices[cq.answer];
       const base = cq.explanation || questionText(cq);
       const blanked = ans && base.includes(ans) ? base.split(ans).join('○○（ピー）') : questionText(cq);
-      setPhase(PHASES.QUESTION);
-      await say(`穴埋め。${blanked}。○○に入るのは何でしょう。`);
-      setPhase(PHASES.GAP);
-      await wait(gapRef.current * 1000, signal);
-      setPhase(PHASES.ANSWER);
-      await say(`答えは、${ans}。`);
-      await wait(700, signal);
-      return;
+      steps.push({ phase: Q, say: `穴埋め。${blanked}。○○に入るのは何でしょう。` });
+      steps.push({ phase: G, waitGap: true });
+      steps.push({ phase: A, say: `答えは、${ans}。` });
+      steps.push({ wait: 700 });
+      return steps;
     }
     if (item.kind === 'choices') {
       const cq = item.q;
-      const o2 = optsRef.current;
-      setPhase(PHASES.QUESTION);
-      const subj2 = o2.readSubject && cq.subject ? `${cq.subject}。` : '';
+      const subj2 = readSubject && cq.subject ? `${cq.subject}。` : '';
       let t = `${subj2}問題。${questionText(cq)}。`;
       if (cq.type !== 'ox') cq.choices.forEach((c, i) => { t += `${i + 1}番、${c}。`; });
       else t += '正しいか、誤りか。';
-      await say(t);
-      setPhase(PHASES.GAP);
-      await wait(gapRef.current * 1000, signal);
-      setPhase(PHASES.ANSWER);
-      await say(answerText(cq));
-      await wait(700, signal);
-      return;
+      steps.push({ phase: Q, say: t });
+      steps.push({ phase: G, waitGap: true });
+      steps.push({ phase: A, say: answerText(cq) });
+      steps.push({ wait: 700 });
+      return steps;
     }
-
+    // 通常の問題
     const q = item.q;
     if (item.intro) {
-      setPhase(PHASES.KEYWORD);
-      await say(item.intro);
-      await wait(300, signal);
+      steps.push({ phase: K, say: item.intro });
+      steps.push({ wait: 300 });
     }
-    setPhase(PHASES.QUESTION);
-    const subj = o.readSubject && q.subject ? `${q.subject}。` : '';
-    await say(`${subj}問題。${questionText(q)}`);
-
-    setPhase(PHASES.GAP);
-    await wait(gapRef.current * 1000, signal);
-
-    if (o.readHint) {
+    const subj = readSubject && q.subject ? `${q.subject}。` : '';
+    steps.push({ phase: Q, say: `${subj}問題。${questionText(q)}` });
+    steps.push({ phase: G, waitGap: true });
+    if (readHint) {
       const hint = item.keyword || effectiveTags(q, links)[0] || '';
-      if (hint) {
-        await say(`ヒント。キーワードは、${hint}。`);
-        await wait(600, signal);
-      }
+      if (hint) { steps.push({ say: `ヒント。キーワードは、${hint}。` }); steps.push({ wait: 600 }); }
     }
-
-    setPhase(PHASES.ANSWER);
-    await say(answerText(q));
-
-    if (item.note) {
-      setPhase(PHASES.NOTE);
-      await say(`つながり。${item.note}`);
+    steps.push({ phase: A, say: answerText(q) });
+    if (item.note) steps.push({ phase: N, say: `つながり。${item.note}` });
+    if (reverse) {
+      steps.push({ phase: Q, say: `逆に確認。答えは、${shortAnswer(q)}。これは何を問う問題だったか思い出しましょう。` });
+      steps.push({ waitGap: true });
+      steps.push({ say: `問題は、${questionText(q)}` });
     }
+    steps.push({ wait: 700 });
+    return steps;
+  };
 
-    if (o.reverse) {
-      setPhase(PHASES.QUESTION);
-      await say(`逆に確認。答えは、${shortAnswer(q)}。これは何を問う問題だったか思い出しましょう。`);
-      await wait(gapRef.current * 1000, signal);
-      await say(`問題は、${questionText(q)}`);
+  // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
+  const builtPlan = useMemo(
+    () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
+    [plan, readSubject, readHint, reverse, links] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
+  const planSig = useMemo(
+    () => JSON.stringify([
+      source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn,
+      readSubject, readHint, reverse, filterSubject, filterGenre, filterKeyword,
+      questions.length, plan.length,
+    ]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, filterSubject, filterGenre, filterKeyword, questions.length, plan.length]
+  );
+
+  // 計画をエンジンへ（同じ署名なら位置を保持して何もしない）
+  useEffect(() => {
+    engine.load(builtPlan, { sig: planSig });
+  }, [builtPlan, planSig]);
+
+  // 再生設定をエンジンへ反映（再生中でも即時）
+  useEffect(() => { engine.configure({ rate }); }, [rate]);
+  useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);
+  useEffect(() => { engine.configure({ loop }); }, [loop]);
+  useEffect(() => { engine.configure({ voice: selectedVoice() }); }, [voices, settings.voiceURI]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
+    // ※ 画面を離れても再生を続けるため、アンマウント時に停止しない（エンジンが保持）。
+  }, []);
+
+  const total = snap.total || builtPlan.length;
+  const index = snap.index;
+  const phase = snap.phase;
+
+  const togglePlay = () => {
+    if (!playing) {
+      updateSettings({ speechRate: rate, gapSeconds: gap });
+      engine.configure({ rate, gapSeconds: gap, loop, voice: selectedVoice() });
+      engine.setSleep(sleepMin);
     }
-
-    await wait(700, signal);
+    engine.toggle();
   };
-
-  const runFrom = async (startIndex) => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const signal = controller.signal;
-    playingRef.current = true;
-    setPlaying(true);
-    try {
-      const list = planRef.current;
-      let i = startIndex;
-      while (playingRef.current) {
-        if (i >= list.length) {
-          if (loopRef.current && list.length > 0) i = 0;
-          else break;
-        }
-        setIndex(i);
-        indexRef.current = i;
-        await playOne(list[i], signal);
-        i += 1;
-      }
-      if (!loopRef.current && i >= list.length && playingRef.current) {
-        stopPlayback();
-        setPhase(PHASES.QUESTION);
-        setIndex(0);
-      }
-    } catch (e) {
-      if (e.name !== 'AbortError') console.warn('audio error', e);
-    }
-  };
-
-  const startPlayback = () => {
-    if (plan.length === 0) return;
-    updateSettings({ speechRate: rate, gapSeconds: gap });
-    requestWakeLock();
-    clearSleepTimer();
-    if (sleepMin > 0) sleepTimerRef.current = setTimeout(() => stopPlayback(), sleepMin * 60 * 1000);
-    runFrom(indexRef.current < plan.length ? indexRef.current : 0);
-  };
-  const stopPlayback = () => {
-    releaseWakeLock();
-    clearSleepTimer();
-    playingRef.current = false;
-    setPlaying(false);
-    if (abortRef.current) abortRef.current.abort();
-    cancelSpeech();
-  };
-  const togglePlay = () => (playing ? stopPlayback() : startPlayback());
-
-  const skip = (delta) => {
-    const wasPlaying = playingRef.current;
-    stopPlayback();
-    let next = indexRef.current + delta;
-    next = Math.max(0, Math.min(plan.length - 1, next));
-    setIndex(next);
-    indexRef.current = next;
-    setPhase(PHASES.QUESTION);
-    if (wasPlaying) setTimeout(() => runFrom(next), 120);
-  };
-  const resetToStart = () => {
-    stopPlayback();
-    setIndex(0);
-    indexRef.current = 0;
-    setPhase(PHASES.QUESTION);
-  };
-  // プラン構造を変える操作は停止して先頭へ
-  const rebuildStop = () => {
-    stopPlayback();
-    setIndex(0);
-    indexRef.current = 0;
-    setPhase(PHASES.QUESTION);
-  };
+  const skip = (delta) => engine.skip(delta);
+  const resetToStart = () => engine.resetToStart();
+  // プラン構造を変える操作は停止（署名が変わればエンジンが先頭から読み直す）
+  const rebuildStop = () => engine.stop();
 
   const changeSource = (s) => {
     rebuildStop();
@@ -604,13 +503,13 @@ export default function AudioMode({ store, onToast }) {
 
   // #10 聞きながら自己採点／キーワード追加
   const gradeCurrent = (ok) => {
-    const q = plan[index]?.q;
+    const q = current;
     if (!q) return;
     recordAnswer(q, ok);
     onToast?.(ok ? '「できた」を記録しました' : '「できない」を記録（復習に追加）');
   };
   const addTag = () => {
-    const q = plan[index]?.q;
+    const q = current;
     const kw = tagInput.trim();
     if (!q || !kw) return;
     const cur = (links[q.id]?.keywords) || [];
@@ -633,7 +532,7 @@ export default function AudioMode({ store, onToast }) {
     );
   }
 
-  const currentItem = plan[index];
+  const currentItem = snap.display || builtPlan[index]?.display || builtPlan[0]?.display || null;
   const current = currentItem?.q;
   const rateOptions = [0.7, 0.85, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0];
   const sleepOptions = [0, 5, 10, 15, 20, 30];
@@ -717,7 +616,7 @@ export default function AudioMode({ store, onToast }) {
         ))}
       </div>
 
-      {plan.length === 0 ? (
+      {builtPlan.length === 0 ? (
         <div className="empty">
           <div className="ico">🎧</div>
           <p>読み上げる項目がありません。</p>
@@ -742,7 +641,7 @@ export default function AudioMode({ store, onToast }) {
                 {phase === PHASES.ANSWER && (currentItem?.kind === 'flashcard' ? '意味・要点' : '正解・解説')}
                 {phase === PHASES.NOTE && (currentItem?.kind === 'summary' ? 'まとめ' : 'つながり')}
               </span>
-              <span className="now-index">{index + 1} / {plan.length}</span>
+              <span className="now-index">{index + 1} / {total}</span>
             </div>
 
             <div className="now-subject">
@@ -819,7 +718,7 @@ export default function AudioMode({ store, onToast }) {
             <div className="player-controls">
               <button onClick={() => skip(-1)} disabled={index === 0} aria-label="前へ">⏮</button>
               <button className="main" onClick={togglePlay} aria-label="再生 / 一時停止">{playing ? '⏸' : '▶'}</button>
-              <button onClick={() => skip(1)} disabled={index >= plan.length - 1} aria-label="次へ">⏭</button>
+              <button onClick={() => skip(1)} disabled={index >= total - 1} aria-label="次へ">⏭</button>
             </div>
             {index > 0 && (
               <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={resetToStart}>最初から</button>
@@ -951,9 +850,10 @@ export default function AudioMode({ store, onToast }) {
           </div>
 
           <div className="audio-note">
-            <strong>🔆 画面をつけたままご利用ください</strong>
+            <strong>🎧 アプリ内なら画面を移動しても再生は続きます</strong>
             <p>
-              再生中は画面が消えないように自動で抑制します（対応ブラウザのみ）。ただし端末の画面を手動でOFFにしたり、ブラウザをバックグラウンドにすると、OSの仕様で音声が止まります。ポケットに入れての“ながら再生”には向きません。
+              再生中に「一問一答」や「分析」など他の画面へ移っても音声は途切れません。下に出るミニプレーヤーでどこからでも停止・スキップできます。
+              ただし端末の画面を手動でOFFにしたり、ブラウザ自体をバックグラウンド（別アプリに切替）にすると、OSの仕様で音声は止まります（Webアプリ共通の制限）。再生中は画面が消えないよう自動で抑制します（対応ブラウザのみ）。
             </p>
           </div>
         </>
