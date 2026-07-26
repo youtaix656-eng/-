@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { handReflex, handSections, type HandStep } from "@/data/handReflex";
+import { HandDiagram } from "./HandDiagram";
 
 // ============================================================
 // ハンドリフレ画面
@@ -69,6 +70,7 @@ function Flow() {
                     <p className="mt-0.5 text-sm leading-relaxed text-cocoa-500 dark:text-sand-200">
                       {step.detail}
                     </p>
+                    <HandDiagram no={step.no} />
                     {step.image && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
