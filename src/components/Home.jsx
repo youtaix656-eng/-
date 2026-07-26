@@ -1,12 +1,15 @@
-import { overallStats } from '../lib/stats.js';
+import { overallStats, studyStreak } from '../lib/stats.js';
+import { daysUntil, formatExamDate } from '../lib/gamify.js';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
 export default function Home({ store, onNavigate, installPrompt, onInstall }) {
-  const { questions, history, reviewQuestions, session, unread } = store;
+  const { questions, history, reviewQuestions, session, unread, settings } = store;
   const overall = overallStats(history);
   const reviewCount = reviewQuestions.length;
   const unreadCount = (unread || []).length;
   const sessionActive = session && session.pos < session.target;
+  const { streak } = studyStreak(history);
+  const examLeft = daysUntil(settings.examDate);
 
   return (
     <div className="view">
@@ -14,6 +17,13 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
         <button className="install-btn" onClick={onInstall}>
           <span>📲 ホーム画面に追加してアプリとして使う</span>
           <span className="install-cta">追加</span>
+        </button>
+      )}
+
+      {examLeft != null && examLeft >= 0 && (
+        <button className="exam-countdown" onClick={() => onNavigate('settings')}>
+          <span className="ec-days">試験日まで残り <strong>{examLeft}</strong> 日！</span>
+          <span className="ec-date">試験日 {formatExamDate(settings.examDate)}</span>
         </button>
       )}
 
@@ -34,6 +44,10 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
               {overall.accuracy == null ? '—' : Math.round(overall.accuracy * 100) + '%'}
             </strong>
             通算正答率
+          </div>
+          <div>
+            <strong>{streak > 0 ? `🔥${streak}` : '0'}</strong>
+            連続日数
           </div>
         </div>
       </div>
@@ -92,6 +106,13 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="ico">🎧</span>
           <span className="title">音声学習</span>
           <span className="desc">間違えた問題を読み上げ。ながら学習に。</span>
+          {reviewCount > 0 && <span className="count-pill">{reviewCount}問</span>}
+        </button>
+
+        <button className="menu-item" onClick={() => onNavigate('mistakes')}>
+          <span className="ico">📓</span>
+          <span className="title">間違いノート</span>
+          <span className="desc">間違えた問題＋メモをPDF/テキスト出力。移動中の見返しに。</span>
           {reviewCount > 0 && <span className="count-pill">{reviewCount}問</span>}
         </button>
 

@@ -2713,3 +2713,48 @@ code.block {
 .pomo-switch { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .pomo-music-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .pomo-hint { font-size: 11px; color: var(--text-mute); margin-top: 6px; }
+
+/* ===== 試験日カウントダウン（ホーム） ===== */
+.exam-countdown {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: none; cursor: pointer; color: #fff;
+  background: linear-gradient(135deg, #b5432e, #d9772f);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.exam-countdown .ec-days { font-size: 17px; font-weight: 800; }
+.exam-countdown .ec-days strong { font-size: 24px; }
+.exam-countdown .ec-date { font-size: 12px; opacity: 0.9; }
+
+/* ===== 達成バッジ ===== */
+.badge-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px;
+}
+.badge-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 6px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border); text-align: center;
+}
+.badge-item.earned { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.badge-item.locked { opacity: 0.6; }
+.badge-ico { font-size: 26px; line-height: 1; }
+.badge-title { font-size: 11px; font-weight: 700; }
+.badge-prog { font-size: 10px; color: var(--text-mute); }
+
+/* ===== 模試の推移グラフ ===== */
+.exam-chart {
+  position: relative; display: flex; align-items: flex-end; gap: 5px;
+  height: 130px; padding: 4px 2px 2px;
+}
+.exam-chart-col { flex: 1; min-width: 8px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.exam-chart-bar { width: 80%; max-width: 22px; border-radius: 3px 3px 0 0; min-height: 4px; }
+.exam-chart-bar.pass { background: var(--correct); }
+.exam-chart-bar.fail { background: var(--text-mute); }
+.exam-chart-lbl { font-size: 9px; color: var(--text-sub); margin-top: 2px; }
+.exam-chart-line {
+  position: absolute; left: 0; right: 0; border-top: 1px dashed var(--accent);
+  pointer-events: none;
+}
+.exam-chart-line span {
+  position: absolute; right: 0; top: -14px; font-size: 9px; color: var(--accent); font-weight: 700;
+}

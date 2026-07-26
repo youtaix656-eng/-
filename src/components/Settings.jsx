@@ -9,6 +9,8 @@ import {
   makeAuthRecord,
   verifyPassword,
 } from '../lib/auth.js';
+import SyncQR from './SyncQR.jsx';
+import { daysUntil, formatExamDate } from '../lib/gamify.js';
 
 // 設定・問題データ管理画面
 export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText }) {
@@ -124,6 +126,62 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       {/* ===== ログイン（端末内ロック） ===== */}
       <div className="section-label" style={{ marginTop: 0 }}>ログイン設定</div>
       <LoginSettings store={store} onToast={onToast} />
+
+      {/* ===== 試験日・学習リマインド ===== */}
+      <div className="section-label">試験日・学習リマインド</div>
+      <div className="card">
+        <div className="field">
+          <label>試験日</label>
+          <input
+            type="date"
+            value={settings.examDate || ''}
+            onChange={(e) => updateSettings({ examDate: e.target.value })}
+          />
+          {settings.examDate && daysUntil(settings.examDate) != null && (
+            <div className="hint">
+              {daysUntil(settings.examDate) >= 0
+                ? `試験日まで残り ${daysUntil(settings.examDate)} 日（${formatExamDate(settings.examDate)}）`
+                : `試験日（${formatExamDate(settings.examDate)}）は過ぎています`}
+            </div>
+          )}
+        </div>
+        <label className="switch-row" style={{ marginTop: 6 }}>
+          <input
+            type="checkbox"
+            checked={!!(settings.reminder && settings.reminder.enabled)}
+            onChange={(e) => {
+              const on = e.target.checked;
+              if (on && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                Notification.requestPermission().catch(() => {});
+              }
+              updateSettings({ reminder: { ...(settings.reminder || {}), enabled: on } });
+            }}
+          />
+          <span>
+            毎日のリマインド通知
+            <small>指定した時刻以降にアプリを開くと「学習しよう」の通知でお知らせします。</small>
+          </span>
+        </label>
+        {settings.reminder && settings.reminder.enabled && (
+          <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+            <label>通知する時刻（朝など）</label>
+            <input
+              type="time"
+              value={(settings.reminder && settings.reminder.time) || '07:00'}
+              onChange={(e) =>
+                updateSettings({ reminder: { ...(settings.reminder || {}), time: e.target.value } })
+              }
+            />
+            <div className="hint">
+              ※ Webアプリのため、アプリ（タブ）を開いた時に通知します。完全な常時バックグラウンド通知はOSの仕様上できません。
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ===== QRで別端末へ受け渡し ===== */}
+      <div className="section-label">QRで別端末へ受け渡し</div>
+      <SyncQR store={store} onToast={onToast} />
 
       {/* ===== ポモドーロタイマー ===== */}
       <div className="section-label">ポモドーロタイマー（画面上部）</div>

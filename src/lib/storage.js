@@ -32,6 +32,7 @@ export const KEYS = {
   pomoMusic: 'shinkyu:pomoMusic', // ポモドーロ開始Music（音声ファイルのBlob）
   lastView: 'shinkyu:lastView', // 前回開いていた画面（アプリ再開時に復元）
   quizProgress: 'shinkyu:quizProgress', // 一問一答の途中経過（1問ごとに保存・続きから）
+  examResults: 'shinkyu:examResults', // 模試の結果履歴
   migrated: 'shinkyu:migrated',
 };
 
@@ -178,6 +179,11 @@ export const loadQuizProgress = () => read(KEYS.quizProgress, null);
 export const saveQuizProgress = (p) => write(KEYS.quizProgress, p);
 export const clearQuizProgress = () => remove(KEYS.quizProgress);
 
+// ---- 模試の結果履歴 ----
+// examResults = [{ id, at, count, correct, scorePct, passed, perSubject }]
+export const loadExamResults = () => read(KEYS.examResults, []);
+export const saveExamResults = (r) => write(KEYS.examResults, r);
+
 // ---- ログイン鍵（端末内のみ・サーバー送信なし） ----
 // auth = { email, salt, passHash, question, ansSalt, ansHash, updatedAt }
 export const loadAuth = () => read(KEYS.auth, null);
@@ -212,6 +218,9 @@ const DEFAULT_SETTINGS = {
   subjectTagsCleaned: false, // 以前自動付与した科目タグを除去済みか
   genreFolded: false, // genre（出題基準カテゴリ）を tags へ折り込み済みか
   authSkipped: false, // 初回のログイン設定案内をスキップ済みか
+  examDate: '', // 試験日（YYYY-MM-DD）カウントダウン用
+  sessionNewRatio: 1, // 学習セッションの新規割合（0〜1、1=すべて新規）
+  reminder: { enabled: false, time: '07:00', lastNotified: '' }, // 毎日の学習リマインド通知
   // ポモドーロタイマー（全画面上部）
   pomodoro: {
     enabled: false, // 上部バーを表示するか
@@ -254,6 +263,7 @@ export async function exportAll() {
     userDict: await loadUserDict(),
     unread: await loadUnread(),
     auth: await loadAuth(),
+    examResults: await loadExamResults(),
     settings: await read(KEYS.settings, {}),
   };
 }
@@ -273,5 +283,6 @@ export async function importAll(data) {
   if (Array.isArray(data.userDict)) await saveUserDict(data.userDict);
   if (Array.isArray(data.unread)) await saveUnread(data.unread);
   if (data.auth && typeof data.auth === 'object') await saveAuth(data.auth);
+  if (Array.isArray(data.examResults)) await saveExamResults(data.examResults);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
 }

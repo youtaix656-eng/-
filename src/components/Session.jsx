@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
-import { GRADES } from '../lib/srs.js';
+import { GRADES, isInReview } from '../lib/srs.js';
 import { getSubjects } from '../lib/stats.js';
 import { subjectMatches } from '../data/examScope.js';
 import { effectiveTags } from '../lib/query.js';
@@ -34,9 +34,28 @@ function buildOrder(pool, target) {
   while (ids.length < target) ids = ids.concat(shuffle(pool).map((q) => q.id));
   return ids.slice(0, target);
 }
+// 指定プールを「新規◯割・復習◯割」で混ぜて target 長の出題順を作る。
+// newRatio: 0〜1（1=すべて新規）。新規＝未着手、復習＝要復習の問題。
+function buildMixedOrder(pool, target, newRatio, srs) {
+  if (pool.length === 0) return [];
+  const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
+  const reviewPool = pool.filter((q) => isInReview(srs[q.id]));
+  // どちらかが空なら、その分をもう一方（無ければ全体）で補う
+  const fill = (base, count) => {
+    if (count <= 0) return [];
+    const src = base.length ? base : pool;
+    let ids = [];
+    while (ids.length < count) ids = ids.concat(shuffle(src).map((q) => q.id));
+    return ids.slice(0, count);
+  };
+  const newCount = Math.round(target * Math.min(1, Math.max(0, newRatio)));
+  const reviewCount = target - newCount;
+  const combined = [...fill(newPool, newCount), ...fill(reviewPool, reviewCount)];
+  return shuffle(combined).slice(0, target);
+}
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
-  const { questions, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer } = store;
+  const { questions, srs, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
   const byId = useMemo(() => Object.fromEntries(questions.map((q) => [q.id, q])), [questions]);
 
@@ -46,6 +65,8 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   const [term, setTerm] = useState('');
   const [fast, setFast] = useState(false);
   const [showBreak, setShowBreak] = useState(false);
+  // 新規◯割・復習◯割（0〜100の新規%）。既定は設定値。
+  const [newPct, setNewPct] = useState(Math.round((settings.sessionNewRatio ?? 1) * 100));
 
   // 検索（科目→ジャンル→キーワード の段階しぼり＋フリーワード）
   const afterSubject = useMemo(() => (subject === 'all' ? questions : poolFor(questions, subject)), [questions, subject]);
@@ -71,18 +92,24 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     const subj = opts.subject != null ? opts.subject : subject;
     const round = opts.round || 1;
     const useFast = opts.fast != null ? opts.fast : fast;
+    const ratio = opts.newRatio != null ? opts.newRatio : newPct / 100;
     if (pool.length === 0) {
       onToast?.('条件に合う問題がありません');
       return;
     }
-    startSession({ subject: subj, label: opts.label, ids: buildOrder(pool, target), pos: 0, target, round, fast: useFast, startedAt: Date.now() });
+    // 割合が「すべて新規(100%)」なら従来通り、それ以外は新規/復習をミックス
+    const ids = ratio >= 1 ? buildOrder(pool, target) : buildMixedOrder(pool, target, ratio, srs);
+    updateSettings({ sessionNewRatio: ratio });
+    startSession({ subject: subj, label: opts.label, ids, pos: 0, target, round, fast: useFast, newRatio: ratio, startedAt: Date.now() });
     setShowBreak(false);
   };
   // 続きから（同じ科目でプールを作り直して再開位置は保持）
   const beginFromScratch = () => {
     const pool = poolFor(questions, session.subject);
     if (pool.length === 0) { onToast?.('この科目の問題がありません'); return; }
-    startSession({ ...session, ids: buildOrder(pool, session.target), pos: 0, startedAt: Date.now() });
+    const ratio = session.newRatio != null ? session.newRatio : 1;
+    const ids = ratio >= 1 ? buildOrder(pool, session.target) : buildMixedOrder(pool, session.target, ratio, srs);
+    startSession({ ...session, ids, pos: 0, startedAt: Date.now() });
     setShowBreak(false);
   };
 
@@ -165,6 +192,26 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
             <span>⚡ 高速回転モード（問題→3秒想起→答え。サクサク周回）</span>
           </label>
 
+          <div className="section-label">新規と復習の割合</div>
+          <div className="chip-row">
+            {[
+              { p: 100, l: 'すべて新規' },
+              { p: 70, l: '新規多め' },
+              { p: 50, l: '半々' },
+              { p: 30, l: '復習多め' },
+              { p: 0, l: 'すべて復習' },
+            ].map((o) => (
+              <button key={o.p} className={`chip ${newPct === o.p ? 'active' : ''}`} onClick={() => setNewPct(o.p)}>
+                {o.l}
+              </button>
+            ))}
+          </div>
+          <div className="range-row" style={{ marginTop: 8 }}>
+            <input type="range" min="0" max="100" step="10" value={newPct} onChange={(e) => setNewPct(Number(e.target.value))} />
+            <span className="range-val">新規{newPct}% / 復習{100 - newPct}%</span>
+          </div>
+          <div className="hint">新規＝まだ解いていない問題、復習＝間違えた問題。任意の割合で混ぜて出題します。</div>
+
           <label className="section-label">今日はどれで勉強しますか？</label>
           <div className="sess-targets">
             {TARGETS.map((t) => (
@@ -204,9 +251,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
             {t >= 900 ? (
-              <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, pool: poolFor(questions, session.subject) })}>2周目を開始</button>
+              <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject) })}>2周目を開始</button>
             ) : (
-              <button className="btn primary" onClick={() => begin(t, { subject: session.subject, fast: session.fast, pool: poolFor(questions, session.subject) })}>もう一度</button>
+              <button className="btn primary" onClick={() => begin(t, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject) })}>もう一度</button>
             )}
           </div>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from './lib/useStore.js';
 import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
+import { daysUntil } from './lib/gamify.js';
 import Home from './components/Home.jsx';
 import Quiz from './components/Quiz.jsx';
 import Session from './components/Session.jsx';
@@ -29,6 +30,7 @@ import MiniPlayer from './components/MiniPlayer.jsx';
 import UnreadPages from './components/UnreadPages.jsx';
 import AuthGate from './components/AuthGate.jsx';
 import Pomodoro from './components/Pomodoro.jsx';
+import MistakeNote from './components/MistakeNote.jsx';
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
 
@@ -70,6 +72,7 @@ export default function App() {
     }
   });
 
+  const examDaysLeft = () => daysUntil(store.settings.examDate);
   const showToast = (msg) => setToast(msg);
   useEffect(() => {
     if (!toast) return;
@@ -116,6 +119,46 @@ export default function App() {
       store.clearImportedToast();
     }
   }, [store.importedToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 別端末からQR/URLで進捗を取り込んだら知らせてホームへ
+  useEffect(() => {
+    if (store.syncToast > 0) {
+      showToast('別端末の学習データを取り込みました');
+      setView('home');
+      store.clearSyncToast();
+    }
+  }, [store.syncToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 毎日のリマインド通知（指定時刻以降にアプリを開いていたら1日1回）
+  useEffect(() => {
+    if (!store.loaded) return;
+    const check = () => {
+      const r = store.settings.reminder;
+      if (!r || !r.enabled) return;
+      const now = new Date();
+      const today = now.toISOString().slice(0, 10);
+      if (r.lastNotified === today) return;
+      const [hh, mm] = String(r.time || '07:00').split(':').map((x) => parseInt(x, 10));
+      const target = new Date(now);
+      target.setHours(hh || 7, mm || 0, 0, 0);
+      if (now < target) return;
+      // 通知（許可時）＋アプリ内トースト
+      const days = examDaysLeft();
+      const body = days != null && days >= 0 ? `試験まで残り${days}日。今日も学習しよう！` : '今日も学習しよう！';
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('鍼灸国試 対策アプリ', { body });
+        }
+      } catch (e) {
+        /* noop */
+      }
+      showToast(`🔔 ${body}`);
+      store.updateSettings({ reminder: { ...r, lastNotified: today } });
+    };
+    check();
+    const iv = setInterval(check, 60 * 1000);
+    return () => clearInterval(iv);
+  }, [store.loaded, store.settings.reminder]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // PWA インストールプロンプトを捕捉
   useEffect(() => {
@@ -279,6 +322,8 @@ export default function App() {
         return <Analytics store={store} onNavigate={setView} />;
       case 'unread':
         return <UnreadPages store={store} onToast={showToast} onOpenImport={() => setView('import')} />;
+      case 'mistakes':
+        return <MistakeNote store={store} onToast={showToast} />;
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
@@ -356,6 +401,7 @@ export default function App() {
       dashboard: '弱点分析',
       analytics: '分析・攻略率・合格診断',
       unread: '読み取れないページ',
+      mistakes: '間違いノート',
       memos: 'メモ一覧',
       ocr: '写真から取り込み',
       tools: '問題ツール',

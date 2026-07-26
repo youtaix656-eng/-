@@ -12,11 +12,16 @@ import {
 } from '../lib/stats.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { isInReview, MATURE_INTERVAL } from '../lib/srs.js';
+import { computeBadges } from '../lib/gamify.js';
 
 // 分析・攻略率・合格者診断（⑯⑱㉑㉒）
 // 学習分析グラフ・出題範囲カバー率・合格ラインまで何%・合格者スタイル診断を1画面に。
 export default function Analytics({ store, onNavigate }) {
-  const { history, questions, srs } = store;
+  const { history, questions, srs, examResults } = store;
+  const badges = useMemo(
+    () => computeBadges(history, srs, questions, examResults, isInReview, MATURE_INTERVAL),
+    [history, srs, questions, examResults]
+  );
 
   const overall = overallStats(history);
   const scope = useMemo(() => scopeCoverage(questions, history), [questions, history]);
@@ -232,6 +237,20 @@ export default function Analytics({ store, onNavigate }) {
             <ul>{diagnosis.advice.map((s, i) => <li key={i}>{s}</li>)}</ul>
           </div>
         )}
+      </div>
+
+      {/* ===== 継続バッジ ===== */}
+      <div className="section-label">🏅 達成バッジ（{badges.filter((b) => b.earned).length}/{badges.length}）</div>
+      <div className="badge-grid">
+        {badges.map((b) => (
+          <div className={`badge-item ${b.earned ? 'earned' : 'locked'}`} key={b.id} title={b.desc}>
+            <span className="badge-ico">{b.earned ? b.icon : '🔒'}</span>
+            <span className="badge-title">{b.title}</span>
+            {!b.earned && b.progress && (
+              <span className="badge-prog">{b.progress.cur}/{b.progress.goal}</span>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="ana-jump">

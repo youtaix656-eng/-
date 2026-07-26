@@ -19,7 +19,7 @@ function fmtTime(sec) {
 // 本番想定の問題数・制限時間で通し演習し、終了後に正答率・合格判定を表示する。
 // 鍼灸国家試験（はり師・きゅう師）は各分野の設定に合わせて調整可能。
 export default function Exam({ store }) {
-  const { questions, recordAnswer } = store;
+  const { questions, recordAnswer, examResults, addExamResult } = store;
 
   // 既定は全問だが、問題数と制限時間を選べる
   const presets = [
@@ -87,10 +87,25 @@ export default function Exam({ store }) {
   useEffect(() => {
     if (stage === 'result' && !recordedRef.current) {
       recordedRef.current = true;
+      let correctCount = 0;
+      const perSubject = {};
       order.forEach((q, i) => {
-        if (answers[i] == null) return; // 未解答は記録しない
         const correct = answers[i] === q.answer;
+        if (correct) correctCount += 1;
+        if (!perSubject[q.subject]) perSubject[q.subject] = { total: 0, correct: 0 };
+        perSubject[q.subject].total += 1;
+        if (correct) perSubject[q.subject].correct += 1;
+        if (answers[i] == null) return; // 未解答はSRS・復習に記録しない
         recordAnswer(q, correct);
+      });
+      // 模試結果を履歴に保存（合否判定つき）
+      const scorePct = order.length > 0 ? Math.round((correctCount / order.length) * 100) : 0;
+      addExamResult?.({
+        count: order.length,
+        correct: correctCount,
+        scorePct,
+        passed: scorePct >= PASS_RATE * 100,
+        perSubject,
       });
     }
     if (stage !== 'result') recordedRef.current = false;
@@ -147,6 +162,8 @@ export default function Exam({ store }) {
             試験を開始する
           </button>
         </div>
+
+        {examResults && examResults.length > 0 && <ExamHistory results={examResults} passLine={PASS_RATE} />}
       </div>
     );
   }
@@ -288,6 +305,50 @@ export default function Exam({ store }) {
       >
         途中で終了して採点
       </button>
+    </div>
+  );
+}
+
+// 模試の結果履歴と、合格ライン到達の推移グラフ
+function ExamHistory({ results, passLine }) {
+  // 古い→新しい（左→右）に並べ、直近20件
+  const items = [...results].slice(0, 20).reverse();
+  const passCount = results.filter((r) => r.passed).length;
+  const best = Math.max(...results.map((r) => r.scorePct));
+  const passPct = Math.round(passLine * 100);
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div className="section-label" style={{ marginTop: 0 }}>模試の記録（{results.length}回）</div>
+      <div className="tiles">
+        <div className="tile">
+          <div className="num">{results.length}</div>
+          <div className="lbl">受験回数</div>
+        </div>
+        <div className="tile">
+          <div className="num" style={{ color: 'var(--correct)' }}>{passCount}</div>
+          <div className="lbl">合格ライン到達</div>
+        </div>
+        <div className="tile">
+          <div className="num">{best}%</div>
+          <div className="lbl">ベストスコア</div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="exam-chart">
+          {items.map((r, i) => (
+            <div className="exam-chart-col" key={r.id || i} title={`${new Date(r.at).toLocaleDateString('ja-JP')}：${r.scorePct}%`}>
+              <div className={`exam-chart-bar ${r.passed ? 'pass' : 'fail'}`} style={{ height: `${Math.max(4, r.scorePct)}%` }} />
+              <span className="exam-chart-lbl">{r.scorePct}</span>
+            </div>
+          ))}
+          <div className="exam-chart-line" style={{ bottom: `${passPct}%` }} title={`合格ライン ${passPct}%`}>
+            <span>合格{passPct}%</span>
+          </div>
+        </div>
+        <div className="inline-note" style={{ textAlign: 'center', marginTop: 6 }}>
+          緑＝合格ライン到達／灰＝未満。左（過去）→右（最近）。
+        </div>
+      </div>
     </div>
   );
 }

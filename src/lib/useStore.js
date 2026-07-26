@@ -6,6 +6,7 @@ import * as storage from './storage.js';
 import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
+import { decodeSync, syncToBackup } from './sync.js';
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
@@ -46,8 +47,10 @@ export function useStore() {
   const [session, setSessionState] = useState(null); // 学習セッション（60/300/900）
   const [unread, setUnreadState] = useState([]); // 読み取れなかったページ・問題の控え
   const [auth, setAuthState] = useState(null); // 端末内ログイン鍵
+  const [examResults, setExamResultsState] = useState([]); // 模試の結果履歴
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
+  const [syncToast, setSyncToast] = useState(0); // 別端末からの進捗取り込み
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
@@ -55,6 +58,24 @@ export function useStore() {
     let alive = true;
     (async () => {
       await storage.migrateFromLocalStorage();
+      // 別端末からの進捗取り込み（QR/URL の #sync=…）。読み込み前に反映する。
+      try {
+        const hash = window.location.hash || '';
+        const mSync = hash.match(/[#&]sync=([^&]+)/);
+        if (mSync) {
+          const payload = decodeSync(decodeURIComponent(mSync[1]));
+          const ok = window.confirm(
+            '別端末の学習データ（進捗・設定）を取り込みます。この端末の進捗は上書きされます。よろしいですか？'
+          );
+          if (ok) {
+            await storage.importAll(syncToBackup(payload));
+            if (alive) setSyncToast(1);
+          }
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      } catch (e) {
+        /* 無効な sync データは無視 */
+      }
       const [q, s, h, m, lk, sch, vn, ec, sn, km, ud, cfg] = await Promise.all([
         storage.loadQuestions(),
         storage.loadSrs(),
@@ -72,6 +93,7 @@ export function useStore() {
       const ss = await storage.loadSession();
       const ur = await storage.loadUnread();
       const au = await storage.loadAuth();
+      const er = await storage.loadExamResults();
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか
@@ -159,6 +181,7 @@ export function useStore() {
       setSessionState(ss || null);
       setUnreadState(ur || []);
       setAuthState(au || null);
+      setExamResultsState(er || []);
       setKwMeta(km || {});
       // 【取り消し】用語辞書に登録していた科目名を取り除く
       let dict = (ud || []).filter((t) => !SUBJECT_TAG_NAMES.includes(t));
@@ -238,6 +261,15 @@ export function useStore() {
   const clearAuth = useCallback(() => {
     setAuthState(null);
     storage.clearAuth();
+  }, []);
+
+  // 模試の結果を保存（新しいものを先頭に、最大100件）
+  const addExamResult = useCallback((result) => {
+    setExamResultsState((cur) => {
+      const next = [{ id: `ex-${Date.now().toString(36)}`, at: Date.now(), ...result }, ...cur].slice(0, 100);
+      storage.saveExamResults(next);
+      return next;
+    });
   }, []);
 
   // 解答を記録（grade 省略時は正誤から自動判定）
@@ -336,6 +368,7 @@ export function useStore() {
   }, []);
   const clearSeedToast = useCallback(() => setSeedToast(0), []);
   const clearImportedToast = useCallback(() => setImportedToast(0), []);
+  const clearSyncToast = useCallback(() => setSyncToast(0), []);
 
   // キーワードのメタ（語呂合わせ）を更新
   const setKeywordMeta = useCallback((keyword, patch) => {
@@ -477,6 +510,8 @@ export function useStore() {
     auth,
     setAuth,
     clearAuth,
+    examResults,
+    addExamResult,
     schedule,
     setSchedule,
     venues,
@@ -496,6 +531,8 @@ export function useStore() {
     clearSeedToast,
     importedToast,
     clearImportedToast,
+    syncToast,
+    clearSyncToast,
     settings,
     reviewQuestions,
     dueReviewQuestions,
