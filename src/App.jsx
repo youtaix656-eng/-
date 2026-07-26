@@ -8,6 +8,7 @@ import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import Dashboard from './components/Dashboard.jsx';
+import Analytics from './components/Analytics.jsx';
 import Memos from './components/Memos.jsx';
 import Settings from './components/Settings.jsx';
 import Ocr from './components/Ocr.jsx';
@@ -200,6 +201,8 @@ export default function App() {
         return <Exam store={store} />;
       case 'dashboard':
         return <Dashboard store={store} />;
+      case 'analytics':
+        return <Analytics store={store} onNavigate={setView} />;
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
@@ -274,6 +277,7 @@ export default function App() {
       audio: '音声学習',
       exam: '模擬試験',
       dashboard: '弱点分析',
+      analytics: '分析・攻略率・合格診断',
       memos: 'メモ一覧',
       ocr: '写真から取り込み',
       tools: '問題ツール',

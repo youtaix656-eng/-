@@ -150,6 +150,7 @@ export function scopeCoverage(questions, history) {
     return {
       subject: subj,
       count: inBank.length,
+      ids: inBank.map((x) => x.id),
       answered,
       correct,
       accuracy: answered > 0 ? correct / answered : null,

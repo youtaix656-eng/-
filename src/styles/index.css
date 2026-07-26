@@ -2477,3 +2477,88 @@ code.block {
   padding-bottom: 3px;
   margin-bottom: 8px;
 }
+
+/* ===== 分析・攻略率・合格診断（Analytics） ===== */
+.ana-pass { display: grid; gap: 12px; }
+.ana-gauge-track {
+  position: relative; height: 20px; border-radius: 10px;
+  background: var(--surface-2); overflow: hidden;
+}
+.ana-gauge-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--wrong), #e6b84e);
+  border-radius: 10px; transition: width .5s ease;
+}
+.ana-gauge-fill.reached { background: linear-gradient(90deg, #e6b84e, var(--correct)); }
+.ana-gauge-line {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: #fff; box-shadow: 0 0 0 1px var(--navy-dark);
+}
+.ana-gauge-scale {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text-sub); margin-top: 4px;
+}
+.ana-gauge-goal { color: var(--accent); font-weight: 700; }
+.ana-pass-num { font-size: 15px; }
+.ana-pass-num strong { font-size: 26px; color: var(--navy-light); }
+.ana-pass-msg { font-size: 13px; margin: 6px 0; color: var(--text); }
+.ana-pass-msg.good { color: var(--correct); font-weight: 600; }
+.ana-pass-msg strong { color: var(--wrong); }
+.ana-pass-msg.good strong { color: var(--correct); }
+
+.ana-stack { display: flex; height: 26px; border-radius: 8px; overflow: hidden; gap: 2px; }
+.ana-stack .seg {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff; min-width: 20px;
+}
+.seg-mastered { background: var(--correct); }
+.seg-learning { background: var(--accent); }
+.seg-review { background: var(--wrong); }
+.seg-untouched { background: var(--surface-2); color: var(--text-sub) !important; }
+.ana-legend {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
+  font-size: 11px; color: var(--text-sub);
+}
+.ana-legend .dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  margin-right: 4px; vertical-align: middle;
+}
+
+.ana-bar-mastery { position: relative; }
+.ana-bar-mastery > span { background: var(--correct); }
+.ana-bar-cover {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  border-right: 2px dashed var(--accent); opacity: .8;
+}
+
+.ana-trend {
+  display: flex; align-items: flex-end; gap: 6px;
+  height: 110px; padding: 4px 2px;
+}
+.ana-trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.ana-trend-bar {
+  width: 70%; max-width: 26px; border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--accent), var(--navy-light));
+  min-height: 4px;
+}
+.ana-trend-lbl { font-size: 10px; color: var(--text-sub); margin-top: 3px; }
+
+.ana-diag-head { display: flex; gap: 12px; align-items: flex-start; }
+.ana-diag-emoji { font-size: 34px; line-height: 1; }
+.ana-diag-type { font-size: 18px; font-weight: 800; color: var(--navy-light); }
+.ana-diag-summary { font-size: 13px; color: var(--text); margin-top: 3px; line-height: 1.5; }
+.ana-diag-metrics {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px;
+  margin: 12px 0; padding: 10px; background: var(--surface-2);
+  border-radius: 8px;
+}
+.ana-diag-metric { display: flex; justify-content: space-between; font-size: 12px; }
+.ana-diag-metric .k { color: var(--text-sub); }
+.ana-diag-metric .v { font-weight: 700; }
+.ana-diag-block { margin-top: 10px; }
+.ana-diag-block-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.ana-diag-block ul { margin: 0; padding-left: 18px; }
+.ana-diag-block li { font-size: 13px; line-height: 1.6; }
+.ana-diag-block.advice li { color: var(--text); }
+
+.ana-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }

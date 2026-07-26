@@ -100,6 +100,14 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span className="desc">本番想定の問題数・制限時間で通し演習。</span>
         </button>
 
+        <button className="menu-item wide featured" onClick={() => onNavigate('analytics')}>
+          <span className="ico">📈</span>
+          <span className="title">分析・攻略率・合格診断</span>
+          <span className="desc">
+            合格ラインまであと何%・出題範囲の攻略率・あなたの合格者スタイルを診断。
+          </span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('dashboard')}>
           <span className="ico">📊</span>
           <span className="title">弱点分析</span>
