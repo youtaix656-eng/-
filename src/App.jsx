@@ -88,13 +88,19 @@ export default function App() {
   const viewRestored = useRef(false);
   useEffect(() => {
     if (!store.loaded || viewRestored.current) return;
-    viewRestored.current = true;
+    let cancelled = false;
     loadLastView().then((v) => {
+      if (cancelled) return;
       // ハッシュ経由の取り込み等で既に他画面へ切り替わっている場合は尊重
       if (v && typeof v === 'string' && v !== 'home') {
         setView((cur) => (cur === 'home' ? v : cur));
       }
+      // 復元が完了してから保存を有効化する（初期の 'home' で上書きしないため）
+      viewRestored.current = true;
     });
+    return () => {
+      cancelled = true;
+    };
   }, [store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 画面を切り替えるたびに保存（復元完了後のみ）
