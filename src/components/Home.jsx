@@ -99,6 +99,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
       </div>
 
       <div className="menu-grid">
+        <button className="menu-item wide featured roadmap-card" onClick={() => onNavigate('roadmap')}>
+          <span className="ico">🗺️</span>
+          <span className="title">合格するためのロードマップ</span>
+          <span className="desc">
+            本番までの計画・やること/NG・新規→△✕の切替時期・手が使えない時の音声学習まで。迷ったらここ。
+          </span>
+        </button>
+
         <button className="menu-item wide featured" onClick={() => onNavigate('session')}>
           <span className="ico">📚</span>
           <span className="title">学習（60・300・900）</span>

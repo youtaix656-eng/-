@@ -31,6 +31,7 @@ import UnreadPages from './components/UnreadPages.jsx';
 import AuthGate from './components/AuthGate.jsx';
 import Pomodoro from './components/Pomodoro.jsx';
 import MistakeNote from './components/MistakeNote.jsx';
+import Roadmap from './components/Roadmap.jsx';
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
 
@@ -337,6 +338,8 @@ export default function App() {
         return <UnreadPages store={store} onToast={showToast} onOpenImport={() => setView('import')} />;
       case 'mistakes':
         return <MistakeNote store={store} onToast={showToast} />;
+      case 'roadmap':
+        return <Roadmap store={store} onNavigate={setView} />;
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
@@ -414,6 +417,7 @@ export default function App() {
       exam: '模擬試験',
       dashboard: '弱点分析',
       analytics: '分析・攻略率・合格診断',
+      roadmap: '合格するためのロードマップ',
       unread: '読み取れないページ',
       mistakes: '間違いノート',
       memos: 'メモ一覧',
