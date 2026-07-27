@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from './lib/useStore.js';
 import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import { daysUntil } from './lib/gamify.js';
+import { haripanReminder } from './data/haripan.js';
+import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
 import Home from './components/Home.jsx';
 import Quiz from './components/Quiz.jsx';
 import Session from './components/Session.jsx';
@@ -150,17 +152,25 @@ export default function App() {
       const target = new Date(now);
       target.setHours(hh || 7, mm || 0, 0, 0);
       if (now < target) return;
-      // 通知（許可時）＋アプリ内トースト
-      const days = examDaysLeft();
-      const body = days != null && days >= 0 ? `試験まで残り${days}日。今日も学習しよう！` : '今日も学習しよう！';
+      // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）
+      const body = haripanReminder(store.settings.examDate);
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification('鍼灸国試 対策アプリ', { body });
+          new Notification('ハリオ先生', { body });
         }
       } catch (e) {
         /* noop */
       }
-      showToast(`🔔 ${body}`);
+      showToast(`🩹 ハリオ先生：${body}`);
+      // アプリを開いていれば声で伝える（喋る）
+      try {
+        if (isSpeechSupported() && typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          cancelSpeech();
+          speak(body, { rate: store.settings.speechRate || 1 });
+        }
+      } catch (e) {
+        /* noop */
+      }
       store.updateSettings({ reminder: { ...r, lastNotified: today } });
     };
     check();

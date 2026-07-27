@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { overallStats, studyStreak } from '../lib/stats.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress } from '../lib/storage.js';
+import Mascot from './Mascot.jsx';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
 export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall }) {
@@ -38,6 +39,9 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="install-cta">追加</span>
         </button>
       )}
+
+      {/* ハリオ先生（AIマスコット） */}
+      <Mascot store={store} />
 
       {/* 前回の続きから（画面上部） */}
       {hasResume && (

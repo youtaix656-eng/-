@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { phaseForDate, phasesInMonth } from '../data/roadmapPhases.js';
 
 // カレンダー：勉強や試験などの予定を入力・管理する。
 // 予定は store.schedule = [{ id, date, time, title, memo, kind }] に保存。
@@ -149,12 +150,14 @@ export default function Calendar({ store, onToast }) {
           const evs = byDate[key] || [];
           const isToday = key === todayKey();
           const isSel = key === selected;
+          const ph = phaseForDate(key);
           return (
             <button
               key={key}
               className={`cal-cell ${inMonth ? '' : 'dim'} ${isToday ? 'today' : ''} ${isSel ? 'sel' : ''}`}
               onClick={() => setSelected(key)}
             >
+              {ph && <span className="cal-phase" style={{ background: ph.color }} title={`フェーズ${ph.no} ${ph.label}`} />}
               <span className={`cal-date ${d.getDay() === 0 ? 'sun' : ''} ${d.getDay() === 6 ? 'sat' : ''}`}>
                 {d.getDate()}
               </span>
@@ -169,6 +172,17 @@ export default function Calendar({ store, onToast }) {
           );
         })}
       </div>
+
+      {phasesInMonth(year, month).length > 0 && (
+        <div className="cal-phase-legend">
+          <span className="cal-phase-legend-title">🗺️ この月のロードマップ</span>
+          {phasesInMonth(year, month).map((p) => (
+            <span className="cal-phase-tag" key={p.id}>
+              <i style={{ background: p.color }} />フェーズ{p.no}・{p.label}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="cal-selected">
         <div className="cal-sel-head">

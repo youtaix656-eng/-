@@ -135,6 +135,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const [reverse, setReverse] = useState(false); // #6 逆向き
   const [readSide, setReadSide] = useState('both'); // 読み上げる面: both | front | back
   const [readChoices, setReadChoices] = useState(false); // 表で選択肢（4択）も読む
+  const [recallMode, setRecallMode] = useState(false); // 記憶定着（想起→答え→反復）
 
   const [loop, setLoop] = useState(false);
   const [sleepMin, setSleepMin] = useState(0);
@@ -421,12 +422,20 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     }
     // 表面・裏面（両方）
     steps.push(...front);
+    // 記憶定着：想起をうながし、追加の間をとる（アクティブリコール）
+    if (recallMode) steps.push({ phase: G, say: '……答えは？ 思い出してみよう。' });
     steps.push({ phase: G, waitGap: true });
+    if (recallMode) steps.push({ wait: 1600 });
     if (readHint) {
       const hint = item.keyword || effectiveTags(q, links)[0] || '';
       if (hint) { steps.push({ say: `ヒント。キーワードは、${hint}。` }); steps.push({ wait: 600 }); }
     }
     steps.push(...back);
+    // 記憶定着：答えの核心をもう一度（反復で刷り込む）
+    if (recallMode) {
+      const key = shortAnswer(q) || '';
+      if (key) { steps.push({ wait: 400 }); steps.push({ phase: A, say: `大事なところをもう一度。${key}。` }); }
+    }
     if (reverse) {
       steps.push({ phase: Q, say: `逆に確認。答えは、${shortAnswer(q)}。これは何を問う問題だったか思い出しましょう。` });
       steps.push({ waitGap: true });
@@ -439,17 +448,17 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, links] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
     () => JSON.stringify([
       source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn,
-      readSubject, readHint, reverse, readSide, readChoices, filterSubject, filterGenre, filterKeyword,
+      readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword,
       questions.length, plan.length,
     ]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, filterSubject, filterGenre, filterKeyword, questions.length, plan.length]
+    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, questions.length, plan.length]
   );
 
   // 計画をエンジンへ（同じ署名なら位置を保持して何もしない）
@@ -818,6 +827,12 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               onToggle={() => setReadChoices((v) => !v)}
               title="表（問題）で選択肢も読む（四択）"
               desc="四択の1〜4の選択肢も表面で読み上げます。本番と同じ形で耳から確認できます。"
+            />
+            <Opt
+              on={recallMode}
+              onToggle={() => setRecallMode((v) => !v)}
+              title="🧠 記憶定着モード（想起→答え→反復）"
+              desc="問題のあと「答えは？」と促して“思い出す間”を長めにとり、正解の核心をもう一度読みます。手が使えなくても記憶に残りやすくなります。"
             />
           </div>
 

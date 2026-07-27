@@ -2872,3 +2872,44 @@ code.block {
 .rm-audio-note { font-size: 11.5px; color: var(--text-mute); margin: 10px 0; line-height: 1.6; }
 .rm-today ol { margin: 0; padding-left: 20px; }
 .rm-today li { font-size: 13.5px; margin: 6px 0; color: var(--text-sub); }
+
+/* ===== カレンダー：フェーズ色分け ===== */
+.cal-cell { position: relative; overflow: hidden; }
+.cal-phase { position: absolute; left: 0; right: 0; top: 0; height: 4px; opacity: 0.9; }
+.cal-phase-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 11px; margin: 10px 0;
+}
+.cal-phase-legend-title { font-size: 12px; font-weight: 800; color: var(--accent); width: 100%; }
+.cal-phase-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-sub); }
+.cal-phase-tag i { width: 12px; height: 8px; border-radius: 3px; display: inline-block; }
+
+/* ===== ハリオ先生（AIマスコット） ===== */
+.mascot {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: linear-gradient(135deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.mascot-img {
+  width: 64px; height: 64px; border-radius: 14px; object-fit: cover; flex: 0 0 auto;
+  border: 2px solid var(--accent); background: #d9d2c4;
+}
+.mascot-body { flex: 1; min-width: 0; }
+.mascot-name { font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+.mascot-role { font-size: 10px; font-weight: 700; color: var(--accent); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; }
+.mascot-bubble {
+  position: relative; margin-top: 6px; background: var(--surface-2);
+  border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.55; color: var(--text);
+}
+.mascot-bubble::before {
+  content: ""; position: absolute; left: -6px; top: 12px; width: 0; height: 0;
+  border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 7px solid var(--surface-2);
+}
+.mascot-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.mascot-btn {
+  font-size: 12px; font-weight: 700; border: 1.5px solid var(--accent); color: var(--accent);
+  background: transparent; border-radius: 8px; padding: 5px 11px; cursor: pointer;
+}
+.mascot-btn.ghost { border-color: var(--border); color: var(--text-sub); }
