@@ -30,4 +30,5 @@ export const STORAGE_KEYS = {
   favorites: "rirakuru:favorites",
   checklist: "rirakuru:checklist",
   theme: "rirakuru:theme",
+  srs: "rirakuru:srs-reviews",
 } as const;

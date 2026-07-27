@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CheckSquare, BookA, HelpCircle } from "lucide-react";
+import { Home, CheckSquare, BookA, HelpCircle, BrainCircuit } from "lucide-react";
 
 // ============================================================
 // 画面下部の固定ナビ（スマホで片手操作しやすい位置）
@@ -11,6 +11,7 @@ const links = [
   { href: "/", label: "ホーム", icon: Home },
   { href: "/checklist", label: "チェック", icon: CheckSquare },
   { href: "/quiz", label: "問題", icon: HelpCircle },
+  { href: "/review", label: "復習", icon: BrainCircuit },
   { href: "/glossary", label: "用語集", icon: BookA },
 ];
 

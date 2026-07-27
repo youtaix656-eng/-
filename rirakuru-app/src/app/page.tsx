@@ -4,6 +4,7 @@ import { categories } from "@/data/categories";
 import { CategoryCard } from "@/components/CategoryCard";
 import { SearchBar } from "@/components/SearchBar";
 import { FavoritesSection } from "@/components/FavoritesSection";
+import { ReviewDueCard } from "@/components/ReviewDueCard";
 
 // ============================================================
 // ホーム（/）
@@ -13,6 +14,9 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-6">
       <SearchBar />
+
+      {/* 今日の復習（間隔反復） */}
+      <ReviewDueCard />
 
       {/* 自主基準テスト・問題への導線 */}
       <Link

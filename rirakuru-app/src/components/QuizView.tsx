@@ -1,13 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, X, RotateCcw, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { Check, X, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, BrainCircuit } from "lucide-react";
 import { qaList, oxList } from "@/data/quiz";
+import { gradeByCorrectness, gradeItem } from "@/lib/srs";
+import { Flashcard } from "./Flashcard";
 
 // ============================================================
 // クイズ画面
-// - 一問一答：タップで答えを開閉するカード
+// - 一問一答：暗記カード（表=問題／裏=答え）を1問ずつめくって進む。
+//   評価（○△✕）は間隔反復（/review）の記録に使われる。一覧表示も切替可。
 // - ○×問題：1問ずつ回答し、正誤と解説を表示。得点を集計。
+//   正誤は自動で間隔反復の記録にも使われる。
 // ============================================================
 
 type Mode = "qa" | "ox";
@@ -41,24 +46,109 @@ export function QuizView() {
         </button>
       </div>
 
-      {mode === "qa" ? <QAList /> : <OXQuiz />}
+      {mode === "qa" ? <QAFlashcards /> : <OXQuiz />}
     </div>
   );
 }
 
-// ---------------- 一問一答 ----------------
-function QAList() {
+// ---------------- 一問一答（暗記カード） ----------------
+function QAFlashcards() {
+  const total = qaList.length;
+  const [index, setIndex] = useState(0);
+  const [listMode, setListMode] = useState(false);
+
+  // 一覧表示（従来のタップ開閉リスト。ざっと見返したいとき用）
+  if (listMode) {
+    return <QAList onSwitchToCards={() => setListMode(false)} />;
+  }
+
+  const item = qaList[index];
+  const percent = Math.round((index / total) * 100);
+
+  const handleGrade = (grade: "good" | "hard" | "again") => {
+    gradeItem(item.id, grade);
+    if (index + 1 < total) setIndex((i) => i + 1);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between text-sm text-cocoa-500 dark:text-sand-200">
+        <span>
+          {index + 1} / {total} 問
+        </span>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/review"
+            className="flex items-center gap-1 font-semibold text-cocoa-600 underline underline-offset-4 dark:text-sand-200"
+          >
+            <BrainCircuit size={16} />
+            復習
+          </Link>
+          <button
+            onClick={() => setListMode(true)}
+            className="font-semibold text-cocoa-600 underline underline-offset-4 dark:text-sand-200"
+          >
+            一覧表示
+          </button>
+        </div>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-cream-200 dark:bg-cocoa-800">
+        <div
+          className="h-full rounded-full bg-cocoa-500 transition-all"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+
+      <Flashcard
+        key={item.id}
+        card={{ id: item.id, source: "qa", front: item.q, back: item.a, ref: item.ref }}
+        onGrade={handleGrade}
+      />
+
+      {/* 手動での前後移動（評価せずに見るだけ移動したい場合） */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setIndex((i) => Math.max(0, i - 1))}
+          disabled={index === 0}
+          className="flex min-h-[44px] items-center gap-1 rounded-full px-3 text-sm font-semibold text-cocoa-500 disabled:opacity-30 dark:text-sand-200"
+        >
+          <ChevronLeft size={18} />
+          前へ
+        </button>
+        <button
+          onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
+          disabled={index === total - 1}
+          className="flex min-h-[44px] items-center gap-1 rounded-full px-3 text-sm font-semibold text-cocoa-500 disabled:opacity-30 dark:text-sand-200"
+        >
+          次へ
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- 一問一答：一覧表示（従来のタップ開閉リスト） ----------------
+function QAList({ onSwitchToCards }: { onSwitchToCards: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [allOpen, setAllOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-2">
-      <button
-        onClick={() => setAllOpen((v) => !v)}
-        className="self-end text-sm font-semibold text-cocoa-600 underline underline-offset-4 dark:text-sand-200"
-      >
-        {allOpen ? "すべて閉じる" : "すべて開く"}
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onSwitchToCards}
+          className="text-sm font-semibold text-cocoa-600 underline underline-offset-4 dark:text-sand-200"
+        >
+          ← カード表示に戻る
+        </button>
+        <button
+          onClick={() => setAllOpen((v) => !v)}
+          className="text-sm font-semibold text-cocoa-600 underline underline-offset-4 dark:text-sand-200"
+        >
+          {allOpen ? "すべて閉じる" : "すべて開く"}
+        </button>
+      </div>
 
       <ul className="flex flex-col gap-2">
         {qaList.map((item, i) => {
@@ -126,7 +216,9 @@ function OXQuiz() {
   const answer = (choice: boolean) => {
     if (picked !== null) return; // 二重回答を防ぐ
     setPicked(choice);
-    if (choice === current.answer) setScore((s) => s + 1);
+    const isCorrect = choice === current.answer;
+    if (isCorrect) setScore((s) => s + 1);
+    gradeByCorrectness(current.id, isCorrect);
   };
 
   const next = () => {
@@ -156,13 +248,22 @@ function OXQuiz() {
           {score} / {total}
         </p>
         <p className="text-sm text-cocoa-500 dark:text-sand-200">正答率 {rate}%</p>
-        <button
-          onClick={restart}
-          className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-cocoa-600 px-6 text-base font-semibold text-white"
-        >
-          <RotateCcw size={18} />
-          もう一度
-        </button>
+        <div className="mt-2 flex flex-wrap justify-center gap-2">
+          <button
+            onClick={restart}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-cocoa-600 px-6 text-base font-semibold text-white"
+          >
+            <RotateCcw size={18} />
+            もう一度
+          </button>
+          <Link
+            href="/review"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-cocoa-600 px-6 text-base font-semibold text-cocoa-600 dark:text-cream-50"
+          >
+            <BrainCircuit size={18} />
+            間違えた問題を復習
+          </Link>
+        </div>
       </div>
     );
   }
@@ -253,6 +354,11 @@ function OXQuiz() {
           {current.ref && (
             <p className="mt-1 text-xs text-cocoa-400 dark:text-sand-200">
               出典：{current.ref}
+            </p>
+          )}
+          {!correct && (
+            <p className="mt-2 text-xs font-semibold text-red-600 dark:text-red-300">
+              この問題は復習リストに追加されました（/review）
             </p>
           )}
           <button

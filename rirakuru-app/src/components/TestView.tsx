@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, X, RotateCcw, Circle } from "lucide-react";
+import Link from "next/link";
+import { Check, X, RotateCcw, Circle, BrainCircuit } from "lucide-react";
 import { standardsTest } from "@/data/standardsTest";
+import { gradeByCorrectness } from "@/lib/srs";
 
 // ============================================================
 // 自主基準テスト（全29問）
@@ -43,7 +45,9 @@ export function TestView() {
       // 単一選択：即確定
       setSelected([i]);
       setLocked(true);
-      if (correctSet.has(i)) setScore((s) => s + 1);
+      const ok = correctSet.has(i);
+      if (ok) setScore((s) => s + 1);
+      gradeByCorrectness(q.id, ok);
     }
   };
 
@@ -51,6 +55,7 @@ export function TestView() {
     if (locked || selected.length !== q.correct.length) return;
     setLocked(true);
     if (isCorrect) setScore((s) => s + 1);
+    gradeByCorrectness(q.id, isCorrect);
   };
 
   const next = () => {
@@ -82,13 +87,22 @@ export function TestView() {
           {score} / {total}
         </p>
         <p className="text-sm text-cocoa-500 dark:text-sand-200">正答率 {rate}%</p>
-        <button
-          onClick={restart}
-          className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-cocoa-600 px-6 text-base font-semibold text-white"
-        >
-          <RotateCcw size={18} />
-          もう一度挑戦
-        </button>
+        <div className="mt-2 flex flex-wrap justify-center gap-2">
+          <button
+            onClick={restart}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-cocoa-600 px-6 text-base font-semibold text-white"
+          >
+            <RotateCcw size={18} />
+            もう一度挑戦
+          </button>
+          <Link
+            href="/review"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-cocoa-600 px-6 text-base font-semibold text-cocoa-600 dark:text-cream-50"
+          >
+            <BrainCircuit size={18} />
+            間違えた問題を復習
+          </Link>
+        </div>
       </div>
     );
   }
@@ -214,6 +228,11 @@ export function TestView() {
           <p className="mt-1 text-sm leading-relaxed text-cocoa-700 dark:text-cream-100">
             {q.explanation}
           </p>
+          {!isCorrect && (
+            <p className="mt-2 text-xs font-semibold text-red-600 dark:text-red-300">
+              この問題は復習リストに追加されました（/review）
+            </p>
+          )}
           <button
             onClick={next}
             className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-cocoa-600 px-6 text-base font-semibold text-white"
