@@ -408,6 +408,7 @@ export default function App() {
     const map = {
       home: '鍼灸国試 対策アプリ',
       quiz: '一問一答',
+      session: '学習（60・300・900）',
       review: '間違えた問題',
       audio: '音声学習',
       exam: '模擬試験',

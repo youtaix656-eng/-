@@ -101,9 +101,15 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           const streak = st.correctStreak || 0;
           const due = st.due || 0;
           const now = Date.now();
-          const dueLabel = due <= now
+          const ms = due - now;
+          const HOUR = 60 * 60 * 1000;
+          const dueLabel = ms <= 0
             ? '今すぐ復習'
-            : `次回 ${Math.max(1, Math.round((due - now) / (24 * 60 * 60 * 1000)))}日後`;
+            : ms < HOUR
+            ? `次回 約${Math.max(1, Math.round(ms / (60 * 1000)))}分後`
+            : ms < 24 * HOUR
+            ? `次回 約${Math.round(ms / HOUR)}時間後`
+            : `次回 約${Math.round(ms / (24 * HOUR))}日後`;
           return (
             <div className="list-item" key={q.id}>
               <div className="li-subject">{q.subject}</div>
