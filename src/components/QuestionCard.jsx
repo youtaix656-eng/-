@@ -62,6 +62,10 @@ export default function QuestionCard({
     onNext?.();
   };
 
+  // 暗記カード：選択せずに「裏（答え）」をめくる
+  const flipToAnswer = () => setRevealed(true);
+  const flippedNoSelect = revealed && selected === null;
+
   const saveMemo = () => {
     onSetMemo?.(question.id, memoText);
     setMemoOpen(false);
@@ -83,6 +87,10 @@ export default function QuestionCard({
           alt="問題の図"
           loading="lazy"
         />
+      )}
+
+      {!revealed && (selfGrade || gradeMode) && (
+        <div className="card-side-label">表（問題）</div>
       )}
 
       {question.question && <div className="q-text">{question.question}</div>}
@@ -116,14 +124,25 @@ export default function QuestionCard({
         })}
       </div>
 
+      {/* 暗記カード：選択せずに答え（裏）をめくる */}
+      {!revealed && (selfGrade || gradeMode) && (
+        <button className="btn block flip-btn" onClick={flipToAnswer}>
+          🔄 答えを見る（裏へ）
+        </button>
+      )}
+
       {revealed && (
         <>
-          <div className={`result-banner ${correct ? 'correct' : 'wrong'}`}>
-            {correct ? '正解' : '不正解'}
-            <span style={{ fontWeight: 500, fontSize: 13, opacity: 0.85 }}>
-              {correct ? '　この調子です' : '　復習リストに追加しました'}
-            </span>
-          </div>
+          {flippedNoSelect ? (
+            <div className="card-side-label back">裏（答え）</div>
+          ) : (
+            <div className={`result-banner ${correct ? 'correct' : 'wrong'}`}>
+              {correct ? '正解' : '不正解'}
+              <span style={{ fontWeight: 500, fontSize: 13, opacity: 0.85 }}>
+                {correct ? '　この調子です' : '　復習リストに追加しました'}
+              </span>
+            </div>
+          )}
 
           {question.explanation && (
             <div className="explanation">

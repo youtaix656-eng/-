@@ -2783,3 +2783,17 @@ code.block {
 .rt-frac { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; }
 .rt-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 6px; }
 .rt-bar > span { display: block; height: 100%; background: var(--accent); }
+
+/* ===== 暗記カード（表→裏）表示 ===== */
+.card-side-label {
+  font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+  color: var(--accent); margin-bottom: 6px;
+}
+.card-side-label.back { color: var(--correct); }
+.flip-btn {
+  margin-top: 12px;
+  background: var(--surface-2);
+  border: 1.5px dashed var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}

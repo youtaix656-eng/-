@@ -133,6 +133,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const [readSubject, setReadSubject] = useState(true); // #2 科目も読む
   const [readHint, setReadHint] = useState(false); // #5 ヒント
   const [reverse, setReverse] = useState(false); // #6 逆向き
+  const [readSide, setReadSide] = useState('both'); // 読み上げる面: both | front | back
+  const [readChoices, setReadChoices] = useState(false); // 表で選択肢（4択）も読む
 
   const [loop, setLoop] = useState(false);
   const [sleepMin, setSleepMin] = useState(0);
@@ -388,21 +390,43 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       steps.push({ wait: 700 });
       return steps;
     }
-    // 通常の問題
+    // 通常の問題（暗記カード：表＝問題〈4択の選択肢も任意〉／裏＝答え）
     const q = item.q;
+    // 表（問題）
+    const front = [];
     if (item.intro) {
-      steps.push({ phase: K, say: item.intro });
-      steps.push({ wait: 300 });
+      front.push({ phase: K, say: item.intro });
+      front.push({ wait: 300 });
     }
     const subj = readSubject && q.subject ? `${q.subject}。` : '';
-    steps.push({ phase: Q, say: `${subj}問題。${questionText(q)}` });
+    let frontText = `${subj}問題。${questionText(q)}。`;
+    if (readChoices && q.type !== 'ox' && Array.isArray(q.choices)) {
+      q.choices.forEach((c, i) => { frontText += `${i + 1}番、${c}。`; });
+    }
+    front.push({ phase: Q, say: frontText });
+    // 裏（答え）
+    const back = [];
+    back.push({ phase: A, say: answerText(q) });
+    if (item.note) back.push({ phase: N, say: `つながり。${item.note}` });
+
+    if (readSide === 'front') {
+      steps.push(...front);
+      steps.push({ wait: 700 });
+      return steps;
+    }
+    if (readSide === 'back') {
+      steps.push(...back);
+      steps.push({ wait: 700 });
+      return steps;
+    }
+    // 表面・裏面（両方）
+    steps.push(...front);
     steps.push({ phase: G, waitGap: true });
     if (readHint) {
       const hint = item.keyword || effectiveTags(q, links)[0] || '';
       if (hint) { steps.push({ say: `ヒント。キーワードは、${hint}。` }); steps.push({ wait: 600 }); }
     }
-    steps.push({ phase: A, say: answerText(q) });
-    if (item.note) steps.push({ phase: N, say: `つながり。${item.note}` });
+    steps.push(...back);
     if (reverse) {
       steps.push({ phase: Q, say: `逆に確認。答えは、${shortAnswer(q)}。これは何を問う問題だったか思い出しましょう。` });
       steps.push({ waitGap: true });
@@ -415,17 +439,17 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, links] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
     () => JSON.stringify([
       source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn,
-      readSubject, readHint, reverse, filterSubject, filterGenre, filterKeyword,
+      readSubject, readHint, reverse, readSide, readChoices, filterSubject, filterGenre, filterKeyword,
       questions.length, plan.length,
     ]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, filterSubject, filterGenre, filterKeyword, questions.length, plan.length]
+    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, filterSubject, filterGenre, filterKeyword, questions.length, plan.length]
   );
 
   // 計画をエンジンへ（同じ署名なら位置を保持して何もしない）
@@ -770,6 +794,31 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 <button className="btn sm primary" onClick={addTag}>追加</button>
               </div>
             )}
+          </div>
+
+          {/* 読み上げる面（暗記カード：表＝問題／裏＝答え） */}
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>読み上げる面（表＝問題／裏＝答え）</div>
+            <div className="chip-row">
+              {[
+                { v: 'both', l: '表面・裏面' },
+                { v: 'front', l: '表面のみ（問題）' },
+                { v: 'back', l: '裏面のみ（答え）' },
+              ].map((o) => (
+                <button key={o.v} className={`chip ${readSide === o.v ? 'active' : ''}`} onClick={() => setReadSide(o.v)}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
+            <div className="hint" style={{ marginTop: 6 }}>
+              「表面のみ」で問題だけを聞いて思い出す練習、「裏面のみ」で答えの総ざらいができます。
+            </div>
+            <Opt
+              on={readChoices}
+              onToggle={() => setReadChoices((v) => !v)}
+              title="表（問題）で選択肢も読む（四択）"
+              desc="四択の1〜4の選択肢も表面で読み上げます。本番と同じ形で耳から確認できます。"
+            />
           </div>
 
           {/* 連結学習の工夫（初心者向け説明つき） */}
