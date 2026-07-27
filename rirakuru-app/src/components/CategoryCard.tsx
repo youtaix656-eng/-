@@ -12,6 +12,8 @@ export function CategoryCard({ category }: { category: Category }) {
       ? "/glossary"
       : category.slug === "hand"
       ? "/hand"
+      : category.slug === "materials"
+      ? "/materials"
       : `/category/${category.slug}`;
 
   return (

@@ -2,6 +2,7 @@ import { items } from "@/data/items";
 import { categories } from "@/data/categories";
 import { glossary } from "@/data/glossary";
 import { handReflex } from "@/data/handReflex";
+import { materialGenres } from "@/data/materials";
 
 // ============================================================
 // 全コンテンツ横断のあいまい検索
@@ -28,6 +29,8 @@ const index: Indexed[] = [
         ? "/glossary"
         : c.slug === "hand"
         ? "/hand"
+        : c.slug === "materials"
+        ? "/materials"
         : `/category/${c.slug}`,
     title: c.title,
     subtitle: "カテゴリ",
@@ -65,6 +68,15 @@ const index: Indexed[] = [
     subtitle: `ハンドリフレ・${s.section}`,
     haystack: [s.name, s.detail, s.section, "ハンドリフレ"].join(" ").toLowerCase(),
   })),
+  ...materialGenres.flatMap((g) =>
+    g.items.map((it) => ({
+      kind: "item" as const,
+      href: it.covered && it.link ? it.link : "/materials",
+      title: `${g.no}-${it.no}：${it.title}`,
+      subtitle: `研修教材・${g.title}`,
+      haystack: [it.title, g.title, "研修教材"].join(" ").toLowerCase(),
+    }))
+  ),
 ];
 
 /**

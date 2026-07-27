@@ -77,6 +77,12 @@ export const categories: Category[] = [
     description: "社内用語・施術用語（五十音順）",
     icon: "BookA",
   },
+  {
+    slug: "materials",
+    title: "研修教材一覧",
+    description: "研修ポータルの教材を大項目1〜9・項目1〜で整理",
+    icon: "ListChecks",
+  },
 ];
 
 /** slug からカテゴリを引く */

@@ -14,7 +14,9 @@ import { Icon } from "@/components/Icon";
 // ビルド時にカテゴリぶんのページを生成（用語集は専用ページのため除外）
 export function generateStaticParams() {
   return categories
-    .filter((c) => c.slug !== "glossary" && c.slug !== "hand")
+    .filter(
+      (c) => c.slug !== "glossary" && c.slug !== "hand" && c.slug !== "materials"
+    )
     .map((c) => ({ slug: c.slug }));
 }
 
