@@ -28,7 +28,7 @@ export default function Mascot({ store }) {
   const readAloud = () => {
     if (!isSpeechSupported()) return;
     cancelSpeech();
-    speak(msg, { rate: settings.speechRate || 1 });
+    speak(msg, { rate: settings.speechRate || 1, pitch: settings.speechPitch || 1 }).catch(() => {});
   };
 
   return (

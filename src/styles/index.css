@@ -2913,3 +2913,18 @@ code.block {
   background: transparent; border-radius: 8px; padding: 5px 11px; cursor: pointer;
 }
 .mascot-btn.ghost { border-color: var(--border); color: var(--text-sub); }
+
+/* ===== 声を選ぶ（6プリセット） ===== */
+.voice-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 480px) { .voice-grid { grid-template-columns: 1fr 1fr; } }
+.voice-card {
+  display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+  background: var(--surface-2); border: 1.5px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; color: var(--text);
+}
+.voice-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.voice-ico { font-size: 22px; flex: 0 0 auto; }
+.voice-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.voice-label { font-size: 13px; font-weight: 800; }
+.voice-desc { font-size: 11px; color: var(--text-sub); }
+.voice-play { font-size: 15px; flex: 0 0 auto; opacity: 0.75; }

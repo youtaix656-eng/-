@@ -24,7 +24,7 @@ let state = {
 };
 
 let plan = []; // [{ steps:[{phase, say?, wait?(ms), waitGap?:true|'cap2'}], display }]
-const settings = { rate: 1, gapSeconds: 2, voice: null, loop: false };
+const settings = { rate: 1, pitch: 1, gapSeconds: 2, voice: null, loop: false };
 
 let abort = null;
 let running = false;
@@ -158,7 +158,7 @@ async function playOne(item, signal) {
   for (const step of steps) {
     if (signal.aborted) return;
     if (step.phase) emit({ phase: step.phase });
-    if (step.say) await speak(step.say, { rate: settings.rate, voice: settings.voice, signal });
+    if (step.say) await speak(step.say, { rate: settings.rate, pitch: settings.pitch, voice: settings.voice, signal });
     if (step.wait) await wait(step.wait, signal);
     if (step.waitGap) {
       const g = step.waitGap === 'cap2' ? Math.min(settings.gapSeconds, 2) : settings.gapSeconds;

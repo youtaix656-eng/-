@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { isSpeechSupported, loadVoices } from '../lib/speech.js';
+import { isSpeechSupported, loadVoices, speak, cancelSpeech } from '../lib/speech.js';
 import * as engine from '../lib/audioEngine.js';
 import { useAudioEngine } from '../lib/audioEngine.js';
+import { VOICE_PRESETS, resolveVoiceURI, presetById } from '../data/voices.js';
 import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
@@ -334,6 +335,18 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     return voices.find((v) => v.voiceURI === settings.voiceURI) || voices[0] || null;
   };
 
+  // 声のプリセット（女性3・男性3）を選ぶ。端末の日本語音声＋ピッチ/速度で差をつける。
+  const pickVoicePreset = (preset) => {
+    const uri = resolveVoiceURI(preset, voices);
+    // settings 変更で voice/pitch/rate の各エフェクトが engine を再設定する
+    updateSettings({ voicePreset: preset.id, voiceURI: uri, speechPitch: preset.pitch, speechRate: preset.rate });
+    setRate(preset.rate);
+    // 試聴（今すぐこの声で聞く）
+    const voice = uri ? voices.find((v) => v.voiceURI === uri) || null : voices[0] || null;
+    cancelSpeech();
+    speak('こんにちは。鍼灸国家試験の勉強を、いっしょに始めましょう。', { rate: preset.rate, pitch: preset.pitch, voice }).catch(() => {});
+  };
+
   // 1項目を「読み上げステップ（phase／読む文／間）」の配列へ変換。
   // 画面OFF・バックグラウンドではOSの仕様で停止する点は従来どおり。
   const buildSteps = (item) => {
@@ -470,7 +483,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   useEffect(() => { engine.configure({ rate }); }, [rate]);
   useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);
   useEffect(() => { engine.configure({ loop }); }, [loop]);
-  useEffect(() => { engine.configure({ voice: selectedVoice() }); }, [voices, settings.voiceURI]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { engine.configure({ voice: selectedVoice(), pitch: settings.speechPitch || 1 }); }, [voices, settings.voiceURI, settings.speechPitch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
@@ -496,7 +509,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const togglePlay = () => {
     if (!playing) {
       updateSettings({ speechRate: rate, gapSeconds: gap });
-      engine.configure({ rate, gapSeconds: gap, loop, voice: selectedVoice() });
+      engine.configure({ rate, gapSeconds: gap, loop, voice: selectedVoice(), pitch: settings.speechPitch || 1 });
       engine.setSleep(sleepMin);
     }
     engine.toggle();
@@ -907,6 +920,31 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 ))}
               </div>
               <div className="hint">寝る前の“ながら再生”に。指定時間で自動停止します。</div>
+            </div>
+          </div>
+
+          {/* 声を選ぶ（聞き取りやすい6種） */}
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>🎙️ 声を選ぶ（聞き取りやすい6種）</div>
+            <div className="voice-grid">
+              {VOICE_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  className={`voice-card ${settings.voicePreset === p.id ? 'active' : ''}`}
+                  onClick={() => pickVoicePreset(p)}
+                >
+                  <span className="voice-ico">{p.gender === 'female' ? '👩' : '👨'}</span>
+                  <span className="voice-body">
+                    <span className="voice-label">{p.label}</span>
+                    <span className="voice-desc">{p.desc}</span>
+                  </span>
+                  <span className="voice-play">🔊</span>
+                </button>
+              ))}
+            </div>
+            <div className="hint" style={{ marginTop: 8 }}>
+              タップするとその声で試聴します。端末で使える日本語音声に合わせて自動調整（声質・高さ・速さ）。
+              {voices.length === 0 && ' ※この端末は日本語音声が見つかりません。端末の音声（TTS）を追加すると使えます。'}
             </div>
           </div>
 

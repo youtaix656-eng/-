@@ -207,6 +207,7 @@ const DEFAULT_SETTINGS = {
   speechPitch: 1.0,
   gapSeconds: 3,
   voiceURI: '',
+  voicePreset: '', // 声のプリセット（女性3・男性3）id
   backupReminderEvery: 50, // この解答数ごとにバックアップを促す
   answersSinceBackup: 0, // 前回バックアップからの解答数
   autoBackupOnStart: false, // 起動時に自動でバックアップを書き出す

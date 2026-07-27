@@ -166,7 +166,7 @@ export default function App() {
       try {
         if (isSpeechSupported() && typeof document !== 'undefined' && document.visibilityState === 'visible') {
           cancelSpeech();
-          speak(body, { rate: store.settings.speechRate || 1 });
+          speak(body, { rate: store.settings.speechRate || 1, pitch: store.settings.speechPitch || 1 }).catch(() => {});
         }
       } catch (e) {
         /* noop */
