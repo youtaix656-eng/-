@@ -32,6 +32,90 @@ let sleepTimer = null;
 let wakeLock = null;
 let visInit = false;
 
+// ---- バックグラウンド表示（メディアセッション＋無音キープアライブ） ----
+// 再生中に無音トラックを鳴らし、ロック画面/通知に「再生中」を表示する。
+// これにより他アプリへ切り替えても通知が残り、タブが破棄されにくくなる。
+// （※ 端末を完全にバックグラウンド化した際の読み上げ継続はOS仕様に依存）
+let silentAudio = null;
+let silentSrc = null;
+
+function makeSilentWav() {
+  const sr = 8000;
+  const n = sr; // 1秒
+  const buf = new ArrayBuffer(44 + n);
+  const v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  w(36, 'data'); v.setUint32(40, n, true);
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < n; i++) bytes[44 + i] = 128; // 8bit PCM の無音
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+
+function ensureSilentAudio() {
+  if (silentAudio || typeof document === 'undefined') return;
+  if (!silentSrc) silentSrc = makeSilentWav();
+  silentAudio = document.createElement('audio');
+  silentAudio.src = silentSrc;
+  silentAudio.loop = true;
+  silentAudio.preload = 'auto';
+  silentAudio.volume = 0.0001; // ほぼ無音（メディアセッション維持のため実際に再生）
+  silentAudio.setAttribute('playsinline', '');
+  silentAudio.style.display = 'none';
+  try { document.body.appendChild(silentAudio); } catch (e) { /* noop */ }
+}
+
+function mediaLabels(d) {
+  if (!d) return { title: '音声学習', artist: '鍼灸国試 対策アプリ' };
+  if (d.kind === 'compare') return { title: `比較：${d.comp?.title || ''}`, artist: '音声学習' };
+  if (d.kind === 'number') return { title: `数字：${d.num?.topic || ''}`, artist: '音声学習' };
+  if (d.kind === 'summary' || d.kind === 'flashcard') return { title: d.keyword || '用語', artist: '音声学習' };
+  const q = d.q;
+  const title = (q && q.question) || d.keyword || '音声学習';
+  return { title: title.length > 60 ? title.slice(0, 60) + '…' : title, artist: (q && q.subject) || '音声学習' };
+}
+
+function setupMediaSession() {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.setActionHandler('play', () => play());
+    navigator.mediaSession.setActionHandler('pause', () => stop());
+    navigator.mediaSession.setActionHandler('stop', () => stop());
+    navigator.mediaSession.setActionHandler('nexttrack', () => skip(1));
+    navigator.mediaSession.setActionHandler('previoustrack', () => skip(-1));
+    navigator.mediaSession.playbackState = 'playing';
+  } catch (e) {
+    /* noop */
+  }
+  updateMediaMetadata();
+}
+
+function updateMediaMetadata() {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || typeof window === 'undefined' || !window.MediaMetadata) return;
+  try {
+    const { title, artist } = mediaLabels(state.display);
+    navigator.mediaSession.metadata = new window.MediaMetadata({ title, artist, album: '鍼灸国試 対策アプリ' });
+  } catch (e) {
+    /* noop */
+  }
+}
+
+function startKeepAlive() {
+  ensureSilentAudio();
+  try { silentAudio?.play().catch(() => {}); } catch (e) { /* noop */ }
+  setupMediaSession();
+}
+function stopKeepAlive() {
+  try { silentAudio?.pause(); } catch (e) { /* noop */ }
+  try {
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+  } catch (e) { /* noop */ }
+}
+
 function emit(patch) {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
@@ -88,6 +172,7 @@ async function runFrom(start) {
   abort = controller;
   const signal = controller.signal;
   running = true;
+  startKeepAlive(); // 再開時（スキップ等）も無音キープアライブ＆通知を維持
   emit({ playing: true });
   try {
     let i = start;
@@ -97,6 +182,7 @@ async function runFrom(start) {
         else break;
       }
       emit({ index: i, display: plan[i]?.display || null });
+      updateMediaMetadata();
       await playOne(plan[i], signal);
       i += 1;
     }
@@ -113,6 +199,7 @@ export function play() {
   if (!plan.length) return;
   requestWakeLock();
   initVisibility();
+  startKeepAlive();
   emit({ started: true });
   const start = state.index < plan.length ? state.index : 0;
   runFrom(start);
@@ -121,6 +208,7 @@ export function play() {
 export function stop() {
   releaseWakeLock();
   clearSleep();
+  stopKeepAlive();
   running = false;
   if (abort) abort.abort();
   cancelSpeech();
