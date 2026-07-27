@@ -2758,3 +2758,28 @@ code.block {
 .exam-chart-line span {
   position: absolute; right: 0; top: -14px; font-size: 9px; color: var(--accent); font-weight: 700;
 }
+
+/* ===== ホーム上部「前回の続きから」 ===== */
+.resume-top {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.resume-top-label {
+  font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 8px;
+}
+.resume-top-item {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface-2); border: none; border-radius: var(--radius-sm);
+  padding: 10px 12px; margin-bottom: 8px; color: var(--text);
+}
+.resume-top-item:last-child { margin-bottom: 0; }
+.rt-main { display: flex; align-items: center; gap: 8px; }
+.rt-ico { font-size: 18px; }
+.rt-title { font-weight: 700; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-frac { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.rt-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 6px; }
+.rt-bar > span { display: block; height: 100%; background: var(--accent); }

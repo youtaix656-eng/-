@@ -25,7 +25,7 @@ function poolForSubject(questions, subject) {
 }
 
 // 一問一答モード
-export default function Quiz({ store, initialSubject, initialQuestions, onConsumed, onOpenKeyword }) {
+export default function Quiz({ store, initialSubject, initialQuestions, autoResume, onConsumeAutoResume, onConsumed, onOpenKeyword }) {
   const { questions, memos, links, recordAnswer, setMemo, setLink } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
 
@@ -75,12 +75,24 @@ export default function Quiz({ store, initialSubject, initialQuestions, onConsum
       const byId = new Map(questions.map((q) => [q.id, q]));
       const rebuilt = p.ids.map((id) => byId.get(id)).filter(Boolean);
       if (rebuilt.length === 0 || (p.idx || 0) >= rebuilt.length) return;
-      setResume({
+      const info = {
         subject: p.subject || 'all',
         order: rebuilt,
         idx: Math.min(p.idx || 0, rebuilt.length - 1),
         stats: p.stats || { total: 0, correct: 0 },
-      });
+      };
+      if (autoResume) {
+        // ホームの「前回の続きから」からの遷移：そのまま続きを開始
+        setSubject(info.subject);
+        setSessionPool(info.order);
+        setOrder(info.order);
+        setSessionStats(info.stats);
+        setIdx(info.idx);
+        setStarted(true);
+        onConsumeAutoResume?.();
+      } else {
+        setResume(info);
+      }
     });
     return () => {
       alive = false;

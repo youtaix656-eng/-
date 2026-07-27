@@ -62,6 +62,7 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [quizSubject, setQuizSubject] = useState(null);
   const [quizQuestions, setQuizQuestions] = useState(null);
+  const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
@@ -274,6 +275,10 @@ export default function App() {
           <Home
             store={store}
             onNavigate={setView}
+            onResumeQuiz={() => {
+              setQuizAutoResume(true);
+              setView('quiz');
+            }}
             installPrompt={installPrompt}
             onInstall={installApp}
           />
@@ -284,6 +289,8 @@ export default function App() {
             store={store}
             initialSubject={quizSubject}
             initialQuestions={quizQuestions}
+            autoResume={quizAutoResume}
+            onConsumeAutoResume={() => setQuizAutoResume(false)}
             onConsumed={() => {
               setQuizSubject(null);
               setQuizQuestions(null);

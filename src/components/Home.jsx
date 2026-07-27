@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { overallStats, studyStreak } from '../lib/stats.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
+import { loadQuizProgress } from '../lib/storage.js';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
-export default function Home({ store, onNavigate, installPrompt, onInstall }) {
+export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall }) {
   const { questions, history, reviewQuestions, session, unread, settings } = store;
   const overall = overallStats(history);
   const reviewCount = reviewQuestions.length;
@@ -11,6 +13,23 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
   const { streak } = studyStreak(history);
   const examLeft = daysUntil(settings.examDate);
 
+  // 一問一答の途中経過（1問ごと自動保存）を「続きから」に出す
+  const [quizResume, setQuizResume] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    loadQuizProgress().then((p) => {
+      if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length) return;
+      const len = p.ids.length;
+      if ((p.idx || 0) >= len) return;
+      setQuizResume({ subject: p.subject || 'all', idx: p.idx || 0, len });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [history]);
+
+  const hasResume = sessionActive || quizResume;
+
   return (
     <div className="view">
       {installPrompt && (
@@ -18,6 +37,33 @@ export default function Home({ store, onNavigate, installPrompt, onInstall }) {
           <span>📲 ホーム画面に追加してアプリとして使う</span>
           <span className="install-cta">追加</span>
         </button>
+      )}
+
+      {/* 前回の続きから（画面上部） */}
+      {hasResume && (
+        <div className="resume-top">
+          <div className="resume-top-label">▶ 前回の続きから</div>
+          {sessionActive && (
+            <button className="resume-top-item" onClick={() => onNavigate('session')}>
+              <div className="rt-main">
+                <span className="rt-ico">📚</span>
+                <span className="rt-title">学習（{session.subject === 'all' ? '全科目' : session.subject}）</span>
+                <span className="rt-frac">{session.pos}/{session.target}問</span>
+              </div>
+              <div className="rt-bar"><span style={{ width: `${(session.pos / session.target) * 100}%` }} /></div>
+            </button>
+          )}
+          {quizResume && (
+            <button className="resume-top-item" onClick={() => (onResumeQuiz ? onResumeQuiz() : onNavigate('quiz'))}>
+              <div className="rt-main">
+                <span className="rt-ico">✏️</span>
+                <span className="rt-title">一問一答（{quizResume.subject === 'all' ? '全科目' : quizResume.subject}）</span>
+                <span className="rt-frac">{quizResume.idx + 1}/{quizResume.len}問</span>
+              </div>
+              <div className="rt-bar"><span style={{ width: `${((quizResume.idx + 1) / quizResume.len) * 100}%` }} /></div>
+            </button>
+          )}
+        </div>
       )}
 
       {examLeft != null && examLeft >= 0 && (
