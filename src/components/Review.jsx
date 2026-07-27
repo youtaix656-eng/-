@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
-import { normalize, MATURE_INTERVAL } from '../lib/srs.js';
+import { normalize, MASTER_STREAK } from '../lib/srs.js';
 
-// 間違えた問題だけを解くモード（間隔反復 / SM-2）
+// 間違えた問題だけを解くモード（エビングハウスの忘却曲線・5回連続の完璧でマスター）
 export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const { dueReviewQuestions, reviewQuestions, memos, links, recordAnswer, setMemo, setLink, srs, GRADES } = store;
 
@@ -52,7 +52,8 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
       <div className="view">
         <h2 className="view-title">間違えた問題</h2>
         <p className="view-desc">
-          誤答した問題を、間隔反復（スペースドリピティション）で効率よく復習します。
+          間違えた・△・✕（自信のない）問題だけを、<strong>エビングハウスの忘却曲線</strong>に沿って再出題します。
+          <strong>○（完璧）が5回連続</strong>で続くまでマスターになりません（△・✕・誤答でリセット）。
         </p>
 
         <div className="tiles">
@@ -68,9 +69,9 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           </div>
           <div className="tile">
             <div className="num">
-              {reviewQuestions.filter((q) => normalize(srs[q.id]).interval >= 7).length}
+              {reviewQuestions.filter((q) => (normalize(srs[q.id]).correctStreak || 0) >= 3).length}
             </div>
-            <div className="lbl">定着間近</div>
+            <div className="lbl">マスター間近</div>
           </div>
         </div>
 
@@ -97,14 +98,23 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         </div>
         {reviewQuestions.map((q) => {
           const st = normalize(srs[q.id]);
-          const pct = Math.min(100, Math.round((st.interval / MATURE_INTERVAL) * 100));
+          const streak = st.correctStreak || 0;
+          const due = st.due || 0;
+          const now = Date.now();
+          const dueLabel = due <= now
+            ? '今すぐ復習'
+            : `次回 ${Math.max(1, Math.round((due - now) / (24 * 60 * 60 * 1000)))}日後`;
           return (
             <div className="list-item" key={q.id}>
               <div className="li-subject">{q.subject}</div>
               <div className="li-q">{q.question || '（図の問題）'}</div>
               <div className="li-stat">
-                誤答 {st.wrongCount || 0}回 ・ 定着度 {pct}%
-                {st.interval > 0 && ` ・ 次回間隔 約${st.interval}日`}
+                完璧 {streak}/{MASTER_STREAK} ・ 誤答 {st.wrongCount || 0}回 ・ {dueLabel}
+              </div>
+              <div className="streak-dots" aria-label={`完璧 ${streak}/${MASTER_STREAK}`}>
+                {Array.from({ length: MASTER_STREAK }).map((_, i) => (
+                  <i key={i} className={i < streak ? 'on' : ''} />
+                ))}
               </div>
               {memos[q.id] && <div className="li-memo">📝 {memos[q.id]}</div>}
             </div>
@@ -131,7 +141,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             {sessionStats.total}問中 {sessionStats.correct}問 正解
           </p>
           <p className="inline-note">
-            正解した問題は次回の出題間隔が延び、間違えた問題は再び近いうちに出題されます。
+            ○（完璧）は忘却曲線に沿って次回が先へ延び、5回連続でマスター。△・✕は約20分後から再スタートします。
           </p>
           <button
             className="btn primary block lg"

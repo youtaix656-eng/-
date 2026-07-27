@@ -154,9 +154,8 @@ export function passReadiness(history, passLine = 0.6) {
 export function questionStatus(state, isInReviewFn, matureInterval) {
   if (!state || (state.seen || 0) === 0) return 'untouched';
   if (isInReviewFn(state)) return 'review';
-  const interval = state.interval || 0;
-  const reps = state.reps || 0;
-  if (interval >= matureInterval || reps >= 3) return 'mastered';
+  // マスターは「○（完璧）5回連続」。それ以外で着手済みは学習中。
+  if ((state.correctStreak || 0) >= 5) return 'mastered';
   return 'learning';
 }
 

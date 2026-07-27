@@ -1,28 +1,40 @@
-// 間隔反復（スペースドリピティション）ロジック — SM-2 準拠
+// 間隔反復（スペースドリピティション）ロジック — エビングハウスの忘却曲線
 //
-// SuperMemo SM-2 アルゴリズムを採用。各問題は以下を持つ:
-//   ef        : easiness factor（易しさ係数, 初期 2.5, 最小 1.3）
-//   interval  : 次回出題までの間隔（日）
-//   reps      : 連続正解回数
-//   due       : 次回出題日時
-// 解答時の自己評価（grade）で間隔を調整する:
-//   0: もう一度（不正解）  3: むずかしい  4: ふつう  5: かんたん
+// 方針（ユーザー指定）:
+//  - 間違えた／△（あいまい）／✕（自信なし）の問題だけが復習対象に入る。
+//  - 復習は「忘却曲線」に沿って間隔を空けて再出題する。
+//  - 「○（完璧）」が **5回連続** で続くまでマスター扱いにしない。
+//    途中で △・✕・誤答があれば連続はリセットされ、約20分後から再スタート。
 //
-// 単純な○×/四択の正誤しか無い場面では、正解=4(ふつう)・不正解=0 として扱う。
+// 各問題が持つ状態:
+//   correctStreak : 連続「○（完璧＝正解）」回数（5でマスター）
+//   wrongCount    : これまでの誤答（△✕含む）回数（1以上で復習対象）
+//   interval      : 次回までの間隔（日・表示用）
+//   due           : 次回出題日時
+//   ef/reps/seen  : 参考値（後方互換のため保持）
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_EF = 1.3;
 const DEFAULT_EF = 2.5;
 
-// 「定着した（もう復習リストから外してよい）」とみなす間隔のしきい値（日）
+// 5回連続「○（完璧）」でマスター（復習リストから外れる）
+export const MASTER_STREAK = 5;
+
+// エビングハウスの忘却曲線に沿った復習間隔（連続「完璧」回数 → 次回までの日数）
+//   1回目の完璧の後は1日後、以降 3日・7日・16日 と広げ、5回目でマスター。
+const EBBINGHAUS_DAYS = [0, 1, 3, 7, 16];
+// 誤答／△／✕ の後は約20分後に再出題（忘却曲線の最初の復習ポイント）
+const WRONG_DELAY_MS = 20 * 60 * 1000;
+
+// 「定着（マスター）」の目安として残す（互換用）。
 export const MATURE_INTERVAL = 21;
 
-// 自己評価グレード
+// 自己評価グレード（○＝easy が「完璧」。△・✕・誤答は again）
 export const GRADES = {
-  again: 0, // もう一度
+  again: 0, // △・✕・もう一度（連続リセット）
   hard: 3, // むずかしい
-  good: 4, // ふつう
-  easy: 5, // かんたん
+  good: 4, // ふつう（正解）
+  easy: 5, // ○ 完璧
 };
 
 export function emptyState() {
@@ -39,11 +51,14 @@ export function emptyState() {
   };
 }
 
-// 旧 Leitner 形式（box を持つ）の状態を SM-2 形式へ移行
+// 旧 Leitner 形式（box を持つ）の状態を移行
 function normalize(state) {
   if (!state) return emptyState();
-  if (state.ef != null && state.interval != null) return state; // 既に SM-2
-  // box → interval のおおよその変換
+  if (state.ef != null && state.interval != null) {
+    // correctStreak が無い古い状態にも既定を補う
+    if (state.correctStreak == null) return { ...state, correctStreak: 0 };
+    return state;
+  }
   const boxDays = [0, 1, 3, 7, 16, 35, 90];
   const box = state.box || 0;
   return {
@@ -61,50 +76,56 @@ function normalize(state) {
 }
 
 // 解答結果を反映して新しい SRS 状態を返す
-// grade: GRADES のいずれか（0/3/4/5）
+// grade: GRADES のいずれか（0=△✕/誤答, 3/4=正解, 5=○完璧）
 export function applyGrade(state, grade, now = Date.now()) {
   const s = normalize(state);
   s.seen += 1;
   s.lastAnswered = now;
 
-  const correct = grade >= 3;
+  const correct = grade >= 3; // ○（完璧）や正解
   s.lastResult = correct ? 'correct' : 'wrong';
 
   if (!correct) {
-    // 不正解: 連続正解をリセットし、翌日に再出題
+    // △・✕・誤答：連続をリセットし、約20分後に再出題（忘却曲線の初回）
     s.reps = 0;
     s.correctStreak = 0;
     s.wrongCount += 1;
-    s.interval = 1;
+    s.interval = 0;
+    s.due = now + WRONG_DELAY_MS;
   } else {
+    // ○（完璧）：連続を伸ばし、忘却曲線に沿って間隔を延ばす
     s.correctStreak += 1;
     s.reps += 1;
-    if (s.reps === 1) s.interval = 1;
-    else if (s.reps === 2) s.interval = 6;
-    else s.interval = Math.round(s.interval * s.ef);
-
-    // EF の更新（SM-2 の式）
-    s.ef = Math.max(
-      MIN_EF,
-      s.ef + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02))
-    );
-    // かんたん/むずかしい で軽く補正
-    if (grade === GRADES.hard) s.interval = Math.max(1, Math.round(s.interval * 0.6));
+    if (s.correctStreak >= MASTER_STREAK) {
+      // 5回連続でマスター。以後は復習リストから外れる（十分先へ）
+      s.interval = 60;
+      s.due = now + 60 * DAY_MS;
+    } else {
+      const days = EBBINGHAUS_DAYS[s.correctStreak] || 16;
+      s.interval = days;
+      s.due = now + days * DAY_MS;
+    }
+    s.ef = Math.max(MIN_EF, s.ef + 0.05); // 参考値
   }
-  s.due = now + s.interval * DAY_MS;
   return s;
 }
 
-// 正誤のみから grade を推定して適用（一問一答・模試用）
+// 正誤のみから grade を推定して適用（模試など○△✕が無い場面）
 export function applyAnswer(state, correct, now = Date.now()) {
   return applyGrade(state, correct ? GRADES.good : GRADES.again, now);
 }
 
-// この問題が「間違えた問題（復習対象）」か
-// 一度でも誤答し、まだ十分に定着していない（間隔が MATURE 未満）もの
+// この問題が「復習対象」か
+// 一度でも間違え（△✕含む）、まだ5回連続の完璧に達していないもの
 export function isInReview(state) {
   const s = normalize(state);
-  return s.wrongCount > 0 && s.interval < MATURE_INTERVAL;
+  return s.wrongCount > 0 && (s.correctStreak || 0) < MASTER_STREAK;
+}
+
+// マスター（5回連続の完璧を達成）したか
+export function isMastered(state) {
+  const s = normalize(state);
+  return (s.correctStreak || 0) >= MASTER_STREAK;
 }
 
 // いま復習期限が来ているか
@@ -113,7 +134,7 @@ export function isDue(state, now = Date.now()) {
   return (s.due || 0) <= now;
 }
 
-// 復習対象を優先度順（期限が過ぎている順→間隔が短い順）に並べる
+// 復習対象を優先度順（期限が過ぎている順→連続完璧が少ない順）に並べる
 export function sortByPriority(questions, srs, now = Date.now()) {
   return [...questions].sort((a, b) => {
     const sa = normalize(srs[a.id]);
@@ -121,7 +142,7 @@ export function sortByPriority(questions, srs, now = Date.now()) {
     const dueA = (sa.due || 0) - now;
     const dueB = (sb.due || 0) - now;
     if (dueA !== dueB) return dueA - dueB;
-    return sa.interval - sb.interval;
+    return (sa.correctStreak || 0) - (sb.correctStreak || 0);
   });
 }
 

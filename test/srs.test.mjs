@@ -5,11 +5,12 @@ import {
   applyAnswer,
   applyGrade,
   isInReview,
+  isMastered,
   isDue,
   sortByPriority,
   normalize,
   GRADES,
-  MATURE_INTERVAL,
+  MASTER_STREAK,
 } from '../src/lib/srs.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -19,32 +20,34 @@ test('初期状態は復習対象でない', () => {
   assert.equal(isInReview(s), false);
 });
 
-test('誤答すると復習対象になり、翌日出題', () => {
+test('誤答(△✕)すると復習対象になり、約20分後に再出題・連続はリセット', () => {
   const now = 1_000_000_000_000;
-  const s = applyAnswer(emptyState(), false, now);
-  assert.equal(s.interval, 1);
+  const s = applyGrade({ ...emptyState(), correctStreak: 2 }, GRADES.again, now);
   assert.equal(s.wrongCount, 1);
+  assert.equal(s.correctStreak, 0); // 連続完璧がリセット
   assert.equal(isInReview(s), true);
-  assert.equal(s.due, now + 1 * DAY);
+  assert.equal(s.due, now + 20 * 60 * 1000); // 忘却曲線の初回＝約20分後
 });
 
-test('正解を重ねると間隔が延びていく（1→6→…）', () => {
+test('○(完璧)を重ねると忘却曲線に沿って間隔が延びる（1→3→7→16日）', () => {
   const now = 1_000_000_000_000;
-  let s = applyAnswer(emptyState(), false, now); // まず誤答して復習対象に
-  s = applyGrade(s, GRADES.good, now); // 1回目正解
+  let s = applyGrade(emptyState(), GRADES.again, now); // まず誤答で復習対象へ
+  s = applyGrade(s, GRADES.easy, now); // 1回目完璧
   assert.equal(s.interval, 1);
-  s = applyGrade(s, GRADES.good, now); // 2回目正解
-  assert.equal(s.interval, 6);
-  const prev = s.interval;
-  s = applyGrade(s, GRADES.good, now); // 3回目 → interval*ef
-  assert.ok(s.interval > prev);
+  s = applyGrade(s, GRADES.easy, now); // 2回目
+  assert.equal(s.interval, 3);
+  s = applyGrade(s, GRADES.easy, now); // 3回目
+  assert.equal(s.interval, 7);
+  s = applyGrade(s, GRADES.easy, now); // 4回目
+  assert.equal(s.interval, 16);
 });
 
-test('「かんたん」は「ふつう」より EF が上がる', () => {
+test('△・✕で連続完璧がリセットされる', () => {
   const now = 1_000_000_000_000;
-  const base = applyGrade(emptyState(), GRADES.good, now);
-  const easy = applyGrade(emptyState(), GRADES.easy, now);
-  assert.ok(easy.ef > base.ef);
+  let s = { ...emptyState(), wrongCount: 1, correctStreak: 3 };
+  s = applyGrade(s, GRADES.again, now); // △/✕
+  assert.equal(s.correctStreak, 0);
+  assert.equal(isMastered(s), false);
 });
 
 test('EF は下限 1.3 を下回らない', () => {
@@ -54,9 +57,22 @@ test('EF は下限 1.3 を下回らない', () => {
   assert.ok(s.ef >= 1.3);
 });
 
-test('十分に定着（interval >= MATURE）すると復習対象から外れる', () => {
-  const s = { ...emptyState(), wrongCount: 1, interval: MATURE_INTERVAL };
-  assert.equal(isInReview(s), false);
+test('○(完璧)5回連続でマスターし、復習対象から外れる', () => {
+  const now = 1_000_000_000_000;
+  let s = applyGrade(emptyState(), GRADES.again, now); // 誤答で復習対象へ
+  assert.equal(isInReview(s), true);
+  for (let i = 0; i < MASTER_STREAK; i++) s = applyGrade(s, GRADES.easy, now);
+  assert.equal(s.correctStreak, MASTER_STREAK);
+  assert.equal(isMastered(s), true);
+  assert.equal(isInReview(s), false); // マスターしたら復習から外れる
+});
+
+test('4回連続の完璧ではまだマスターしない', () => {
+  const now = 1_000_000_000_000;
+  let s = applyGrade(emptyState(), GRADES.again, now);
+  for (let i = 0; i < 4; i++) s = applyGrade(s, GRADES.easy, now);
+  assert.equal(isMastered(s), false);
+  assert.equal(isInReview(s), true);
 });
 
 test('期限判定 isDue', () => {

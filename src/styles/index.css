@@ -2797,3 +2797,11 @@ code.block {
   color: var(--accent);
   font-weight: 700;
 }
+
+/* ===== 復習：完璧の連続（5回でマスター） ===== */
+.streak-dots { display: flex; gap: 5px; margin-top: 6px; }
+.streak-dots i {
+  width: 16px; height: 6px; border-radius: 3px;
+  background: var(--border); flex: 0 0 auto;
+}
+.streak-dots i.on { background: var(--correct); }
