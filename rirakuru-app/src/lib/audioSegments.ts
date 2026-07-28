@@ -5,6 +5,7 @@
 import type { Item } from "@/data/types";
 import type { AudioSegment } from "@/components/AudioLearning";
 import type { HandStep } from "@/data/handReflex";
+import type { FootStep } from "@/data/footReflex";
 
 /** カテゴリの項目一覧から、読み上げ用セグメントを組み立てる */
 export function buildItemAudioSegments(items: Item[]): AudioSegment[] {
@@ -30,6 +31,14 @@ export function buildItemAudioSegments(items: Item[]): AudioSegment[] {
 
 /** ハンドリフレの手順から読み上げ用セグメントを組み立てる */
 export function buildHandAudioSegments(steps: HandStep[]): AudioSegment[] {
+  return steps.map((s) => ({
+    label: `手順${s.no}：${s.name}`,
+    text: `手順${s.no}、${s.section}、${s.name}。${s.detail}`,
+  }));
+}
+
+/** 足つぼの手順から読み上げ用セグメントを組み立てる */
+export function buildFootAudioSegments(steps: FootStep[]): AudioSegment[] {
   return steps.map((s) => ({
     label: `手順${s.no}：${s.name}`,
     text: `手順${s.no}、${s.section}、${s.name}。${s.detail}`,

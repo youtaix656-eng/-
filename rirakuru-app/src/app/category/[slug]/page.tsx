@@ -21,7 +21,11 @@ import { deriveItemFlashcards, type SimpleCard } from "@/lib/categoryQA";
 export function generateStaticParams() {
   return categories
     .filter(
-      (c) => c.slug !== "glossary" && c.slug !== "hand" && c.slug !== "materials"
+      (c) =>
+        c.slug !== "glossary" &&
+        c.slug !== "hand" &&
+        c.slug !== "footcare" &&
+        c.slug !== "materials"
     )
     .map((c) => ({ slug: c.slug }));
 }

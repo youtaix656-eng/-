@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GraduationCap, HandHelping } from "lucide-react";
+import { GraduationCap, HandHelping, Footprints } from "lucide-react";
 import { categories } from "@/data/categories";
 import { CategoryCard } from "@/components/CategoryCard";
 import { SearchBar } from "@/components/SearchBar";
@@ -45,6 +45,24 @@ export default function HomePage() {
         <span className="flex flex-col">
           <span className="text-base font-semibold text-cocoa-800 dark:text-cream-50">
             ハンドリフレ 手順
+          </span>
+          <span className="text-sm text-cocoa-500 dark:text-sand-200">
+            通し番号1〜／順番の一問一答
+          </span>
+        </span>
+      </Link>
+
+      {/* 足つぼへの導線 */}
+      <Link
+        href="/footcare"
+        className="flex min-h-[44px] items-center gap-3 rounded-xl2 border border-cream-200 bg-white p-4 shadow-sm active:bg-cream-100 dark:border-cocoa-800 dark:bg-cocoa-900"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sand-100 text-cocoa-600 dark:bg-cocoa-800 dark:text-sand-200">
+          <Footprints size={24} />
+        </span>
+        <span className="flex flex-col">
+          <span className="text-base font-semibold text-cocoa-800 dark:text-cream-50">
+            足つぼ 手順
           </span>
           <span className="text-sm text-cocoa-500 dark:text-sand-200">
             通し番号1〜／順番の一問一答

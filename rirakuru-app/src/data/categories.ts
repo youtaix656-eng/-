@@ -30,6 +30,12 @@ export const categories: Category[] = [
     icon: "HandHelping",
   },
   {
+    slug: "footcare",
+    title: "足つぼ",
+    description: "手順（通し番号1〜）と、順番の一問一答",
+    icon: "Footprints",
+  },
+  {
     slug: "options",
     title: "オプションメニュー",
     description: "足つぼ・ヘッドスパ・ホットストーンなどの手順と提案タイミング",

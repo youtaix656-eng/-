@@ -119,23 +119,7 @@ export const items: Item[] = [
   },
 
   // ---------- オプションメニュー ----------
-  {
-    id: "options-footcare",
-    categorySlug: "options",
-    title: "足つぼ",
-    summary: "足裏の反射区を刺激するオプション",
-    body: "足裏の反射区を程よい圧で刺激します。むくみ・疲れが気になるお客様への提案タイミングは、ヒアリング時か脚の施術中です。",
-    steps: [
-      { text: "足裏全体をならす" },
-      { text: "反射区を順に刺激", note: "痛がる箇所は圧を調整" },
-      { text: "アキレス腱・足首まわりをほぐして仕上げ" },
-    ],
-    warnings: [
-      { level: "warning", text: "強い痛みや腫れがある場合は無理に刺激しない。" },
-    ],
-    related: ["options-headspa"],
-    tags: ["オプション", "足つぼ", "反射区", "むくみ"],
-  },
+  // 足つぼは詳細手順を専用ページ（/footcare）に収録。
   {
     id: "options-headspa",
     categorySlug: "options",
@@ -146,7 +130,6 @@ export const items: Item[] = [
       { text: "頭頂部〜生え際を刺激" },
       { text: "首・肩とつなげてリラックスへ導く" },
     ],
-    related: ["options-footcare"],
     tags: ["オプション", "ヘッドスパ", "頭", "眼精疲労"],
   },
 
