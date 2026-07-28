@@ -1104,6 +1104,11 @@ code.block {
 .sess-done h2, .sess-break h2 { margin: 6px 0; color: var(--text); }
 .sess-break-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .sess-timer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); font-weight: 700; color: var(--text); }
+.sess-reset-btn { color: var(--text-sub); }
+.sess-reset-confirm { margin-top: 10px; padding: 12px 14px; border: 1.5px solid #e7c3bd; border-radius: var(--radius-sm); background: #fff7f5; text-align: center; }
+.sess-reset-q { display: block; font-weight: 800; color: var(--text); margin-bottom: 10px; }
+.sess-reset-confirm .btn-row { justify-content: center; gap: 12px; }
+.sess-reset-confirm .btn { min-width: 96px; }
 
 /* 高速回転カード（3秒想起） */
 .fast-tag { font-size: 11px; font-weight: 800; color: var(--accent); margin-left: auto; }

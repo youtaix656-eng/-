@@ -65,6 +65,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   const [term, setTerm] = useState('');
   const [fast, setFast] = useState(false);
   const [showBreak, setShowBreak] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   // 新規◯割・復習◯割（0〜100の新規%）。既定は設定値。
   const [newPct, setNewPct] = useState(Math.round((settings.sessionNewRatio ?? 1) * 100));
 
@@ -111,6 +112,14 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     const ids = ratio >= 1 ? buildOrder(pool, session.target) : buildMixedOrder(pool, session.target, ratio, srs);
     startSession({ ...session, ids, pos: 0, startedAt: Date.now() });
     setShowBreak(false);
+  };
+
+  // 学習のリセット（進行中の学習セッションを破棄して開始画面へ戻す）
+  const doReset = () => {
+    clearSession();
+    setShowBreak(false);
+    setConfirmReset(false);
+    onToast?.('学習をリセットしました');
   };
 
   const answered = (correct, grade) => {
@@ -280,6 +289,13 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
             <button className="btn ghost block" onClick={() => onToast?.('ここまで保存しました。続きからいつでも再開できます')}>
               終了して後で続ける（自動保存済み）
             </button>
+            <ResetControl
+              target={session.target}
+              confirming={confirmReset}
+              onAsk={() => setConfirmReset(true)}
+              onConfirm={doReset}
+              onCancel={() => setConfirmReset(false)}
+            />
           </div>
         </div>
       </div>
@@ -324,7 +340,36 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
       <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={() => setShowBreak(true)}>
         中断して休憩（自動保存されています）
       </button>
+      <ResetControl
+        target={session.target}
+        confirming={confirmReset}
+        onAsk={() => setConfirmReset(true)}
+        onConfirm={doReset}
+        onCancel={() => setConfirmReset(false)}
+      />
     </div>
+  );
+}
+
+// 学習リセットボタン ＋ 確認（はい/いいえ）
+//   ①「学習◯◯をリセットする」をタップ → ②「本当にリセットしますか？」はい/いいえ
+function ResetControl({ target, confirming, onAsk, onConfirm, onCancel }) {
+  const label = target ? `学習${target}をリセットする` : '学習をリセットする';
+  if (confirming) {
+    return (
+      <div className="sess-reset-confirm">
+        <span className="sess-reset-q">本当にリセットしますか？</span>
+        <div className="btn-row">
+          <button className="btn danger" onClick={onConfirm}>はい</button>
+          <button className="btn ghost" onClick={onCancel}>いいえ</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <button className="btn ghost sm block sess-reset-btn" style={{ marginTop: 10 }} onClick={onAsk}>
+      🗑 {label}
+    </button>
   );
 }
 
