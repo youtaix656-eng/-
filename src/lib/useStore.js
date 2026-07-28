@@ -12,6 +12,7 @@ import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
 import eiseiQuestions, { EISEI_VERSION } from '../data/eiseiQuestions.js';
 import houkiQuestions, { HOUKI_VERSION } from '../data/houkiQuestions.js';
+import anatQuestions, { ANAT_VERSION } from '../data/anatQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -118,6 +119,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(houkiQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.houkiVersion = HOUKI_VERSION;
+        mutated = true;
+      }
+      // 同梱の解剖学（バッチ方式・増分）。ANAT_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.anatVersion || 0) < ANAT_VERSION) {
+        const { unique } = dedupeAgainst(anatQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.anatVersion = ANAT_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
