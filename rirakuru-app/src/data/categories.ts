@@ -68,7 +68,7 @@ export const categories: Category[] = [
   {
     slug: "payroll",
     title: "給与・シフト",
-    description: "歩合の仕組み・指名料・シフト提出締切・有給",
+    description: "業務委託契約・エントリー制度・報酬の仕組み・諸経費・指名料・収入シミュレーション",
     icon: "Wallet",
   },
   {

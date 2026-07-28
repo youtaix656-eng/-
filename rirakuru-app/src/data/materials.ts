@@ -37,7 +37,14 @@ export const materialGenres: MaterialGenre[] = [
     no: 1,
     title: "オリエンテーション（面談・受講案内）",
     items: [
-      { no: 1, id: "m1-1", title: "面談動画（202512）", kind: "video", covered: false },
+      {
+        no: 1,
+        id: "m1-1",
+        title: "面談動画（202512）",
+        kind: "video",
+        covered: true,
+        link: "/category/payroll",
+      },
       { no: 2, id: "m1-2", title: "受講約款", kind: "text", covered: false },
     ],
   },
