@@ -59,7 +59,7 @@ export default function HomePage() {
           id="cat-heading"
           className="mb-3 text-lg font-semibold text-cocoa-800 dark:text-cream-50"
         >
-          カテゴリ
+          目次
         </h2>
         <div className="grid grid-cols-2 gap-3">
           {categories.map((c) => (

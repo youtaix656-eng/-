@@ -33,7 +33,7 @@ const index: Indexed[] = [
         ? "/materials"
         : `/category/${c.slug}`,
     title: c.title,
-    subtitle: "カテゴリ",
+    subtitle: "目次",
     haystack: [c.title, c.description].join(" ").toLowerCase(),
   })),
   ...items.map((i) => {

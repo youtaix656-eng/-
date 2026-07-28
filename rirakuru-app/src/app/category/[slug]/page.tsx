@@ -3,12 +3,18 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { categories, getCategory } from "@/data/categories";
 import { getItemsByCategory } from "@/data/items";
+import { qaList } from "@/data/quiz";
 import { Accordion } from "@/components/Accordion";
 import { Icon } from "@/components/Icon";
+import { AudioLearning } from "@/components/AudioLearning";
+import { CategoryQuizSection } from "@/components/CategoryQuizSection";
+import { buildItemAudioSegments } from "@/lib/audioSegments";
+import { deriveItemFlashcards, type SimpleCard } from "@/lib/categoryQA";
 
 // ============================================================
-// カテゴリ一覧（/category/[slug]）
-// 該当カテゴリの項目をアコーディオンで表示。
+// 目次ページ（/category/[slug]）
+// 該当する目次の項目をアコーディオンで表示し、
+// 「一問一答」「音声学習」の枠を添える。
 // ============================================================
 
 // ビルド時にカテゴリぶんのページを生成（用語集は専用ページのため除外）
@@ -29,6 +35,15 @@ export default function CategoryPage({
   if (!category) notFound();
 
   const items = getItemsByCategory(category.slug);
+  const isStandards = category.slug === "standards";
+
+  // 自主基準は既存の一問一答（qaList）を使い、他の目次は項目データから
+  // 一問一答を機械的に組み立てる（新しい事実は追加しない）。
+  const quizCards: SimpleCard[] = isStandards
+    ? qaList.map((q) => ({ id: q.id, front: q.q, back: q.a }))
+    : deriveItemFlashcards(items);
+
+  const audioSegments = buildItemAudioSegments(items);
 
   return (
     <div className="flex flex-col gap-4">
@@ -53,6 +68,9 @@ export default function CategoryPage({
           </p>
         </div>
       </div>
+
+      <CategoryQuizSection cards={quizCards} isStandards={isStandards} />
+      <AudioLearning segments={audioSegments} />
 
       <Accordion items={items} />
     </div>

@@ -16,7 +16,7 @@ export function Accordion({ items }: { items: Item[] }) {
   if (items.length === 0) {
     return (
       <p className="rounded-xl2 border border-cream-200 bg-white p-4 text-sm text-cocoa-500 dark:border-cocoa-800 dark:bg-cocoa-900 dark:text-sand-200">
-        このカテゴリにはまだ項目がありません。
+この目次にはまだ項目がありません。
       </p>
     );
   }
