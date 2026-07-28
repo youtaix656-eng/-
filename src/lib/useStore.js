@@ -11,6 +11,7 @@ import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
 import eiseiQuestions, { EISEI_VERSION } from '../data/eiseiQuestions.js';
+import houkiQuestions, { HOUKI_VERSION } from '../data/houkiQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -110,6 +111,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(eiseiQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.eiseiVersion = EISEI_VERSION;
+        mutated = true;
+      }
+      // 同梱の関係法規（バッチ方式・増分）。HOUKI_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.houkiVersion || 0) < HOUKI_VERSION) {
+        const { unique } = dedupeAgainst(houkiQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.houkiVersion = HOUKI_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
