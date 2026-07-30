@@ -14,6 +14,7 @@ import eiseiQuestions, { EISEI_VERSION } from '../data/eiseiQuestions.js';
 import houkiQuestions, { HOUKI_VERSION } from '../data/houkiQuestions.js';
 import anatQuestions, { ANAT_VERSION } from '../data/anatQuestions.js';
 import seiriQuestions, { SEIRI_VERSION } from '../data/seiriQuestions.js';
+import rinshoQuestions, { RINSHO_VERSION } from '../data/rinshoQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -134,6 +135,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(seiriQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.seiriVersion = SEIRI_VERSION;
+        mutated = true;
+      }
+      // 同梱の臨床医学総論（バッチ方式・増分）。RINSHO_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.rinshoVersion || 0) < RINSHO_VERSION) {
+        const { unique } = dedupeAgainst(rinshoQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.rinshoVersion = RINSHO_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
