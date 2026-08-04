@@ -13,6 +13,7 @@ import {
   type Grade,
 } from "@/lib/srs";
 import { Flashcard } from "./Flashcard";
+import { StruggleListView } from "./StruggleListView";
 
 // ============================================================
 // 復習（間隔反復）画面
@@ -22,7 +23,10 @@ import { Flashcard } from "./Flashcard";
 // 一度でも間違えると、その後正解しても連続正解が既定回数続くまで
 // マスター扱いにならず、出題対象に残り続ける。
 // ============================================================
+type Mode = "due" | "list";
+
 export function ReviewView() {
+  const [mode, setMode] = useState<Mode>("due");
   const [map, setMap] = useState<ReviewMap | null>(null);
   const [queue, setQueue] = useState<string[]>([]);
   const [pos, setPos] = useState(0);
@@ -87,7 +91,29 @@ export function ReviewView() {
         </div>
       )}
 
-      {!currentCard ? (
+      {/* モード切替 */}
+      <div className="grid grid-cols-2 gap-2 rounded-full bg-cream-100 p-1 dark:bg-cocoa-800">
+        <button
+          onClick={() => setMode("due")}
+          className={`min-h-[44px] rounded-full text-sm font-semibold transition-colors ${
+            mode === "due" ? "bg-cocoa-600 text-white" : "text-cocoa-600 dark:text-sand-200"
+          }`}
+        >
+          今日の復習
+        </button>
+        <button
+          onClick={() => setMode("list")}
+          className={`min-h-[44px] rounded-full text-sm font-semibold transition-colors ${
+            mode === "list" ? "bg-cocoa-600 text-white" : "text-cocoa-600 dark:text-sand-200"
+          }`}
+        >
+          苦手を一覧で見る・聞く
+        </button>
+      </div>
+
+      {mode === "list" ? (
+        <StruggleListView />
+      ) : !currentCard ? (
         <div className="flex flex-col items-center gap-3 rounded-xl2 border border-cream-200 bg-white p-8 text-center dark:border-cocoa-800 dark:bg-cocoa-900">
           <PartyPopper size={32} className="text-cocoa-500" />
           <p className="text-base font-semibold text-cocoa-800 dark:text-cream-50">
@@ -99,7 +125,8 @@ export function ReviewView() {
             一問一答・○×問題・自主基準テスト・接客セミナー振り返りテストで
             間違えた問題や「自信なし」と評価した問題が、忘却曲線に沿った
             タイミングでここに出てきます。マスターと判定されるまで
-            繰り返し出題されます。
+            繰り返し出題されます。今すぐ内容を見返したいときは
+            「苦手を一覧で見る・聞く」もご利用ください。
           </p>
         </div>
       ) : (

@@ -44,6 +44,16 @@ function addDays(date: Date, days: number): Date {
   return d;
 }
 
+function addMinutes(date: Date, minutes: number): Date {
+  const d = new Date(date);
+  d.setMinutes(d.getMinutes() + minutes);
+  return d;
+}
+
+// 間違えた直後の「短い間隔」（分）。0にすると全問が同時に積み上がって
+// 一気に出てしまうため、少し間隔をあけてから再度出題する。
+const RELEARN_MINUTES = 10;
+
 /** 現在の状態と評価から、次の ReviewState を計算する */
 export function nextReviewState(
   prev: ReviewState | undefined,
@@ -52,13 +62,14 @@ export function nextReviewState(
   const now = new Date();
 
   if (grade !== "good") {
-    // 間違い・自信なし：連続記録をリセットし、今すぐ復習対象にする
-    // （エビングハウスの忘却曲線は直後の忘却が最も早いため、
-    //   翌日まで待たず即座に「復習」に出して繰り返し定着させる）
+    // 間違い・自信なし：連続記録をリセットし、少し間隔をあけてから
+    // 復習対象にする（エビングハウスの忘却曲線は直後の忘却が最も早いが、
+    //   間隔ゼロで同じ問題を繰り返すと定着しにくいため、短い間隔を挟む）。
+    // 「今すぐ全部見たい／聞きたい」は問題一覧（苦手リスト）側で対応する。
     return {
       intervalDays: 1,
       streak: 0,
-      dueAt: now.toISOString(),
+      dueAt: addMinutes(now, RELEARN_MINUTES).toISOString(),
       lastGrade: grade,
       lastReviewedAt: now.toISOString(),
       mastered: false,

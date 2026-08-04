@@ -6,6 +6,7 @@ import type { Item } from "@/data/types";
 import type { AudioSegment } from "@/components/AudioLearning";
 import type { HandStep } from "@/data/handReflex";
 import type { FootStep } from "@/data/footReflex";
+import type { ReviewCard } from "@/lib/reviewPool";
 
 /** カテゴリの項目一覧から、読み上げ用セグメントを組み立てる */
 export function buildItemAudioSegments(items: Item[]): AudioSegment[] {
@@ -43,4 +44,18 @@ export function buildFootAudioSegments(steps: FootStep[]): AudioSegment[] {
     label: `手順${s.no}：${s.name}`,
     text: `手順${s.no}、${s.section}、${s.name}。${s.detail}`,
   }));
+}
+
+/** 復習カード（間違えた・自信がない問題）から読み上げ用セグメントを組み立てる */
+export function buildReviewAudioSegments(cards: ReviewCard[]): AudioSegment[] {
+  return cards.map((c) => {
+    const parts: string[] = [c.front];
+    if (c.choices && c.choices.length > 0) {
+      parts.push("選択肢は、" + c.choices.join("、") + "です。");
+    }
+    parts.push("答えは、" + c.back + "です。");
+    if (c.explanation) parts.push(c.explanation);
+    const label = c.front.length > 24 ? c.front.slice(0, 24) + "…" : c.front;
+    return { label, text: parts.join(" ") };
+  });
 }
