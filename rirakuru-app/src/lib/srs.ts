@@ -52,11 +52,13 @@ export function nextReviewState(
   const now = new Date();
 
   if (grade !== "good") {
-    // 間違い・自信なし：連続記録をリセットし、翌日にすぐ再挑戦させる
+    // 間違い・自信なし：連続記録をリセットし、今すぐ復習対象にする
+    // （エビングハウスの忘却曲線は直後の忘却が最も早いため、
+    //   翌日まで待たず即座に「復習」に出して繰り返し定着させる）
     return {
       intervalDays: 1,
       streak: 0,
-      dueAt: addDays(now, 1).toISOString(),
+      dueAt: now.toISOString(),
       lastGrade: grade,
       lastReviewedAt: now.toISOString(),
       mastered: false,
