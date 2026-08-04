@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GraduationCap, HandHelping, Footprints } from "lucide-react";
+import { GraduationCap, HandHelping, Footprints, Presentation } from "lucide-react";
 import { categories } from "@/data/categories";
 import { CategoryCard } from "@/components/CategoryCard";
 import { SearchBar } from "@/components/SearchBar";
@@ -30,6 +30,24 @@ export default function HomePage() {
           <span className="text-base font-semibold">自主基準テスト（全29問）</span>
           <span className="text-sm text-cream-100/90">
             回答するとすぐ解答表示／一問一答・○×も
+          </span>
+        </span>
+      </Link>
+
+      {/* 接客セミナー振り返りテストへの導線 */}
+      <Link
+        href="/service-seminar-test"
+        className="flex min-h-[44px] items-center gap-3 rounded-xl2 border border-cream-200 bg-white p-4 shadow-sm active:bg-cream-100 dark:border-cocoa-800 dark:bg-cocoa-900"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sand-100 text-cocoa-600 dark:bg-cocoa-800 dark:text-sand-200">
+          <Presentation size={24} />
+        </span>
+        <span className="flex flex-col">
+          <span className="text-base font-semibold text-cocoa-800 dark:text-cream-50">
+            接客セミナー 振り返りテスト（全16問）
+          </span>
+          <span className="text-sm text-cocoa-500 dark:text-sand-200">
+            アプローチ・施術時・クロージングの3段階
           </span>
         </span>
       </Link>

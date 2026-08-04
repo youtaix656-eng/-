@@ -3,24 +3,25 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, X, RotateCcw, Circle, BrainCircuit } from "lucide-react";
-import { standardsTest } from "@/data/standardsTest";
+import { standardsTest, type TestQuestion } from "@/data/standardsTest";
 import { gradeByCorrectness } from "@/lib/srs";
 
 // ============================================================
-// 自主基準テスト（全29問）
+// 選択式テストの共通ビュー（自主基準テスト・接客セミナー振り返りテスト等）
 // - 単一選択：選んだ瞬間に正誤と解答・解説を表示
 // - 複数選択：必要数を選び「回答する」で正誤と解答・解説を表示
 // - 回答後に「次へ」。最後に得点を表示。
+// questions を渡さない場合は自主基準テスト（従来どおり）。
 // ============================================================
-export function TestView() {
-  const total = standardsTest.length;
+export function TestView({ questions = standardsTest }: { questions?: TestQuestion[] }) {
+  const total = questions.length;
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number[]>([]);
   const [locked, setLocked] = useState(false);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
 
-  const q = standardsTest[index];
+  const q = questions[index];
   const isMulti = q.correct.length > 1;
   const correctSet = useMemo(() => new Set(q.correct), [q]);
 
@@ -127,6 +128,9 @@ export function TestView() {
 
       {/* 設問 */}
       <div className="rounded-xl2 border border-cream-200 bg-white p-4 dark:border-cocoa-800 dark:bg-cocoa-900">
+        {q.section && (
+          <p className="mb-2 text-xs font-bold text-cocoa-400 dark:text-sand-300">{q.section}</p>
+        )}
         <p className="text-base leading-relaxed text-cocoa-800 dark:text-cream-50">
           {q.question}
         </p>

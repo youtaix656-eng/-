@@ -5,6 +5,7 @@
 // ============================================================
 import { qaList, oxList } from "@/data/quiz";
 import { standardsTest } from "@/data/standardsTest";
+import { serviceSeminarTest } from "@/data/serviceSeminarTest";
 
 export type ReviewCard = {
   id: string;
@@ -48,7 +49,16 @@ function buildPool(): ReviewCard[] {
     explanation: t.explanation,
   }));
 
-  return [...fromQa, ...fromOx, ...fromTest];
+  const fromServiceTest: ReviewCard[] = serviceSeminarTest.map((t) => ({
+    id: t.id,
+    source: "test",
+    front: t.question,
+    choices: t.options,
+    back: t.correct.map((c) => t.options[c]).join("・"),
+    explanation: t.explanation,
+  }));
+
+  return [...fromQa, ...fromOx, ...fromTest, ...fromServiceTest];
 }
 
 export const reviewPool: ReviewCard[] = buildPool();

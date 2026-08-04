@@ -13,6 +13,8 @@ export type TestQuestion = {
   id: string;
   /** 問番号 */
   no: number;
+  /** 大項目・章（あれば設問の上に表示） */
+  section?: string;
   /** 設問文 */
   question: string;
   /** 選択肢 */
