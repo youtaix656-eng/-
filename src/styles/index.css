@@ -87,6 +87,105 @@ button {
   font-weight: 400;
 }
 
+/* ホーム右上：直近の履歴ボタン */
+.hist-open-btn {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hist-open-btn:active { transform: scale(0.92); }
+
+/* 履歴パネル（オーバーレイ＋横スライド） */
+.hist-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 56px) 10px 20px;
+  animation: fade 0.2s ease;
+}
+.hist-panel {
+  width: 100%;
+  max-width: 560px;
+  background: var(--card, #fff);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.hist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+.hist-title { font-weight: 800; color: var(--text); font-size: 15px; }
+.hist-head-actions { display: flex; align-items: center; gap: 8px; }
+.hist-close {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  color: var(--text-sub, #888);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.hist-hint { font-size: 12px; color: var(--text-sub, #888); text-align: center; padding: 8px 12px 0; }
+.hist-empty { padding: 40px 20px; text-align: center; color: var(--text-sub, #888); line-height: 1.8; }
+.hist-track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 14px 18px;
+}
+.hist-card {
+  flex: 0 0 80%;
+  max-width: 300px;
+  scroll-snap-align: center;
+  text-align: left;
+  background: var(--bg, #f7f7f7);
+  border: 1.5px solid var(--border, #e5e5e5);
+  border-radius: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 130px;
+}
+.hist-card:active { border-color: var(--accent, #2b7); }
+.hist-when { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.hist-date { font-size: 14px; font-weight: 700; color: var(--text); }
+.hist-week { font-size: 12.5px; color: var(--text-sub, #888); }
+.hist-time { font-size: 14px; font-weight: 700; color: var(--text); margin-left: auto; }
+.hist-card-title { font-size: 16px; font-weight: 800; color: var(--text); line-height: 1.3; }
+.hist-genre {
+  align-self: flex-start;
+  font-size: 12.5px;
+  color: var(--accent-ink, #185);
+  background: var(--accent-bg, #e7f5ee);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.hist-genre.muted { color: var(--text-sub, #999); background: transparent; border: 1px dashed var(--border, #ddd); }
+.hist-jump { margin-top: auto; font-size: 12px; color: var(--text-sub, #888); }
+
 .view {
   padding: 18px 16px 24px;
   animation: fade 0.25s ease;

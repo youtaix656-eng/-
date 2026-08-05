@@ -52,6 +52,7 @@ export function useStore() {
   const [unread, setUnreadState] = useState([]); // 読み取れなかったページ・問題の控え
   const [auth, setAuthState] = useState(null); // 端末内ログイン鍵
   const [examResults, setExamResultsState] = useState([]); // 模試の結果履歴
+  const [activity, setActivityState] = useState([]); // 直近の閲覧履歴（ホーム右上）
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
   const [syncToast, setSyncToast] = useState(0); // 別端末からの進捗取り込み
@@ -98,6 +99,7 @@ export function useStore() {
       const ur = await storage.loadUnread();
       const au = await storage.loadAuth();
       const er = await storage.loadExamResults();
+      const act = await storage.loadActivity();
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか
@@ -214,6 +216,7 @@ export function useStore() {
       setUnreadState(ur || []);
       setAuthState(au || null);
       setExamResultsState(er || []);
+      setActivityState(Array.isArray(act) ? act : []);
       setKwMeta(km || {});
       // 【取り消し】用語辞書に登録していた科目名を取り除く
       let dict = (ud || []).filter((t) => !SUBJECT_TAG_NAMES.includes(t));
@@ -271,6 +274,9 @@ export function useStore() {
     if (persist.current) storage.saveUnread(unread);
   }, [unread]);
   useEffect(() => {
+    if (persist.current) storage.saveActivity(activity);
+  }, [activity]);
+  useEffect(() => {
     if (persist.current) storage.saveSettings(settings);
   }, [settings]);
 
@@ -284,6 +290,34 @@ export function useStore() {
   const removeUnread = useCallback((id) => {
     setUnreadState((cur) => cur.filter((x) => x.id !== id));
   }, []);
+
+  // 直近の閲覧履歴を記録（新しい順・最大50件）。
+  // 直前と同じ画面＋ジャンルの連続は1件にまとめる（時刻だけ更新）。
+  const ACTIVITY_MAX = 50;
+  const logActivity = useCallback((entry) => {
+    if (!entry || !entry.view) return;
+    setActivityState((cur) => {
+      const at = Date.now();
+      const top = cur[0];
+      if (top && top.view === entry.view && (top.genre || '') === (entry.genre || '') && (top.title || '') === (entry.title || '')) {
+        // 同じ内容の連続 → 先頭の時刻だけ更新
+        const next = [...cur];
+        next[0] = { ...top, at };
+        return next;
+      }
+      const rec = {
+        id: `ac-${at.toString(36)}-${Math.floor(Math.random() * 1e4)}`,
+        at,
+        view: entry.view,
+        title: entry.title || '',
+        genre: entry.genre || '',
+        subject: entry.subject || '',
+        keyword: entry.keyword || '',
+      };
+      return [rec, ...cur].slice(0, ACTIVITY_MAX);
+    });
+  }, []);
+  const clearActivity = useCallback(() => setActivityState([]), []);
 
   // ログイン鍵（端末内）の保存・削除。即時に IndexedDB へ書き込む。
   const setAuth = useCallback((record) => {
@@ -544,6 +578,9 @@ export function useStore() {
     clearAuth,
     examResults,
     addExamResult,
+    activity,
+    logActivity,
+    clearActivity,
     schedule,
     setSchedule,
     venues,

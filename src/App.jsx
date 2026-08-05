@@ -34,6 +34,7 @@ import AuthGate from './components/AuthGate.jsx';
 import Pomodoro from './components/Pomodoro.jsx';
 import MistakeNote from './components/MistakeNote.jsx';
 import Roadmap from './components/Roadmap.jsx';
+import HistoryPanel from './components/HistoryPanel.jsx';
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
 
@@ -46,6 +47,37 @@ const NAV = [
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// 画面 → 表示タイトル（ヘッダー・履歴で共用）
+const VIEW_TITLES = {
+  home: '鍼灸国試 対策アプリ',
+  quiz: '一問一答',
+  session: '学習（60・300・900）',
+  review: '間違えた問題',
+  audio: '音声学習',
+  exam: '模擬試験',
+  dashboard: '弱点分析',
+  analytics: '分析・攻略率・合格診断',
+  roadmap: '合格するためのロードマップ',
+  unread: '読み取れないページ',
+  mistakes: '間違いノート',
+  memos: 'メモ一覧',
+  ocr: '写真から取り込み',
+  tools: '問題ツール',
+  scope: '試験範囲',
+  connect: '連結学習',
+  builder: '出題を作る',
+  import: '問題を取り込む',
+  parse: '自由文から自動作成',
+  notegen: '文章から問題を作る',
+  calendar: 'カレンダー',
+  venues: '試験会場・ホテル',
+  examcontent: '鍼灸国家試験の内容',
+  experiences: '体験談ノート',
+  mindmap: 'マインドマップ',
+  toc: '目次',
+  settings: '設定',
+};
 
 function triggerDownload(content, filename, type) {
   const blob = new Blob([content], { type });
@@ -68,6 +100,7 @@ export default function App() {
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
     try {
       return sessionStorage.getItem(UNLOCK_KEY) === '1';
@@ -111,6 +144,12 @@ export default function App() {
   useEffect(() => {
     if (store.loaded && viewRestored.current) saveLastView(view);
   }, [view, store.loaded]);
+
+  // 直近の履歴に記録（ホーム以外の画面を開いたとき）。復元完了後のみ。
+  useEffect(() => {
+    if (!store.loaded || !viewRestored.current || view === 'home') return;
+    store.logActivity(activityInfo(view));
+  }, [view, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 端末だけに取り込む体験メモ（#notes=…）を反映したら知らせて画面を開く
   useEffect(() => {
@@ -236,6 +275,36 @@ export default function App() {
   const sendOcrToImport = (csv) => {
     setImportText(csv);
     setView('settings');
+  };
+
+  // 履歴に残す情報（タイトル・ジャンル）を今の文脈から組み立てる
+  const activityInfo = (v) => {
+    const info = { view: v, title: VIEW_TITLES[v] || '', genre: '', subject: '', keyword: '' };
+    if (v === 'quiz' && quizSubject) {
+      info.subject = quizSubject;
+      info.title = `一問一答：${quizSubject}`;
+      info.genre = quizSubject;
+    } else if (v === 'session') {
+      const s = store.session && store.session.subject && store.session.subject !== 'all' ? store.session.subject : '';
+      if (s) info.genre = s;
+      info.subject = s;
+    } else if ((v === 'connect' || v === 'mindmap') && focusKeyword) {
+      info.keyword = focusKeyword;
+      info.genre = focusKeyword;
+    }
+    return info;
+  };
+
+  // 履歴カードのダブルタップで元の画面へ飛ぶ
+  const jumpToActivity = (e) => {
+    setShowHistory(false);
+    if (e.view === 'quiz' && e.subject) {
+      startSubjectQuiz(e.subject);
+    } else if (e.view === 'connect' && e.keyword) {
+      openKeyword(e.keyword);
+    } else {
+      setView(e.view);
+    }
   };
 
   const unlock = () => {
@@ -417,38 +486,7 @@ export default function App() {
     }
   };
 
-  const headerTitle = () => {
-    const map = {
-      home: '鍼灸国試 対策アプリ',
-      quiz: '一問一答',
-      session: '学習（60・300・900）',
-      review: '間違えた問題',
-      audio: '音声学習',
-      exam: '模擬試験',
-      dashboard: '弱点分析',
-      analytics: '分析・攻略率・合格診断',
-      roadmap: '合格するためのロードマップ',
-      unread: '読み取れないページ',
-      mistakes: '間違いノート',
-      memos: 'メモ一覧',
-      ocr: '写真から取り込み',
-      tools: '問題ツール',
-      scope: '試験範囲',
-      connect: '連結学習',
-      builder: '出題を作る',
-      import: '問題を取り込む',
-      parse: '自由文から自動作成',
-      notegen: '文章から問題を作る',
-      calendar: 'カレンダー',
-      venues: '試験会場・ホテル',
-      examcontent: '鍼灸国家試験の内容',
-      experiences: '体験談ノート',
-      mindmap: 'マインドマップ',
-      toc: '目次',
-      settings: '設定',
-    };
-    return map[view] || '鍼灸国試 対策アプリ';
-  };
+  const headerTitle = () => VIEW_TITLES[view] || '鍼灸国試 対策アプリ';
 
   const pomoOn = !!(store.settings.pomodoro && store.settings.pomodoro.enabled);
 
@@ -473,7 +511,26 @@ export default function App() {
           )}
         </h1>
         {view === 'home' && <p className="subtitle">過去問ベースで、合格まで着実に。</p>}
+        {view === 'home' && (
+          <button
+            className="hist-open-btn"
+            onClick={() => setShowHistory(true)}
+            aria-label="直近の履歴"
+            title="直近の履歴"
+          >
+            🕘
+          </button>
+        )}
       </header>
+
+      {showHistory && (
+        <HistoryPanel
+          activity={store.activity}
+          onClose={() => setShowHistory(false)}
+          onJump={jumpToActivity}
+          onClear={store.clearActivity}
+        />
+      )}
 
       <main>
         {/* バックアップ促しバナー */}

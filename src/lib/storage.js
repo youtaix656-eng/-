@@ -33,6 +33,7 @@ export const KEYS = {
   lastView: 'shinkyu:lastView', // 前回開いていた画面（アプリ再開時に復元）
   quizProgress: 'shinkyu:quizProgress', // 一問一答の途中経過（1問ごとに保存・続きから）
   examResults: 'shinkyu:examResults', // 模試の結果履歴
+  activity: 'shinkyu:activity', // 直近の閲覧履歴（画面・タイトル・ジャンル）
   migrated: 'shinkyu:migrated',
 };
 
@@ -183,6 +184,12 @@ export const clearQuizProgress = () => remove(KEYS.quizProgress);
 // examResults = [{ id, at, count, correct, scorePct, passed, perSubject }]
 export const loadExamResults = () => read(KEYS.examResults, []);
 export const saveExamResults = (r) => write(KEYS.examResults, r);
+
+// ---- 直近の閲覧履歴（ホーム右上からスライドで確認） ----
+// activity = [{ id, at, view, title, genre, subject, keyword }]（新しい順）
+export const loadActivity = () => read(KEYS.activity, []);
+export const saveActivity = (a) => write(KEYS.activity, a);
+export const clearActivity = () => remove(KEYS.activity);
 
 // ---- ログイン鍵（端末内のみ・サーバー送信なし） ----
 // auth = { email, salt, passHash, question, ansSalt, ansHash, updatedAt }
