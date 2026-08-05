@@ -11,7 +11,7 @@ const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => 
 //   60問＝1セット（休憩の区切り） / 300問＝1日の基本目標 / 900問＝1周
 //   1問ごとに位置を自動保存し、アプリを閉じても「続きから」再開できる。
 const SET_SIZE = 60;
-const TARGETS = [60, 300, 900];
+const TARGETS = [10, 60, 300, 900];
 
 function shuffle(arr) {
   const a = [...arr];
@@ -137,7 +137,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
       <div className="view">
         <h2 className="view-title">学習（60・300・900）</h2>
         <p className="view-desc">
-          60問で1区切り、300問で今日の目標、900問で1周。1問ごとに自動保存され、いつでも続きから再開できます。
+          10問はすきま時間に、60問で1区切り、300問で今日の目標、900問で1周。1問ごとに自動保存され、いつでも続きから再開できます。
         </p>
 
         {session && (
@@ -227,7 +227,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
               <button key={t} className="sess-target" onClick={() => begin(t)} disabled={filteredPool.length === 0}>
                 <span className="sess-target-n">{t}</span>
                 <span className="sess-target-l">
-                  {t === 60 ? '1セット（区切り）' : t === 300 ? '1日の目標' : '1周（周回）'}
+                  {t === 10 ? 'すきま時間' : t === 60 ? '1セット（区切り）' : t === 300 ? '1日の目標' : '1周（周回）'}
                 </span>
               </button>
             ))}
@@ -248,14 +248,16 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
         <div className="card sess-done">
           <div className="sess-done-ico">{t >= 900 ? '🏆' : t >= 300 ? '🎉' : '✅'}</div>
           <h2>
-            {t >= 900 ? '1周（900問）終了！' : t >= 300 ? '今日の目標 300問 達成！' : '1セット（60問）完了！'}
+            {t >= 900 ? '1周（900問）終了！' : t >= 300 ? '今日の目標 300問 達成！' : t >= 60 ? '1セット（60問）完了！' : `すきま学習（${t}問）完了！`}
           </h2>
           <p className="view-desc" style={{ textAlign: 'center' }}>
             {t >= 900
               ? 'おつかれさまでした。苦手を分析して2周目へ進みましょう。'
               : t >= 300
               ? 'すばらしい集中力です。苦手の復習で定着させましょう。'
-              : 'いいペースです。続けて次のセットへ。'}
+              : t >= 60
+              ? 'いいペースです。続けて次のセットへ。'
+              : '短い時間でもコツコツ積み上げ、えらい！もう1回いける？'}
           </p>
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
