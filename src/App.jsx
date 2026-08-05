@@ -52,7 +52,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const VIEW_TITLES = {
   home: '鍼灸国試 対策アプリ',
   quiz: '一問一答',
-  session: '学習（60・300・900）',
+  session: '学習（10・60・300・900）',
   review: '間違えた問題',
   audio: '音声学習',
   exam: '模擬試験',

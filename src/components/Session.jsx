@@ -135,7 +135,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   if (!active && !(session && session.pos >= session.target)) {
     return (
       <div className="view">
-        <h2 className="view-title">学習（60・300・900）</h2>
+        <h2 className="view-title">学習（10・60・300・900）</h2>
         <p className="view-desc">
           10問はすきま時間に、60問で1区切り、300問で今日の目標、900問で1周。1問ごとに自動保存され、いつでも続きから再開できます。
         </p>

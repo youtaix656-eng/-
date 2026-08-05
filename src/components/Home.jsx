@@ -113,7 +113,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
 
         <button className="menu-item wide featured" onClick={() => onNavigate('session')}>
           <span className="ico">📚</span>
-          <span className="title">学習（60・300・900）</span>
+          <span className="title">学習（10・60・300・900）</span>
           <span className="desc">
             {sessionActive
               ? `続きから：${session.subject === 'all' ? '全科目' : session.subject}　${session.pos}/${session.target}問`
