@@ -59,3 +59,29 @@ export function buildReviewAudioSegments(cards: ReviewCard[]): AudioSegment[] {
     return { label, text: parts.join(" ") };
   });
 }
+
+export type QuizAudioPair = {
+  label: string;
+  /** 問題文＋選択肢（正答を含まない） */
+  question: string;
+  /** 答え＋解説 */
+  answer: string;
+};
+
+/**
+ * 復習カードを「問題」と「答え」を別々に読み上げられる形に分ける。
+ * 問題を聞いてから、自分でタップして初めて答えが再生されるようにするため
+ * （一文にまとめて自動で答えまで読み上げない）。
+ */
+export function buildReviewQuizAudioPairs(cards: ReviewCard[]): QuizAudioPair[] {
+  return cards.map((c) => {
+    const qParts: string[] = [c.front];
+    if (c.choices && c.choices.length > 0) {
+      qParts.push("選択肢は、" + c.choices.join("、") + "です。");
+    }
+    const aParts: string[] = ["答えは、" + c.back + "です。"];
+    if (c.explanation) aParts.push(c.explanation);
+    const label = c.front.length > 24 ? c.front.slice(0, 24) + "…" : c.front;
+    return { label, question: qParts.join(" "), answer: aParts.join(" ") };
+  });
+}

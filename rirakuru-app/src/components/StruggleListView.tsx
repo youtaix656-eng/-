@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Circle, Triangle, X, ListChecks, Check } from "lucide-react";
-import { reviewPool, correctChoiceTexts } from "@/lib/reviewPool";
+import { ChevronDown, ListChecks } from "lucide-react";
+import { reviewPool } from "@/lib/reviewPool";
 import { readReviewMap, hasStruggled, isMastered, gradeItem, type ReviewMap, type Grade } from "@/lib/srs";
-import { AudioLearning } from "./AudioLearning";
-import { buildReviewAudioSegments } from "@/lib/audioSegments";
+import { QuizAudioPlayer } from "./QuizAudioPlayer";
+import { Flashcard } from "./Flashcard";
 
 // ============================================================
 // 苦手リスト（間違えた・自信がない問題を、期日に関係なくいつでも一覧表示）
 // - 復習期日を待たず、間違えた問題をすぐに見返せる
-// - タップで開いて答え・解説を確認、その場で理解度を再評価できる
-// - まとめて音声で聞ける（端末の読み上げ機能）
+// - タップで問題だけ表示 → もう一度タップで答え（Flashcardと同じ流れ）
+//   問題と答えを同時に出さない
+// - 音声も「問題を再生」→「正解を聞く」の2ステップ（QuizAudioPlayer）
 // ============================================================
 export function StruggleListView() {
   const [map, setMap] = useState<ReviewMap | null>(null);
@@ -25,8 +26,6 @@ export function StruggleListView() {
     if (!map) return [];
     return reviewPool.filter((c) => hasStruggled(map, c.id) && !isMastered(map, c.id));
   }, [map]);
-
-  const audioSegments = useMemo(() => buildReviewAudioSegments(items), [items]);
 
   if (!map) return null;
 
@@ -52,7 +51,7 @@ export function StruggleListView() {
         </div>
       ) : (
         <>
-          <AudioLearning segments={audioSegments} />
+          <QuizAudioPlayer cards={items} />
 
           <ul className="flex flex-col gap-2">
             {items.map((card) => {
@@ -79,70 +78,7 @@ export function StruggleListView() {
                   </button>
                   {open && (
                     <div className="border-t border-cream-100 px-4 py-3 dark:border-cocoa-800">
-                      {card.choices && (
-                        <ul className="mb-2 flex flex-col gap-1">
-                          {card.choices.map((c, i) => {
-                            const isCorrect = correctChoiceTexts(card).has(c);
-                            return (
-                              <li
-                                key={i}
-                                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm ${
-                                  isCorrect
-                                    ? "bg-green-50 font-semibold text-green-700 dark:bg-green-950/40 dark:text-green-300"
-                                    : "text-cocoa-500 dark:text-sand-200"
-                                }`}
-                              >
-                                {isCorrect ? (
-                                  <Check size={14} className="shrink-0 text-green-600 dark:text-green-300" />
-                                ) : (
-                                  <span className="w-[14px] shrink-0" />
-                                )}
-                                {i + 1}. {c}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                      <p className="text-base font-semibold leading-relaxed text-cocoa-800 dark:text-cream-50">
-                        答え：{card.back}
-                      </p>
-                      {card.explanation && (
-                        <p className="mt-2 text-sm leading-relaxed text-cocoa-600 dark:text-sand-200">
-                          {card.explanation}
-                        </p>
-                      )}
-                      {card.ref && (
-                        <p className="mt-2 text-xs text-cocoa-400 dark:text-sand-200">
-                          出典：{card.ref}
-                        </p>
-                      )}
-
-                      <p className="mb-2 mt-4 text-sm text-cocoa-500 dark:text-sand-200">
-                        理解度を再評価する：
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        <button
-                          onClick={() => grade(card.id, "good")}
-                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl2 border-2 border-green-500 bg-green-50 text-sm font-semibold text-green-700 dark:bg-green-950/40 dark:text-green-300"
-                        >
-                          <Circle size={16} />
-                          完璧！自信あり
-                        </button>
-                        <button
-                          onClick={() => grade(card.id, "hard")}
-                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl2 border-2 border-amber-400 bg-amber-50 text-sm font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
-                        >
-                          <Triangle size={14} />
-                          解説がわからない
-                        </button>
-                        <button
-                          onClick={() => grade(card.id, "again")}
-                          className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl2 border-2 border-red-400 bg-red-50 text-sm font-semibold text-red-600 dark:bg-red-950/30 dark:text-red-300"
-                        >
-                          <X size={16} />
-                          答えも解説もわからない
-                        </button>
-                      </div>
+                      <Flashcard card={card} onGrade={(g) => grade(card.id, g)} />
                     </div>
                   )}
                 </li>
