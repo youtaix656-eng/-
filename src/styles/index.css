@@ -2928,6 +2928,45 @@ code.block {
 .nf-edit .nf-topic { margin-bottom: 8px; }
 .nf-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-sub, #6b7280); margin: 8px 0 4px; }
 
+/* 網羅マップ */
+.cov-todo { margin-bottom: 12px; }
+.cov-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 12px; }
+.cov-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-sub, #6b7280); }
+.cov-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.cov-swatch.lv-rich, .cov-dot.lv-rich, .cov-chip.lv-rich { background: #16a34a; }
+.cov-swatch.lv-ok, .cov-dot.lv-ok, .cov-chip.lv-ok { background: #84cc16; }
+.cov-swatch.lv-thin, .cov-dot.lv-thin, .cov-chip.lv-thin { background: #f59e0b; }
+.cov-swatch.lv-none, .cov-dot.lv-none { background: #dc2626; }
+
+.cov-subject {
+  border: 1px solid var(--border, #e5e7eb);
+  border-left-width: 4px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.cov-subject.lv-rich { border-left-color: #16a34a; }
+.cov-subject.lv-ok { border-left-color: #84cc16; }
+.cov-subject.lv-thin { border-left-color: #f59e0b; }
+.cov-subject.lv-none { border-left-color: #dc2626; background: #fef2f2; }
+.cov-subject-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px; background: none; border: none; cursor: pointer; text-align: left;
+}
+.cov-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.cov-name { font-weight: 700; font-size: 14px; color: var(--text); flex: 1; }
+.cov-count { font-size: 13px; color: var(--text-sub, #6b7280); font-weight: 700; }
+.cov-caret { font-size: 12px; color: var(--text-sub, #9ca3af); }
+.cov-detail { padding: 0 14px 14px; }
+.cov-groups { display: flex; flex-wrap: wrap; gap: 6px; }
+.cov-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 600;
+}
+.cov-chip b { font-weight: 800; }
+.cov-outline { margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-sub, #6b7280); line-height: 1.8; }
+
 /* ===== ホーム上部「前回の続きから」 ===== */
 .resume-top {
   background: var(--surface);

@@ -36,6 +36,7 @@ import MistakeNote from './components/MistakeNote.jsx';
 import Roadmap from './components/Roadmap.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import NumberFacts from './components/NumberFacts.jsx';
+import CoverageMap from './components/CoverageMap.jsx';
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
 
@@ -58,6 +59,7 @@ const VIEW_TITLES = {
   audio: '音声学習',
   exam: '模擬試験',
   dashboard: '弱点分析',
+  coverage: '網羅マップ',
   analytics: '分析・攻略率・合格診断',
   roadmap: '合格するためのロードマップ',
   unread: '読み取れないページ',
@@ -421,6 +423,8 @@ export default function App() {
         return <MistakeNote store={store} onToast={showToast} />;
       case 'numbers':
         return <NumberFacts store={store} onToast={showToast} />;
+      case 'coverage':
+        return <CoverageMap store={store} onStartSubject={startSubjectQuiz} />;
       case 'roadmap':
         return <Roadmap store={store} onNavigate={setView} />;
       case 'memos':
