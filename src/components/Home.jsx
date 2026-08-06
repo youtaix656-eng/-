@@ -160,6 +160,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">つながる語・比較・数値注意を1枚に。引っかけに強くなる。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('flashcards')}>
+          <span className="ico">🃏</span>
+          <span className="title">経穴フラッシュカード</span>
+          <span className="desc">経穴名→経絡・部位・主治を反復。図つきサンプル5枚（今後拡充）。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('toc')}>
           <span className="ico">📖</span>
           <span className="title">目次</span>

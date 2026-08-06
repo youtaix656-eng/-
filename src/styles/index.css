@@ -1262,6 +1262,17 @@ code.block {
   background: var(--surface-2);
   margin-bottom: 12px;
 }
+/* 図問題・フラッシュカードのインライン模式図 */
+.q-figure { margin: 0 0 12px; text-align: center; }
+.q-figure svg {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.q-figure figcaption { font-size: 11px; color: var(--text-sub, #6b7280); margin-top: 4px; }
 .now-image {
   width: 100%;
   max-height: 200px;
@@ -2966,6 +2977,37 @@ code.block {
 }
 .cov-chip b { font-weight: 800; }
 .cov-outline { margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-sub, #6b7280); line-height: 1.8; }
+
+/* 経穴フラッシュカード */
+.fc-counter { text-align: center; font-size: 13px; color: var(--text-sub, #6b7280); margin-bottom: 8px; }
+.fc-card {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  background: #fff;
+  padding: 18px;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: var(--shadow, 0 1px 3px rgba(0,0,0,.08));
+}
+.fc-card.flipped { background: #f8fafc; text-align: left; justify-content: flex-start; }
+.fc-front { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.fc-name { font-size: 40px; font-weight: 800; color: var(--navy); letter-spacing: 2px; }
+.fc-yomi { font-size: 15px; color: var(--text-sub, #6b7280); }
+.fc-tap { margin-top: 14px; font-size: 12px; color: var(--accent, #2563eb); }
+.fc-back-name { font-size: 20px; font-weight: 800; color: var(--navy); margin-bottom: 10px; text-align: center; }
+.fc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fc-table th, .fc-table td { border: 1px solid var(--border, #e5e7eb); padding: 7px 9px; vertical-align: top; text-align: left; }
+.fc-table th { background: #f1f5f9; width: 84px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.fc-table td { line-height: 1.6; }
+.fc-youketsu { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fc-youketsu th, .fc-youketsu td { border: 1px solid var(--border, #e5e7eb); padding: 8px 10px; text-align: left; }
+.fc-youketsu thead th { background: #f1f5f9; font-weight: 700; }
+.fc-youketsu td:last-child { font-weight: 700; color: var(--navy); }
 
 /* ===== ホーム上部「前回の続きから」 ===== */
 .resume-top {

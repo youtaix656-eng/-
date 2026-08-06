@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { figureFor } from '../data/figures.jsx';
 
 // 1問を表示し、解答・正誤判定・解説・メモを扱う共通コンポーネント
 //
@@ -88,6 +89,12 @@ export default function QuestionCard({
           loading="lazy"
         />
       )}
+
+      {/* 図問題：インライン模式図（オフライン対応） */}
+      {question.figure && (() => {
+        const Fig = figureFor(question.figure);
+        return Fig ? <Fig /> : null;
+      })()}
 
       {!revealed && (selfGrade || gradeMode) && (
         <div className="card-side-label">表（問題）</div>

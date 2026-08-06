@@ -37,6 +37,7 @@ import Roadmap from './components/Roadmap.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import NumberFacts from './components/NumberFacts.jsx';
 import CoverageMap from './components/CoverageMap.jsx';
+import Flashcards from './components/Flashcards.jsx';
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
 
@@ -79,6 +80,7 @@ const VIEW_TITLES = {
   examcontent: '鍼灸国家試験の内容',
   experiences: '体験談ノート',
   mindmap: 'マインドマップ',
+  flashcards: '経穴フラッシュカード',
   toc: '目次',
   settings: '設定',
 };
@@ -468,6 +470,8 @@ export default function App() {
         return <Experiences store={store} onToast={showToast} />;
       case 'mindmap':
         return <MindMap store={store} onOpenKeyword={openKeyword} />;
+      case 'flashcards':
+        return <Flashcards />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':

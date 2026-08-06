@@ -15,6 +15,7 @@ import houkiQuestions, { HOUKI_VERSION } from '../data/houkiQuestions.js';
 import anatQuestions, { ANAT_VERSION } from '../data/anatQuestions.js';
 import seiriQuestions, { SEIRI_VERSION } from '../data/seiriQuestions.js';
 import rinshoQuestions, { RINSHO_VERSION } from '../data/rinshoQuestions.js';
+import zumondaiQuestions, { ZUMONDAI_VERSION } from '../data/zumondaiQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -153,6 +154,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(rinshoQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.rinshoVersion = RINSHO_VERSION;
+        mutated = true;
+      }
+      // 同梱の図問題（図を見て答える四択）。ZUMONDAI_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.zumondaiVersion || 0) < ZUMONDAI_VERSION) {
+        const { unique } = dedupeAgainst(zumondaiQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.zumondaiVersion = ZUMONDAI_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
