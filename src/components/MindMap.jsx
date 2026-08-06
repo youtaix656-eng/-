@@ -9,12 +9,15 @@ import { buildKanaIndex } from '../lib/yomi.js';
 const TYPE_COLOR = { linked: '#3f9db0', compare: '#e6b64f', number: '#8f7fe0' };
 
 export default function MindMap({ store, onOpenKeyword }) {
-  const { questions, links } = store;
+  const { questions, links, numberOverrides } = store;
   const cands = useMemo(() => centerCandidates(questions, links), [questions, links]);
   const firstCenter = cands.user[0] || cands.suggested[0] || '原穴';
   const [center, setCenter] = useState(firstCenter);
 
-  const mm = useMemo(() => mindmapFor(center, questions, links), [center, questions, links]);
+  const mm = useMemo(
+    () => mindmapFor(center, questions, links, numberOverrides),
+    [center, questions, links, numberOverrides]
+  );
   const branches = useMemo(() => branchesOf(mm), [mm]);
   const laid = useMemo(() => radialLayout(branches), [branches]);
 

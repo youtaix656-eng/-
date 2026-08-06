@@ -53,6 +53,7 @@ export function useStore() {
   const [auth, setAuthState] = useState(null); // 端末内ログイン鍵
   const [examResults, setExamResultsState] = useState([]); // 模試の結果履歴
   const [activity, setActivityState] = useState([]); // 直近の閲覧履歴（ホーム右上）
+  const [numberOverrides, setNumberOverridesState] = useState({}); // 数値ファクトの上書き（毎年更新）
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
   const [syncToast, setSyncToast] = useState(0); // 別端末からの進捗取り込み
@@ -107,6 +108,7 @@ export function useStore() {
       const au = await storage.loadAuth();
       const er = await storage.loadExamResults();
       const act = await storage.loadActivity();
+      const numOv = await storage.loadNumberOverrides();
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか
@@ -224,6 +226,7 @@ export function useStore() {
       setAuthState(au || null);
       setExamResultsState(er || []);
       setActivityState(Array.isArray(act) ? act : []);
+      setNumberOverridesState(numOv && typeof numOv === 'object' ? numOv : {});
       setKwMeta(km || {});
       // 【取り消し】用語辞書に登録していた科目名を取り除く
       let dict = (ud || []).filter((t) => !SUBJECT_TAG_NAMES.includes(t));
@@ -284,6 +287,9 @@ export function useStore() {
     if (persist.current) storage.saveActivity(activity);
   }, [activity]);
   useEffect(() => {
+    if (persist.current) storage.saveNumberOverrides(numberOverrides);
+  }, [numberOverrides]);
+  useEffect(() => {
     if (persist.current) storage.saveSettings(settings);
   }, [settings]);
 
@@ -325,6 +331,24 @@ export function useStore() {
     });
   }, []);
   const clearActivity = useCallback(() => setActivityState([]), []);
+
+  // 数値ファクトの上書き（毎年変わる数値を全科目まとめて更新するための単一窓口）
+  const setNumberOverride = useCallback((id, patch) => {
+    if (!id) return;
+    setNumberOverridesState((cur) => ({
+      ...cur,
+      [id]: { ...(cur[id] || {}), ...patch, updatedAt: Date.now() },
+    }));
+  }, []);
+  const clearNumberOverride = useCallback((id) => {
+    setNumberOverridesState((cur) => {
+      if (!(id in cur)) return cur;
+      const next = { ...cur };
+      delete next[id];
+      return next;
+    });
+  }, []);
+  const clearAllNumberOverrides = useCallback(() => setNumberOverridesState({}), []);
 
   // ログイン鍵（端末内）の保存・削除。即時に IndexedDB へ書き込む。
   const setAuth = useCallback((record) => {
@@ -588,6 +612,10 @@ export function useStore() {
     activity,
     logActivity,
     clearActivity,
+    numberOverrides,
+    setNumberOverride,
+    clearNumberOverride,
+    clearAllNumberOverrides,
     schedule,
     setSchedule,
     venues,

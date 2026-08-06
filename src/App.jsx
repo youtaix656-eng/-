@@ -35,6 +35,7 @@ import Pomodoro from './components/Pomodoro.jsx';
 import MistakeNote from './components/MistakeNote.jsx';
 import Roadmap from './components/Roadmap.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
+import NumberFacts from './components/NumberFacts.jsx';
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
 
@@ -61,6 +62,7 @@ const VIEW_TITLES = {
   roadmap: '合格するためのロードマップ',
   unread: '読み取れないページ',
   mistakes: '間違いノート',
+  numbers: '数値の棚卸し・一括更新',
   memos: 'メモ一覧',
   ocr: '写真から取り込み',
   tools: '問題ツール',
@@ -417,6 +419,8 @@ export default function App() {
         return <UnreadPages store={store} onToast={showToast} onOpenImport={() => setView('import')} />;
       case 'mistakes':
         return <MistakeNote store={store} onToast={showToast} />;
+      case 'numbers':
+        return <NumberFacts store={store} onToast={showToast} />;
       case 'roadmap':
         return <Roadmap store={store} onNavigate={setView} />;
       case 'memos':

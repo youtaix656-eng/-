@@ -37,6 +37,7 @@ export const KEYS = {
   audioProgress: 'shinkyu:audioProgress', // 音声学習の再生位置（続きから）
   examResults: 'shinkyu:examResults', // 模試の結果履歴
   activity: 'shinkyu:activity', // 直近の閲覧履歴（画面・タイトル・ジャンル）
+  numberOverrides: 'shinkyu:numberOverrides', // 数値ファクトの上書き（毎年変わる数値の一括更新）
   migrated: 'shinkyu:migrated',
 };
 
@@ -210,6 +211,8 @@ export const saveExamResults = (r) => write(KEYS.examResults, r);
 // activity = [{ id, at, view, title, genre, subject, keyword }]（新しい順）
 export const loadActivity = () => read(KEYS.activity, []);
 export const saveActivity = (a) => write(KEYS.activity, a);
+export const loadNumberOverrides = () => read(KEYS.numberOverrides, {});
+export const saveNumberOverrides = (o) => write(KEYS.numberOverrides, o);
 export const clearActivity = () => remove(KEYS.activity);
 
 // ---- ログイン鍵（端末内のみ・サーバー送信なし） ----

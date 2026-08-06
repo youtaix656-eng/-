@@ -2905,6 +2905,29 @@ code.block {
   position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--wrong, #c62828);
 }
 
+/* 数値の棚卸し */
+.nf-item {
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.nf-item.edited { border-color: #34d399; background: #f0fdf4; }
+.nf-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nf-topic { font-weight: 700; font-size: 14px; color: var(--text); }
+.nf-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  background: #fef3c7; color: #b45309;
+}
+.nf-badge.edited { background: #d1fae5; color: #047857; }
+.nf-value { font-size: 20px; font-weight: 800; color: var(--navy); margin: 6px 0 2px; }
+.nf-asof { font-size: 12px; color: var(--text-sub, #6b7280); }
+.nf-note { font-size: 12px; color: var(--text-sub, #6b7280); margin-top: 4px; line-height: 1.6; }
+.nf-actions { display: flex; gap: 8px; margin-top: 8px; }
+.nf-edit .nf-topic { margin-bottom: 8px; }
+.nf-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-sub, #6b7280); margin: 8px 0 4px; }
+
 /* ===== ホーム上部「前回の続きから」 ===== */
 .resume-top {
   background: var(--surface);

@@ -19,13 +19,13 @@ export function linkedKeywords(center, questions, links) {
   return [...co.entries()].sort((a, b) => b[1] - a[1]).map(([k, w]) => ({ keyword: k, weight: w }));
 }
 
-// センターのマインドマップ内容
-export function mindmapFor(center, questions, links) {
+// センターのマインドマップ内容（numberOverrides があれば数値を実効値で反映）
+export function mindmapFor(center, questions, links, numberOverrides) {
   return {
     center,
     linked: linkedKeywords(center, questions, links),
     comparisons: comparisonsForKeyword(center),
-    numbers: numbersForKeyword(center),
+    numbers: numbersForKeyword(center, numberOverrides),
   };
 }
 

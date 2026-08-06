@@ -264,6 +264,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">経穴マスタから問題を自動生成。既存問題の形式・重複・矛盾・経穴×経絡の誤りを点検。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('numbers')}>
+          <span className="ico">🔢</span>
+          <span className="title">数値の棚卸し・一括更新</span>
+          <span className="desc">国民医療費・平均寿命・出生率など毎年変わる数値を、全科目まとめて更新。年1回の見直しに。</span>
+        </button>
+
         <button className="menu-item wide" onClick={() => onNavigate('settings')}>
           <span className="ico">⚙️</span>
           <span className="title">設定・問題データ管理</span>
