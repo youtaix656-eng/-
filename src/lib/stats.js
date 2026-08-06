@@ -94,7 +94,7 @@ export function recentAccuracy(history, n = 120) {
 
 // 学習した「異なる日」の数と、今日（または昨日）から連続している日数
 export function studyStreak(history) {
-  if (!history.length) return { activeDays: 0, streak: 0 };
+  if (!history.length) return { activeDays: 0, streak: 0, longestStreak: 0, studiedToday: false };
   const days = new Set();
   history.forEach((h) => {
     if (!h.at) return;
