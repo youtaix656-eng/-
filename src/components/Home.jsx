@@ -11,7 +11,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   const reviewCount = reviewQuestions.length;
   const unreadCount = (unread || []).length;
   const sessionActive = session && session.pos < session.target;
-  const { streak } = studyStreak(history);
+  const { streak, longestStreak, studiedToday } = studyStreak(history);
   const examLeft = daysUntil(settings.examDate);
 
   // 一問一答の途中経過（1問ごと自動保存）を「続きから」に出す
@@ -76,6 +76,19 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="ec-date">試験日 {formatExamDate(settings.examDate)}</span>
         </button>
       )}
+
+      {/* 連続日数（ストリーク）だけを大きく表示 */}
+      <div className={`streak-card${studiedToday ? ' lit' : ''}`}>
+        <span className="streak-flame">{streak > 0 ? '🔥' : '🌱'}</span>
+        <span className="streak-main">
+          <strong>{streak}</strong>日連続
+        </span>
+        <span className="streak-sub">
+          {studiedToday ? '今日も学習済み！' : '今日まだ未学習。1問でも解いて継続！'}
+          <br />
+          最長 {longestStreak}日
+        </span>
+      </div>
 
       <div className="home-hero">
         <h2>今日も一歩ずつ</h2>

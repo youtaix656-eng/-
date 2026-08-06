@@ -1994,6 +1994,26 @@ code.block {
 .exam-countdown .cd-days { margin-left: auto; font-size: 13px; text-align: right; }
 .exam-countdown .cd-days strong { font-size: 26px; margin: 0 3px; }
 
+/* 連続日数（ストリーク）カード */
+.streak-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.streak-card.lit {
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border-color: #fdba74;
+}
+.streak-card .streak-flame { font-size: 30px; line-height: 1; }
+.streak-card .streak-main { font-size: 15px; color: var(--text); }
+.streak-card .streak-main strong { font-size: 30px; color: #ea580c; margin-right: 2px; }
+.streak-card .streak-sub { margin-left: auto; font-size: 12px; color: var(--muted, #6b7280); text-align: right; line-height: 1.5; }
+
 .cal-head {
   display: flex;
   align-items: center;
@@ -2861,6 +2881,28 @@ code.block {
 }
 .exam-chart-line span {
   position: absolute; right: 0; top: -14px; font-size: 9px; color: var(--accent); font-weight: 700;
+}
+
+/* 模試 合否予測 */
+.exam-predict { margin-bottom: 12px; }
+.exam-predict-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.exam-predict-emoji { font-size: 30px; line-height: 1; }
+.exam-predict-zone { font-weight: 800; font-size: 16px; color: var(--text); }
+.exam-predict-avg { font-size: 13px; color: var(--text-sub); margin-top: 2px; }
+.exam-predict-avg strong { font-size: 18px; color: var(--navy); margin: 0 2px; }
+.exam-predict-delta { margin-left: 6px; font-weight: 700; }
+.exam-predict-delta.up { color: var(--correct); }
+.exam-predict-delta.down { color: var(--wrong, #c62828); }
+.exam-predict-gauge {
+  position: relative; height: 12px; border-radius: 6px; background: var(--track, #e5e7eb);
+  overflow: hidden; margin: 6px 0 8px;
+}
+.exam-predict-gauge .epg-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #34d399, #059669);
+  border-radius: 6px;
+}
+.exam-predict-gauge .epg-line {
+  position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--wrong, #c62828);
 }
 
 /* ===== ホーム上部「前回の続きから」 ===== */

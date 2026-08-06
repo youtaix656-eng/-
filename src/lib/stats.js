@@ -114,7 +114,17 @@ export function studyStreak(history) {
     streak += 1;
     cursor -= DAY_MS_L;
   }
-  return { activeDays: sorted.length, streak };
+  // これまでの最長連続日数（記録）
+  const asc = [...days].sort((a, b) => a - b);
+  let longestStreak = asc.length ? 1 : 0;
+  let run = asc.length ? 1 : 0;
+  for (let i = 1; i < asc.length; i++) {
+    if (asc[i] - asc[i - 1] === DAY_MS_L) run += 1;
+    else run = 1;
+    if (run > longestStreak) longestStreak = run;
+  }
+  const studiedToday = days.has(t);
+  return { activeDays: sorted.length, streak, longestStreak, studiedToday };
 }
 
 // 正答率の推移（直近を等間隔のブロックに割り、各ブロックの正答率）

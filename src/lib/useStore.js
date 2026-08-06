@@ -6,7 +6,7 @@ import * as storage from './storage.js';
 import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
-import { decodeSync, syncToBackup } from './sync.js';
+import { decodeSync, syncToBackup, isSyncExpired } from './sync.js';
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
@@ -69,12 +69,19 @@ export function useStore() {
         const mSync = hash.match(/[#&]sync=([^&]+)/);
         if (mSync) {
           const payload = decodeSync(decodeURIComponent(mSync[1]));
-          const ok = window.confirm(
-            '別端末の学習データ（進捗・設定）を取り込みます。この端末の進捗は上書きされます。よろしいですか？'
-          );
-          if (ok) {
-            await storage.importAll(syncToBackup(payload));
-            if (alive) setSyncToast(1);
+          if (isSyncExpired(payload)) {
+            // 発行から5分を過ぎた受け渡しは安全のため取り込まない
+            window.alert(
+              'この受け渡しリンク／QRコードは発行から5分以上経過したため使えません（安全のため）。\n受け渡し元でもう一度発行してください。'
+            );
+          } else {
+            const ok = window.confirm(
+              '別端末の学習データ（進捗・設定）を取り込みます。この端末の進捗は上書きされます。よろしいですか？'
+            );
+            if (ok) {
+              await storage.importAll(syncToBackup(payload));
+              if (alive) setSyncToast(1);
+            }
           }
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }

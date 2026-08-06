@@ -18,9 +18,13 @@ function b64UrlDecode(str) {
   );
 }
 
+// 受け渡し（QR／URL）の有効期限：発行から5分間だけ使える（安全のため）
+export const SYNC_TTL_MS = 5 * 60 * 1000;
+
 // バックアップ全体 → 軽量ペイロード（キーを短縮して容量節約）
 export function buildSyncPayload(data, { includeHistory = true } = {}) {
-  const p = { v: 1 };
+  // t = 発行時刻（秒）。受け取り側で5分以内かどうかを判定する。
+  const p = { v: 1, t: Math.floor(Date.now() / 1000) };
   if (data.srs && Object.keys(data.srs).length) p.s = data.srs;
   if (includeHistory && Array.isArray(data.history) && data.history.length) p.h = data.history;
   if (data.memos && Object.keys(data.memos).length) p.m = data.memos;
@@ -37,6 +41,16 @@ export function decodeSync(str) {
   const obj = JSON.parse(b64UrlDecode(str));
   if (!obj || obj.v !== 1) throw new Error('未対応のデータ形式です');
   return obj;
+}
+
+// 発行からの経過ミリ秒（t が無い旧データは null）
+export function syncAgeMs(payload) {
+  return payload && payload.t ? Date.now() - payload.t * 1000 : null;
+}
+// 発行から5分を過ぎていれば期限切れ（t が無い旧データは期限切れ扱いにしない）
+export function isSyncExpired(payload) {
+  const age = syncAgeMs(payload);
+  return age != null && age > SYNC_TTL_MS;
 }
 
 // 軽量ペイロード → importAll が受け取れるバックアップ形式へ

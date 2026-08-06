@@ -373,16 +373,77 @@ export default function Exam({ store }) {
   );
 }
 
-// 模試の結果履歴と、合格ライン到達の推移グラフ
+// 直近の模試スコアから合否を予測する
+//  results は新しい→古い順。直近3回（無ければある分）の平均で判定し、傾向も見る。
+function predictExam(results, passLine) {
+  if (!results.length) return null;
+  const passPct = Math.round(passLine * 100);
+  const recent = results.slice(0, 3).map((r) => r.scorePct);
+  const recentAvg = Math.round(recent.reduce((a, b) => a + b, 0) / recent.length);
+  // 傾向：直近と、その前の同数の平均を比べる
+  const prev = results.slice(3, 6).map((r) => r.scorePct);
+  const prevAvg = prev.length ? Math.round(prev.reduce((a, b) => a + b, 0) / prev.length) : null;
+  const delta = prevAvg == null ? null : recentAvg - prevAvg;
+  const gap = recentAvg - passPct; // 正なら合格ラインを上回る
+  let zone, emoji, msg;
+  if (gap >= 8) {
+    zone = '合格圏';
+    emoji = '🎉';
+    msg = `直近平均は合格ライン+${gap}ポイント。この調子を維持しましょう。`;
+  } else if (gap >= 0) {
+    zone = 'ボーダー（合格圏内・僅差）';
+    emoji = '🟢';
+    msg = `合格ラインをわずかに上回っています（+${gap}ポイント）。取りこぼしを減らして余裕を作りましょう。`;
+  } else if (gap >= -8) {
+    zone = 'ボーダー（あと少し）';
+    emoji = '🟡';
+    msg = `合格ラインまであと${-gap}ポイント。弱点科目を重点復習すれば十分届きます。`;
+  } else {
+    zone = '要強化';
+    emoji = '🔴';
+    msg = `合格ラインまであと${-gap}ポイント。範囲のカバーと間違い直しを優先しましょう。`;
+  }
+  return { passPct, recentAvg, recentN: recent.length, delta, zone, emoji, msg };
+}
+
+// 模試の結果履歴と、合格ライン到達の推移グラフ＋合否予測
 function ExamHistory({ results, passLine }) {
   // 古い→新しい（左→右）に並べ、直近20件
   const items = [...results].slice(0, 20).reverse();
   const passCount = results.filter((r) => r.passed).length;
   const best = Math.max(...results.map((r) => r.scorePct));
   const passPct = Math.round(passLine * 100);
+  const pred = predictExam(results, passLine);
   return (
     <div style={{ marginTop: 18 }}>
       <div className="section-label" style={{ marginTop: 0 }}>模試の記録（{results.length}回）</div>
+
+      {pred && (
+        <div className="card exam-predict">
+          <div className="exam-predict-head">
+            <span className="exam-predict-emoji">{pred.emoji}</span>
+            <div>
+              <div className="exam-predict-zone">合否予測：{pred.zone}</div>
+              <div className="exam-predict-avg">
+                直近{pred.recentN}回の平均 <strong>{pred.recentAvg}%</strong>
+                （合格ライン {pred.passPct}%）
+                {pred.delta != null && (
+                  <span className={`exam-predict-delta ${pred.delta >= 0 ? 'up' : 'down'}`}>
+                    {pred.delta >= 0 ? `▲ +${pred.delta}` : `▼ ${pred.delta}`}pt
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="exam-predict-gauge">
+            <span className="epg-fill" style={{ width: `${Math.min(100, pred.recentAvg)}%` }} />
+            <span className="epg-line" style={{ left: `${pred.passPct}%` }} title={`合格ライン ${pred.passPct}%`} />
+          </div>
+          <div className="inline-note">{pred.msg}</div>
+          <div className="inline-note">※直近の模試スコアからの目安です。合格基準は年度により変動します。</div>
+        </div>
+      )}
+
       <div className="tiles">
         <div className="tile">
           <div className="num">{results.length}</div>
