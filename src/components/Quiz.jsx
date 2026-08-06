@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
+import ResetInline from './ResetInline.jsx';
 import { getSubjects } from '../lib/stats.js';
 import { subjectMatches } from '../data/examScope.js';
 import * as storage from '../lib/storage.js';
@@ -146,6 +147,16 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     else setIdx(order.length); // 終了画面へ
   };
 
+  // 一問一答をリセット（途中経過を破棄して科目選択へ戻す）
+  const resetQuiz = () => {
+    storage.clearQuizProgress();
+    setStarted(false);
+    setSessionPool(null);
+    setOrder([]);
+    setIdx(0);
+    setResume(null);
+  };
+
   // ---- 開始前 ----
   if (!started) {
     return (
@@ -263,6 +274,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
         GRADES={GRADES}
         isLast={idx + 1 >= order.length}
       />
+      <ResetInline label="一問一答をリセット" onReset={resetQuiz} />
     </div>
   );
 }

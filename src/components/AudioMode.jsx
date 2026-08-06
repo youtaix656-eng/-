@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { isSpeechSupported, loadVoices, speak, cancelSpeech } from '../lib/speech.js';
+import * as storage from '../lib/storage.js';
 import * as engine from '../lib/audioEngine.js';
 import { useAudioEngine } from '../lib/audioEngine.js';
 import { VOICE_PRESETS, resolveVoiceURI, presetById } from '../data/voices.js';
@@ -474,10 +475,32 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, questions.length, plan.length]
   );
 
-  // 計画をエンジンへ（同じ署名なら位置を保持して何もしない）
+  // 保存済みの再生位置（続きから）。マウント時に一度だけ読み込む。
+  const [audioReady, setAudioReady] = useState(false);
+  const resumeAudioRef = useRef(null);
   useEffect(() => {
-    engine.load(builtPlan, { sig: planSig });
-  }, [builtPlan, planSig]);
+    let alive = true;
+    storage.loadAudioProgress().then((p) => {
+      if (!alive) return;
+      resumeAudioRef.current = p && typeof p.index === 'number' ? p : null;
+      setAudioReady(true);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  // 計画をエンジンへ（同じ署名なら位置を保持。保存位置があれば続きから）
+  useEffect(() => {
+    if (!audioReady) return;
+    const saved = resumeAudioRef.current;
+    const startIndex = saved && saved.sig === planSig ? saved.index : 0;
+    engine.load(builtPlan, { sig: planSig, startIndex });
+  }, [builtPlan, planSig, audioReady]);
+
+  // 再生位置を1問ごとに保存（続きから用）。読み込み完了後のみ。
+  useEffect(() => {
+    if (!audioReady || !planSig) return;
+    storage.saveAudioProgress({ sig: planSig, index: snap.index || 0, at: Date.now() });
+  }, [snap.index, planSig, audioReady]);
 
   // 再生設定をエンジンへ反映（再生中でも即時）
   useEffect(() => { engine.configure({ rate }); }, [rate]);
@@ -515,7 +538,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     engine.toggle();
   };
   const skip = (delta) => engine.skip(delta);
-  const resetToStart = () => engine.resetToStart();
+  const resetToStart = () => {
+    engine.resetToStart();
+    storage.clearAudioProgress();
+    resumeAudioRef.current = null;
+  };
   // プラン構造を変える操作は停止（署名が変わればエンジンが先頭から読み直す）
   const rebuildStop = () => engine.stop();
 
@@ -792,7 +819,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               <button onClick={() => skip(1)} disabled={index >= total - 1} aria-label="次へ">⏭</button>
             </div>
             {index > 0 && (
-              <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={resetToStart}>最初から</button>
+              <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={resetToStart}>🔁 最初から（リセット）</button>
             )}
 
             {/* #10 聞きながら自己採点＋キーワード追加 */}

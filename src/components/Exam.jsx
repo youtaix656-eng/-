@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import ResetInline from './ResetInline.jsx';
+import * as storage from '../lib/storage.js';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -36,7 +38,10 @@ export default function Exam({ store }) {
   const [answers, setAnswers] = useState([]); // index による解答（null=未解答）
   const [idx, setIdx] = useState(0);
   const [remain, setRemain] = useState(0);
+  const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
   const timerRef = useRef(null);
+  const remainRef = useRef(0);
+  useEffect(() => { remainRef.current = remain; }, [remain]);
 
   const maxCount = Math.min(preset.count, questions.length);
 
@@ -48,6 +53,56 @@ export default function Exam({ store }) {
     setIdx(0);
     setRemain(preset.minutes * 60);
     setStage('running');
+  };
+
+  // 保存済みの途中経過を読み込む（続きから）
+  useEffect(() => {
+    if (stage !== 'setup' || !questions.length) return;
+    let alive = true;
+    storage.loadExamProgress().then((p) => {
+      if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length || (p.remain || 0) <= 0) return;
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      const rebuilt = p.ids.map((id) => byId.get(id)).filter(Boolean);
+      if (rebuilt.length !== p.ids.length) return; // 収録が変わっていたら復元しない
+      setResume(p);
+    });
+    return () => { alive = false; };
+  }, [questions, stage]);
+
+  const doResume = () => {
+    if (!resume) return;
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    setOrder(resume.ids.map((id) => byId.get(id)));
+    setAnswers(resume.answers || new Array(resume.ids.length).fill(null));
+    setIdx(Math.min(resume.idx || 0, resume.ids.length - 1));
+    setRemain(resume.remain || 0);
+    setResume(null);
+    setStage('running');
+  };
+
+  // 試験中は1問ごと（解答・移動ごと）に途中経過を保存
+  useEffect(() => {
+    if (stage !== 'running' || order.length === 0) return;
+    storage.saveExamProgress({
+      ids: order.map((q) => q.id),
+      answers,
+      idx,
+      remain: remainRef.current,
+      presetLabel: preset.label,
+      at: Date.now(),
+    });
+  }, [stage, idx, answers, order]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 試験をリセット（途中経過を破棄してセットアップへ戻す）
+  const resetExam = () => {
+    clearInterval(timerRef.current);
+    storage.clearExamProgress();
+    setResume(null);
+    setOrder([]);
+    setAnswers([]);
+    setIdx(0);
+    setRemain(0);
+    setStage('setup');
   };
 
   // タイマー
@@ -77,6 +132,7 @@ export default function Exam({ store }) {
 
   const finish = () => {
     clearInterval(timerRef.current);
+    storage.clearExamProgress(); // 採点したら途中経過は破棄
     // 解答を履歴・SRSに反映（採点時に一括記録）
     setStage('result');
   };
@@ -119,6 +175,12 @@ export default function Exam({ store }) {
         <p className="view-desc">
           本番を想定した問題数・制限時間で通し演習します。終了後に正答率と合格ライン判定を表示します。
         </p>
+
+        {resume && (
+          <button className="btn primary block lg" style={{ marginBottom: 12 }} onClick={doResume}>
+            ▶ 前回の続きから（{resume.presetLabel || '模試'}・{(resume.idx || 0) + 1}/{resume.ids.length}問・残り{fmtTime(resume.remain || 0)}）
+          </button>
+        )}
 
         <div className="card">
           <label className="section-label" style={{ marginTop: 0 }}>
@@ -305,6 +367,8 @@ export default function Exam({ store }) {
       >
         途中で終了して採点
       </button>
+
+      <ResetInline label="模試をリセット（採点せず破棄）" onReset={resetExam} />
     </div>
   );
 }

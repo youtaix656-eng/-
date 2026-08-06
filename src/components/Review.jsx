@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
+import ResetInline from './ResetInline.jsx';
 import { normalize, MASTER_STREAK } from '../lib/srs.js';
+import * as storage from '../lib/storage.js';
 
 // 間違えた問題だけを解くモード（エビングハウスの忘却曲線・5回連続の完璧でマスター）
 export default function Review({ store, onOpenKeyword, onGoAudio }) {
-  const { dueReviewQuestions, reviewQuestions, memos, links, recordAnswer, setMemo, setLink, srs, GRADES } = store;
+  const { questions, dueReviewQuestions, reviewQuestions, memos, links, recordAnswer, setMemo, setLink, srs, GRADES } = store;
 
   const [started, setStarted] = useState(false);
   const [order, setOrder] = useState([]);
   const [idx, setIdx] = useState(0);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
+  const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
 
   const start = () => {
     if (dueReviewQuestions.length === 0) return;
@@ -17,6 +20,45 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     setIdx(0);
     setSessionStats({ total: 0, correct: 0 });
     setStarted(true);
+  };
+
+  // 保存済みの途中経過を読み込む（続きから）
+  useEffect(() => {
+    if (started || !questions || !questions.length) return;
+    let alive = true;
+    storage.loadReviewProgress().then((p) => {
+      if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length) return;
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      const rebuilt = p.ids.map((id) => byId.get(id)).filter(Boolean);
+      if (rebuilt.length === 0 || (p.idx || 0) >= rebuilt.length) return;
+      setResume({ order: rebuilt, idx: Math.min(p.idx || 0, rebuilt.length - 1), stats: p.stats || { total: 0, correct: 0 } });
+    });
+    return () => { alive = false; };
+  }, [questions, started]);
+
+  // 1問ごとに途中経過を保存（終了したら消す）
+  useEffect(() => {
+    if (!started) return;
+    if (idx >= order.length) { storage.clearReviewProgress(); return; }
+    storage.saveReviewProgress({ ids: order.map((q) => q.id), idx, stats: sessionStats, at: Date.now() });
+  }, [started, idx, order, sessionStats]);
+
+  const doResume = () => {
+    if (!resume) return;
+    setOrder(resume.order);
+    setIdx(resume.idx);
+    setSessionStats(resume.stats);
+    setStarted(true);
+    setResume(null);
+  };
+
+  // 復習をリセット（途中経過を破棄してリストへ戻す）
+  const resetReview = () => {
+    storage.clearReviewProgress();
+    setStarted(false);
+    setOrder([]);
+    setIdx(0);
+    setResume(null);
   };
 
   const handleAnswered = (correct, grade) => {
@@ -74,6 +116,12 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             <div className="lbl">マスター間近</div>
           </div>
         </div>
+
+        {resume && (
+          <button className="btn primary block lg" style={{ marginBottom: 10 }} onClick={doResume}>
+            ▶ 前回の続きから（{resume.idx + 1}/{resume.order.length}問）
+          </button>
+        )}
 
         <div className="section-label" style={{ marginTop: 0 }}>復習のしかたを選ぶ</div>
         <button className="btn primary block lg" onClick={start} disabled={dueCount === 0}>
@@ -189,6 +237,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         GRADES={GRADES}
         isLast={idx + 1 >= order.length}
       />
+      <ResetInline label="復習をリセット" onReset={resetReview} />
     </div>
   );
 }

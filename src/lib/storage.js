@@ -32,6 +32,9 @@ export const KEYS = {
   pomoMusic: 'shinkyu:pomoMusic', // ポモドーロ開始Music（音声ファイルのBlob）
   lastView: 'shinkyu:lastView', // 前回開いていた画面（アプリ再開時に復元）
   quizProgress: 'shinkyu:quizProgress', // 一問一答の途中経過（1問ごとに保存・続きから）
+  reviewProgress: 'shinkyu:reviewProgress', // 復習の途中経過（1問ごとに保存・続きから）
+  examProgress: 'shinkyu:examProgress', // 模試の途中経過（解答・残り時間・続きから）
+  audioProgress: 'shinkyu:audioProgress', // 音声学習の再生位置（続きから）
   examResults: 'shinkyu:examResults', // 模試の結果履歴
   activity: 'shinkyu:activity', // 直近の閲覧履歴（画面・タイトル・ジャンル）
   migrated: 'shinkyu:migrated',
@@ -179,6 +182,24 @@ export const saveLastView = (v) => write(KEYS.lastView, v);
 export const loadQuizProgress = () => read(KEYS.quizProgress, null);
 export const saveQuizProgress = (p) => write(KEYS.quizProgress, p);
 export const clearQuizProgress = () => remove(KEYS.quizProgress);
+
+// ---- 復習の途中経過（1問ごとに保存・続きから） ----
+// reviewProgress = { ids:[qid], idx, stats:{total,correct}, at }
+export const loadReviewProgress = () => read(KEYS.reviewProgress, null);
+export const saveReviewProgress = (p) => write(KEYS.reviewProgress, p);
+export const clearReviewProgress = () => remove(KEYS.reviewProgress);
+
+// ---- 模試の途中経過（解答・残り時間・続きから） ----
+// examProgress = { ids:[qid], answers:[idx|null], idx, remain, presetLabel, at }
+export const loadExamProgress = () => read(KEYS.examProgress, null);
+export const saveExamProgress = (p) => write(KEYS.examProgress, p);
+export const clearExamProgress = () => remove(KEYS.examProgress);
+
+// ---- 音声学習の再生位置（続きから） ----
+// audioProgress = { sig, index, at }
+export const loadAudioProgress = () => read(KEYS.audioProgress, null);
+export const saveAudioProgress = (p) => write(KEYS.audioProgress, p);
+export const clearAudioProgress = () => remove(KEYS.audioProgress);
 
 // ---- 模試の結果履歴 ----
 // examResults = [{ id, at, count, correct, scorePct, passed, perSubject }]
