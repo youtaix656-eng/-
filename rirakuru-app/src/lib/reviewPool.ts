@@ -66,3 +66,9 @@ export const reviewPool: ReviewCard[] = buildPool();
 export function findCard(id: string): ReviewCard | undefined {
   return reviewPool.find((c) => c.id === id);
 }
+
+/** 選択肢のうち、どれが正解にあたるかを判定するための集合を作る（表示のハイライト用） */
+export function correctChoiceTexts(card: ReviewCard): Set<string> {
+  if (!card.choices) return new Set();
+  return new Set(card.back.split("・"));
+}

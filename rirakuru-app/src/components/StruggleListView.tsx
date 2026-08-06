@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Circle, Triangle, X, ListChecks } from "lucide-react";
-import { reviewPool } from "@/lib/reviewPool";
+import { ChevronDown, Circle, Triangle, X, ListChecks, Check } from "lucide-react";
+import { reviewPool, correctChoiceTexts } from "@/lib/reviewPool";
 import { readReviewMap, hasStruggled, isMastered, gradeItem, type ReviewMap, type Grade } from "@/lib/srs";
 import { AudioLearning } from "./AudioLearning";
 import { buildReviewAudioSegments } from "@/lib/audioSegments";
@@ -81,11 +81,26 @@ export function StruggleListView() {
                     <div className="border-t border-cream-100 px-4 py-3 dark:border-cocoa-800">
                       {card.choices && (
                         <ul className="mb-2 flex flex-col gap-1">
-                          {card.choices.map((c, i) => (
-                            <li key={i} className="text-sm text-cocoa-500 dark:text-sand-200">
-                              {i + 1}. {c}
-                            </li>
-                          ))}
+                          {card.choices.map((c, i) => {
+                            const isCorrect = correctChoiceTexts(card).has(c);
+                            return (
+                              <li
+                                key={i}
+                                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm ${
+                                  isCorrect
+                                    ? "bg-green-50 font-semibold text-green-700 dark:bg-green-950/40 dark:text-green-300"
+                                    : "text-cocoa-500 dark:text-sand-200"
+                                }`}
+                              >
+                                {isCorrect ? (
+                                  <Check size={14} className="shrink-0 text-green-600 dark:text-green-300" />
+                                ) : (
+                                  <span className="w-[14px] shrink-0" />
+                                )}
+                                {i + 1}. {c}
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                       <p className="text-base font-semibold leading-relaxed text-cocoa-800 dark:text-cream-50">
