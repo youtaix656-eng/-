@@ -1,7 +1,7 @@
 // 臨床医学各論（りんしょういがくかくろん）— 過去問の教材化。
 // 起動時に問題バンクへ取り込む（RINKAKU_VERSION で増分反映）。genre=大項目｜中項目。
 // 原問（4択そのまま）＋一問一答（A核心/B定義逆引き/C鑑別/D○×）で網羅。
-export const RINKAKU_VERSION = 2;
+export const RINKAKU_VERSION = 3;
 
 const OX = ['○（正しい）', '×（誤り）'];
 const S = '臨床医学各論';
@@ -236,7 +236,7 @@ const rinkakuQuestions = [
   {
     id: 'rk-kan-b8', subject: S, type: 'choice', round: 31, deck: S,
     genre: '感染症｜細菌感染症',
-    question: '細菌感染症はどれか。',
+    question: '細菌感染症はどれか。（第31回）',
     choices: ['デング熱', '破傷風', '日本脳炎', '手足口病'],
     answer: 1,
     explanation: '破傷風は破傷風菌（細菌）による。デング熱はデングウイルス、日本脳炎は日本脳炎ウイルス、手足口病はコクサッキー・エンテロウイルスによる。',
@@ -330,7 +330,7 @@ const rinkakuQuestions = [
   {
     id: 'rk-kan-c11', subject: S, type: 'choice', round: 26, deck: S,
     genre: '感染症｜ウイルス感染症',
-    question: '感染症について正しいのはどれか。',
+    question: '感染症について正しいのはどれか。（第26回）',
     choices: [
       'インフルエンザウイルス感染は迅速な検査が可能である。',
       '麻疹は「三日ばしか」と言われている。',
@@ -393,7 +393,7 @@ const rinkakuQuestions = [
   {
     id: 'rk-kan-c13', subject: S, type: 'choice', round: 29, deck: S,
     genre: '感染症｜ウイルス感染症',
-    question: '感染症について正しいのはどれか。',
+    question: '感染症について正しいのはどれか。（第29回）',
     choices: [
       '風疹は「三日ばしか」と言われる。',
       '日本脳炎はネズミの媒介によって感染する。',
@@ -519,7 +519,7 @@ const rinkakuQuestions = [
   {
     id: 'rk-kan-c17', subject: S, type: 'choice', round: 34, deck: S,
     genre: '感染症｜ウイルス感染症',
-    question: '帯状疱疹について正しいのはどれか。',
+    question: '帯状疱疹について正しいのはどれか。（第34回）',
     choices: ['5類感染症である。', 'ウイルスの初回感染で起こる。', 'ワクチンによって予防が可能である。', '左右対称性に出現する。'],
     answer: 2,
     explanation: '帯状疱疹はワクチンで発症・重症化を予防できる。5類感染症は水痘で帯状疱疹は該当せず、初感染では水痘となり再活性化で帯状疱疹となる。皮疹はデルマトームに一致して片側性。',
