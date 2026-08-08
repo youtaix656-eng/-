@@ -3,6 +3,7 @@ import { WAKE_STATE_EMOJI, WAKE_STATE_LABELS } from '../types/sleep';
 import { formatDateLabel, todayISODate } from '../lib/time';
 import { groggyHourBuckets, recentAverageHours } from '../lib/analysis';
 import { computeStreak } from '../lib/streak';
+import Clock from './Clock';
 
 export default function Home({
   records,
@@ -27,6 +28,8 @@ export default function Home({
 
   return (
     <>
+      <Clock />
+
       {needsWakeLog && (
         <div className="reminder-banner">
           <span className="title">

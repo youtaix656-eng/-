@@ -64,7 +64,7 @@ export default function Dashboard({ records }: { records: SleepRecord[] }) {
                 borderRadius: '4px 4px 2px 2px',
                 background:
                   dates[i] === todayISODate()
-                    ? 'var(--amber)'
+                    ? 'var(--text)'
                     : h > 0
                       ? 'linear-gradient(180deg, var(--sleep), var(--sleep-soft))'
                       : 'var(--border-soft)',
@@ -151,7 +151,7 @@ export default function Dashboard({ records }: { records: SleepRecord[] }) {
                   style={{
                     paddingTop: '100%',
                     borderRadius: 3,
-                    background: 'var(--amber)',
+                    background: 'var(--text)',
                     opacity: count === 0 ? 0.08 : 0.2 + 0.7 * (count / maxMatrix),
                   }}
                 />

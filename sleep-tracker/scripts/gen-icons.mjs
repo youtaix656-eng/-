@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = join(__dirname, '..', 'public', 'icons');
 
-const BG = [10, 14, 24, 255]; // #0a0e18
-const AMBER = [242, 177, 56, 255]; // #f2b138
+const BG = [0, 0, 0, 255]; // #000000
+const FG = [255, 255, 255, 255]; // #ffffff
 
 // ---------------- PNG エンコード（IHDR/IDAT/IEND を手組み） ----------------
 
@@ -114,7 +114,7 @@ function renderIcon(size, mode) {
         continue;
       }
       const inMoon = insideCircle(x, y, cx, cy, r1) && !insideCircle(x, y, ex, ey, r2);
-      setPixel(rgba, size, x, y, inMoon ? AMBER : BG);
+      setPixel(rgba, size, x, y, inMoon ? FG : BG);
     }
   }
   return rgba;

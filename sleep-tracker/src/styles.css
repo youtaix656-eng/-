@@ -10,9 +10,11 @@
   --text: #ffffff;
   --text-muted: rgba(255, 255, 255, 0.75);
   --text-faint: rgba(255, 255, 255, 0.5);
-  --amber: #ffb52e;
-  --amber-soft: rgba(255, 181, 46, 0.18);
-  --amber-line: rgba(255, 181, 46, 0.55);
+  /* ボタン・選択状態など「地」の主役は白+黒文字で統一する（データの色分けとは別枠） */
+  --invert-bg: #ffffff;
+  --invert-fg: #000000;
+  --invert-fg-muted: rgba(0, 0, 0, 0.6);
+  --invert-shadow: rgba(255, 255, 255, 0.3);
   --sleep: #9fadff;
   --sleep-soft: rgba(159, 173, 255, 0.2);
   --nap: #4fe0c0;
@@ -82,11 +84,13 @@ textarea {
 
 .app-header .header-action {
   font-size: 13px;
-  color: var(--amber);
+  color: var(--text);
   font-weight: 700;
   background: none;
   border: none;
   padding: 4px 2px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .app-main {
@@ -131,11 +135,11 @@ textarea {
 }
 
 .bottom-nav button.active {
-  color: var(--amber);
+  color: var(--text);
 }
 
 .bottom-nav button.active .ico {
-  filter: drop-shadow(0 0 8px var(--amber-soft));
+  filter: drop-shadow(0 0 8px var(--invert-shadow));
 }
 
 .fab {
@@ -145,15 +149,15 @@ textarea {
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--amber);
-  color: #241703;
+  background: var(--invert-bg);
+  color: var(--invert-fg);
   font-size: 26px;
   font-weight: 700;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12px 24px -8px rgba(242, 177, 56, 0.55);
+  box-shadow: 0 12px 24px -8px var(--invert-shadow);
   z-index: 9;
 }
 
@@ -185,7 +189,7 @@ textarea {
   font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   font-size: 28px;
   font-weight: 700;
-  color: var(--amber);
+  color: var(--text);
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -229,8 +233,8 @@ textarea {
 }
 
 .btn-primary {
-  background: var(--amber);
-  color: #241703;
+  background: var(--invert-bg);
+  color: var(--invert-fg);
 }
 
 .btn-secondary {
@@ -292,7 +296,7 @@ textarea {
 .field textarea:focus,
 .seg:focus-visible,
 .btn:focus-visible {
-  outline: 2px solid var(--amber);
+  outline: 2px solid var(--text);
   outline-offset: 1px;
 }
 
@@ -334,8 +338,13 @@ textarea {
 }
 
 .seg.on {
-  background: var(--amber-soft);
-  border-color: var(--amber-line);
+  background: var(--invert-bg);
+  border-color: var(--invert-bg);
+  color: var(--invert-fg);
+}
+
+.seg.on .n {
+  color: var(--invert-fg-muted);
 }
 
 .section-title {
@@ -435,8 +444,8 @@ h2.page-title {
 }
 
 .tabs button.active {
-  background: var(--amber);
-  color: #241703;
+  background: var(--invert-bg);
+  color: var(--invert-fg);
 }
 
 .modal-backdrop {
@@ -489,8 +498,8 @@ h2.page-title {
 }
 
 .reminder-banner {
-  background: var(--amber-soft);
-  border: 1px solid var(--amber-line);
+  background: var(--surface-2);
+  border: 1px solid var(--text);
   border-radius: 14px;
   padding: 16px;
   display: flex;

@@ -197,7 +197,7 @@ export default function NapTimer({
                   width: 176,
                   height: 176,
                   borderRadius: '50%',
-                  background: `conic-gradient(var(--amber) ${progress * 360}deg, var(--border-soft) ${progress * 360}deg 360deg)`,
+                  background: `conic-gradient(var(--text) ${progress * 360}deg, var(--border-soft) ${progress * 360}deg 360deg)`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

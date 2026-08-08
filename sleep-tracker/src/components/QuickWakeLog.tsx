@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SleepRecord, WakeState } from '../types/sleep';
 import { applyQuickWakeLog } from '../lib/todayRecord';
 import { loadLastDefaults } from '../lib/storage';
-import { todayISODate } from '../lib/time';
+import { formatDateLabel, todayISODate } from '../lib/time';
 
 const MOOD_OPTIONS: { value: WakeState; emoji: string; label: string }[] = [
   { value: 1, emoji: '😩', label: 'だるい' },
@@ -50,7 +50,12 @@ export default function QuickWakeLog({
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-sheet">
         <div className="modal-head">
-          <h2>おはようございます</h2>
+          <div>
+            <h2>おはようございます</h2>
+            <div className="subtle" style={{ marginTop: 2 }}>
+              {formatDateLabel(todayISODate())}
+            </div>
+          </div>
           <button className="icon-btn" onClick={onClose} aria-label="閉じる">
             ✕
           </button>

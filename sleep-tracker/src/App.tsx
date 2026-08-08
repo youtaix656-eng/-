@@ -23,18 +23,32 @@ export default function App() {
   const [tab, setTab] = useState<TabId>('home');
   const { records, saveRecord, deleteRecord } = useRecords();
   const [editing, setEditing] = useState<SleepRecord | 'new' | null>(null);
+  const [newRecordDate, setNewRecordDate] = useState<string | undefined>(undefined);
   const [timerOpen, setTimerOpen] = useState(false);
   const [timerPreset, setTimerPreset] = useState<number | null>(null);
   const [quickWakeOpen, setQuickWakeOpen] = useState(false);
   const [napQuickAddOpen, setNapQuickAddOpen] = useState(false);
 
   function openNewRecord() {
+    setNewRecordDate(undefined);
     setEditing('new');
+  }
+
+  // カレンダーで記録の無い日をタップしたときは、その日付を初期値にした新規フォームを開く
+  function openNewRecordForDate(date: string) {
+    setNewRecordDate(date);
+    setEditing('new');
+  }
+
+  function closeForm() {
+    setEditing(null);
+    setNewRecordDate(undefined);
   }
 
   // ホームの「詳しく編集する」は今日の記録があればそれを編集する（新規の空フォームを開かない）
   function openTodayFullForm() {
     const today = records.find((r) => r.date === todayISODate());
+    setNewRecordDate(undefined);
     setEditing(today ?? 'new');
   }
 
@@ -64,7 +78,14 @@ export default function App() {
             onOpenFullForm={openTodayFullForm}
           />
         )}
-        {tab === 'history' && <History records={records} onEdit={(r) => setEditing(r)} onDelete={deleteRecord} />}
+        {tab === 'history' && (
+          <History
+            records={records}
+            onEdit={(r) => setEditing(r)}
+            onCreateDate={openNewRecordForDate}
+            onDelete={deleteRecord}
+          />
+        )}
         {tab === 'dashboard' && <Dashboard records={records} />}
         {tab === 'schedule' && <Schedule records={records} />}
       </main>
@@ -80,10 +101,11 @@ export default function App() {
       {editing !== null && (
         <RecordForm
           initial={editing === 'new' ? null : editing}
-          onClose={() => setEditing(null)}
+          defaultDate={editing === 'new' ? newRecordDate : undefined}
+          onClose={closeForm}
           onSave={async (record) => {
             await saveRecord(record);
-            setEditing(null);
+            closeForm();
           }}
         />
       )}

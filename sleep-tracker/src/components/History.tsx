@@ -1,19 +1,23 @@
+import { useState } from 'react';
 import type { SleepRecord } from '../types/sleep';
 import { WAKE_STATE_EMOJI } from '../types/sleep';
 import { formatDateLabel } from '../lib/time';
+import Calendar from './Calendar';
+
+type View = 'list' | 'calendar';
 
 export default function History({
   records,
   onEdit,
+  onCreateDate,
   onDelete,
 }: {
   records: SleepRecord[];
   onEdit: (record: SleepRecord) => void;
+  onCreateDate: (date: string) => void;
   onDelete: (id: string) => void;
 }) {
-  if (records.length === 0) {
-    return <div className="empty-state">まだ記録がありません。ホームの「＋」から記録を追加できます。</div>;
-  }
+  const [view, setView] = useState<View>('list');
 
   function handleDelete(e: React.MouseEvent, r: SleepRecord) {
     e.stopPropagation();
@@ -23,32 +27,55 @@ export default function History({
   }
 
   return (
-    <div className="card" style={{ padding: '4px 14px' }}>
-      {records.map((r) => {
-        const core = coreHours(r);
-        return (
-          <div key={r.id} className="list-row" onClick={() => onEdit(r)} style={{ cursor: 'pointer' }}>
-            <span>
-              {formatDateLabel(r.date)}
-              <br />
-              <span className="t">
-                {core > 0 ? `コア${core}h` : ''}
-                {r.naps.length > 0 ? `${core > 0 ? ' + ' : ''}仮眠${r.naps.length}回` : ''}
-                {core === 0 && r.naps.length === 0 ? '未入力' : ''}
-              </span>
-            </span>
-            <span className="pill-row">
-              <span className="pill">
-                {WAKE_STATE_EMOJI[r.wakeState]} 学習{r.studyPerformance}
-              </span>
-              <button className="icon-btn" onClick={(e) => handleDelete(e, r)} aria-label="削除">
-                🗑
-              </button>
-            </span>
+    <>
+      <div className="tabs">
+        <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>
+          リスト
+        </button>
+        <button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}>
+          カレンダー
+        </button>
+      </div>
+
+      {view === 'calendar' && (
+        <Calendar
+          records={records}
+          onOpenDate={(date, existing) => (existing ? onEdit(existing) : onCreateDate(date))}
+        />
+      )}
+
+      {view === 'list' &&
+        (records.length === 0 ? (
+          <div className="empty-state">まだ記録がありません。ホームの「＋」から記録を追加できます。</div>
+        ) : (
+          <div className="card" style={{ padding: '4px 14px' }}>
+            {records.map((r) => {
+              const core = coreHours(r);
+              return (
+                <div key={r.id} className="list-row" onClick={() => onEdit(r)} style={{ cursor: 'pointer' }}>
+                  <span>
+                    {formatDateLabel(r.date)}
+                    <br />
+                    <span className="t">
+                      {core > 0 ? `コア${core}h` : ''}
+                      {r.naps.length > 0 ? `${core > 0 ? ' + ' : ''}仮眠${r.naps.length}回` : ''}
+                      {core === 0 && r.naps.length === 0 ? '未入力' : ''}
+                    </span>
+                  </span>
+                  <span className="pill-row">
+                    <span className="pill">
+                      {WAKE_STATE_EMOJI[r.wakeState]} 学習{r.studyPerformance}
+                    </span>
+                    <button className="icon-btn" onClick={(e) => handleDelete(e, r)} aria-label="削除">
+                      🗑
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
-    </div>
+        ))}
+    </>
   );
 }
 

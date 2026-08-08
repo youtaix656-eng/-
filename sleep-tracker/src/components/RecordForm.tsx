@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GrogginessPeriod, Nap, NapAfterState, SleepRecord, StudyPerformance, WakeState } from '../types/sleep';
 import { NAP_AFTER_STATE_LABELS, WAKE_STATE_EMOJI, WAKE_STATE_LABELS } from '../types/sleep';
 import { computeTotalSleepHours } from '../lib/calc';
 import { newId } from '../lib/id';
+import { loadLastDefaults } from '../lib/storage';
 import { addMinutesToTime, todayISODate } from '../lib/time';
 
 const WAKE_STATES: WakeState[] = [1, 2, 3, 4, 5];
@@ -11,14 +12,16 @@ const INTENSITIES = [1, 2, 3, 4, 5] as const;
 
 export default function RecordForm({
   initial,
+  defaultDate,
   onClose,
   onSave,
 }: {
   initial: SleepRecord | null;
+  defaultDate?: string;
   onClose: () => void;
   onSave: (record: SleepRecord) => void | Promise<void>;
 }) {
-  const [date, setDate] = useState(initial?.date ?? todayISODate());
+  const [date, setDate] = useState(initial?.date ?? defaultDate ?? todayISODate());
   const [coreStart, setCoreStart] = useState(initial?.coreSleep.start ?? '');
   const [coreEnd, setCoreEnd] = useState(initial?.coreSleep.end ?? '');
   const [wakeState, setWakeState] = useState<WakeState>(initial?.wakeState ?? 3);
@@ -28,6 +31,16 @@ export default function RecordForm({
   const [workEndTime, setWorkEndTime] = useState(initial?.workEndTime ?? '');
   const [memo, setMemo] = useState(initial?.memo ?? '');
   const [saving, setSaving] = useState(false);
+
+  // 新規記録では、前回のコア睡眠開始・勤務終了時刻を覚えておいて初期値にする
+  useEffect(() => {
+    if (initial) return;
+    loadLastDefaults().then((d) => {
+      if (d.coreSleep?.start) setCoreStart((cur) => cur || d.coreSleep!.start);
+      if (d.workEndTime) setWorkEndTime((cur) => cur || d.workEndTime!);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const totalHours = computeTotalSleepHours({ start: coreStart, end: coreEnd }, naps);
 
