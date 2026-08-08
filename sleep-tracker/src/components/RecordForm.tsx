@@ -2,24 +2,12 @@ import { useState } from 'react';
 import type { GrogginessPeriod, Nap, NapAfterState, SleepRecord, StudyPerformance, WakeState } from '../types/sleep';
 import { NAP_AFTER_STATE_LABELS, WAKE_STATE_EMOJI, WAKE_STATE_LABELS } from '../types/sleep';
 import { computeTotalSleepHours } from '../lib/calc';
-import { todayISODate } from '../lib/time';
+import { newId } from '../lib/id';
+import { addMinutesToTime, todayISODate } from '../lib/time';
 
 const WAKE_STATES: WakeState[] = [1, 2, 3, 4, 5];
 const AFTER_STATES: NapAfterState[] = ['groggy', 'neutral', 'refreshed'];
 const INTENSITIES = [1, 2, 3, 4, 5] as const;
-
-function newId(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function addMinutesToTime(hhmm: string, min: number): string {
-  if (!hhmm) return '';
-  const [h, m] = hhmm.split(':').map(Number);
-  const total = (((h * 60 + m + min) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
 
 export default function RecordForm({
   initial,

@@ -6,7 +6,10 @@ import Dashboard from './components/Dashboard';
 import Schedule from './components/Schedule';
 import RecordForm from './components/RecordForm';
 import NapTimer from './components/NapTimer';
+import QuickWakeLog from './components/QuickWakeLog';
+import NapQuickAdd from './components/NapQuickAdd';
 import { useRecords } from './lib/useRecords';
+import { todayISODate } from './lib/time';
 import type { SleepRecord } from './types/sleep';
 
 const TAB_TITLES: Record<TabId, string> = {
@@ -22,9 +25,17 @@ export default function App() {
   const [editing, setEditing] = useState<SleepRecord | 'new' | null>(null);
   const [timerOpen, setTimerOpen] = useState(false);
   const [timerPreset, setTimerPreset] = useState<number | null>(null);
+  const [quickWakeOpen, setQuickWakeOpen] = useState(false);
+  const [napQuickAddOpen, setNapQuickAddOpen] = useState(false);
 
   function openNewRecord() {
     setEditing('new');
+  }
+
+  // ホームの「詳しく編集する」は今日の記録があればそれを編集する（新規の空フォームを開かない）
+  function openTodayFullForm() {
+    const today = records.find((r) => r.date === todayISODate());
+    setEditing(today ?? 'new');
   }
 
   function startTimer(min: number | null = null) {
@@ -44,7 +55,15 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {tab === 'home' && <Home records={records} onStartNap={startTimer} onNewRecord={openNewRecord} />}
+        {tab === 'home' && (
+          <Home
+            records={records}
+            onStartNap={startTimer}
+            onOpenQuickWake={() => setQuickWakeOpen(true)}
+            onOpenNapQuickAdd={() => setNapQuickAddOpen(true)}
+            onOpenFullForm={openTodayFullForm}
+          />
+        )}
         {tab === 'history' && <History records={records} onEdit={(r) => setEditing(r)} onDelete={deleteRecord} />}
         {tab === 'dashboard' && <Dashboard records={records} />}
         {tab === 'schedule' && <Schedule records={records} />}
@@ -75,6 +94,28 @@ export default function App() {
           records={records}
           onSaveNap={saveRecord}
           onClose={() => setTimerOpen(false)}
+        />
+      )}
+
+      {quickWakeOpen && (
+        <QuickWakeLog
+          records={records}
+          onClose={() => setQuickWakeOpen(false)}
+          onSave={async (record) => {
+            await saveRecord(record);
+            setQuickWakeOpen(false);
+          }}
+        />
+      )}
+
+      {napQuickAddOpen && (
+        <NapQuickAdd
+          records={records}
+          onClose={() => setNapQuickAddOpen(false)}
+          onSave={async (record) => {
+            await saveRecord(record);
+            setNapQuickAddOpen(false);
+          }}
         />
       )}
     </div>

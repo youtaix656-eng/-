@@ -1,24 +1,56 @@
 import type { SleepRecord } from '../types/sleep';
 import { WAKE_STATE_EMOJI, WAKE_STATE_LABELS } from '../types/sleep';
 import { formatDateLabel, todayISODate } from '../lib/time';
-import { groggyHourBuckets } from '../lib/analysis';
+import { groggyHourBuckets, recentAverageHours } from '../lib/analysis';
+import { computeStreak } from '../lib/streak';
 
 export default function Home({
   records,
   onStartNap,
-  onNewRecord,
+  onOpenQuickWake,
+  onOpenNapQuickAdd,
+  onOpenFullForm,
 }: {
   records: SleepRecord[];
   onStartNap: (min: number) => void;
-  onNewRecord: () => void;
+  onOpenQuickWake: () => void;
+  onOpenNapQuickAdd: () => void;
+  onOpenFullForm: () => void;
 }) {
   const latest = records[0];
   const todayRecord = records.find((r) => r.date === todayISODate());
+  const needsWakeLog = !todayRecord?.coreSleep.start;
+  const streak = computeStreak(records);
+  const weeklyAvg = recentAverageHours(records, 7);
   const buckets = groggyHourBuckets(records).filter((b) => b.count >= 2);
   const nextWarning = pickUpcomingWarning(buckets);
 
   return (
     <>
+      {needsWakeLog && (
+        <div className="reminder-banner">
+          <span className="title">
+            {todayRecord ? '今日の就寝・起床がまだ記録されていません' : '今日の記録がまだありません'}
+          </span>
+          <button className="btn btn-primary" onClick={onOpenQuickWake}>
+            睡眠を記録する
+          </button>
+        </div>
+      )}
+
+      {records.length > 0 && (
+        <div className="stat-row">
+          <div className="stat-chip">
+            <span className="stat-value">🔥 {streak}日</span>
+            <span className="stat-label">連続記録</span>
+          </div>
+          <div className="stat-chip">
+            <span className="stat-value">{weeklyAvg ? `${weeklyAvg}h` : '–'}</span>
+            <span className="stat-label">今週の平均睡眠時間</span>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="card-label">{latest ? `直近の記録（${formatDateLabel(latest.date)}）` : '記録がまだありません'}</div>
         {latest ? (
@@ -44,7 +76,7 @@ export default function Home({
             </div>
           </>
         ) : (
-          <div className="subtle">最初の記録を入力すると、ここにサマリーが表示されます。</div>
+          <div className="subtle">「睡眠を記録する」から最初の記録を入力すると、ここにサマリーが表示されます。</div>
         )}
       </div>
 
@@ -57,8 +89,12 @@ export default function Home({
         </button>
       </div>
 
-      <button className="btn btn-ghost" onClick={onNewRecord}>
-        {todayRecord ? '＋ 今日の記録を編集' : '＋ 今日の記録を入力'}
+      <button className="btn btn-ghost" onClick={onOpenNapQuickAdd}>
+        ＋ 仮眠を後から記録
+      </button>
+
+      <button className="text-link" onClick={onOpenFullForm}>
+        モヤ・学習パフォーマンス・メモも詳しく編集する
       </button>
 
       {nextWarning && (

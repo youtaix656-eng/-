@@ -46,6 +46,13 @@ export function todayISODate(): string {
   return `${y}-${m}-${day}`;
 }
 
+export function addMinutesToTime(hhmm: string, min: number): string {
+  if (!hhmm) return '';
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = (((h * 60 + m + min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 export function isoToHHMM(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

@@ -81,6 +81,17 @@ export function wakeStudyCorrelation(records: SleepRecord[]): number | null {
   return num / Math.sqrt(dx2 * dy2);
 }
 
+// 直近N日以内に入力された記録だけを対象にした平均睡眠時間（未記録の日は数えない）。
+export function recentAverageHours(records: SleepRecord[], days = 7): number {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutoffISO = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+  const recent = records.filter((r) => r.date >= cutoffISO && r.totalSleepHours > 0);
+  if (recent.length === 0) return 0;
+  return Math.round((recent.reduce((sum, r) => sum + r.totalSleepHours, 0) / recent.length) * 10) / 10;
+}
+
 export function wakeStudyMatrix(records: SleepRecord[]): number[][] {
   // [wakeState-1][studyPerformance-1] = 件数
   const matrix: number[][] = Array.from({ length: 5 }, () => Array(5).fill(0));
