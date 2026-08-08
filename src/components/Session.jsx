@@ -84,6 +84,13 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     });
   }, [afterKw, term, links]);
 
+  // 現在の条件で「まだ解いていない新規問題」が何問残っているか
+  //   新規＝未着手（srs.seen が 0 または未登録）。buildMixedOrder の newPool と同じ定義。
+  const newRemaining = useMemo(
+    () => filteredPool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0).length,
+    [filteredPool, srs]
+  );
+
   // 上位を変えたら下位をリセット
   useEffect(() => { setGenre(''); setKeyword(''); }, [subject]);
   useEffect(() => { setKeyword(''); }, [genre]);
@@ -190,7 +197,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
             style={{ marginTop: 10 }}
           />
           <div className="search-foot" style={{ marginTop: 8 }}>
-            <span>この条件で <strong>{filteredPool.length}</strong> 問</span>
+            <span>この条件で <strong>{filteredPool.length}</strong> 問（残り新規 <strong>{newRemaining}</strong> 問）</span>
             {(genre || keyword || term || subject !== 'all') && (
               <button className="btn ghost sm" onClick={() => { setSubject('all'); setGenre(''); setKeyword(''); setTerm(''); }}>クリア</button>
             )}
