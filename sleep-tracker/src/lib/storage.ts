@@ -5,12 +5,14 @@
 import { idbGet, idbSet, isIdbSupported } from './db';
 import type { SleepRecord } from '../types/sleep';
 import type { NapTimerState } from '../types/napTimer';
+import type { AppSettings } from '../types/settings';
 
 const KEYS = {
   records: 'sleep:records',
   napTimer: 'sleep:napTimer',
   pendingNap: 'sleep:pendingNap',
   lastDefaults: 'sleep:lastDefaults',
+  settings: 'sleep:settings',
 } as const;
 
 const useIdb = isIdbSupported();
@@ -120,4 +122,43 @@ export interface LastDefaults {
 
 export async function loadLastDefaults(): Promise<LastDefaults> {
   return read<LastDefaults>(KEYS.lastDefaults, {});
+}
+
+// ---------------- アプリ設定（目標睡眠時間・通知） ----------------
+
+export async function loadSettings(): Promise<AppSettings> {
+  return read<AppSettings>(KEYS.settings, {});
+}
+
+export async function saveSettings(settings: AppSettings): Promise<void> {
+  await write(KEYS.settings, settings);
+}
+
+// ---------------- バックアップ（全記録のエクスポート／インポート） ----------------
+
+export interface BackupFile {
+  app: 'sleep-tracker';
+  version: 1;
+  exportedAt: string;
+  records: SleepRecord[];
+  settings: AppSettings;
+}
+
+export async function exportBackup(): Promise<BackupFile> {
+  const records = await read<SleepRecord[]>(KEYS.records, []);
+  const settings = await read<AppSettings>(KEYS.settings, {});
+  return { app: 'sleep-tracker', version: 1, exportedAt: new Date().toISOString(), records, settings };
+}
+
+// 既存の記録とID一致するものは上書き、それ以外は追加する（取り込みのやり直しでも重複しない）。
+export async function importBackup(file: BackupFile): Promise<number> {
+  if (file.app !== 'sleep-tracker' || !Array.isArray(file.records)) {
+    throw new Error('このアプリのバックアップファイルではありません');
+  }
+  const existing = await read<SleepRecord[]>(KEYS.records, []);
+  const byId = new Map(existing.map((r) => [r.id, r]));
+  for (const r of file.records) byId.set(r.id, r);
+  await write(KEYS.records, [...byId.values()]);
+  if (file.settings) await write(KEYS.settings, file.settings);
+  return file.records.length;
 }

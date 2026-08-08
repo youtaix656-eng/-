@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import BottomNav, { type TabId } from './components/BottomNav';
 import Home from './components/Home';
 import History from './components/History';
@@ -8,9 +8,15 @@ import RecordForm from './components/RecordForm';
 import NapTimer from './components/NapTimer';
 import QuickWakeLog from './components/QuickWakeLog';
 import NapQuickAdd from './components/NapQuickAdd';
+import GroggyQuickAdd from './components/GroggyQuickAdd';
+import EveningReflection from './components/EveningReflection';
+import SettingsScreen from './components/Settings';
 import { useRecords } from './lib/useRecords';
+import { loadSettings, saveSettings } from './lib/storage';
+import { startReminderWatch, stopReminderWatch } from './lib/reminders';
 import { todayISODate } from './lib/time';
 import type { SleepRecord } from './types/sleep';
+import type { AppSettings } from './types/settings';
 
 const TAB_TITLES: Record<TabId, string> = {
   home: '睡眠トラッカー',
@@ -21,13 +27,20 @@ const TAB_TITLES: Record<TabId, string> = {
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('home');
-  const { records, saveRecord, deleteRecord } = useRecords();
+  const { records, saveRecord, deleteRecord, refresh } = useRecords();
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
+
+  const [settings, setSettings] = useState<AppSettings>({});
   const [editing, setEditing] = useState<SleepRecord | 'new' | null>(null);
   const [newRecordDate, setNewRecordDate] = useState<string | undefined>(undefined);
   const [timerOpen, setTimerOpen] = useState(false);
   const [timerPreset, setTimerPreset] = useState<number | null>(null);
   const [quickWakeOpen, setQuickWakeOpen] = useState(false);
   const [napQuickAddOpen, setNapQuickAddOpen] = useState(false);
+  const [groggyQuickAddOpen, setGroggyQuickAddOpen] = useState(false);
+  const [eveningReflectionOpen, setEveningReflectionOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   function openNewRecord() {
     setNewRecordDate(undefined);
@@ -57,24 +70,67 @@ export default function App() {
     setTimerOpen(true);
   }
 
+  function updateSettings(patch: Partial<AppSettings>) {
+    setSettings((cur) => {
+      const next = { ...cur, ...patch };
+      saveSettings(next);
+      return next;
+    });
+  }
+
+  // 設定の読み込み、PWAショートカット（ホーム長押し）からの起動アクション処理
+  useEffect(() => {
+    loadSettings().then(setSettings);
+
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    if (action === 'nap20') {
+      startTimer(20);
+    } else if (action === 'quickwake') {
+      setQuickWakeOpen(true);
+    }
+    if (action) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 未記録リマインダーの開始/停止
+  useEffect(() => {
+    if (settings.remindersEnabled) {
+      startReminderWatch(() => recordsRef.current);
+    } else {
+      stopReminderWatch();
+    }
+    return () => stopReminderWatch();
+  }, [settings.remindersEnabled]);
+
   return (
     <div className="app">
       <header className="app-header">
         <h1>{TAB_TITLES[tab]}</h1>
-        {tab === 'home' && (
-          <button className="header-action" onClick={() => startTimer(null)}>
-            ⏱ 仮眠
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          {tab === 'home' && (
+            <button className="header-action" onClick={() => startTimer(null)}>
+              ⏱ 仮眠
+            </button>
+          )}
+          <button className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="設定">
+            ⚙
           </button>
-        )}
+        </div>
       </header>
 
       <main className="app-main">
         {tab === 'home' && (
           <Home
             records={records}
+            settings={settings}
             onStartNap={startTimer}
             onOpenQuickWake={() => setQuickWakeOpen(true)}
             onOpenNapQuickAdd={() => setNapQuickAddOpen(true)}
+            onOpenGroggyQuickAdd={() => setGroggyQuickAddOpen(true)}
+            onOpenEveningReflection={() => setEveningReflectionOpen(true)}
             onOpenFullForm={openTodayFullForm}
           />
         )}
@@ -138,6 +194,37 @@ export default function App() {
             await saveRecord(record);
             setNapQuickAddOpen(false);
           }}
+        />
+      )}
+
+      {groggyQuickAddOpen && (
+        <GroggyQuickAdd
+          records={records}
+          onClose={() => setGroggyQuickAddOpen(false)}
+          onSave={async (record) => {
+            await saveRecord(record);
+            setGroggyQuickAddOpen(false);
+          }}
+        />
+      )}
+
+      {eveningReflectionOpen && (
+        <EveningReflection
+          records={records}
+          onClose={() => setEveningReflectionOpen(false)}
+          onSave={async (record) => {
+            await saveRecord(record);
+            setEveningReflectionOpen(false);
+          }}
+        />
+      )}
+
+      {settingsOpen && (
+        <SettingsScreen
+          settings={settings}
+          onUpdateSettings={updateSettings}
+          onImported={refresh}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </div>

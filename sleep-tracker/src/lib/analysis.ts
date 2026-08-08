@@ -92,6 +92,50 @@ export function recentAverageHours(records: SleepRecord[], days = 7): number {
   return Math.round((recent.reduce((sum, r) => sum + r.totalSleepHours, 0) / recent.length) * 10) / 10;
 }
 
+export interface NapTimingBucket {
+  label: string;
+  avgPerformance: number;
+  sampleSize: number;
+}
+
+const NAP_TIME_BUCKETS = [
+  { label: '0-6時', from: 0, to: 6 },
+  { label: '6-9時', from: 6, to: 9 },
+  { label: '9-12時', from: 9, to: 12 },
+  { label: '12-15時', from: 12, to: 15 },
+  { label: '15-18時', from: 15, to: 18 },
+  { label: '18-24時', from: 18, to: 24 },
+];
+
+// 仮眠を取った時間帯ごとに、その日の学習パフォーマンスの平均を集計する。
+export function napTimingVsPerformance(records: SleepRecord[]): NapTimingBucket[] {
+  const buckets = NAP_TIME_BUCKETS.map((b) => ({ ...b, sum: 0, count: 0 }));
+  for (const r of records) {
+    for (const n of r.naps) {
+      const hour = Math.floor(toMinutes(n.start) / 60) % 24;
+      const bucket = buckets.find((b) => hour >= b.from && hour < b.to);
+      if (bucket) {
+        bucket.sum += r.studyPerformance;
+        bucket.count += 1;
+      }
+    }
+  }
+  return buckets
+    .filter((b) => b.count > 0)
+    .map((b) => ({ label: b.label, avgPerformance: Math.round((b.sum / b.count) * 10) / 10, sampleSize: b.count }));
+}
+
+// 直近N日の合計睡眠時間（週の目標達成率などに使う。未記録の日は0として合算しない＝単純合計）。
+export function recentTotalHours(records: SleepRecord[], days = 7): number {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutoffISO = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+  return Math.round(
+    records.filter((r) => r.date >= cutoffISO).reduce((sum, r) => sum + r.totalSleepHours, 0) * 10
+  ) / 10;
+}
+
 export function wakeStudyMatrix(records: SleepRecord[]): number[][] {
   // [wakeState-1][studyPerformance-1] = 件数
   const matrix: number[][] = Array.from({ length: 5 }, () => Array(5).fill(0));

@@ -28,6 +28,7 @@ export default function QuickWakeLog({
   const [coreStart, setCoreStart] = useState(today?.coreSleep.start ?? '');
   const [coreEnd, setCoreEnd] = useState(today?.coreSleep.end ?? nowHHMM());
   const [wakeState, setWakeState] = useState<WakeState>(today?.wakeState ?? 3);
+  const [memo, setMemo] = useState('');
   const [saving, setSaving] = useState(false);
 
   // 未入力なら前回のコア睡眠開始時刻を初期値にして、入力の手間を減らす
@@ -41,7 +42,7 @@ export default function QuickWakeLog({
 
   async function handleSave() {
     setSaving(true);
-    const record = applyQuickWakeLog(records, { coreStart, coreEnd, wakeState });
+    const record = applyQuickWakeLog(records, { coreStart, coreEnd, wakeState, memo });
     await onSave(record);
     setSaving(false);
   }
@@ -88,6 +89,11 @@ export default function QuickWakeLog({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="field">
+          <span className="lbl">一言メモ（任意）</span>
+          <textarea className="inp" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="気になったことがあれば" />
         </div>
 
         <div className="subtle">仮眠やモヤ、学習の記録は後からいつでも追加できます。</div>

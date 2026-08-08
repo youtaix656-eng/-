@@ -1,21 +1,29 @@
 import type { SleepRecord } from '../types/sleep';
 import { WAKE_STATE_EMOJI, WAKE_STATE_LABELS } from '../types/sleep';
+import type { AppSettings } from '../types/settings';
 import { formatDateLabel, todayISODate } from '../lib/time';
-import { groggyHourBuckets, recentAverageHours } from '../lib/analysis';
+import { groggyHourBuckets, recentAverageHours, recentTotalHours } from '../lib/analysis';
 import { computeStreak } from '../lib/streak';
 import Clock from './Clock';
+import AnimalFactCard from './AnimalFactCard';
 
 export default function Home({
   records,
+  settings,
   onStartNap,
   onOpenQuickWake,
   onOpenNapQuickAdd,
+  onOpenGroggyQuickAdd,
+  onOpenEveningReflection,
   onOpenFullForm,
 }: {
   records: SleepRecord[];
+  settings: AppSettings;
   onStartNap: (min: number) => void;
   onOpenQuickWake: () => void;
   onOpenNapQuickAdd: () => void;
+  onOpenGroggyQuickAdd: () => void;
+  onOpenEveningReflection: () => void;
   onOpenFullForm: () => void;
 }) {
   const latest = records[0];
@@ -25,6 +33,10 @@ export default function Home({
   const weeklyAvg = recentAverageHours(records, 7);
   const buckets = groggyHourBuckets(records).filter((b) => b.count >= 2);
   const nextWarning = pickUpcomingWarning(buckets);
+
+  const weeklyTotal = recentTotalHours(records, 7);
+  const target = settings.targetWeeklyHours;
+  const achievementPct = target ? Math.round((weeklyTotal / target) * 100) : null;
 
   return (
     <>
@@ -92,8 +104,17 @@ export default function Home({
         </button>
       </div>
 
-      <button className="btn btn-ghost" onClick={onOpenNapQuickAdd}>
-        ＋ 仮眠を後から記録
+      <div className="btn-row">
+        <button className="btn btn-ghost" onClick={onOpenNapQuickAdd}>
+          ＋ 仮眠を後から記録
+        </button>
+        <button className="btn btn-ghost" onClick={onOpenGroggyQuickAdd}>
+          ＋ モヤを記録
+        </button>
+      </div>
+
+      <button className="btn btn-ghost" onClick={onOpenEveningReflection}>
+        🌙 今日の振り返り
       </button>
 
       <button className="text-link" onClick={onOpenFullForm}>
@@ -110,6 +131,31 @@ export default function Home({
           </div>
         </div>
       )}
+
+      {target && (
+        <div className="card">
+          <div className="card-label">週の目標睡眠時間</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <span className="big-num" style={{ fontSize: 20 }}>
+              {weeklyTotal}
+              <span className="unit">/{target}h</span>
+            </span>
+            <span className="subtle">{achievementPct}%</span>
+          </div>
+          <div style={{ background: 'var(--border-soft)', borderRadius: 4, height: 8, marginTop: 8 }}>
+            <div
+              style={{
+                width: `${Math.min(100, achievementPct ?? 0)}%`,
+                background: 'var(--text)',
+                height: '100%',
+                borderRadius: 4,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <AnimalFactCard userAverageHours={weeklyAvg} />
     </>
   );
 }

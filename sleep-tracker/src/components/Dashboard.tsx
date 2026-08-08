@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { SleepRecord } from '../types/sleep';
-import { groggyHourGrid, napEffectSummary, wakeStudyCorrelation, wakeStudyMatrix } from '../lib/analysis';
+import {
+  groggyHourGrid,
+  napEffectSummary,
+  napTimingVsPerformance,
+  wakeStudyCorrelation,
+  wakeStudyMatrix,
+} from '../lib/analysis';
+import { buildGroggyInsights } from '../lib/groggyInsight';
 import { todayISODate } from '../lib/time';
 
 type RangeDays = 7 | 30;
@@ -19,6 +26,7 @@ function lastNDates(n: number): string[] {
 
 export default function Dashboard({ records }: { records: SleepRecord[] }) {
   const [range, setRange] = useState<RangeDays>(7);
+  const [shareStatus, setShareStatus] = useState('');
 
   const dates = useMemo(() => lastNDates(range), [range]);
   const byDate = useMemo(() => new Map(records.map((r) => [r.date, r])), [records]);
@@ -35,9 +43,32 @@ export default function Dashboard({ records }: { records: SleepRecord[] }) {
   const corr = wakeStudyCorrelation(inRange);
   const matrix = wakeStudyMatrix(inRange);
   const maxMatrix = Math.max(1, ...matrix.flat());
+  const napTiming = napTimingVsPerformance(inRange);
+  const maxNapPerf = Math.max(1, ...napTiming.map((b) => b.avgPerformance));
+  // 原因分析はサンプル数が命なので、期間で絞らず全記録から傾向を出す
+  const groggyInsights = buildGroggyInsights(records);
 
   if (records.length === 0) {
     return <div className="empty-state">記録が貯まるとここに睡眠の傾向が表示されます。</div>;
+  }
+
+  const moyaCount = inRange.reduce((sum, r) => sum + r.grogginessPeriods.length, 0);
+
+  async function handleShare() {
+    const rangeLabel = range === 7 ? '直近7日' : '直近30日';
+    const text = [
+      `【睡眠トラッカー】${rangeLabel}の記録`,
+      `平均睡眠時間: ${avgHours}h`,
+      `モヤの発生: ${moyaCount}件`,
+      `仮眠すっきり率: ${napFx.total > 0 ? `${Math.round(napFx.refreshedRate * 100)}%` : '記録なし'}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setShareStatus('コピーしました');
+    } catch {
+      setShareStatus('コピーできませんでした');
+    }
+    window.setTimeout(() => setShareStatus(''), 2500);
   }
 
   return (
@@ -50,6 +81,10 @@ export default function Dashboard({ records }: { records: SleepRecord[] }) {
           30日
         </button>
       </div>
+
+      <button className="text-link" onClick={handleShare}>
+        {shareStatus || '📋 サマリーをコピー'}
+      </button>
 
       <div className="card">
         <div className="card-label">合計睡眠時間の推移（平均 {avgHours}h）</div>
@@ -165,6 +200,53 @@ export default function Dashboard({ records }: { records: SleepRecord[] }) {
             {corr === null ? '相関を出すにはあと数件記録が必要です。' : `相関係数の目安: ${corr.toFixed(2)}（${corrLabel(corr)}）`}
           </div>
         </div>
+      </div>
+
+      <div className="field">
+        <div className="section-title">仮眠の時間帯 × 学習パフォーマンス</div>
+        <div className="card">
+          {napTiming.length === 0 ? (
+            <div className="subtle">仮眠の記録がまだありません。</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {napTiming.map((b) => (
+                <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ width: 56, fontSize: 11.5, color: 'var(--text-faint)', flex: 'none' }}>{b.label}</span>
+                  <div style={{ flex: 1, background: 'var(--border-soft)', borderRadius: 4, height: 8 }}>
+                    <div
+                      style={{
+                        width: `${(b.avgPerformance / maxNapPerf) * 100}%`,
+                        background: 'var(--nap)',
+                        height: '100%',
+                        borderRadius: 4,
+                      }}
+                    />
+                  </div>
+                  <span style={{ width: 34, fontSize: 11.5, textAlign: 'right', flex: 'none' }}>{b.avgPerformance}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="field">
+        <div className="section-title">モヤの原因分析（記録からの傾向）</div>
+        {groggyInsights.length === 0 ? (
+          <div className="card subtle">
+            モヤを記録するときに「きっかけ」タグを選ぶと、傾向と対処法をここに表示します。
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {groggyInsights.map((insight) => (
+              <div className="card" key={insight.id} style={{ borderColor: 'var(--moya)' }}>
+                <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 6 }}>{insight.headline}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 6 }}>{insight.cause}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--nap)' }}>💡 {insight.countermeasure}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

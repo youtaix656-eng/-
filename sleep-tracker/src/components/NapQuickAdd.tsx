@@ -27,11 +27,12 @@ export default function NapQuickAdd({
   const [start, setStart] = useState(defaultStart(records));
   const [end, setEnd] = useState(addMinutesToTime(defaultStart(records), 20));
   const [afterState, setAfterState] = useState<NapAfterState>('neutral');
+  const [memo, setMemo] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    const record = attachNapToTodayRecord(records, { id: newId(), start, end, afterState });
+    const record = attachNapToTodayRecord(records, { id: newId(), start, end, afterState }, memo);
     await onSave(record);
     setSaving(false);
   }
@@ -76,6 +77,11 @@ export default function NapQuickAdd({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="field">
+          <span className="lbl">一言メモ（任意）</span>
+          <textarea className="inp" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="気になったことがあれば" />
         </div>
 
         <div className="btn-row">
