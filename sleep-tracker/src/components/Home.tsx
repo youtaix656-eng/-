@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import type { SleepRecord } from '../types/sleep';
 import { WAKE_STATE_EMOJI, WAKE_STATE_LABELS } from '../types/sleep';
 import type { AppSettings } from '../types/settings';
 import { formatDateLabel, todayISODate } from '../lib/time';
 import { groggyHourBuckets, recentAverageHours, recentTotalHours } from '../lib/analysis';
 import { computeStreak } from '../lib/streak';
+import { pickFactOfTheDay } from '../data/sleepFacts';
 import Clock from './Clock';
-import AnimalFactCard from './AnimalFactCard';
+import FactsModal from './FactsModal';
 
 export default function Home({
   records,
@@ -37,6 +39,8 @@ export default function Home({
   const weeklyTotal = recentTotalHours(records, 7);
   const target = settings.targetWeeklyHours;
   const achievementPct = target ? Math.round((weeklyTotal / target) * 100) : null;
+  const todayFact = pickFactOfTheDay();
+  const [factsOpen, setFactsOpen] = useState(false);
 
   return (
     <>
@@ -155,7 +159,16 @@ export default function Home({
         </div>
       )}
 
-      <AnimalFactCard userAverageHours={weeklyAvg} />
+      <div className="card">
+        <div className="card-label">今日の睡眠の豆知識</div>
+        <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>{todayFact.title}</div>
+        <div className="subtle">{todayFact.body}</div>
+        <button className="text-link" onClick={() => setFactsOpen(true)} style={{ marginTop: 4 }}>
+          🐨 動物の睡眠も見る
+        </button>
+      </div>
+
+      {factsOpen && <FactsModal onClose={() => setFactsOpen(false)} />}
     </>
   );
 }
