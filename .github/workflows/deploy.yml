@@ -52,10 +52,21 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /-/rirakuru
 
+      # 分割睡眠トラッカー（Vite + React + TypeScript）を /sleep-tracker サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (sleep-tracker)
+        run: npm ci
+        working-directory: sleep-tracker
+
+      - name: Build (睡眠トラッカー / /sleep-tracker)
+        run: npm run build
+        working-directory: sleep-tracker
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru
+          rm -rf dist/rirakuru dist/sleep-tracker
           cp -r rirakuru-app/out dist/rirakuru
+          cp -r sleep-tracker/dist dist/sleep-tracker
           touch dist/.nojekyll
 
       - name: Upload artifact
