@@ -44,6 +44,25 @@ export function groupQuizzes(graph, { limit = 10 } = {}) {
   return out;
 }
 
+// 穴埋め知識マップ（#21）：中心概念とその仲間（隣接）を見せ、隠した1つを当てる。
+//   [{ center, shown:[隣接の一部], answer(隠した隣接), distractors(非隣接) }]
+export function fillBlankQuizzes(graph, { limit = 10 } = {}) {
+  const out = [];
+  const nodeIds = Object.keys(graph.nodes);
+  for (const c of nodeIds) {
+    const nb = neighbors(graph, c).map((n) => n.other);
+    if (nb.length < 3) continue;
+    const answer = nb[nb.length - 1];
+    const shown = nb.slice(0, Math.min(3, nb.length - 1));
+    const nbSet = new Set([c, ...nb]);
+    const distractors = nodeIds.filter((x) => !nbSet.has(x)).slice(0, 3);
+    if (distractors.length < 1) continue;
+    out.push({ center: c, shown, answer, distractors });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 // 選択肢を組み立てる（正解＋distractors をまぜる）。rnd は 0..1 の乱数関数（既定 Math.random）。
 export function buildOptions(answer, distractors, rnd = Math.random) {
   const opts = [answer, ...distractors];

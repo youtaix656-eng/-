@@ -40,3 +40,15 @@ test('buildOptions: 正解を含む選択肢をまぜる', () => {
   assert.equal(opts.length, 4);
   assert.ok(opts.includes('正'));
 });
+
+import { fillBlankQuizzes } from '../src/lib/kgQuiz.js';
+test('fillBlankQuizzes: 中心の隣接から隠した1つを当てる', () => {
+  const g = emptyGraph();
+  addCoOccurrence(g, ['心不全', '利尿薬', 'BNP', '浮腫']); // 心不全に3隣接
+  addCoOccurrence(g, ['遠い1', '遠い2']); // distractor
+  const qz = fillBlankQuizzes(g);
+  const q = qz.find((x) => x.center === '心不全');
+  assert.ok(q, '心不全を中心とした穴埋めができる');
+  assert.ok(!q.shown.includes(q.answer), '答えは表示側に含まれない');
+  assert.ok(q.distractors.length >= 1);
+});

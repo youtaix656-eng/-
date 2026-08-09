@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { pathQuizzes, groupQuizzes, buildOptions } from '../lib/kgQuiz.js';
+import { pathQuizzes, groupQuizzes, fillBlankQuizzes, buildOptions } from '../lib/kgQuiz.js';
 
 // 連想クイズ：経路クイズ（#23 A―?―B の中間を当てる）＋ 束グルーピング（#24 仲間はどれ？）
 export default function AssocQuiz({ graph }) {
@@ -10,7 +10,8 @@ export default function AssocQuiz({ graph }) {
 
   const pathItems = useMemo(() => pathQuizzes(graph, { limit: 20 }), [graph]);
   const groupItems = useMemo(() => groupQuizzes(graph, { limit: 20 }), [graph]);
-  const items = mode === 'path' ? pathItems : groupItems;
+  const fillItems = useMemo(() => fillBlankQuizzes(graph, { limit: 20 }), [graph]);
+  const items = mode === 'path' ? pathItems : mode === 'group' ? groupItems : fillItems;
   const cur = items[idx];
 
   // 選択肢は問題ごとに一度だけシャッフル
@@ -31,6 +32,7 @@ export default function AssocQuiz({ graph }) {
         <div className="chip-row" style={{ marginBottom: 10 }}>
           <button className={`chip ${mode === 'path' ? 'active' : ''}`} onClick={() => switchMode('path')}>経路クイズ</button>
           <button className={`chip ${mode === 'group' ? 'active' : ''}`} onClick={() => switchMode('group')}>仲間さがし</button>
+          <button className={`chip ${mode === 'fill' ? 'active' : ''}`} onClick={() => switchMode('fill')}>穴埋め</button>
           {score.total > 0 && <span className="inline-note" style={{ alignSelf: 'center' }}>{score.ok}/{score.total} 正解</span>}
         </div>
 
@@ -43,7 +45,9 @@ export default function AssocQuiz({ graph }) {
             <div className="quiz-q">
               {mode === 'path'
                 ? <><b>{cur.a}</b> ―（？）― <b>{cur.b}</b>　をつなぐのは？</>
-                : <><b>{cur.concept}</b> と同じかたまり（仲間）はどれ？</>}
+                : mode === 'group'
+                ? <><b>{cur.concept}</b> と同じかたまり（仲間）はどれ？</>
+                : <><b>{cur.center}</b> の仲間（{cur.shown.join('・')} …）に、あと1つ入るのは？</>}
             </div>
             <div className="quiz-options">
               {options.map((opt) => {

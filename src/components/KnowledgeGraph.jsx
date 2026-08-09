@@ -15,11 +15,37 @@ import { NUMBER_FACTS } from '../data/mindmapData.js';
 import { numberSkewers } from '../lib/numberLinks.js';
 import { conceptGrowth, diseaseTriad } from '../lib/kgTimeline.js';
 import GraphCanvas from './GraphCanvas.jsx';
+import RelationAuthor from './RelationAuthor.jsx';
+import { loadUserRelations } from '../lib/userRelations.js';
+import { addNode, addEdge } from '../lib/knowledgeGraph.js';
+import { conceptId } from '../lib/concepts.js';
+import { loadKwMeta, saveKwMeta } from '../lib/storage.js';
 
 function firstSentence(text) {
   const s = String(text || '').trim();
   const m = s.match(/^[^。]*。/);
   return m ? m[0] : s.slice(0, 60);
+}
+
+// 語呂・連想メモ（#7）— 概念に語呂合わせを紐づけて連想を強める
+function GoroField({ concept, kwMeta, onSave }) {
+  const cur = (kwMeta[concept] || {}).goro || '';
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(cur);
+  useEffect(() => { setText(cur); setOpen(false); }, [concept]); // eslint-disable-line
+  return (
+    <div className="goro-field">
+      {cur && !open && <div className="goro-view">🧩 語呂：{cur}</div>}
+      {!open ? (
+        <button className="btn ghost sm" onClick={() => setOpen(true)}>{cur ? '語呂を編集' : '＋ 語呂・連想メモ'}</button>
+      ) : (
+        <div className="goro-edit">
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="覚え方・語呂合わせ" />
+          <button className="btn primary sm" onClick={() => { onSave(concept, text); setOpen(false); }}>保存</button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // 強さ→ヒートレベル（#27）
@@ -50,13 +76,29 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
   const [fcOpen, setFcOpen] = useState(false);
   const [assocMap, setAssocMap] = useState({});
   useEffect(() => { loadAssocReview().then(setAssocMap); }, []);
+  const [userRels, setUserRels] = useState([]);
+  const [relVer, setRelVer] = useState(0);
+  useEffect(() => { loadUserRelations().then(setUserRels); }, [relVer]);
+  const [kwMeta, setKwMeta] = useState({});
+  useEffect(() => { loadKwMeta().then((m) => setKwMeta(m || {})); }, []);
 
   const solved = useMemo(
     () => questions.filter((q) => srs[q.id] && (srs[q.id].seen || 0) > 0),
     [questions, srs]
   );
   const solvedIds = useMemo(() => new Set(solved.map((q) => q.id)), [solved]);
-  const graph = useMemo(() => buildGraphFromSolved(solved, links), [solved, links]);
+  const graph = useMemo(() => {
+    const g = buildGraphFromSolved(solved, links);
+    // 自作の関係（#29）を強い辺として合流
+    for (const r of userRels) {
+      const a = conceptId(r.from);
+      const b = conceptId(r.to);
+      if (!a || !b || a === b) continue;
+      addNode(g, a); addNode(g, b);
+      addEdge(g, a, b, { type: r.type, weight: 4 });
+    }
+    return g;
+  }, [solved, links, userRels]);
   const stats = graphStats(graph);
 
   const hubs = useMemo(() => {
@@ -378,6 +420,11 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
                     ))}
                   </ul>
                 )}
+                <GoroField
+                  concept={fcConcept}
+                  kwMeta={kwMeta}
+                  onSave={(c, t) => { const next = { ...kwMeta, [c]: { ...(kwMeta[c] || {}), goro: t } }; setKwMeta(next); saveKwMeta(next); }}
+                />
               </div>
             )}
             <div className="btn-row" style={{ marginTop: 10 }}>
@@ -488,6 +535,8 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
           </div>
         </>
       )}
+
+      <RelationAuthor concepts={conceptList} onChanged={() => setRelVer((v) => v + 1)} />
 
       <div className="section-label">📤 グラフを書き出す</div>
       <div className="card">
