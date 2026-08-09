@@ -9,6 +9,7 @@ import { relatedQuestions } from '../lib/related.js';
 import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
 import { comparisonsForKeyword } from '../data/mindmapData.js';
+import { loadMissTypes, recordMissType, missTypeLabel } from '../lib/missTypes.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -95,6 +96,10 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const [batch, setBatch] = useState(60); // 1回の問題数（0=すべて）
   const [showAll, setShowAll] = useState(false); // リストの折りたたみ（#4）
   const [fast, setFast] = useState(false); // 高速回転モード（#6）
+  const [missTypes, setMissTypes] = useState({}); // 間違いの型（#9）
+
+  useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  const onMissType = (id, type) => recordMissType(id, type).then(setMissTypes);
 
   // 復習リストにある科目の一覧
   const subjects = useMemo(
@@ -385,6 +390,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
               <div className="li-q">{q.question || '（図の問題）'}</div>
               <div className="li-stat">
                 完璧 {cs}/{MASTER_STREAK} ・ 誤答 {st.wrongCount || 0}回 ・ {dueLabel}
+                {missTypes[q.id] && <span className="misstype-tag">型: {missTypeLabel(missTypes[q.id].type)}</span>}
               </div>
               <div className="streak-dots" aria-label={`完璧 ${cs}/${MASTER_STREAK}`}>
                 {Array.from({ length: MASTER_STREAK }).map((_, i) => (
@@ -500,6 +506,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         comparisons={curComparisons}
         reason={curReason}
         fast={fast}
+        onMissType={onMissType}
       />
       <ResetInline label="復習をリセット" onReset={resetReview} />
     </div>

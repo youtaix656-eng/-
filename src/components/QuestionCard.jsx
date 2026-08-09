@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { figureFor } from '../data/figures.jsx';
+import { MISS_TYPES } from '../lib/missTypes.js';
 
 // 1問を表示し、解答・正誤判定・解説・メモを扱う共通コンポーネント
 //
@@ -23,12 +24,14 @@ export default function QuestionCard({
   comparisons = [], // まぎらわしい対比（誤答時に自動提示）＝#8
   reason = '', // なぜ今この問題か（期限切れ／忘却リスク）＝#10
   fast = false, // 高速回転モード：一定秒で自動的に答えを表示＝#6
+  onMissType, // (questionId, type) 間違いの型を記録＝#9（あれば△✕後に型を聞く）
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
   const [recorded, setRecorded] = useState(false);
   const [memoOpen, setMemoOpen] = useState(false);
   const [memoText, setMemoText] = useState(memo || '');
+  const [askType, setAskType] = useState(false); // 間違いの型を尋ねている最中
 
   useEffect(() => {
     setSelected(null);
@@ -36,6 +39,7 @@ export default function QuestionCard({
     setRecorded(false);
     setMemoOpen(false);
     setMemoText(memo || '');
+    setAskType(false);
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 高速回転モード（#6）：3秒たったら自動で答え（裏）を表示。自力想起の合図。
@@ -67,9 +71,23 @@ export default function QuestionCard({
 
   // ○△✕ の自己評価（毎問）。△✕は「間違えた問題」として復習サイクルへ。
   const pickSelf = (kind) => {
-    if (kind === 'maru') onAnswered?.(true, GRADES ? GRADES.easy : 5);
-    else onAnswered?.(false, GRADES ? GRADES.again : 0); // △・✕ とも復習対象に
+    if (kind === 'maru') {
+      onAnswered?.(true, GRADES ? GRADES.easy : 5);
+      setRecorded(true);
+      onNext?.();
+      return;
+    }
+    // △・✕：復習対象に。型記録が有効なら型を尋ねてから次へ。
+    onAnswered?.(false, GRADES ? GRADES.again : 0);
     setRecorded(true);
+    if (onMissType) setAskType(true);
+    else onNext?.();
+  };
+
+  // 間違いの型を記録して次へ（#9）
+  const pickType = (type) => {
+    if (type) onMissType?.(question.id, type);
+    setAskType(false);
     onNext?.();
   };
 
@@ -229,20 +247,36 @@ export default function QuestionCard({
 
           {/* ○△✕ の自己評価（毎問）。△✕は自動で復習に入ります。 */}
           {selfGrade ? (
-            <div style={{ marginTop: 16 }}>
-              <div className="grade-label">この問題の理解度は？（△・✕は自動で復習リストに入ります）</div>
-              <div className="selfgrade-row">
-                <button className="btn self-maru" onClick={() => pickSelf('maru')}>
-                  <span className="sg-mark">○</span>完璧！自信あり
-                </button>
-                <button className="btn self-sankaku" onClick={() => pickSelf('sankaku')}>
-                  <span className="sg-mark">△</span>解説がわからない
-                </button>
-                <button className="btn self-batsu" onClick={() => pickSelf('batsu')}>
-                  <span className="sg-mark">✕</span>答えも解説もわからない
+            askType ? (
+              <div style={{ marginTop: 16 }}>
+                <div className="grade-label">どんな間違いでしたか？（型を記録して復習に活かします）</div>
+                <div className="misstype-row">
+                  {MISS_TYPES.map((t) => (
+                    <button key={t.id} className="btn misstype-btn" onClick={() => pickType(t.id)}>
+                      {t.label}<small>{t.hint}</small>
+                    </button>
+                  ))}
+                </div>
+                <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => pickType(null)}>
+                  記録せず次へ →
                 </button>
               </div>
-            </div>
+            ) : (
+              <div style={{ marginTop: 16 }}>
+                <div className="grade-label">この問題の理解度は？（△・✕は自動で復習リストに入ります）</div>
+                <div className="selfgrade-row">
+                  <button className="btn self-maru" onClick={() => pickSelf('maru')}>
+                    <span className="sg-mark">○</span>完璧！自信あり
+                  </button>
+                  <button className="btn self-sankaku" onClick={() => pickSelf('sankaku')}>
+                    <span className="sg-mark">△</span>解説がわからない
+                  </button>
+                  <button className="btn self-batsu" onClick={() => pickSelf('batsu')}>
+                    <span className="sg-mark">✕</span>答えも解説もわからない
+                  </button>
+                </div>
+              </div>
+            )
           ) : gradeMode && GRADES ? (
             <div style={{ marginTop: 16 }}>
               <div className="grade-label">記憶度は？（次回の出題間隔が変わります）</div>
