@@ -7,6 +7,16 @@ import { installErrorHandlers } from './lib/errorLog.js';
 // 端末内エラーログを有効化（外部送信なし。設定→データ管理で閲覧・消去）
 installErrorHandlers();
 
+// 自動世代バックアップ（#3）：起動後に1日1回だけ、進捗の世代スナップショットを取る。
+//   起動処理と競合しないよう遅延実行し、失敗しても本体に影響させない。
+if (typeof window !== 'undefined' && !import.meta.env.DEV) {
+  setTimeout(() => {
+    Promise.all([import('./lib/backupSnapshots.js'), import('./lib/storage.js')])
+      .then(([snap, storage]) => snap.maybeAutoSnapshot(storage))
+      .catch(() => {});
+  }, 8000);
+}
+
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

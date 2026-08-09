@@ -13,6 +13,7 @@ import SyncQR from './SyncQR.jsx';
 import SyncScan from './SyncScan.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
+import SnapshotsCard from './SnapshotsCard.jsx';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 
 // 設定・問題データ管理画面
@@ -486,6 +487,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         </p>
       </div>
 
+      <SnapshotsCard onToast={onToast} />
       <Diagnostics store={store} onToast={onToast} />
       <ErrorLogCard onToast={onToast} />
     </div>
