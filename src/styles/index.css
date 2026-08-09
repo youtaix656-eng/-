@@ -3255,3 +3255,26 @@ code.block {
 /* 復習：件数表示 */
 .review-count { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-sub); margin: 2px 0 4px; }
 .review-count strong { color: var(--text); font-size: 16px; }
+
+/* ===== 復習UI強化（#1/#2/#3/#4/#5/#7） ===== */
+.review-streak { display: flex; gap: 16px; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 10px; font-size: 13px; color: var(--text-sub); }
+.review-streak strong { color: var(--text); font-size: 16px; }
+.section-hint { font-size: 11px; font-weight: 400; color: var(--text-mute); margin-left: 6px; }
+
+/* 弱点チップ（絞り込み＋▶即復習＋誤答率の色） */
+.weak-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.weak-chip.active { outline: 2px solid var(--accent); }
+.weak-chip-label { background: var(--surface-2); color: var(--text); border: none; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.weak-chip-go { background: var(--surface); color: var(--accent); border: none; border-left: 1px solid var(--border); padding: 0 10px; font-size: 11px; cursor: pointer; }
+.weak-chip-go:hover { background: var(--accent); color: #000; }
+.weak-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.weak-chip.lv-hot .weak-dot { background: var(--wrong); }
+.weak-chip.lv-warm .weak-dot { background: var(--warn); }
+.weak-chip.lv-mild .weak-dot { background: var(--correct); }
+
+/* 忘却リスクバッジ */
+.li-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.risk-badge { flex: 0 0 auto; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+.risk-badge.lv-hot { background: var(--wrong-bg); color: var(--wrong); }
+.risk-badge.lv-warm { background: #33280f; color: var(--warn); }
+.risk-badge.lv-mild { background: var(--correct-bg); color: var(--correct); }

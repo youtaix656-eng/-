@@ -6,7 +6,8 @@ import * as storage from '../lib/storage.js';
 import { effectiveTags } from '../lib/query.js';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { relatedQuestions } from '../lib/related.js';
-import { filterReview, sortReview } from '../lib/reviewOrder.js';
+import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
+import { studyStreak } from '../lib/stats.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -91,6 +92,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const [search, setSearch] = useState('');
   const [subject, setSubject] = useState('all'); // 科目ごとの検索
   const [batch, setBatch] = useState(60); // 1回の問題数（0=すべて）
+  const [showAll, setShowAll] = useState(false); // リストの折りたたみ（#4）
 
   // 復習リストにある科目の一覧
   const subjects = useMemo(
@@ -136,6 +138,20 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     const pool = batch > 0 ? startPool.slice(0, batch) : startPool;
     startWith(pool);
   };
+
+  // 弱点テーマをワンタップで即復習（#5）：フィルタ状態に依存せずその場でプールを作る
+  const quickStartTag = (tag) => {
+    const pool = sortReview(filterReview(reviewQuestions, { tag, links }), orderMode, { srs, history, links });
+    startWith(batch > 0 ? pool.slice(0, batch) : pool);
+  };
+
+  // 今日の到達・連続日数（#7）
+  const { streak } = useMemo(() => studyStreak(history), [history]);
+  const todayCount = useMemo(() => {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    const start0 = d.getTime();
+    return history.filter((h) => h.at >= start0).length;
+  }, [history]);
 
   // 保存済みの途中経過を読み込む（続きから）
   useEffect(() => {
@@ -241,21 +257,35 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           </button>
         )}
 
-        {/* ===== 弱点テーマで狙い撃ち（#4） ===== */}
+        {/* ===== 連続日数・今日の到達（#7） ===== */}
+        <div className="review-streak">
+          <span>🔥 連続 <strong>{streak}</strong> 日</span>
+          <span>今日 <strong>{todayCount}</strong> 問</span>
+        </div>
+
+        {/* ===== 弱点テーマで狙い撃ち（#4 絞り込み・#5 即復習・#1 誤答数と色） ===== */}
         {weakTags.length > 0 && (
           <>
-            <div className="section-label" style={{ marginTop: 0 }}>弱点テーマで狙い撃ち</div>
+            <div className="section-label" style={{ marginTop: 0 }}>
+              弱点テーマで狙い撃ち<span className="section-hint">（数字＝誤答数。▶で即復習）</span>
+            </div>
             <div className="chip-row">
               <button className={`chip ${filterTag === '' ? 'active' : ''}`} onClick={() => setFilterTag('')}>すべて</button>
-              {weakTags.map((w) => (
-                <button
-                  key={w.tag}
-                  className={`chip ${filterTag === w.tag ? 'active' : ''}`}
-                  onClick={() => setFilterTag(filterTag === w.tag ? '' : w.tag)}
-                >
-                  {w.tag} <b>{w.wrong}</b>
-                </button>
-              ))}
+              {weakTags.map((w) => {
+                const lvl = w.rate >= 0.6 ? 'hot' : w.rate >= 0.3 ? 'warm' : 'mild';
+                return (
+                  <span key={w.tag} className={`weak-chip ${filterTag === w.tag ? 'active' : ''} lv-${lvl}`}>
+                    <button
+                      className="weak-chip-label"
+                      onClick={() => setFilterTag(filterTag === w.tag ? '' : w.tag)}
+                      title={`誤答${w.wrong}／${w.attempts}（誤答率${Math.round(w.rate * 100)}%）`}
+                    >
+                      <i className="weak-dot" />{w.tag} <b>誤答{w.wrong}</b>
+                    </button>
+                    <button className="weak-chip-go" onClick={() => quickStartTag(w.tag)} aria-label={`${w.tag}を即復習`}>▶</button>
+                  </span>
+                );
+              })}
             </div>
           </>
         )}
@@ -323,9 +353,9 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         <div className="section-label" style={{ marginTop: 0 }}>
           復習リストの問題（{shownList.length}）
         </div>
-        {shownList.map((q) => {
+        {(showAll ? shownList : shownList.slice(0, 10)).map((q) => {
           const st = normalize(srs[q.id]);
-          const streak = st.correctStreak || 0;
+          const cs = st.correctStreak || 0;
           const due = st.due || 0;
           const now = Date.now();
           const ms = due - now;
@@ -337,16 +367,22 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             : ms < 24 * HOUR
             ? `次回 約${Math.round(ms / HOUR)}時間後`
             : `次回 約${Math.round(ms / (24 * HOUR))}日後`;
+          // 忘却リスク（#2）：高いほど赤
+          const risk = Math.round(riskOf(q, srs, now) * 100);
+          const rlvl = risk >= 70 ? 'hot' : risk >= 40 ? 'warm' : 'mild';
           return (
             <div className="list-item" key={q.id}>
-              <div className="li-subject">{q.subject}</div>
+              <div className="li-top">
+                <span className="li-subject">{q.subject}</span>
+                <span className={`risk-badge lv-${rlvl}`} title="忘却リスク（高いほど早く復習を）">忘却{risk}%</span>
+              </div>
               <div className="li-q">{q.question || '（図の問題）'}</div>
               <div className="li-stat">
-                完璧 {streak}/{MASTER_STREAK} ・ 誤答 {st.wrongCount || 0}回 ・ {dueLabel}
+                完璧 {cs}/{MASTER_STREAK} ・ 誤答 {st.wrongCount || 0}回 ・ {dueLabel}
               </div>
-              <div className="streak-dots" aria-label={`完璧 ${streak}/${MASTER_STREAK}`}>
+              <div className="streak-dots" aria-label={`完璧 ${cs}/${MASTER_STREAK}`}>
                 {Array.from({ length: MASTER_STREAK }).map((_, i) => (
-                  <i key={i} className={i < streak ? 'on' : ''} />
+                  <i key={i} className={i < cs ? 'on' : ''} />
                 ))}
               </div>
               {memos[q.id] && <div className="li-memo">📝 {memos[q.id]}</div>}
@@ -354,6 +390,11 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             </div>
           );
         })}
+        {shownList.length > 10 && (
+          <button className="btn ghost block" onClick={() => setShowAll((v) => !v)}>
+            {showAll ? '▲ 折りたたむ' : `▼ もっと見る（残り${shownList.length - 10}件）`}
+          </button>
+        )}
         {shownList.length === 0 && (
           <p className="inline-note">条件に合う問題がありません。検索語や弱点テーマの選択を変えてください。</p>
         )}
