@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { forgettingRisk } from '../lib/forgetting.js';
 import { hardestItems } from '../lib/difficulty.js';
+import { loadMissTypes, MISS_TYPES, missTypeLabel } from '../lib/missTypes.js';
 
 // 学習インサイト（#6 忘却予測 / #7 弱点クラスタリング / #8 難易度推定 の可視化）。
 //   解答履歴と復習状態から「弱いテーマ・近く忘れそう・難しい問題」を自動抽出して表示する。
@@ -12,7 +13,17 @@ export default function InsightsSection({ store }) {
   const risk = useMemo(() => forgettingRisk(questions, srs, { threshold: 0.4, limit: 5 }), [questions, srs]);
   const hard = useMemo(() => hardestItems(history, questions, { minAttempts: 2, limit: 5 }), [history, questions]);
 
-  const nothing = weak.length === 0 && risk.length === 0 && hard.length === 0;
+  // 間違いの型の内訳（改善3）
+  const [missTypes, setMissTypes] = useState({});
+  useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  const typeCounts = useMemo(() => {
+    const c = {};
+    for (const v of Object.values(missTypes)) if (v && v.type) c[v.type] = (c[v.type] || 0) + 1;
+    return c;
+  }, [missTypes]);
+  const typeTotal = Object.values(typeCounts).reduce((a, b) => a + b, 0);
+
+  const nothing = weak.length === 0 && risk.length === 0 && hard.length === 0 && typeTotal === 0;
 
   return (
     <>
@@ -24,6 +35,23 @@ export default function InsightsSection({ store }) {
           </p>
         ) : (
           <div className="insights">
+            {typeTotal > 0 && (
+              <div className="insight-block">
+                <div className="insight-head">間違いの型の内訳（記録{typeTotal}件）</div>
+                <div className="misstype-bar">
+                  {MISS_TYPES.map((t) => {
+                    const n = typeCounts[t.id] || 0;
+                    const pct = Math.round((n / typeTotal) * 100);
+                    return (
+                      <div className="misstype-seg" key={t.id} style={{ flex: Math.max(n, 0.02) }} title={`${t.label} ${n}件`}>
+                        <span className="misstype-seg-lbl">{t.label} {pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="inline-note">対策：勘違い→対比で整理／知識不足→解説を精読／ケアレス→設問を最後まで確認。</div>
+              </div>
+            )}
             {weak.length > 0 && (
               <div className="insight-block">
                 <div className="insight-head">弱点テーマ（誤答が多い順）</div>

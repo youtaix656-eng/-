@@ -164,6 +164,28 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const dailyGoal = Math.max(1, todayReviewDone + dueReviewQuestions.length);
   const goalPct = Math.min(100, Math.round((todayReviewDone / dailyGoal) * 100));
 
+  // 前進感（改善5）：あと1問でマスター／マスターまで延べ何回／週間の復習量
+  const DAY = 24 * 60 * 60 * 1000;
+  const nearMaster = useMemo(
+    () => reviewQuestions.filter((q) => (normalize(srs[q.id]).correctStreak || 0) === MASTER_STREAK - 1).length,
+    [reviewQuestions, srs]
+  );
+  const toMasterTotal = useMemo(
+    () => reviewQuestions.reduce((s, q) => s + Math.max(0, MASTER_STREAK - (normalize(srs[q.id]).correctStreak || 0)), 0),
+    [reviewQuestions, srs]
+  );
+  const weekly = useMemo(() => {
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d0 = base.getTime() - i * DAY;
+      const d1 = d0 + DAY;
+      days.push(history.filter((h) => h.source === 'review' && h.at >= d0 && h.at < d1).length);
+    }
+    return days;
+  }, [history]);
+  const weekMax = Math.max(1, ...weekly);
+
   // 保存済みの途中経過を読み込む（続きから）
   useEffect(() => {
     if (started || !questions || !questions.length) return;
@@ -266,6 +288,21 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           <button className="btn primary block lg" style={{ marginBottom: 10 }} onClick={doResume}>
             ▶ 前回の続きから（{resume.idx + 1}/{resume.order.length}問）
           </button>
+        )}
+
+        {/* 前進感（改善5）：あと1問でマスター／延べ回数／週間の復習量 */}
+        {reviewQuestions.length > 0 && (
+          <div className="progress-hint">
+            🎯 あと1問でマスター <strong>{nearMaster}</strong> 件 ・ マスターまで延べ <strong>{toMasterTotal}</strong> 回
+            <div className="weekbar" title="直近7日の復習量">
+              {weekly.map((c, i) => (
+                <span key={i} className="weekbar-col">
+                  <i style={{ height: `${Math.round((c / weekMax) * 100)}%` }} />
+                </span>
+              ))}
+              <span className="weekbar-label">7日</span>
+            </div>
+          </div>
         )}
 
         {/* ===== 今日の到達リング＋連続日数（改善2・5） ===== */}
@@ -445,12 +482,16 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     return (
       <div className="view">
         <h2 className="view-title">復習完了</h2>
-        <div className="card" style={{ textAlign: 'center' }}>
+        <div className="card complete-pop" style={{ textAlign: 'center' }}>
+          <div className="complete-emoji">{rate >= 80 ? '🎉' : rate >= 50 ? '👍' : '💪'}</div>
           <div className="num" style={{ fontSize: 32, color: 'var(--text)', fontWeight: 800 }}>
             {rate}%
           </div>
           <p className="view-desc">
-            {sessionStats.total}問中 {sessionStats.correct}問 正解
+            {sessionStats.total}問中 {sessionStats.correct}問 正解 ・ 🔥連続{streak}日 ・ 今日{todayReviewDone}問
+          </p>
+          <p className="inline-note" style={{ marginBottom: 8 }}>
+            マスターまで延べ <strong>{toMasterTotal}</strong> 回（あと1問で <strong>{nearMaster}</strong> 件がマスター）
           </p>
           {misses.length > 0 ? (
             <>
