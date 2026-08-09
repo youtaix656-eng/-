@@ -34,5 +34,14 @@ jobs:
       - name: Validate content (schema / dedup / coverage / freshness)
         run: npm run validate
 
+      - name: Lint theme (黒背景・白文字の不変条件)
+        run: npm run lint:theme
+
+      - name: Security audit (high 以上で警告)
+        run: npm audit --audit-level=high || true
+
       - name: Build
         run: npm run build
+
+      - name: Performance budget (bundle size)
+        run: npm run check:size

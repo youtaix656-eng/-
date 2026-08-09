@@ -1,0 +1,21 @@
+# 依存脆弱性の継続監視＆自動更新（#19）。
+# npm の既知脆弱性・古い依存を毎週チェックし、更新PRを自動作成する。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+  - package-ecosystem: npm
+    directory: /rirakuru-app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [ci]

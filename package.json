@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test",
-    "validate": "node scripts/validate-content.mjs"
+    "validate": "node scripts/validate-content.mjs",
+    "lint:theme": "node scripts/lint-theme.mjs",
+    "check:size": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
