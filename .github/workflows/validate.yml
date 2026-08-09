@@ -1,0 +1,38 @@
+name: Validate content & build
+
+# デプロイ前の品質ゲート。PR と main への push で
+#   1) テスト  2) コンテンツ検証（スキーマ・重複・版番号・網羅・数値鮮度）  3) ビルド
+# を実行する。スキーマ/重複/版番号に重大エラーがあれば失敗する。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Validate content (schema / dedup / coverage / freshness)
+        run: npm run validate
+
+      - name: Build
+        run: npm run build
