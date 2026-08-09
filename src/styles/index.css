@@ -3251,3 +3251,7 @@ code.block {
 .li-related-list li { font-size: 12.5px; color: var(--text); display: flex; align-items: baseline; gap: 6px; }
 .li-related-subj { flex: 0 0 auto; font-size: 10px; font-weight: 800; color: var(--accent); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; }
 .li-related-shared { flex: 0 0 auto; margin-left: auto; font-size: 10px; color: var(--text-mute); }
+
+/* 復習：件数表示 */
+.review-count { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-sub); margin: 2px 0 4px; }
+.review-count strong { color: var(--text); font-size: 16px; }

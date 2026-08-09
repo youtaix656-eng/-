@@ -22,13 +22,15 @@ test('matchesSearch: 語・科目・タグ・同義語で一致', () => {
   assert.equal(matchesSearch(q2, 'ACL', {}), true);
 });
 
-test('filterReview: タグと検索で絞り込み', () => {
+test('filterReview: 科目・タグ・検索で絞り込み', () => {
   const qs = [
-    { id: 'a', subject: 'S', tags: ['心不全'], question: '心不全' },
-    { id: 'b', subject: 'S', tags: ['骨折'], question: '骨折' },
+    { id: 'a', subject: '循環器', tags: ['心不全'], question: '心不全' },
+    { id: 'b', subject: '運動器', tags: ['骨折'], question: '骨折' },
   ];
   assert.deepEqual(filterReview(qs, { tag: '心不全', links: {} }).map((q) => q.id), ['a']);
   assert.deepEqual(filterReview(qs, { term: '骨折', links: {} }).map((q) => q.id), ['b']);
+  assert.deepEqual(filterReview(qs, { subject: '運動器', links: {} }).map((q) => q.id), ['b']);
+  assert.deepEqual(filterReview(qs, { subject: '循環器', term: '骨折', links: {} }).map((q) => q.id), []);
 });
 
 test('sortReview: forget/hard/wrong/subject で並ぶ', () => {

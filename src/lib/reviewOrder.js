@@ -27,9 +27,10 @@ export function matchesSearch(q, term, links) {
   return false;
 }
 
-// 復習リストを絞り込み（弱点タグ＋検索語）
-export function filterReview(questions, { tag = '', term = '', links = {} } = {}) {
+// 復習リストを絞り込み（科目＋弱点タグ＋検索語）
+export function filterReview(questions, { subject = '', tag = '', term = '', links = {} } = {}) {
   return questions.filter((q) => {
+    if (subject && q.subject !== subject) return false;
     if (tag && !effectiveTags(q, links).includes(tag)) return false;
     if (term && !matchesSearch(q, term, links)) return false;
     return true;

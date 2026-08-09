@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import ResetInline from './ResetInline.jsx';
 import { normalize, MASTER_STREAK } from '../lib/srs.js';
@@ -15,6 +15,15 @@ const ORDER_MODES = [
   { id: 'hard', label: '難問（誤答率）順' },
   { id: 'wrong', label: '誤答が多い順' },
   { id: 'subject', label: '科目順' },
+];
+
+// 1回の問題数（学習と同じ 10・60・300・900、および すべて）
+const REVIEW_TARGETS = [
+  { n: 10, label: '10問' },
+  { n: 60, label: '60問' },
+  { n: 300, label: '300問' },
+  { n: 900, label: '900問' },
+  { n: 0, label: 'すべて' },
 ];
 
 // 復習リスト項目に「関連問題・用語」をその場表示（#10）
@@ -74,11 +83,20 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const [idx, setIdx] = useState(0);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
   const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
+  const missRef = useRef([]); // この回で ○ にならなかった（不正解・△・✕）問題
 
   // 出題・一覧の制御（#1/#4/#5/#8）
   const [orderMode, setOrderMode] = useState('forget'); // 既定＝忘れそうな順
   const [filterTag, setFilterTag] = useState('');
   const [search, setSearch] = useState('');
+  const [subject, setSubject] = useState('all'); // 科目ごとの検索
+  const [batch, setBatch] = useState(60); // 1回の問題数（0=すべて）
+
+  // 復習リストにある科目の一覧
+  const subjects = useMemo(
+    () => Array.from(new Set(reviewQuestions.map((q) => q.subject).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja')),
+    [reviewQuestions]
+  );
 
   // 弱点テーマ（誤答が多いタグ）＝ #4
   const weakTags = useMemo(
@@ -86,26 +104,37 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     [history, reviewQuestions, links]
   );
 
+  const filterOpts = { subject: subject === 'all' ? '' : subject, tag: filterTag, term: search, links };
+
   // 絞り込み＋並べ替え後のリスト（#8）
   const shownList = useMemo(() => {
-    const filtered = filterReview(reviewQuestions, { tag: filterTag, term: search, links });
+    const filtered = filterReview(reviewQuestions, filterOpts);
     return sortReview(filtered, orderMode, { srs, history, links });
-  }, [reviewQuestions, filterTag, search, orderMode, srs, history, links]);
+  }, [reviewQuestions, subject, filterTag, search, orderMode, srs, history, links]);
 
   // 出題プール：絞り込みがあれば全リストから、無ければ「今日の復習」から。並びは orderMode。
+  const filtering = subject !== 'all' || !!filterTag || !!search.trim();
   const startPool = useMemo(() => {
-    const base = filterTag || search.trim()
-      ? filterReview(reviewQuestions, { tag: filterTag, term: search, links })
-      : dueReviewQuestions;
+    const base = filtering ? filterReview(reviewQuestions, filterOpts) : dueReviewQuestions;
     return sortReview(base, orderMode, { srs, history, links });
-  }, [filterTag, search, reviewQuestions, dueReviewQuestions, orderMode, srs, history, links]);
+  }, [filtering, subject, filterTag, search, reviewQuestions, dueReviewQuestions, orderMode, srs, history, links]);
 
-  const start = () => {
-    if (startPool.length === 0) return;
-    setOrder(startPool);
+  // 実際に出題される問数（バッチ上限と在庫の小さい方）
+  const effectiveCount = batch > 0 ? Math.min(batch, startPool.length) : startPool.length;
+
+  // pool を出題開始（続けるループ用に任意の配列でも開始できる）
+  const startWith = (pool) => {
+    if (!pool || pool.length === 0) return;
+    missRef.current = [];
+    setOrder(pool);
     setIdx(0);
     setSessionStats({ total: 0, correct: 0 });
     setStarted(true);
+  };
+
+  const start = () => {
+    const pool = batch > 0 ? startPool.slice(0, batch) : startPool;
+    startWith(pool);
   };
 
   // 保存済みの途中経過を読み込む（続きから）
@@ -148,7 +177,10 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   };
 
   const handleAnswered = (correct, grade) => {
-    recordAnswer(order[idx], correct, grade);
+    const q = order[idx];
+    recordAnswer(q, correct, grade);
+    // ○（完璧）以外＝不正解・△・✕ は「まだ定着していない」として記憶
+    if (!correct && q) missRef.current.push(q);
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
   };
 
@@ -176,7 +208,6 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   // ---- 開始前 ----
   if (!started) {
     const dueCount = dueReviewQuestions.length;
-    const filtering = !!(filterTag || search.trim());
     return (
       <div className="view">
         <h2 className="view-title">間違えた問題</h2>
@@ -229,14 +260,21 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           </>
         )}
 
-        {/* ===== 検索・並べ替え（#8） ＋ 出題順（#1/#5） ===== */}
+        {/* ===== 検索（科目・キーワード）＋並べ替え・出題順 ===== */}
         <div className="review-controls">
+          <label className="review-order">
+            <span>科目</span>
+            <select value={subject} onChange={(e) => setSubject(e.target.value)}>
+              <option value="all">すべての科目</option>
+              {subjects.map((s) => (<option key={s} value={s}>{s}</option>))}
+            </select>
+          </label>
           <input
             type="text"
             className="review-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="🔎 復習リストを検索（語・科目・タグ）"
+            placeholder="🔎 キーワード検索（語・タグ）"
           />
           <label className="review-order">
             <span>出題・並び順</span>
@@ -245,11 +283,28 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             </select>
           </label>
         </div>
+        <div className="review-count">
+          この条件で <strong>{startPool.length}</strong> 問
+          {filtering && <button className="btn ghost sm" onClick={() => { setSubject('all'); setFilterTag(''); setSearch(''); }}>クリア</button>}
+        </div>
 
-        <div className="section-label" style={{ marginTop: 4 }}>復習のしかたを選ぶ</div>
-        <button className="btn primary block lg" onClick={start} disabled={startPool.length === 0}>
+        {/* ===== 1回の問題数（10・60・300・900・すべて） ===== */}
+        <div className="section-label" style={{ marginTop: 4 }}>1回の問題数</div>
+        <div className="chip-row">
+          {REVIEW_TARGETS.map((t) => (
+            <button
+              key={t.n}
+              className={`chip ${batch === t.n ? 'active' : ''}`}
+              onClick={() => setBatch(t.n)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <button className="btn primary block lg" style={{ marginTop: 6 }} onClick={start} disabled={startPool.length === 0}>
           {startPool.length > 0
-            ? `📝 一問一答で復習（${startPool.length}問${filtering ? '・絞り込み中' : ''}・${ORDER_MODES.find((m) => m.id === orderMode)?.label}）`
+            ? `📝 一問一答で復習（${effectiveCount}問・${ORDER_MODES.find((m) => m.id === orderMode)?.label}）`
             : (filtering ? '条件に合う問題がありません' : '今日の復習は完了しました')}
         </button>
         <button
@@ -312,6 +367,11 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
       sessionStats.total > 0
         ? Math.round((sessionStats.correct / sessionStats.total) * 100)
         : 0;
+    // この回で ○ にならなかった（不正解・△・✕）問題（重複除去）
+    const misses = [];
+    const seen = new Set();
+    for (const q of missRef.current) if (!seen.has(q.id)) { seen.add(q.id); misses.push(q); }
+    const backToList = () => { missRef.current = []; setStarted(false); };
     return (
       <div className="view">
         <h2 className="view-title">復習完了</h2>
@@ -322,16 +382,28 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           <p className="view-desc">
             {sessionStats.total}問中 {sessionStats.correct}問 正解
           </p>
-          <p className="inline-note">
-            ○（完璧）は忘却曲線に沿って次回が先へ延び、5回連続でマスター。△・✕は約20分後から再スタートします。
-          </p>
-          <button
-            className="btn primary block lg"
-            style={{ marginTop: 12 }}
-            onClick={() => setStarted(false)}
-          >
-            復習リストに戻る
-          </button>
+          {misses.length > 0 ? (
+            <>
+              <p className="inline-note" style={{ marginBottom: 12 }}>
+                まだ定着していない（不正解・△・✕）問題が <strong style={{ color: 'var(--wrong)' }}>{misses.length}問</strong> あります。続けますか？
+              </p>
+              <div className="btn-row">
+                <button className="btn primary" onClick={() => startWith(misses)}>
+                  はい、続ける（{misses.length}問）
+                </button>
+                <button className="btn" onClick={backToList}>いいえ、中断する</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="inline-note">
+                この回はすべて ○（完璧）でした。○は忘却曲線に沿って次回が先へ延び、5回連続でマスターです。
+              </p>
+              <button className="btn primary block lg" style={{ marginTop: 12 }} onClick={backToList}>
+                復習リストに戻る
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
