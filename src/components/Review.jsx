@@ -152,13 +152,16 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     startWith(batch > 0 ? pool.slice(0, batch) : pool);
   };
 
-  // 今日の到達・連続日数（#7）
+  // 今日の到達・連続日数（改善2）：復習由来の解答だけを数える
   const { streak } = useMemo(() => studyStreak(history), [history]);
-  const todayCount = useMemo(() => {
+  const todayReviewDone = useMemo(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0);
     const start0 = d.getTime();
-    return history.filter((h) => h.at >= start0).length;
+    return history.filter((h) => h.source === 'review' && h.at >= start0).length;
   }, [history]);
+  // 日次目標＝今日こなした復習＋まだ期限が来ている数（今日中に片づけたい総量）
+  const dailyGoal = Math.max(1, todayReviewDone + dueReviewQuestions.length);
+  const goalPct = Math.min(100, Math.round((todayReviewDone / dailyGoal) * 100));
 
   // 保存済みの途中経過を読み込む（続きから）
   useEffect(() => {
@@ -201,7 +204,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
 
   const handleAnswered = (correct, grade) => {
     const q = order[idx];
-    recordAnswer(q, correct, grade);
+    recordAnswer(q, correct, grade, 'review'); // 復習由来として記録（到達集計用）
     // ○（完璧）以外＝不正解・△・✕ は「まだ定着していない」として記憶
     if (!correct && q) missRef.current.push(q);
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
@@ -264,10 +267,19 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           </button>
         )}
 
-        {/* ===== 連続日数・今日の到達（#7） ===== */}
-        <div className="review-streak">
-          <span>🔥 連続 <strong>{streak}</strong> 日</span>
-          <span>今日 <strong>{todayCount}</strong> 問</span>
+        {/* ===== 今日の到達リング＋連続日数（改善2・5） ===== */}
+        <div className="review-goal">
+          <div className="goal-ring" style={{ '--pct': goalPct }}>
+            <div className="goal-ring-in">{goalPct}%</div>
+          </div>
+          <div className="goal-text">
+            <div className="goal-line">今日の復習 <strong>{todayReviewDone}</strong> / {dailyGoal} 問</div>
+            <div className="goal-sub">
+              🔥 連続 <strong>{streak}</strong> 日
+              {todayReviewDone === 0 && streak > 0 && <span className="goal-nudge">　今日やれば {streak + 1} 日目！</span>}
+              {goalPct >= 100 && <span className="goal-done">　🎉 今日の目標達成！</span>}
+            </div>
+          </div>
         </div>
 
         {/* ===== 弱点テーマで狙い撃ち（#4 絞り込み・#5 即復習・#1 誤答数と色） ===== */}
