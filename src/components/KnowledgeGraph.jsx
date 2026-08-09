@@ -4,7 +4,7 @@ import { graphStats, neighbors } from '../lib/knowledgeGraph.js';
 import { nodeDegrees, isolatedConcepts } from '../lib/learnerModel.js';
 import { recommendNext } from '../lib/kgRecommend.js';
 import { effectiveStrength } from '../lib/assocStrength.js';
-import { shortestPath, pathRelations } from '../lib/graphAlgos.js';
+import { shortestPath, pathRelations, connectedComponents, crossSubjectBridges } from '../lib/graphAlgos.js';
 import { recallPairs } from '../lib/kgRecall.js';
 import { conceptsOf } from '../lib/concepts.js';
 import AssocTrainer from './AssocTrainer.jsx';
@@ -124,6 +124,42 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
   }, [history, questions, links]);
   const weekMax = Math.max(1, ...weekly);
   const weekTotal = weekly.reduce((a, b) => a + b, 0);
+
+  // クラスタ（#13）と 科目横断ブリッジ（#12）
+  const clusters = useMemo(() => connectedComponents(graph).slice(0, 5), [graph]);
+  const bridges = useMemo(() => crossSubjectBridges(graph, { limit: 8 }), [graph]);
+
+  // グラフのエクスポート（#30）：JSON と 簡易SVG をダウンロード
+  const exportJson = () => {
+    const blob = new Blob([JSON.stringify(graph, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'knowledge-graph.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const exportSvg = () => {
+    const ids = hubs.map((h) => h.id);
+    const N = ids.length || 1;
+    const R = 120, cx = 150, cy = 150;
+    const pos = {};
+    ids.forEach((id, i) => {
+      const ang = (i / N) * Math.PI * 2 - Math.PI / 2;
+      pos[id] = { x: cx + R * Math.cos(ang), y: cy + R * Math.sin(ang) };
+    });
+    const lines = [];
+    for (const e of Object.values(graph.edges)) {
+      if (pos[e.a] && pos[e.b]) lines.push(`<line x1="${pos[e.a].x.toFixed(1)}" y1="${pos[e.a].y.toFixed(1)}" x2="${pos[e.b].x.toFixed(1)}" y2="${pos[e.b].y.toFixed(1)}" stroke="#37b6cc" stroke-width="1" opacity="0.5"/>`);
+    }
+    const dots = ids.map((id) => `<circle cx="${pos[id].x.toFixed(1)}" cy="${pos[id].y.toFixed(1)}" r="5" fill="#37b6cc"/><text x="${(pos[id].x + 6).toFixed(1)}" y="${pos[id].y.toFixed(1)}" font-size="9" fill="#fff">${id}</text>`);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="#000"/>${lines.join('')}${dots.join('')}</svg>`;
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'knowledge-graph.svg';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   if (solved.length === 0) {
     return (
@@ -315,6 +351,38 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
         </>
       )}
 
+      {bridges.length > 0 && (
+        <>
+          <div className="section-label">🌉 科目をまたぐつながり（横断ブリッジ）</div>
+          <div className="card">
+            <ul className="kg-edge-list">
+              {bridges.map((e) => (
+                <li key={`${e.a}-${e.b}`}>
+                  <button className="kg-tag" onClick={() => onOpenKeyword?.(e.a)}>{e.a}</button>
+                  <span className="kg-rel">―</span>
+                  <button className="kg-tag" onClick={() => onOpenKeyword?.(e.b)}>{e.b}</button>
+                  <span className="inline-note">（{(e.subjectsA[0] || '')}×{(e.subjectsB[0] || '')}）</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+
+      {clusters.length > 1 && (
+        <>
+          <div className="section-label">🧷 知識のかたまり（クラスタ）</div>
+          <div className="card">
+            {clusters.map((c, i) => (
+              <div key={i} className="cluster-row">
+                <span className="cluster-size">{c.length}概念</span>
+                <span className="cluster-members">{c.slice(0, 6).join('・')}{c.length > 6 ? ' …' : ''}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {todayLinks.length > 0 && (
         <>
           <div className="section-label">🌱 今日つないだ知識</div>
@@ -331,6 +399,15 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
           </div>
         </>
       )}
+
+      <div className="section-label">📤 グラフを書き出す</div>
+      <div className="card">
+        <div className="btn-row">
+          <button className="btn" onClick={exportSvg}>🖼️ 画像(SVG)で保存</button>
+          <button className="btn" onClick={exportJson}>🗂️ データ(JSON)で保存</button>
+        </div>
+        <p className="inline-note" style={{ marginTop: 8 }}>知識グラフを画像やデータとして書き出せます（バックアップ・共有用）。</p>
+      </div>
     </div>
   );
 }

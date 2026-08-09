@@ -3377,3 +3377,8 @@ code.block {
 .assoc-a { font-size: 20px; font-weight: 800; color: var(--text); }
 .assoc-arrow { color: var(--accent); font-weight: 800; margin: 4px 0; }
 .assoc-b { font-size: 20px; font-weight: 800; color: var(--accent); }
+
+/* ===== クラスタ表示（#13） ===== */
+.cluster-row { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.cluster-size { flex: 0 0 auto; font-weight: 800; color: var(--accent); }
+.cluster-members { color: var(--text-sub); }

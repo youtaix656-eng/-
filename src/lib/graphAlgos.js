@@ -34,6 +34,41 @@ export function shortestPath(graph, a, b) {
   return path;
 }
 
+// 連結成分（#13 クラスタ）— つながっている概念のかたまりを返す。大きい順。
+export function connectedComponents(graph) {
+  const adj = adjacency(graph);
+  const seen = new Set();
+  const comps = [];
+  for (const id of Object.keys(graph.nodes)) {
+    if (seen.has(id)) continue;
+    const comp = [];
+    const stack = [id];
+    seen.add(id);
+    while (stack.length) {
+      const cur = stack.pop();
+      comp.push(cur);
+      for (const { to } of adj.get(cur) || []) if (!seen.has(to)) { seen.add(to); stack.push(to); }
+    }
+    comps.push(comp);
+  }
+  return comps.sort((a, b) => b.length - a.length);
+}
+
+// 科目横断ブリッジ（#12）— 両端の概念が別科目に属する辺。異分野をつなぐ“橋”。
+//   node.subjects を使う。[{ a, b, type, subjectsA, subjectsB }]
+export function crossSubjectBridges(graph, { limit = 20 } = {}) {
+  const out = [];
+  for (const e of Object.values(graph.edges)) {
+    const sa = graph.nodes[e.a]?.subjects || [];
+    const sb = graph.nodes[e.b]?.subjects || [];
+    if (sa.length && sb.length && !sa.some((s) => sb.includes(s))) {
+      out.push({ a: e.a, b: e.b, type: e.type, subjectsA: sa, subjectsB: sb, strength: e.strength || e.weight || 0 });
+    }
+  }
+  out.sort((x, y) => y.strength - x.strength);
+  return limit > 0 ? out.slice(0, limit) : out;
+}
+
 // 経路上の各ステップの関係タイプ（表示用）。path 長 n → n-1 ステップ。
 export function pathRelations(graph, path) {
   const out = [];

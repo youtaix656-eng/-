@@ -49,3 +49,26 @@ test('elaborationSuggestions: 隣接する未付与の概念を提案', () => {
   const sug = elaborationSuggestions(g, ['心不全']);
   assert.ok(sug.includes('利尿薬') && sug.includes('BNP'));
 });
+
+import { connectedComponents, crossSubjectBridges } from '../src/lib/graphAlgos.js';
+import { addEdge } from '../src/lib/knowledgeGraph.js';
+
+test('connectedComponents: つながりの塊を大きい順に', () => {
+  const g = emptyGraph();
+  addCoOccurrence(g, ['A', 'B', 'C']);
+  addCoOccurrence(g, ['X', 'Y']);
+  const comps = connectedComponents(g);
+  assert.equal(comps.length, 2);
+  assert.equal(comps[0].length, 3);
+});
+
+test('crossSubjectBridges: 別科目をつなぐ辺を検出', () => {
+  const g = emptyGraph();
+  addCoOccurrence(g, ['心不全', '利尿薬'], { subject: '循環器' }); // 循環器の塊
+  addCoOccurrence(g, ['骨折', 'ギプス'], { subject: '運動器' }); // 運動器の塊
+  addEdge(g, '心不全', '骨折'); // 異なる科目どうしを橋渡し
+  const br = crossSubjectBridges(g);
+  assert.ok(br.find((e) => (e.a === '心不全' || e.b === '心不全') && (e.a === '骨折' || e.b === '骨折')));
+  // 同一科目の 心不全-利尿薬 は橋ではない
+  assert.ok(!br.find((e) => (e.a === '利尿薬' || e.b === '利尿薬')));
+});
