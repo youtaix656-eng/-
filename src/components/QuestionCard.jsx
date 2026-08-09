@@ -20,6 +20,9 @@ export default function QuestionCard({
   selfGrade = false, // ○△✕ の自己評価（△✕は復習サイクルへ）
   GRADES,
   isLast = false,
+  comparisons = [], // まぎらわしい対比（誤答時に自動提示）＝#8
+  reason = '', // なぜ今この問題か（期限切れ／忘却リスク）＝#10
+  fast = false, // 高速回転モード：一定秒で自動的に答えを表示＝#6
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
@@ -34,6 +37,13 @@ export default function QuestionCard({
     setMemoOpen(false);
     setMemoText(memo || '');
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 高速回転モード（#6）：3秒たったら自動で答え（裏）を表示。自力想起の合図。
+  useEffect(() => {
+    if (!fast || revealed) return;
+    const t = setTimeout(() => setRevealed(true), 3000);
+    return () => clearTimeout(t);
+  }, [fast, revealed, question.id]);
 
   const correct = selected === question.answer;
 
@@ -79,7 +89,11 @@ export default function QuestionCard({
           {question.type === 'ox' ? '○×' : '四択'}
         </span>
         <span className="q-subject">{question.subject}</span>
+        {fast && !revealed && <span className="fast-flag">⚡3秒</span>}
       </div>
+
+      {/* なぜ今この問題か（#10）＋ 自力想起の合図 */}
+      {reason && <div className="q-reason">🧠 {reason}</div>}
 
       {question.image && (
         <img
@@ -155,6 +169,22 @@ export default function QuestionCard({
             <div className="explanation">
               <span className="label">解説</span>
               {question.explanation}
+            </div>
+          )}
+
+          {/* まぎらわしい対比（#8）：正解できなかったときだけ自動提示して混同を解消 */}
+          {!correct && comparisons.length > 0 && (
+            <div className="compare-card">
+              <div className="compare-head">⚖️ まぎらわしい対比（混同注意）</div>
+              {comparisons.slice(0, 2).map((c) => (
+                <div className="compare-item" key={c.id}>
+                  <div className="compare-title">{c.title}</div>
+                  <ul className="compare-members">
+                    {(c.members || []).map((m, i) => (<li key={i}>{m}</li>))}
+                  </ul>
+                  {c.note && <div className="compare-note">💡 {c.note}</div>}
+                </div>
+              ))}
             </div>
           )}
 

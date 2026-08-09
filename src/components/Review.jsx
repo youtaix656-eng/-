@@ -8,6 +8,7 @@ import { weakTagClusters } from '../lib/weakClusters.js';
 import { relatedQuestions } from '../lib/related.js';
 import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
+import { comparisonsForKeyword } from '../data/mindmapData.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -93,6 +94,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const [subject, setSubject] = useState('all'); // 科目ごとの検索
   const [batch, setBatch] = useState(60); // 1回の問題数（0=すべて）
   const [showAll, setShowAll] = useState(false); // リストの折りたたみ（#4）
+  const [fast, setFast] = useState(false); // 高速回転モード（#6）
 
   // 復習リストにある科目の一覧
   const subjects = useMemo(
@@ -331,6 +333,10 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             </button>
           ))}
         </div>
+        <label className="autokw-row" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} />
+          <span>⚡ 高速回転モード（問題→3秒で答え表示→自己採点。まず自力で思い出す）</span>
+        </label>
 
         <button className="btn primary block lg" style={{ marginTop: 6 }} onClick={start} disabled={startPool.length === 0}>
           {startPool.length > 0
@@ -452,10 +458,24 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
 
   // ---- 出題中 ----
   const current = order[idx];
+  // まぎらわしい対比（#8）：この問題のタグに紐づく対比を集める
+  const curTags = effectiveTags(current, links);
+  const curComparisons = [];
+  const seenCmp = new Set();
+  for (const t of curTags) {
+    for (const c of comparisonsForKeyword(t)) if (!seenCmp.has(c.id)) { seenCmp.add(c.id); curComparisons.push(c); }
+  }
+  // なぜ今この問題か（#10）
+  const curRisk = Math.round(riskOf(current, srs) * 100);
+  const curSt = normalize(srs[current.id]);
+  const overdue = (curSt.due || 0) <= Date.now();
+  const curReason = overdue
+    ? `期限が来た復習です（忘却リスク ${curRisk}%）。まず自力で思い出してみましょう。`
+    : `忘却リスク ${curRisk}% で選ばれました。まず自力で思い出してみましょう。`;
   return (
     <div className="view">
       <div className="exam-timer">
-        <span className="count">🔁 復習モード</span>
+        <span className="count">🔁 復習モード{fast ? ' ⚡' : ''}</span>
         <span className="count">
           {idx + 1} / {order.length}
         </span>
@@ -477,6 +497,9 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         selfGrade
         GRADES={GRADES}
         isLast={idx + 1 >= order.length}
+        comparisons={curComparisons}
+        reason={curReason}
+        fast={fast}
       />
       <ResetInline label="復習をリセット" onReset={resetReview} />
     </div>

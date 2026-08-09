@@ -3278,3 +3278,13 @@ code.block {
 .risk-badge.lv-hot { background: var(--wrong-bg); color: var(--wrong); }
 .risk-badge.lv-warm { background: #33280f; color: var(--warn); }
 .risk-badge.lv-mild { background: var(--correct-bg); color: var(--correct); }
+
+/* ===== 復習：理由・高速・対比カード（#6/#8/#10） ===== */
+.fast-flag { margin-left: auto; font-size: 11px; font-weight: 800; color: var(--warn); background: #33280f; border-radius: 6px; padding: 1px 7px; }
+.q-reason { font-size: 12.5px; color: var(--text-sub); background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 6px; padding: 7px 10px; margin: 8px 0 4px; }
+.compare-card { margin-top: 12px; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: #2a2410; padding: 10px 12px; }
+.compare-head { font-size: 13px; font-weight: 800; color: var(--warn); margin-bottom: 6px; }
+.compare-item { margin-top: 6px; }
+.compare-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.compare-members { margin: 4px 0; padding-left: 18px; font-size: 12.5px; color: var(--text); line-height: 1.7; }
+.compare-note { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
