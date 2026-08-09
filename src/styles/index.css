@@ -3398,3 +3398,7 @@ code.block {
 .skewer-num { flex: 0 0 auto; font-weight: 800; color: var(--accent); }
 .skewer-facts { color: var(--text-sub); }
 .skewer-cross { color: var(--warn); font-weight: 700; }
+
+/* ===== インタラクティブ知識グラフ（#9） ===== */
+.graph-canvas { width: 100%; overflow: hidden; border-radius: var(--radius-sm); background: var(--bg); border: 1px solid var(--border); cursor: grab; }
+.graph-canvas:active { cursor: grabbing; }

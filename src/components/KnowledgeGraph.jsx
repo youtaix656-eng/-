@@ -14,6 +14,7 @@ import { assocKey } from '../lib/assocReview.js';
 import { NUMBER_FACTS } from '../data/mindmapData.js';
 import { numberSkewers } from '../lib/numberLinks.js';
 import { conceptGrowth, diseaseTriad } from '../lib/kgTimeline.js';
+import GraphCanvas from './GraphCanvas.jsx';
 
 function firstSentence(text) {
   const s = String(text || '').trim();
@@ -208,6 +209,10 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
         <div className="tile"><div className="num">{stats.edges}</div><div className="lbl">つながり（辺）</div></div>
         <div className="tile"><div className="num">{todayLinks.length}</div><div className="lbl">今日つないだ</div></div>
       </div>
+
+      {/* インタラクティブ知識グラフ（#9）：ドラッグ・ズームで探索 */}
+      <div className="section-label">🗺️ 知識マップ（触って探索）</div>
+      <GraphCanvas graph={graph} onOpenKeyword={onOpenKeyword} />
 
       {topHub && hubNeighbors.length > 0 && (
         <>
