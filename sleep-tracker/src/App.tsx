@@ -14,10 +14,12 @@ import SettingsScreen from './components/Settings';
 import WorkTab from './components/work/WorkTab';
 import ShiftStartForm from './components/work/ShiftStartForm';
 import SymptomQuickLog from './components/work/SymptomQuickLog';
+import TreatmentSessionForm from './components/work/TreatmentSessionForm';
 import { useRecords } from './lib/useRecords';
 import { useShifts } from './lib/useShifts';
 import { loadSettings, saveSettings } from './lib/storage';
 import { startReminderWatch, stopReminderWatch } from './lib/reminders';
+import { markTodayOff } from './lib/todayShift';
 import { todayISODate } from './lib/time';
 import type { SleepRecord } from './types/sleep';
 import type { AppSettings } from './types/settings';
@@ -49,9 +51,14 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shiftStartOpen, setShiftStartOpen] = useState(false);
   const [symptomLogOpen, setSymptomLogOpen] = useState(false);
+  const [sessionFormOpen, setSessionFormOpen] = useState(false);
 
   async function refreshAll() {
     await Promise.all([refresh(), refreshShifts()]);
+  }
+
+  async function handleMarkDayOff() {
+    await saveShift(markTodayOff(shifts));
   }
 
   function openNewRecord() {
@@ -159,8 +166,11 @@ export default function App() {
         {tab === 'work' && (
           <WorkTab
             shifts={shifts}
+            records={records}
             onOpenShiftStart={() => setShiftStartOpen(true)}
             onOpenSymptomLog={() => setSymptomLogOpen(true)}
+            onOpenSessionForm={() => setSessionFormOpen(true)}
+            onMarkDayOff={handleMarkDayOff}
           />
         )}
       </main>
@@ -260,12 +270,16 @@ export default function App() {
       )}
 
       {symptomLogOpen && (
-        <SymptomQuickLog
+        <SymptomQuickLog shifts={shifts} onClose={() => setSymptomLogOpen(false)} onSave={saveShift} />
+      )}
+
+      {sessionFormOpen && (
+        <TreatmentSessionForm
           shifts={shifts}
-          onClose={() => setSymptomLogOpen(false)}
+          onClose={() => setSessionFormOpen(false)}
           onSave={async (shift) => {
             await saveShift(shift);
-            setSymptomLogOpen(false);
+            setSessionFormOpen(false);
           }}
         />
       )}

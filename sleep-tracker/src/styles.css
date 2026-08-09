@@ -554,3 +554,51 @@ h2.page-title {
     transform: scale(0.96);
   }
 }
+
+/* 勤務ログレポートの印刷/PDF保存用（睡眠外来にそのまま見せられる白背景の紙面にする）
+   注意: WorkReport は WorkTab 経由で .app-main の中に描画されるため、
+   .app-main 自体を非表示にはできない（レポートも一緒に消えてしまう）。
+   .app-main の「レポート以外の直下の子」だけを個別に隠す。 */
+@media print {
+  .app-header,
+  .bottom-nav,
+  .fab,
+  .no-print {
+    display: none !important;
+  }
+  .app-main > *:not(.modal-backdrop) {
+    display: none !important;
+  }
+  .app > .modal-backdrop:not(:has(.work-report-sheet)),
+  .app-main .modal-backdrop:not(:has(.work-report-sheet)) {
+    display: none !important;
+  }
+  body,
+  .app,
+  .app-main {
+    background: #ffffff !important;
+  }
+  .modal-backdrop {
+    position: static !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
+  .work-report-sheet {
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #111111 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: none !important;
+  }
+  .work-report-sheet * {
+    color: #111111 !important;
+  }
+  .work-report-sheet .card {
+    background: #ffffff !important;
+    border: 1px solid #999999 !important;
+  }
+}

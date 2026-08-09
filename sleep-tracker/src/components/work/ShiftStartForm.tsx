@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CaffeineIntake, ShiftLog, VentilationStatus } from '../../types/work';
 import { VENTILATION_LABELS } from '../../types/work';
 import type { SleepRecord } from '../../types/sleep';
-import { applyShiftStart, derivePriorSleepFromRecords } from '../../lib/todayShift';
+import { applyShiftStart, derivePriorSleepFromRecords, findTodayShift } from '../../lib/todayShift';
 import { formatDateLabel, todayISODate } from '../../lib/time';
 
 const VENTILATIONS: VentilationStatus[] = ['normal', 'broken', 'unknown'];
@@ -24,14 +24,17 @@ export default function ShiftStartForm({
   onSave: (shift: ShiftLog) => void | Promise<void>;
 }) {
   const derived = derivePriorSleepFromRecords(records);
+  const existing = findTodayShift(shifts);
 
-  const [startTime, setStartTime] = useState(nowHHMM());
-  const [ventilation, setVentilation] = useState<VentilationStatus>('unknown');
-  const [priorSleepAuto, setPriorSleepAuto] = useState(derived.hours !== undefined);
-  const [priorSleepHours, setPriorSleepHours] = useState(String(derived.hours ?? ''));
-  const [caffeineTaken, setCaffeineTaken] = useState(false);
-  const [caffeineTime, setCaffeineTime] = useState(nowHHMM());
-  const [caffeineAmount, setCaffeineAmount] = useState('');
+  const [startTime, setStartTime] = useState(existing?.startTime || nowHHMM());
+  const [ventilation, setVentilation] = useState<VentilationStatus>(existing?.ventilation ?? 'unknown');
+  const [priorSleepAuto, setPriorSleepAuto] = useState(existing ? existing.priorSleepAuto : derived.hours !== undefined);
+  const [priorSleepHours, setPriorSleepHours] = useState(String(existing?.priorSleepHours ?? derived.hours ?? ''));
+  const [caffeineTaken, setCaffeineTaken] = useState(existing?.caffeine.taken ?? false);
+  const [caffeineTime, setCaffeineTime] = useState(existing?.caffeine.time || nowHHMM());
+  const [caffeineAmount, setCaffeineAmount] = useState(existing?.caffeine.amount ?? '');
+  const [tookBreaks, setTookBreaks] = useState<boolean | undefined>(existing?.tookBreaks);
+  const [continuousHours, setContinuousHours] = useState(String(existing?.continuousTreatmentHours ?? ''));
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -46,6 +49,8 @@ export default function ShiftStartForm({
       priorSleepAuto,
       priorSleepPattern: priorSleepAuto ? derived.pattern : undefined,
       caffeine,
+      tookBreaks,
+      continuousTreatmentHours: Number(continuousHours) || undefined,
     });
     await onSave(shift);
     setSaving(false);
@@ -56,7 +61,7 @@ export default function ShiftStartForm({
       <div className="modal-sheet">
         <div className="modal-head">
           <div>
-            <h2>勤務を開始</h2>
+            <h2>勤務を{existing?.startTime ? '編集' : '開始'}</h2>
             <div className="subtle" style={{ marginTop: 2 }}>
               {formatDateLabel(todayISODate())}
             </div>
@@ -157,6 +162,32 @@ export default function ShiftStartForm({
               </div>
             </div>
           )}
+        </div>
+
+        <div className="field">
+          <span className="lbl">休憩（任意）</span>
+          <div className="segrow">
+            <button type="button" className={`seg ${tookBreaks === true ? 'on' : ''}`} onClick={() => setTookBreaks(true)}>
+              取れた
+            </button>
+            <button type="button" className={`seg ${tookBreaks === false ? 'on' : ''}`} onClick={() => setTookBreaks(false)}>
+              取れなかった
+            </button>
+          </div>
+        </div>
+
+        <div className="field">
+          <span className="lbl">連続施術時間の目安（時間・任意）</span>
+          <input
+            type="number"
+            className="inp"
+            min={0}
+            max={12}
+            step={0.5}
+            value={continuousHours}
+            onChange={(e) => setContinuousHours(e.target.value)}
+            placeholder="例: 3"
+          />
         </div>
 
         <div className="btn-row">
