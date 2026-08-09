@@ -63,21 +63,21 @@ export interface CaffeineIntake {
   amount?: string; // 自由入力（例: コーヒー1杯・エナジードリンク1本）
 }
 
-export type TreatmentType = 'body' | 'head_spa' | 'foot_reflexology' | 'other';
+// このセラピストの施術メニュー（4種類固定）
+export type TreatmentType = 'body_massage' | 'head_spa' | 'foot_reflexology' | 'hand_care';
 
 export const TREATMENT_TYPE_LABELS: Record<TreatmentType, string> = {
-  body: 'ボディ',
+  body_massage: 'もみほぐし',
   head_spa: 'ヘッドスパ',
-  foot_reflexology: 'フットリフレクソロジー',
-  other: 'その他',
+  foot_reflexology: '足つぼ',
+  hand_care: 'ハンドケア',
 };
 
-export const TREATMENT_TYPES: TreatmentType[] = ['body', 'head_spa', 'foot_reflexology', 'other'];
+export const TREATMENT_TYPES: TreatmentType[] = ['body_massage', 'head_spa', 'foot_reflexology', 'hand_care'];
 
 export interface TreatmentSession {
   id: string;
   type: TreatmentType;
-  otherNote?: string;
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
 }

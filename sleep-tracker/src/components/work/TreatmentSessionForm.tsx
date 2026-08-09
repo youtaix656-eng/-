@@ -19,21 +19,14 @@ export default function TreatmentSessionForm({
   onClose: () => void;
   onSave: (shift: ShiftLog) => void | Promise<void>;
 }) {
-  const [type, setType] = useState<TreatmentType>('body');
-  const [otherNote, setOtherNote] = useState('');
+  const [type, setType] = useState<TreatmentType>('body_massage');
   const [startTime, setStartTime] = useState(addMinutesToTime(nowHHMM(), -60));
   const [endTime, setEndTime] = useState(nowHHMM());
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    const shift = attachSessionToTodayShift(shifts, {
-      id: newId(),
-      type,
-      otherNote: type === 'other' && otherNote ? otherNote : undefined,
-      startTime,
-      endTime,
-    });
+    const shift = attachSessionToTodayShift(shifts, { id: newId(), type, startTime, endTime });
     await onSave(shift);
     setSaving(false);
   }
@@ -50,23 +43,19 @@ export default function TreatmentSessionForm({
 
         <div className="field">
           <span className="lbl">施術種別</span>
-          <div className="segrow">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {TREATMENT_TYPES.map((t) => (
-              <button key={t} type="button" className={`seg ${type === t ? 'on' : ''}`} onClick={() => setType(t)}>
+              <button
+                key={t}
+                type="button"
+                className={`seg ${type === t ? 'on' : ''}`}
+                onClick={() => setType(t)}
+                style={{ fontSize: 15, padding: '14px 6px', fontWeight: 700 }}
+              >
                 {TREATMENT_TYPE_LABELS[t]}
               </button>
             ))}
           </div>
-          {type === 'other' && (
-            <input
-              type="text"
-              className="inp"
-              value={otherNote}
-              onChange={(e) => setOtherNote(e.target.value)}
-              placeholder="施術名を入力"
-              style={{ marginTop: 8 }}
-            />
-          )}
         </div>
 
         <div className="field-row">
