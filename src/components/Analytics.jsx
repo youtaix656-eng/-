@@ -13,6 +13,7 @@ import {
 import { scopeCoverage } from '../data/examScope.js';
 import { isInReview, MATURE_INTERVAL } from '../lib/srs.js';
 import { computeBadges } from '../lib/gamify.js';
+import InsightsSection from './InsightsSection.jsx';
 
 // 分析・攻略率・合格者診断（⑯⑱㉑㉒）
 // 学習分析グラフ・出題範囲カバー率・合格ラインまで何%・合格者スタイル診断を1画面に。
@@ -65,6 +66,8 @@ export default function Analytics({ store, onNavigate }) {
 
   return (
     <div className="view">
+      <InsightsSection store={store} />
+
       {/* ===== ㉑ 合格ラインまで何% ===== */}
       <div className="section-label">🎯 合格ライン診断</div>
       <div className="card ana-pass">
