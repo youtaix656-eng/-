@@ -10,6 +10,9 @@ import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
 import { comparisonsForKeyword } from '../data/mindmapData.js';
 import { loadMissTypes, recordMissType, missTypeLabel } from '../lib/missTypes.js';
+import { buildGraphFromSolved } from '../lib/kgService.js';
+import { conceptsOf } from '../lib/concepts.js';
+import { elaborationSuggestions, chainNext } from '../lib/kgRecall.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -185,6 +188,12 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     return days;
   }, [history]);
   const weekMax = Math.max(1, ...weekly);
+
+  // 知識グラフ（解答済みから構築）＝精緻化候補・関連1問チェインに使う
+  const kgraph = useMemo(
+    () => buildGraphFromSolved(questions.filter((q) => srs[q.id] && (srs[q.id].seen || 0) > 0), links),
+    [questions, srs, links]
+  );
 
   // 保存済みの途中経過を読み込む（続きから）
   useEffect(() => {
@@ -479,6 +488,14 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     const seen = new Set();
     for (const q of missRef.current) if (!seen.has(q.id)) { seen.add(q.id); misses.push(q); }
     const backToList = () => { missRef.current = []; setStarted(false); };
+    // 関連1問チェイン（#1）：この回の問題と概念を共有する“つながり”を辿って続ける
+    const chainPool = [];
+    const excl = new Set(order.map((q) => q.id));
+    for (const q of order) {
+      const nx = chainNext(q, questions, links, excl);
+      if (nx) { chainPool.push(nx.question); excl.add(nx.question.id); }
+      if (chainPool.length >= 10) break;
+    }
     return (
       <div className="view">
         <h2 className="view-title">復習完了</h2>
@@ -515,6 +532,11 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
               </button>
             </>
           )}
+          {chainPool.length > 0 && (
+            <button className="btn block" style={{ marginTop: 10 }} onClick={() => startWith(chainPool)}>
+              🔗 関連をたどって続ける（{chainPool.length}問）
+            </button>
+          )}
         </div>
       </div>
     );
@@ -536,6 +558,8 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const curReason = overdue
     ? `期限が来た復習です（忘却リスク ${curRisk}%）。まず自力で思い出してみましょう。`
     : `忘却リスク ${curRisk}% で選ばれました。まず自力で思い出してみましょう。`;
+  // 精緻化候補（#2）：この問題の概念とつながる隣接概念
+  const curElaborate = elaborationSuggestions(kgraph, conceptsOf(current, links), { limit: 6 });
   return (
     <div className="view">
       <div className="exam-timer">
@@ -562,6 +586,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         GRADES={GRADES}
         isLast={idx + 1 >= order.length}
         comparisons={curComparisons}
+        elaborate={curElaborate}
         reason={curReason}
         fast={fast}
         onMissType={onMissType}

@@ -3360,3 +3360,7 @@ code.block {
 .kg-path-controls select { flex: 1; min-width: 120px; }
 .kg-path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .kg-path-node { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ===== 精緻化プロンプト（#2） ===== */
+.elaborate-box { margin-top: 12px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: rgba(55,182,204,0.08); padding: 10px 12px; }
+.elaborate-head { font-size: 12.5px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }

@@ -27,6 +27,7 @@ export default function QuestionCard({
   onMissType, // (questionId, type) 間違いの型を記録＝#9（あれば△✕後に型を聞く）
   simple = false, // 段階表示：メモ・連結を「もっと」に畳む＝改善1
   missType = '', // この問題の記録済みの間違いの型（型別の出し分け）＝改善3
+  elaborate = [], // 精緻化候補（これと何がつながる？）＝#2。タップで連結キーワードに追加
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
@@ -35,6 +36,7 @@ export default function QuestionCard({
   const [memoText, setMemoText] = useState(memo || '');
   const [askType, setAskType] = useState(false); // 間違いの型を尋ねている最中
   const [moreOpen, setMoreOpen] = useState(false); // 「もっと」（メモ・連結）の開閉
+  const [addedKw, setAddedKw] = useState([]); // この問題で精緻化として追加した語（✓表示用）
 
   useEffect(() => {
     setSelected(null);
@@ -44,6 +46,7 @@ export default function QuestionCard({
     setMemoText(memo || '');
     setAskType(false);
     setMoreOpen(false);
+    setAddedKw([]);
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 高速回転モード（#6）：3秒たったら自動で答え（裏）を表示。自力想起の合図。
@@ -213,6 +216,31 @@ export default function QuestionCard({
             <div className={`explanation ${missType === 'chishiki' ? 'emphasis' : ''}`}>
               <span className="label">解説{missType === 'chishiki' ? '（知識を補強）' : ''}</span>
               {question.explanation}
+            </div>
+          )}
+
+          {/* 精緻化プロンプト（#2）：これと何がつながる？ タップで連結に追加 */}
+          {(elaborate.length > 0 || addedKw.length > 0) && onSetLink && (
+            <div className="elaborate-box">
+              <div className="elaborate-head">🔗 これと何がつながる？（タップで連結に追加）</div>
+              <div className="chip-row">
+                {[...new Set([...addedKw, ...elaborate])].map((c) => {
+                  const has = addedKw.includes(c) || (link?.keywords || []).includes(c);
+                  return (
+                    <button
+                      key={c}
+                      className={`chip ${has ? 'active' : ''}`}
+                      onClick={() => {
+                        if (has) return;
+                        onSetLink(question.id, { keywords: [...(link?.keywords || []), c] });
+                        setAddedKw((prev) => [...prev, c]);
+                      }}
+                    >
+                      {has ? '✓ ' : '＋ '}{c}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
