@@ -7,6 +7,7 @@ import { effectiveStrength } from '../lib/assocStrength.js';
 import { shortestPath, pathRelations } from '../lib/graphAlgos.js';
 import { recallPairs } from '../lib/kgRecall.js';
 import { conceptsOf } from '../lib/concepts.js';
+import AssocTrainer from './AssocTrainer.jsx';
 
 function firstSentence(text) {
   const s = String(text || '').trim();
@@ -192,6 +193,9 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
           </div>
         </>
       )}
+
+      {/* 連想トレーニング（#25 連結の間隔反復 ＋ #22 対比識別ドリル） */}
+      <AssocTrainer graph={graph} />
 
       {/* 最短経路（#10）：AとBはどうつながる？ */}
       {conceptList.length >= 2 && (

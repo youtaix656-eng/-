@@ -3371,3 +3371,9 @@ code.block {
 .fc-concept-name { display: block; font-size: 22px; font-weight: 800; color: var(--accent); }
 .fc-concept-hint { font-size: 11px; color: var(--text-mute); }
 .fc-concept-body { margin-top: 10px; }
+
+/* ===== 連想トレーニング（#25/#22） ===== */
+.assoc-card { text-align: center; }
+.assoc-a { font-size: 20px; font-weight: 800; color: var(--text); }
+.assoc-arrow { color: var(--accent); font-weight: 800; margin: 4px 0; }
+.assoc-b { font-size: 20px; font-weight: 800; color: var(--accent); }
