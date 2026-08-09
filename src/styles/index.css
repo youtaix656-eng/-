@@ -3237,3 +3237,17 @@ code.block {
 .snap-when small { font-weight: 400; color: var(--text-sub); font-size: 11px; }
 .snap-tag { font-size: 10px; font-weight: 800; color: var(--accent); margin-left: 6px; }
 .snap-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+
+/* ===== 復習の狙い撃ち・検索・関連（#1/#4/#5/#8/#10） ===== */
+.review-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.review-search { flex: 1 1 180px; min-width: 160px; }
+.review-order { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); }
+.review-order select { padding: 8px 10px; }
+.li-related { margin-top: 8px; border-top: 1px dashed var(--border); padding-top: 6px; }
+.li-related-toggle { background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 700; cursor: pointer; padding: 2px 0; }
+.li-related-body { margin-top: 6px; }
+.li-def { font-size: 12px; color: var(--text-sub); background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; }
+.li-related-list { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.li-related-list li { font-size: 12.5px; color: var(--text); display: flex; align-items: baseline; gap: 6px; }
+.li-related-subj { flex: 0 0 auto; font-size: 10px; font-weight: 800; color: var(--accent); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; }
+.li-related-shared { flex: 0 0 auto; margin-left: auto; font-size: 10px; color: var(--text-mute); }
