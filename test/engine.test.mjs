@@ -76,6 +76,19 @@ test('weakTagClusters: 誤答の多いタグを上位に', () => {
   assert.ok(pool.find((q) => q.id === 'a'));
 });
 
+test('weakTagClusters: 表記ゆれ正規化と汎用タグ除外（改善4）', () => {
+  const qs = [
+    { id: 'a', tags: ['ACL', '症状'] },      // ACL→前十字靱帯、症状=汎用
+    { id: 'b', tags: ['前十字靱帯', '治療'] }, // 治療=汎用
+  ];
+  const hist = [{ questionId: 'a', correct: false }, { questionId: 'b', correct: false }];
+  const rows = weakTagClusters(hist, qs, {});
+  const tags = rows.map((r) => r.tag);
+  assert.ok(tags.includes('前十字靱帯'), 'ACLと前十字靱帯が統合され残る');
+  assert.equal(rows.find((r) => r.tag === '前十字靱帯').wrong, 2, '正規化で誤答が合算');
+  assert.ok(!tags.includes('症状') && !tags.includes('治療'), '汎用タグは除外');
+});
+
 // ---- #13 関連問題 ----
 test('relatedQuestions: 共有タグが多い順', () => {
   const target = { id: 't', subject: 'S', tags: ['心不全', '利尿薬', '浮腫'] };

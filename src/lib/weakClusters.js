@@ -3,15 +3,20 @@
 //   history: [{ questionId, subject, correct, at }] / questions: タグ付き問題配列
 
 import { effectiveTags } from './query.js';
+import { canonical, isGenericTag } from './synonyms.js';
 
-// タグ別の {attempts, wrong} を集計
+// タグ別の {attempts, wrong} を集計（表記ゆれは正式名称へ正規化＝改善4）
 function tagStats(history, questions, links) {
   const byId = new Map(questions.map((q) => [q.id, q]));
   const stats = new Map();
   for (const h of history) {
     const q = byId.get(h.questionId);
     if (!q) continue;
-    for (const tag of effectiveTags(q, links)) {
+    const seen = new Set();
+    for (const raw of effectiveTags(q, links)) {
+      const tag = canonical(raw);
+      if (seen.has(tag)) continue; // 同一問題内で正規化後に重複したら1回だけ
+      seen.add(tag);
       const cur = stats.get(tag) || { attempts: 0, wrong: 0 };
       cur.attempts += 1;
       if (!h.correct) cur.wrong += 1;
@@ -21,13 +26,34 @@ function tagStats(history, questions, links) {
   return stats;
 }
 
+// 全問題での各タグの出現数（df）。汎用すぎるタグ（多くの問題に付く）を除くのに使う。
+function tagDocFreq(questions, links) {
+  const df = new Map();
+  for (const q of questions) {
+    const seen = new Set();
+    for (const raw of effectiveTags(q, links)) {
+      const tag = canonical(raw);
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      df.set(tag, (df.get(tag) || 0) + 1);
+    }
+  }
+  return df;
+}
+
 // 弱点タグのランキング。[{ tag, attempts, wrong, rate }]
-//   minWrong 以上の誤答があるタグを、誤答数→誤答率の順で返す。
+//   ・表記ゆれを正規化して統合、汎用タグ（GENERIC_TAGS）を除外
+//   ・データが十分あるときは「多くの問題に付く汎用タグ」も除外（狙い撃ち精度UP）
 export function weakTagClusters(history = [], questions = [], links = {}, { minWrong = 1, limit = 12 } = {}) {
   const stats = tagStats(history, questions, links);
+  const df = tagDocFreq(questions, links);
+  const genericCut = questions.length >= 12 ? Math.max(8, questions.length * 0.5) : Infinity;
   const rows = [];
   for (const [tag, { attempts, wrong }] of stats) {
     if (wrong < minWrong) continue;
+    if (!tag || tag.length <= 1) continue;
+    if (isGenericTag(tag)) continue; // 汎用語は除外
+    if ((df.get(tag) || 0) >= genericCut) continue; // 出現しすぎる汎用タグは除外
     rows.push({ tag, attempts, wrong, rate: attempts ? wrong / attempts : 0 });
   }
   rows.sort((a, b) => b.wrong - a.wrong || b.rate - a.rate);
