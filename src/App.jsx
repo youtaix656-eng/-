@@ -37,6 +37,7 @@ import Roadmap from './components/Roadmap.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import NumberFacts from './components/NumberFacts.jsx';
 import CoverageMap from './components/CoverageMap.jsx';
+import KnowledgeGraph from './components/KnowledgeGraph.jsx';
 import Flashcards from './components/Flashcards.jsx';
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
@@ -61,6 +62,7 @@ const VIEW_TITLES = {
   exam: '模擬試験',
   dashboard: '弱点分析',
   coverage: '網羅マップ',
+  kgraph: '知識グラフ',
   analytics: '分析・攻略率・合格診断',
   roadmap: '合格するためのロードマップ',
   unread: '読み取れないページ',
@@ -427,6 +429,8 @@ export default function App() {
         return <NumberFacts store={store} onToast={showToast} />;
       case 'coverage':
         return <CoverageMap store={store} onStartSubject={startSubjectQuiz} />;
+      case 'kgraph':
+        return <KnowledgeGraph store={store} onOpenKeyword={openKeyword} />;
       case 'roadmap':
         return <Roadmap store={store} onNavigate={setView} />;
       case 'memos':

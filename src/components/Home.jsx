@@ -160,6 +160,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">つながる語・比較・数値注意を1枚に。引っかけに強くなる。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('kgraph')}>
+          <span className="ico">🕸️</span>
+          <span className="title">知識グラフ</span>
+          <span className="desc">解くたびに概念が自動でつながる。中心概念・強い連想・次に広がる問題を提示。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('flashcards')}>
           <span className="ico">🃏</span>
           <span className="title">経穴フラッシュカード</span>
