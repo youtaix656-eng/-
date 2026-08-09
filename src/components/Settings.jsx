@@ -11,6 +11,7 @@ import {
 } from '../lib/auth.js';
 import SyncQR from './SyncQR.jsx';
 import SyncScan from './SyncScan.jsx';
+import ErrorLogCard from './ErrorLogCard.jsx';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 
 // 設定・問題データ管理画面
@@ -483,6 +484,8 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           データはすべてこの端末のブラウザ内（IndexedDB）に保存されます。サーバーには送信されません。
         </p>
       </div>
+
+      <ErrorLogCard onToast={onToast} />
     </div>
   );
 }

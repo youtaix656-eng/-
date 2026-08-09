@@ -2,6 +2,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles/index.css';
+import { installErrorHandlers } from './lib/errorLog.js';
+
+// 端末内エラーログを有効化（外部送信なし。設定→データ管理で閲覧・消去）
+installErrorHandlers();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
