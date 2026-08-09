@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { buildGraphFromSolved, todaysLinks } from '../lib/kgService.js';
 import { graphStats, neighbors } from '../lib/knowledgeGraph.js';
 import { nodeDegrees, isolatedConcepts } from '../lib/learnerModel.js';
@@ -8,6 +8,9 @@ import { shortestPath, pathRelations, connectedComponents, crossSubjectBridges }
 import { recallPairs } from '../lib/kgRecall.js';
 import { conceptsOf } from '../lib/concepts.js';
 import AssocTrainer from './AssocTrainer.jsx';
+import AssocQuiz from './AssocQuiz.jsx';
+import { loadAssocReview, isAssocDue } from '../lib/assocReview.js';
+import { assocKey } from '../lib/assocReview.js';
 
 function firstSentence(text) {
   const s = String(text || '').trim();
@@ -41,6 +44,8 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
   const [pathB, setPathB] = useState('');
   const [fcIdx, setFcIdx] = useState(0);
   const [fcOpen, setFcOpen] = useState(false);
+  const [assocMap, setAssocMap] = useState({});
+  useEffect(() => { loadAssocReview().then(setAssocMap); }, []);
 
   const solved = useMemo(
     () => questions.filter((q) => srs[q.id] && (srs[q.id].seen || 0) > 0),
@@ -81,6 +86,16 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
 
   // 連想リコール（#17）と最短経路（#10）
   const recall = useMemo(() => recallPairs(graph, { limit: 8 }), [graph]);
+  // 忘れかけの連想（#26）：復習期限が来ている連想（トレーニング済みのもの）
+  const fadingLinks = useMemo(() => {
+    const now = Date.now();
+    return recallPairs(graph, { limit: 60 })
+      .filter((p) => {
+        const k = assocKey(p.a, p.b);
+        return assocMap[k] && isAssocDue(assocMap, k, now);
+      })
+      .slice(0, 8);
+  }, [graph, assocMap]);
   const conceptList = useMemo(
     () => Object.keys(graph.nodes).sort((a, b) => a.localeCompare(b, 'ja')),
     [graph]
@@ -230,8 +245,29 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
         </>
       )}
 
+      {/* 忘れかけの連想（#26） */}
+      {fadingLinks.length > 0 && (
+        <>
+          <div className="section-label">⚠️ 忘れかけの連想（そろそろ復習を）</div>
+          <div className="card">
+            <ul className="kg-edge-list">
+              {fadingLinks.map((e, i) => (
+                <li key={i}>
+                  <i className="kg-heat lv-warm" />
+                  <span className="kg-tag">{e.a}</span><span className="kg-rel">―</span><span className="kg-tag">{e.b}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="inline-note" style={{ marginTop: 6 }}>下の連想トレーニングで思い出しておきましょう。</p>
+          </div>
+        </>
+      )}
+
       {/* 連想トレーニング（#25 連結の間隔反復 ＋ #22 対比識別ドリル） */}
       <AssocTrainer graph={graph} />
+
+      {/* 連想クイズ（#23 経路クイズ ＋ #24 束グルーピング） */}
+      <AssocQuiz graph={graph} />
 
       {/* 最短経路（#10）：AとBはどうつながる？ */}
       {conceptList.length >= 2 && (

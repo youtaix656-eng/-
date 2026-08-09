@@ -3382,3 +3382,10 @@ code.block {
 .cluster-row { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
 .cluster-size { flex: 0 0 auto; font-weight: 800; color: var(--accent); }
 .cluster-members { color: var(--text-sub); }
+
+/* ===== 連想クイズ（#23/#24） ===== */
+.quiz-q { font-size: 15px; color: var(--text); margin-bottom: 10px; }
+.quiz-options { display: flex; flex-direction: column; gap: 8px; }
+.quiz-opt { text-align: left; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+.quiz-opt.correct { border-color: var(--correct); background: var(--correct-bg); }
+.quiz-opt.wrong { border-color: var(--wrong); background: var(--wrong-bg); }
