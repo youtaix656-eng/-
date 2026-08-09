@@ -10,6 +10,7 @@ import {
   verifyPassword,
 } from '../lib/auth.js';
 import SyncQR from './SyncQR.jsx';
+import SyncScan from './SyncScan.jsx';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 
 // 設定・問題データ管理画面
@@ -182,6 +183,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       {/* ===== QRで別端末へ受け渡し ===== */}
       <div className="section-label">QRで別端末へ受け渡し</div>
       <SyncQR store={store} onToast={onToast} />
+      <SyncScan onToast={onToast} />
 
       {/* ===== ポモドーロタイマー ===== */}
       <div className="section-label">ポモドーロタイマー（画面上部）</div>
