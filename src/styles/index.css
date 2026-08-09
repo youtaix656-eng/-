@@ -3364,3 +3364,10 @@ code.block {
 /* ===== 精緻化プロンプト（#2） ===== */
 .elaborate-box { margin-top: 12px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: rgba(55,182,204,0.08); padding: 10px 12px; }
 .elaborate-head { font-size: 12.5px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+
+/* ===== 概念カード（#16＋#20） ===== */
+.fc-concept { width: 100%; text-align: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px 12px; cursor: pointer; }
+.fc-concept.open { border-color: var(--accent); }
+.fc-concept-name { display: block; font-size: 22px; font-weight: 800; color: var(--accent); }
+.fc-concept-hint { font-size: 11px; color: var(--text-mute); }
+.fc-concept-body { margin-top: 10px; }

@@ -6,6 +6,13 @@ import { recommendNext } from '../lib/kgRecommend.js';
 import { effectiveStrength } from '../lib/assocStrength.js';
 import { shortestPath, pathRelations } from '../lib/graphAlgos.js';
 import { recallPairs } from '../lib/kgRecall.js';
+import { conceptsOf } from '../lib/concepts.js';
+
+function firstSentence(text) {
+  const s = String(text || '').trim();
+  const m = s.match(/^[^。]*。/);
+  return m ? m[0] : s.slice(0, 60);
+}
 
 // 強さ→ヒートレベル（#27）
 function heatLevel(v, max) {
@@ -31,6 +38,8 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
   const { questions, srs, history, links } = store;
   const [pathA, setPathA] = useState('');
   const [pathB, setPathB] = useState('');
+  const [fcIdx, setFcIdx] = useState(0);
+  const [fcOpen, setFcOpen] = useState(false);
 
   const solved = useMemo(
     () => questions.filter((q) => srs[q.id] && (srs[q.id].seen || 0) > 0),
@@ -81,6 +90,39 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
   );
   const pathRels = useMemo(() => (path && path.length > 1 ? pathRelations(graph, path) : []), [graph, path]);
   const heatMax = strongEdges.length ? strongEdges[0].eff : 0;
+
+  // 概念フラッシュカード（#16＋#20）：つながりの多い順に概念をめくる
+  const fcConcepts = useMemo(() => {
+    const deg = nodeDegrees(graph);
+    return Object.keys(graph.nodes).sort((a, b) => (deg.get(b) || 0) - (deg.get(a) || 0));
+  }, [graph]);
+  const fcConcept = fcConcepts[fcIdx % (fcConcepts.length || 1)];
+  const fcCard = useMemo(() => {
+    if (!fcConcept) return null;
+    return {
+      neighbors: neighbors(graph, fcConcept).slice(0, 8),
+      questions: questions.filter((q) => conceptsOf(q, links).includes(fcConcept)).slice(0, 3),
+      def: firstSentence((questions.find((q) => (q.explanation || '').includes(fcConcept)) || {}).explanation),
+    };
+  }, [graph, fcConcept, questions, links]);
+  const fcNext = () => { setFcOpen(false); setFcIdx((i) => (i + 1) % (fcConcepts.length || 1)); };
+  const fcPrev = () => { setFcOpen(false); setFcIdx((i) => (i - 1 + (fcConcepts.length || 1)) % (fcConcepts.length || 1)); };
+
+  // 週次つながりレポート（#28）：日ごとに“つないだ概念ペア”の数
+  const weekly = useMemo(() => {
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d0 = base.getTime() - i * 86400000;
+      const d1 = d0 + 86400000;
+      const ids = new Set(history.filter((h) => h.at >= d0 && h.at < d1).map((h) => h.questionId));
+      const qs = questions.filter((q) => ids.has(q.id));
+      days.push(todaysLinks(qs, links, { limit: 9999 }).length);
+    }
+    return days;
+  }, [history, questions, links]);
+  const weekMax = Math.max(1, ...weekly);
+  const weekTotal = weekly.reduce((a, b) => a + b, 0);
 
   if (solved.length === 0) {
     return (
@@ -210,6 +252,61 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
             {isolated.map((n) => (
               <button key={n.id} className="chip" onClick={() => onOpenKeyword?.(n.id)}>{n.id}</button>
             ))}
+          </div>
+        </>
+      )}
+
+      {/* 概念カード＝連結フラッシュカード（#16＋#20） */}
+      {fcConcept && (
+        <>
+          <div className="section-label">🃏 概念カード（つながりをめくる）</div>
+          <div className="card">
+            <button className={`fc-concept ${fcOpen ? 'open' : ''}`} onClick={() => setFcOpen((v) => !v)}>
+              <span className="fc-concept-name">{fcConcept}</span>
+              <span className="fc-concept-hint">{fcOpen ? '' : 'タップでつながりを表示'}</span>
+            </button>
+            {fcOpen && fcCard && (
+              <div className="fc-concept-body">
+                {fcCard.def && <div className="li-def"><b>意味</b>：{fcCard.def}</div>}
+                {fcCard.neighbors.length > 0 && (
+                  <div className="chip-row" style={{ marginTop: 6 }}>
+                    {fcCard.neighbors.map((n) => (
+                      <button key={n.other} className="chip" onClick={() => onOpenKeyword?.(n.other)}>{n.other}</button>
+                    ))}
+                  </div>
+                )}
+                {fcCard.questions.length > 0 && (
+                  <ul className="kg-rec-list" style={{ marginTop: 8 }}>
+                    {fcCard.questions.map((q) => (
+                      <li key={q.id}><div className="kg-rec-q">{String(q.question || '（図の問題）').slice(0, 38)}</div></li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            <div className="btn-row" style={{ marginTop: 10 }}>
+              <button className="btn" onClick={fcPrev}>← 前</button>
+              <button className="btn" onClick={fcNext}>次 →</button>
+              <span className="inline-note" style={{ alignSelf: 'center' }}>{(fcIdx % fcConcepts.length) + 1}/{fcConcepts.length}</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 週次つながりレポート（#28） */}
+      {weekTotal > 0 && (
+        <>
+          <div className="section-label">📅 今週つないだ知識（7日）</div>
+          <div className="card">
+            <div className="ana-trend">
+              {weekly.map((c, i) => (
+                <div className="ana-trend-col" key={i} title={`${c}ペア`}>
+                  <div className="ana-trend-bar" style={{ height: `${Math.max(4, (c / weekMax) * 100)}%` }} />
+                  <span className="ana-trend-lbl">{c}</span>
+                </div>
+              ))}
+            </div>
+            <div className="inline-note" style={{ textAlign: 'center' }}>1日ごとの“つないだ概念ペア”数。今週計 {weekTotal} ペア。</div>
           </div>
         </>
       )}
