@@ -70,3 +70,11 @@ export function syncUrl(encoded) {
   const base = `${location.origin}${location.pathname}`;
   return `${base}#sync=${encoded}`;
 }
+
+// スキャン／貼り付けした文字列（URL）から #sync=… のエンコード値を取り出す。
+// 受け渡し用でなければ空文字を返す。
+export function extractSyncCode(text) {
+  if (!text) return '';
+  const m = String(text).match(/[#?&]sync=([^&#\s]+)/);
+  return m ? m[1] : '';
+}
