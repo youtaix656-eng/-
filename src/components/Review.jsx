@@ -96,6 +96,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const [batch, setBatch] = useState(60); // 1回の問題数（0=すべて）
   const [showAll, setShowAll] = useState(false); // リストの折りたたみ（#4）
   const [fast, setFast] = useState(false); // 高速回転モード（#6）
+  const [simple, setSimple] = useState(true); // 段階表示：シンプル/じっくり（改善1）
   const [missTypes, setMissTypes] = useState({}); // 間違いの型（#9）
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
@@ -354,6 +355,10 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} />
           <span>⚡ 高速回転モード（問題→3秒で答え表示→自己採点。まず自力で思い出す）</span>
         </label>
+        <label className="autokw-row" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={!simple} onChange={(e) => setSimple(!e.target.checked)} />
+          <span>📖 じっくりモード（メモ・連結キーワードも最初から表示。オフ＝シンプル：問題→答え→○△✕）</span>
+        </label>
 
         <button className="btn primary block lg" style={{ marginTop: 6 }} onClick={start} disabled={startPool.length === 0}>
           {startPool.length > 0
@@ -519,6 +524,8 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         reason={curReason}
         fast={fast}
         onMissType={onMissType}
+        simple={simple}
+        missType={missTypes[current.id]?.type || ''}
       />
       <ResetInline label="復習をリセット" onReset={resetReview} />
     </div>

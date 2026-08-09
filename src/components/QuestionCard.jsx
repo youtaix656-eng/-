@@ -25,6 +25,8 @@ export default function QuestionCard({
   reason = '', // なぜ今この問題か（期限切れ／忘却リスク）＝#10
   fast = false, // 高速回転モード：一定秒で自動的に答えを表示＝#6
   onMissType, // (questionId, type) 間違いの型を記録＝#9（あれば△✕後に型を聞く）
+  simple = false, // 段階表示：メモ・連結を「もっと」に畳む＝改善1
+  missType = '', // この問題の記録済みの間違いの型（型別の出し分け）＝改善3
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
@@ -32,6 +34,7 @@ export default function QuestionCard({
   const [memoOpen, setMemoOpen] = useState(false);
   const [memoText, setMemoText] = useState(memo || '');
   const [askType, setAskType] = useState(false); // 間違いの型を尋ねている最中
+  const [moreOpen, setMoreOpen] = useState(false); // 「もっと」（メモ・連結）の開閉
 
   useEffect(() => {
     setSelected(null);
@@ -40,6 +43,7 @@ export default function QuestionCard({
     setMemoOpen(false);
     setMemoText(memo || '');
     setAskType(false);
+    setMoreOpen(false);
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 高速回転モード（#6）：3秒たったら自動で答え（裏）を表示。自力想起の合図。
@@ -183,16 +187,14 @@ export default function QuestionCard({
             </div>
           )}
 
-          {question.explanation && (
-            <div className="explanation">
-              <span className="label">解説</span>
-              {question.explanation}
-            </div>
+          {/* ケアレス型：まず落ち着いて再確認プロンプト（改善3） */}
+          {missType === 'careless' && (
+            <div className="recheck-prompt">🧯 ケアレスに注意。選択肢を最後まで読み、引っかけ（「誤っているのはどれか」等）を確認しましょう。</div>
           )}
 
-          {/* まぎらわしい対比（#8）：正解できなかったときだけ自動提示して混同を解消 */}
-          {!correct && comparisons.length > 0 && (
-            <div className="compare-card">
+          {/* 対比カード（#8・改善3）：勘違い型は常時先頭で提示、それ以外は誤答時に下部で提示 */}
+          {comparisons.length > 0 && (missType === 'kanchigai' || !correct) && (
+            <div className={`compare-card ${missType === 'kanchigai' ? 'top' : ''}`}>
               <div className="compare-head">⚖️ まぎらわしい対比（混同注意）</div>
               {comparisons.slice(0, 2).map((c) => (
                 <div className="compare-item" key={c.id}>
@@ -206,43 +208,60 @@ export default function QuestionCard({
             </div>
           )}
 
-          {showMemo && (
-            <div className="memo-box">
-              {!memoOpen ? (
-                <button className="btn ghost sm" onClick={() => setMemoOpen(true)}>
-                  📝 {memo ? 'メモを編集' : 'メモ・付箋を追加'}
-                </button>
-              ) : (
-                <>
-                  <label>覚え方・自分メモ</label>
-                  <textarea
-                    value={memoText}
-                    onChange={(e) => setMemoText(e.target.value)}
-                    placeholder="語呂合わせ、間違えた理由、関連知識などを自由に記録"
-                    autoFocus
-                  />
-                  <div className="btn-row" style={{ marginTop: 8 }}>
-                    <button className="btn sm" onClick={() => setMemoOpen(false)}>
-                      キャンセル
-                    </button>
-                    <button className="btn primary sm" onClick={saveMemo}>
-                      保存
-                    </button>
-                  </div>
-                </>
-              )}
-              {memo && !memoOpen && <div className="li-memo">{memo}</div>}
+          {/* 解説（知識不足型は強調） */}
+          {question.explanation && (
+            <div className={`explanation ${missType === 'chishiki' ? 'emphasis' : ''}`}>
+              <span className="label">解説{missType === 'chishiki' ? '（知識を補強）' : ''}</span>
+              {question.explanation}
             </div>
           )}
 
-          {/* 連結学習：キーワード（タップで連結マップへ）＋ 連結メモ */}
-          {onSetLink && (
-            <ConnectEditor
-              question={question}
-              link={link}
-              onSetLink={onSetLink}
-              onOpenKeyword={onOpenKeyword}
-            />
+          {/* もっと（メモ・連結）：シンプルモードでは畳む＝改善1 */}
+          {(showMemo || onSetLink) && simple && !moreOpen ? (
+            <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={() => setMoreOpen(true)}>
+              ▸ もっと（メモ・連結キーワード）
+            </button>
+          ) : (
+            <>
+              {showMemo && (
+                <div className="memo-box">
+                  {!memoOpen ? (
+                    <button className="btn ghost sm" onClick={() => setMemoOpen(true)}>
+                      📝 {memo ? 'メモを編集' : 'メモ・付箋を追加'}
+                    </button>
+                  ) : (
+                    <>
+                      <label>覚え方・自分メモ</label>
+                      <textarea
+                        value={memoText}
+                        onChange={(e) => setMemoText(e.target.value)}
+                        placeholder="語呂合わせ、間違えた理由、関連知識などを自由に記録"
+                        autoFocus
+                      />
+                      <div className="btn-row" style={{ marginTop: 8 }}>
+                        <button className="btn sm" onClick={() => setMemoOpen(false)}>
+                          キャンセル
+                        </button>
+                        <button className="btn primary sm" onClick={saveMemo}>
+                          保存
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {memo && !memoOpen && <div className="li-memo">{memo}</div>}
+                </div>
+              )}
+
+              {/* 連結学習：キーワード（タップで連結マップへ）＋ 連結メモ */}
+              {onSetLink && (
+                <ConnectEditor
+                  question={question}
+                  link={link}
+                  onSetLink={onSetLink}
+                  onOpenKeyword={onOpenKeyword}
+                />
+              )}
+            </>
           )}
 
           {/* ○△✕ の自己評価（毎問）。△✕は自動で復習に入ります。 */}
