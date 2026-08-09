@@ -3223,3 +3223,10 @@ code.block {
   flex: 0 0 auto; font-size: 11px; font-weight: 800; color: var(--wrong);
   background: var(--wrong-bg); border-radius: 6px; padding: 1px 7px; min-width: 40px; text-align: center;
 }
+
+/* ===== セルフ診断 ===== */
+.diag-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.diag-label { color: var(--text-sub); }
+.diag-val { color: var(--text); font-weight: 700; text-align: right; }
+.diag-val.good { color: var(--correct); }
+.diag-val.bad { color: var(--wrong); }
