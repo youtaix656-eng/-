@@ -6,6 +6,7 @@ import { idbGet, idbSet, isIdbSupported } from './db';
 import type { SleepRecord } from '../types/sleep';
 import type { NapTimerState } from '../types/napTimer';
 import type { AppSettings } from '../types/settings';
+import type { ShiftLog } from '../types/work';
 
 const KEYS = {
   records: 'sleep:records',
@@ -13,6 +14,7 @@ const KEYS = {
   pendingNap: 'sleep:pendingNap',
   lastDefaults: 'sleep:lastDefaults',
   settings: 'sleep:settings',
+  shifts: 'sleep:shifts',
 } as const;
 
 const useIdb = isIdbSupported();
@@ -99,6 +101,50 @@ class IndexedDbSleepRepository implements SleepRecordRepository {
 
 export const sleepRepository: SleepRecordRepository = new IndexedDbSleepRepository();
 
+// ---------------- ShiftLogRepository（施術中コンディション記録） ----------------
+
+export interface ShiftLogRepository {
+  list(range?: { from: string; to: string }): Promise<ShiftLog[]>;
+  get(id: string): Promise<ShiftLog | undefined>;
+  upsert(shift: ShiftLog): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
+class IndexedDbShiftRepository implements ShiftLogRepository {
+  async list(range?: { from: string; to: string }): Promise<ShiftLog[]> {
+    const all = await read<ShiftLog[]>(KEYS.shifts, []);
+    const sorted = [...all].sort((a, b) => (a.date < b.date ? 1 : -1));
+    if (!range) return sorted;
+    return sorted.filter((s) => s.date >= range.from && s.date <= range.to);
+  }
+
+  async get(id: string): Promise<ShiftLog | undefined> {
+    const all = await read<ShiftLog[]>(KEYS.shifts, []);
+    return all.find((s) => s.id === id);
+  }
+
+  async upsert(shift: ShiftLog): Promise<void> {
+    const all = await read<ShiftLog[]>(KEYS.shifts, []);
+    const idx = all.findIndex((s) => s.id === shift.id);
+    if (idx === -1) {
+      all.push(shift);
+    } else {
+      all[idx] = shift;
+    }
+    await write(KEYS.shifts, all);
+  }
+
+  async remove(id: string): Promise<void> {
+    const all = await read<ShiftLog[]>(KEYS.shifts, []);
+    await write(
+      KEYS.shifts,
+      all.filter((s) => s.id !== id)
+    );
+  }
+}
+
+export const shiftRepository: ShiftLogRepository = new IndexedDbShiftRepository();
+
 // ---------------- 仮眠タイマー状態（フォアグラウンド復帰時の差分判定に使用） ----------------
 
 export async function loadNapTimer(): Promise<NapTimerState | undefined> {
@@ -142,12 +188,14 @@ export interface BackupFile {
   exportedAt: string;
   records: SleepRecord[];
   settings: AppSettings;
+  shifts?: ShiftLog[];
 }
 
 export async function exportBackup(): Promise<BackupFile> {
   const records = await read<SleepRecord[]>(KEYS.records, []);
   const settings = await read<AppSettings>(KEYS.settings, {});
-  return { app: 'sleep-tracker', version: 1, exportedAt: new Date().toISOString(), records, settings };
+  const shifts = await read<ShiftLog[]>(KEYS.shifts, []);
+  return { app: 'sleep-tracker', version: 1, exportedAt: new Date().toISOString(), records, settings, shifts };
 }
 
 // 既存の記録とID一致するものは上書き、それ以外は追加する（取り込みのやり直しでも重複しない）。
@@ -160,5 +208,11 @@ export async function importBackup(file: BackupFile): Promise<number> {
   for (const r of file.records) byId.set(r.id, r);
   await write(KEYS.records, [...byId.values()]);
   if (file.settings) await write(KEYS.settings, file.settings);
+  if (Array.isArray(file.shifts)) {
+    const existingShifts = await read<ShiftLog[]>(KEYS.shifts, []);
+    const byShiftId = new Map(existingShifts.map((s) => [s.id, s]));
+    for (const s of file.shifts) byShiftId.set(s.id, s);
+    await write(KEYS.shifts, [...byShiftId.values()]);
+  }
   return file.records.length;
 }

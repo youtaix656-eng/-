@@ -1,7 +1,8 @@
-export type TabId = 'home' | 'history' | 'dashboard' | 'schedule';
+export type TabId = 'home' | 'history' | 'dashboard' | 'schedule' | 'work';
 
 const TABS: { id: TabId; label: string; ico: string }[] = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
+  { id: 'work', label: '勤務', ico: '💆' },
   { id: 'history', label: '履歴', ico: '📋' },
   { id: 'dashboard', label: '分析', ico: '📊' },
   { id: 'schedule', label: '提案', ico: '🗓' },

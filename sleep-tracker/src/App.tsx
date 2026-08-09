@@ -11,7 +11,11 @@ import NapQuickAdd from './components/NapQuickAdd';
 import GroggyQuickAdd from './components/GroggyQuickAdd';
 import EveningReflection from './components/EveningReflection';
 import SettingsScreen from './components/Settings';
+import WorkTab from './components/work/WorkTab';
+import ShiftStartForm from './components/work/ShiftStartForm';
+import SymptomQuickLog from './components/work/SymptomQuickLog';
 import { useRecords } from './lib/useRecords';
+import { useShifts } from './lib/useShifts';
 import { loadSettings, saveSettings } from './lib/storage';
 import { startReminderWatch, stopReminderWatch } from './lib/reminders';
 import { todayISODate } from './lib/time';
@@ -23,11 +27,13 @@ const TAB_TITLES: Record<TabId, string> = {
   history: '記録一覧',
   dashboard: '分析',
   schedule: 'スケジュール提案',
+  work: '勤務ログ',
 };
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('home');
   const { records, saveRecord, deleteRecord, refresh } = useRecords();
+  const { shifts, saveShift, refresh: refreshShifts } = useShifts();
   const recordsRef = useRef(records);
   recordsRef.current = records;
 
@@ -41,6 +47,12 @@ export default function App() {
   const [groggyQuickAddOpen, setGroggyQuickAddOpen] = useState(false);
   const [eveningReflectionOpen, setEveningReflectionOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shiftStartOpen, setShiftStartOpen] = useState(false);
+  const [symptomLogOpen, setSymptomLogOpen] = useState(false);
+
+  async function refreshAll() {
+    await Promise.all([refresh(), refreshShifts()]);
+  }
 
   function openNewRecord() {
     setNewRecordDate(undefined);
@@ -144,6 +156,13 @@ export default function App() {
         )}
         {tab === 'dashboard' && <Dashboard records={records} />}
         {tab === 'schedule' && <Schedule records={records} />}
+        {tab === 'work' && (
+          <WorkTab
+            shifts={shifts}
+            onOpenShiftStart={() => setShiftStartOpen(true)}
+            onOpenSymptomLog={() => setSymptomLogOpen(true)}
+          />
+        )}
       </main>
 
       {(tab === 'home' || tab === 'history') && (
@@ -223,8 +242,31 @@ export default function App() {
         <SettingsScreen
           settings={settings}
           onUpdateSettings={updateSettings}
-          onImported={refresh}
+          onImported={refreshAll}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {shiftStartOpen && (
+        <ShiftStartForm
+          shifts={shifts}
+          records={records}
+          onClose={() => setShiftStartOpen(false)}
+          onSave={async (shift) => {
+            await saveShift(shift);
+            setShiftStartOpen(false);
+          }}
+        />
+      )}
+
+      {symptomLogOpen && (
+        <SymptomQuickLog
+          shifts={shifts}
+          onClose={() => setSymptomLogOpen(false)}
+          onSave={async (shift) => {
+            await saveShift(shift);
+            setSymptomLogOpen(false);
+          }}
         />
       )}
     </div>
