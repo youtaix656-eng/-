@@ -1,26 +1,43 @@
 :root {
-  /* 紺色ベースの高コントラスト配色（背景=紺 / 文字=白でメリハリ） */
-  --navy: #24456f;
-  --navy-dark: #16293f;
-  --navy-light: #35608f;
-  --accent: #3f9db0;
-  --bg: #10233f;
-  --surface: #1c3a63;
-  --surface-2: #274a79;
-  --border: #3a5c8c;
-  --text: #f5f8fd;
-  --text-sub: #c6d4e6;
-  --text-mute: #90a4bd;
-  --correct: #3aa878;
-  --correct-bg: #14382a;
-  --wrong: #e26a5e;
-  --wrong-bg: #3d201c;
-  --warn: #e6b64f;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.28);
+  /* 黒背景・白文字の高コントラスト配色（背景=黒 / 文字=白でメリハリ） */
+  --navy: #0a0a0a;
+  --navy-dark: #000000;
+  --navy-light: #2c2c2c;
+  --accent: #37b6cc;
+  --bg: #000000;
+  --surface: #161616;
+  --surface-2: #262626;
+  --border: #5a5a5a;
+  --text: #ffffff;
+  --text-sub: #e8e8e8;
+  --text-mute: #b4b4b4;
+  --correct: #3ad18f;
+  --correct-bg: #0d2c20;
+  --wrong: #ff6f60;
+  --wrong-bg: #331512;
+  --warn: #f0c451;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(0, 0, 0, 0.5);
   --radius: 14px;
   --radius-sm: 9px;
   --nav-h: 62px;
   --max-w: 640px;
+  /* 一部の新機能UIが参照するフォールバック変数も黒テーマ側に固定 */
+  --card: #161616;
+  --track: #333333;
+  --accent-bg: rgba(55, 182, 204, 0.16);
+  --accent-ink: #7fdcea;
+}
+
+/* 黒背景テーマの微調整：主要アクション・選択状態は白地×黒文字で最大コントラスト */
+.btn.primary {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+.chip.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
 }
 
 * {
@@ -3178,3 +3195,21 @@ code.block {
 .voice-label { font-size: 13px; font-weight: 800; }
 .voice-desc { font-size: 11px; color: var(--text-sub); }
 .voice-play { font-size: 15px; flex: 0 0 auto; opacity: 0.75; }
+
+
+/* ===== 黒背景テーマ統一：白カード前提だった機能UIをダーク＋高コントラストへ ===== */
+.hist-panel,
+.nf-item,
+.cov-subject,
+.fc-card { background: var(--surface) !important; color: var(--text); }
+.nf-item.edited { background: #0f2c1e !important; }
+.cov-subject.lv-none { background: #2a1412 !important; }
+.fc-card.flipped { background: #1e1e1e !important; }
+.fc-table th,
+.fc-youketsu thead th { background: var(--surface-2) !important; color: var(--text) !important; }
+/* --navy を「文字アクセント」に使っていた値・見出しは黒地で見えるよう白へ */
+.nf-value,
+.fc-name,
+.fc-back-name,
+.fc-youketsu td:last-child,
+.exam-predict-avg strong { color: var(--text) !important; }
