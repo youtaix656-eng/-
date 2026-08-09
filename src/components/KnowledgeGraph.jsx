@@ -11,6 +11,9 @@ import AssocTrainer from './AssocTrainer.jsx';
 import AssocQuiz from './AssocQuiz.jsx';
 import { loadAssocReview, isAssocDue } from '../lib/assocReview.js';
 import { assocKey } from '../lib/assocReview.js';
+import { NUMBER_FACTS } from '../data/mindmapData.js';
+import { numberSkewers } from '../lib/numberLinks.js';
+import { conceptGrowth, diseaseTriad } from '../lib/kgTimeline.js';
 
 function firstSentence(text) {
   const s = String(text || '').trim();
@@ -119,8 +122,14 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
       neighbors: neighbors(graph, fcConcept).slice(0, 8),
       questions: questions.filter((q) => conceptsOf(q, links).includes(fcConcept)).slice(0, 3),
       def: firstSentence((questions.find((q) => (q.explanation || '').includes(fcConcept)) || {}).explanation),
+      triad: diseaseTriad(fcConcept, graph), // 疾患3点セット（#5）
     };
   }, [graph, fcConcept, questions, links]);
+
+  // 数値の串刺し（#6）と 成長タイムラプス（#14）
+  const skewers = useMemo(() => numberSkewers(NUMBER_FACTS).slice(0, 6), []);
+  const growth = useMemo(() => conceptGrowth(history, questions, links, { days: 14 }), [history, questions, links]);
+  const growthMax = Math.max(1, ...growth.map((g) => g.cumulative));
   const fcNext = () => { setFcOpen(false); setFcIdx((i) => (i + 1) % (fcConcepts.length || 1)); };
   const fcPrev = () => { setFcOpen(false); setFcIdx((i) => (i - 1 + (fcConcepts.length || 1)) % (fcConcepts.length || 1)); };
 
@@ -344,6 +353,12 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
             {fcOpen && fcCard && (
               <div className="fc-concept-body">
                 {fcCard.def && <div className="li-def"><b>意味</b>：{fcCard.def}</div>}
+                {(fcCard.triad.causes.length > 0 || fcCard.triad.treats.length > 0) && (
+                  <div className="triad">
+                    {fcCard.triad.causes.length > 0 && <div className="triad-row"><span className="triad-lbl">原因</span>{fcCard.triad.causes.join('・')}</div>}
+                    {fcCard.triad.treats.length > 0 && <div className="triad-row"><span className="triad-lbl">治療</span>{fcCard.triad.treats.join('・')}</div>}
+                  </div>
+                )}
                 {fcCard.neighbors.length > 0 && (
                   <div className="chip-row" style={{ marginTop: 6 }}>
                     {fcCard.neighbors.map((n) => (
@@ -432,6 +447,39 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
                 </li>
               ))}
             </ul>
+          </div>
+        </>
+      )}
+
+      {skewers.length > 0 && (
+        <>
+          <div className="section-label">🔢 数値の串刺し（同じ数字が出る所）</div>
+          <div className="card">
+            {skewers.map((g) => (
+              <div key={g.num} className="skewer-row">
+                <span className="skewer-num">{g.num}</span>
+                <span className="skewer-facts">
+                  {g.facts.map((f) => `${f.topic}（${f.value}）`).join(' ／ ')}
+                  {g.crossSubject && <span className="skewer-cross"> ★分野横断</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {growth.some((g) => g.added > 0) && (
+        <>
+          <div className="section-label">📈 知識の成長（累積の概念数・14日）</div>
+          <div className="card">
+            <div className="ana-trend">
+              {growth.map((g, i) => (
+                <div className="ana-trend-col" key={i} title={`${g.label}：累計${g.cumulative}（+${g.added}）`}>
+                  <div className="ana-trend-bar" style={{ height: `${Math.max(4, (g.cumulative / growthMax) * 100)}%` }} />
+                </div>
+              ))}
+            </div>
+            <div className="inline-note" style={{ textAlign: 'center' }}>知っている概念の総数が右肩上がりに増えていれば順調です。</div>
           </div>
         </>
       )}

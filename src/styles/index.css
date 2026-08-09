@@ -3389,3 +3389,12 @@ code.block {
 .quiz-opt { text-align: left; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
 .quiz-opt.correct { border-color: var(--correct); background: var(--correct-bg); }
 .quiz-opt.wrong { border-color: var(--wrong); background: var(--wrong-bg); }
+
+/* ===== 疾患3点セット・数値串刺し（#5/#6） ===== */
+.triad { margin: 6px 0; }
+.triad-row { font-size: 12.5px; color: var(--text); margin: 2px 0; }
+.triad-lbl { display: inline-block; min-width: 34px; font-size: 10px; font-weight: 800; color: var(--accent); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; margin-right: 6px; }
+.skewer-row { display: flex; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.skewer-num { flex: 0 0 auto; font-weight: 800; color: var(--accent); }
+.skewer-facts { color: var(--text-sub); }
+.skewer-cross { color: var(--warn); font-weight: 700; }
