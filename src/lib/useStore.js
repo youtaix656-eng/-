@@ -18,6 +18,7 @@ import rinshoQuestions, { RINSHO_VERSION } from '../data/rinshoQuestions.js';
 import zumondaiQuestions, { ZUMONDAI_VERSION } from '../data/zumondaiQuestions.js';
 import rinkakuQuestions, { RINKAKU_VERSION } from '../data/rinkakuQuestions.js';
 import rihaQuestions, { RIHA_VERSION } from '../data/rihaQuestions.js';
+import toyoQuestions, { TOYO_VERSION } from '../data/toyoQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -177,6 +178,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(rihaQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.rihaVersion = RIHA_VERSION;
+        mutated = true;
+      }
+      // 同梱の東洋医学概論（バッチ方式・増分）。TOYO_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.toyoVersion || 0) < TOYO_VERSION) {
+        const { unique } = dedupeAgainst(toyoQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.toyoVersion = TOYO_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
