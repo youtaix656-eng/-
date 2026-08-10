@@ -109,9 +109,17 @@ st.set_page_config(page_title="YouTube字幕要約", page_icon="📺", layout="w
 st.title("📺 YouTube 字幕要約アプリ")
 st.caption("YouTubeのURLを入力すると、字幕から詳細文章と要約をClaudeが生成します。")
 
-api_key = os.environ.get("ANTHROPIC_API_KEY")
-if not api_key:
+raw_api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+api_key = raw_api_key if raw_api_key.isascii() else None
+
+if not raw_api_key:
     st.error("環境変数 `ANTHROPIC_API_KEY` が設定されていません。設定してからアプリを再起動してください。")
+elif not raw_api_key.isascii():
+    st.error(
+        "APIキーに全角文字やスマート引用符など、使用できない文字が含まれているようです。"
+        "Streamlit CloudのSecretsを開き、APIキーを一度削除してから貼り付け直してください"
+        "（前後の引用符は半角の \" を使い、スマートフォンの自動修正機能はオフにしてください）。"
+    )
 
 url = st.text_input("YouTube動画のURL", placeholder="https://www.youtube.com/watch?v=...")
 run = st.button("実行", type="primary", disabled=not api_key)
