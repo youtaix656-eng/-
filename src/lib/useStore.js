@@ -17,6 +17,7 @@ import seiriQuestions, { SEIRI_VERSION } from '../data/seiriQuestions.js';
 import rinshoQuestions, { RINSHO_VERSION } from '../data/rinshoQuestions.js';
 import zumondaiQuestions, { ZUMONDAI_VERSION } from '../data/zumondaiQuestions.js';
 import rinkakuQuestions, { RINKAKU_VERSION } from '../data/rinkakuQuestions.js';
+import rihaQuestions, { RIHA_VERSION } from '../data/rihaQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -169,6 +170,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(rinkakuQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.rinkakuVersion = RINKAKU_VERSION;
+        mutated = true;
+      }
+      // 同梱のリハビリテーション医学（バッチ方式・増分）。RIHA_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.rihaVersion || 0) < RIHA_VERSION) {
+        const { unique } = dedupeAgainst(rihaQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.rihaVersion = RIHA_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
