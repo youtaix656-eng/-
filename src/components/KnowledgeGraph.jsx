@@ -68,7 +68,7 @@ function RecallCard({ pair }) {
 }
 
 // 知識グラフ（#1〜#10 の可視化）— 解くたびに育つ知識のつながりを見せる。
-export default function KnowledgeGraph({ store, onOpenKeyword }) {
+export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts }) {
   const { questions, srs, history, links } = store;
   const [pathA, setPathA] = useState('');
   const [pathB, setPathB] = useState('');
@@ -480,6 +480,9 @@ export default function KnowledgeGraph({ store, onOpenKeyword }) {
               <div key={i} className="cluster-row">
                 <span className="cluster-size">{c.length}概念</span>
                 <span className="cluster-members">{c.slice(0, 6).join('・')}{c.length > 6 ? ' …' : ''}</span>
+                {onStudyConcepts && (
+                  <button className="btn ghost sm" style={{ marginLeft: 'auto', flex: '0 0 auto' }} onClick={() => onStudyConcepts(c)}>▶ 学習</button>
+                )}
               </div>
             ))}
           </div>

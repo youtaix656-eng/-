@@ -430,7 +430,11 @@ export default function App() {
       case 'coverage':
         return <CoverageMap store={store} onStartSubject={startSubjectQuiz} />;
       case 'kgraph':
-        return <KnowledgeGraph store={store} onOpenKeyword={openKeyword} />;
+        return <KnowledgeGraph store={store} onOpenKeyword={openKeyword} onStudyConcepts={(concepts) => {
+          const set = new Set(concepts);
+          const qs = store.questions.filter((q) => (q.tags || []).some((t) => set.has(t)));
+          if (qs.length) startCustomQuiz(qs);
+        }} />;
       case 'roadmap':
         return <Roadmap store={store} onNavigate={setView} />;
       case 'memos':

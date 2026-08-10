@@ -587,6 +587,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         isLast={idx + 1 >= order.length}
         comparisons={curComparisons}
         elaborate={curElaborate}
+        whyPrompt
         reason={curReason}
         fast={fast}
         onMissType={onMissType}

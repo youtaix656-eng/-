@@ -28,10 +28,12 @@ export default function QuestionCard({
   simple = false, // 段階表示：メモ・連結を「もっと」に畳む＝改善1
   missType = '', // この問題の記録済みの間違いの型（型別の出し分け）＝改善3
   elaborate = [], // 精緻化候補（これと何がつながる？）＝#2。タップで連結キーワードに追加
+  whyPrompt = false, // なぜ？チェーン（自己説明）＝#4
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
   const [recorded, setRecorded] = useState(false);
+  const [why, setWhy] = useState(''); // なぜ？の一言（#4）
   const [memoOpen, setMemoOpen] = useState(false);
   const [memoText, setMemoText] = useState(memo || '');
   const [askType, setAskType] = useState(false); // 間違いの型を尋ねている最中
@@ -47,6 +49,7 @@ export default function QuestionCard({
     setAskType(false);
     setMoreOpen(false);
     setAddedKw([]);
+    setWhy('');
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 高速回転モード（#6）：3秒たったら自動で答え（裏）を表示。自力想起の合図。
@@ -216,6 +219,32 @@ export default function QuestionCard({
             <div className={`explanation ${missType === 'chishiki' ? 'emphasis' : ''}`}>
               <span className="label">解説{missType === 'chishiki' ? '（知識を補強）' : ''}</span>
               {question.explanation}
+            </div>
+          )}
+
+          {/* なぜ？チェーン（#4）：自己説明で理解を深める */}
+          {whyPrompt && onSetMemo && (
+            <div className="why-box">
+              <div className="elaborate-head">🤔 なぜこの答え？（自分の言葉で一言）</div>
+              <div className="goro-edit">
+                <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="理由・つながりを一言" />
+                <button className="btn primary sm" disabled={!why.trim()} onClick={() => { onSetMemo(question.id, (memo ? memo + ' / ' : '') + 'なぜ:' + why.trim()); setWhy(''); }}>記録</button>
+              </div>
+            </div>
+          )}
+
+          {/* 誤答選択肢リンク（#8）：短い選択肢は別の重要語。タップで学べる */}
+          {selfGrade && question.type === 'choice' && onOpenKeyword &&
+            question.choices.some((ch, i) => i !== question.answer && ch.length <= 12) && (
+            <div className="wrongchoice-box">
+              <div className="elaborate-head">🔎 誤答の選択肢も学ぶ（タップ）</div>
+              <div className="chip-row">
+                {question.choices.map((ch, i) => (
+                  i !== question.answer && ch.length <= 12
+                    ? <button key={i} className="chip" onClick={() => onOpenKeyword(ch)}>{ch}</button>
+                    : null
+                ))}
+              </div>
             </div>
           )}
 
