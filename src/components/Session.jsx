@@ -78,13 +78,15 @@ function buildMixedOrder(pool, target, newRatio, srs) {
 }
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
-  const { questions, srs, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark } = store;
+  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
   const byId = useMemo(() => Object.fromEntries(questions.map((q) => [q.id, q])), [questions]);
 
   const [subject, setSubject] = useState('all');
   const [genre, setGenre] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [round, setRound] = useState(''); // 回（第XX回）でしぼる（#5）
+  const [bookmarkOnly, setBookmarkOnly] = useState(false); // ブックマークのみ
   const [term, setTerm] = useState('');
   const [fast, setFast] = useState(false);
   const [showBreak, setShowBreak] = useState(false);
@@ -98,14 +100,40 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   const afterGenre = useMemo(() => (genre ? afterSubject.filter((q) => q.genre === genre) : afterSubject), [afterSubject, genre]);
   const kwOptions = useMemo(() => uniqJa(afterGenre.flatMap((q) => effectiveTags(q, links))), [afterGenre, links]);
   const afterKw = useMemo(() => (keyword ? afterGenre.filter((q) => effectiveTags(q, links).includes(keyword)) : afterGenre), [afterGenre, keyword, links]);
+  // 回（第XX回）の選択肢（#5）
+  const roundOptions = useMemo(
+    () => Array.from(new Set(afterKw.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    [afterKw]
+  );
+  const afterRound = useMemo(() => (round ? afterKw.filter((q) => String(q.round) === String(round)) : afterKw), [afterKw, round]);
   const filteredPool = useMemo(() => {
+    let pool = afterRound;
+    if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
     const t = term.trim().toLowerCase();
-    if (!t) return afterKw;
-    return afterKw.filter((q) => {
+    if (!t) return pool;
+    return pool.filter((q) => {
       const hay = [q.question, q.subject, q.round, ...(q.choices || []), q.explanation, ...effectiveTags(q, links)].filter(Boolean).join(' ').toLowerCase();
       return hay.includes(t);
     });
-  }, [afterKw, term, links]);
+  }, [afterRound, bookmarkOnly, bookmarks, term, links]);
+
+  // 弱点タグ（#8）：直近の誤答が多いタグを上位に。タップでキーワードしぼり。
+  const weakTags = useMemo(() => {
+    const wrong = {}, total = {};
+    for (const h of history) {
+      const q = byId[h.questionId];
+      if (!q) continue;
+      for (const tg of effectiveTags(q, links)) {
+        total[tg] = (total[tg] || 0) + 1;
+        if (!h.correct) wrong[tg] = (wrong[tg] || 0) + 1;
+      }
+    }
+    return Object.keys(wrong)
+      .filter((tg) => wrong[tg] >= 2)
+      .map((tg) => ({ tag: tg, wrong: wrong[tg], rate: wrong[tg] / total[tg] }))
+      .sort((a, b) => b.wrong - a.wrong || b.rate - a.rate)
+      .slice(0, 8);
+  }, [history, byId, links]);
 
   // 現在の条件で「まだ解いていない新規問題」が何問残っているか
   //   新規＝未着手（srs.seen が 0 または未登録）。buildMixedOrder の newPool と同じ定義。
@@ -115,7 +143,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   );
 
   // 上位を変えたら下位をリセット
-  useEffect(() => { setGenre(''); setKeyword(''); }, [subject]);
+  useEffect(() => { setGenre(''); setKeyword(''); setRound(''); }, [subject]);
   useEffect(() => { setKeyword(''); }, [genre]);
 
   const begin = (target, opts = {}) => {
@@ -232,7 +260,33 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
                 {kwOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
               </select>
             </label>
+            <label className="mini-field">
+              <span>回（年度）</span>
+              <select value={round} onChange={(e) => setRound(e.target.value)} disabled={roundOptions.length === 0}>
+                <option value="">指定なし</option>
+                {roundOptions.map((r) => (<option key={r} value={r}>第{r}回</option>))}
+              </select>
+            </label>
           </div>
+
+          {/* 弱点タグ（#8）：誤答が多いタグをタップでしぼり込み */}
+          {weakTags.length > 0 && (
+            <div className="weak-tags">
+              <span className="weak-tags-label">弱点タグ</span>
+              <div className="chip-row">
+                {weakTags.map((w) => (
+                  <button
+                    key={w.tag}
+                    className={`chip ${keyword === w.tag ? 'active' : ''}`}
+                    onClick={() => setKeyword(keyword === w.tag ? '' : w.tag)}
+                    title={`誤答${w.wrong}回・正答率${Math.round((1 - w.rate) * 100)}%`}
+                  >
+                    {w.tag} <span className="weak-count">×{w.wrong}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <input
             type="text"
             value={term}
@@ -242,11 +296,15 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           />
           <div className="search-foot" style={{ marginTop: 8 }}>
             <span>この条件で <strong>{filteredPool.length}</strong> 問（残り新規 <strong>{newRemaining}</strong> 問）</span>
-            {(genre || keyword || term || subject !== 'all') && (
-              <button className="btn ghost sm" onClick={() => { setSubject('all'); setGenre(''); setKeyword(''); setTerm(''); }}>クリア</button>
+            {(genre || keyword || round || term || bookmarkOnly || subject !== 'all') && (
+              <button className="btn ghost sm" onClick={() => { setSubject('all'); setGenre(''); setKeyword(''); setRound(''); setTerm(''); setBookmarkOnly(false); }}>クリア</button>
             )}
           </div>
 
+          <label className="autokw-row" style={{ marginTop: 6 }}>
+            <input type="checkbox" checked={bookmarkOnly} onChange={(e) => setBookmarkOnly(e.target.checked)} />
+            <span>★ ブックマークした問題だけ出題</span>
+          </label>
           <label className="autokw-row" style={{ marginTop: 6 }}>
             <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} />
             <span>⚡ 高速回転モード（問題→3秒想起→答え。サクサク周回）</span>
@@ -304,6 +362,22 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   // ===== 完了画面 =====
   if (session && session.pos >= session.target) {
     const t = session.target;
+    // このセッションの解答を history から復元（誤答一覧・ジャンル別＝#1/#6）
+    const idsSet = new Set(session.ids || []);
+    const startedAt = session.startedAt || 0;
+    const latest = new Map(); // questionId → 最新の correct
+    for (const h of history) {
+      if (h.at >= startedAt && idsSet.has(h.questionId)) latest.set(h.questionId, h.correct);
+    }
+    const wrongQs = [...latest.entries()].filter(([, c]) => !c).map(([qid]) => byId[qid]).filter(Boolean);
+    const byGenre = {};
+    for (const [qid, c] of latest) {
+      const q = byId[qid]; if (!q) continue;
+      const g = q.genre || q.subject || 'その他';
+      if (!byGenre[g]) byGenre[g] = { total: 0, correct: 0 };
+      byGenre[g].total += 1; if (c) byGenre[g].correct += 1;
+    }
+    const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
     return (
       <div className="view">
         <div className="card sess-done">
@@ -330,6 +404,43 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           </div>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>
         </div>
+
+        {/* ジャンル別の正答率（#6・苦手順） */}
+        {genreRows.length > 1 && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>ジャンル別の正答率（苦手順）</div>
+            <ul className="genre-stats">
+              {genreRows.map(([g, s]) => {
+                const p = Math.round((s.correct / s.total) * 100);
+                return (
+                  <li key={g}>
+                    <span className="gs-name">{g}</span>
+                    <span className="gs-bar"><i style={{ width: `${p}%`, background: p < 60 ? 'var(--wrong)' : p < 80 ? 'var(--warn)' : 'var(--correct)' }} /></span>
+                    <span className="gs-num">{p}%（{s.correct}/{s.total}）</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* 今回の誤答一覧（#1） */}
+        {wrongQs.length > 0 && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>今回の誤答（{wrongQs.length}問）</div>
+            <ul className="wrong-list">
+              {wrongQs.map((q) => (
+                <li key={q.id}>
+                  <span className="wl-ans">{q.type === 'ox' ? (q.answer === 0 ? '○' : '✕') : `正解 ${q.answer + 1}`}</span>
+                  <span className="wl-q">{q.question}</span>
+                </li>
+              ))}
+            </ul>
+            <button className="btn accent block" style={{ marginTop: 10 }} onClick={() => begin(wrongQs.length, { pool: wrongQs, subject: session.subject, newRatio: 1, allowSeen: true, label: '誤答復習' })}>
+              ✕ 間違えた{wrongQs.length}問だけ、もう一度
+            </button>
+          </div>
+        )}
       </div>
     );
   }

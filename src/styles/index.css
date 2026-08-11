@@ -1337,6 +1337,10 @@ code.block {
 .wrong-list li { display: flex; gap: 8px; font-size: 0.9rem; line-height: 1.4; }
 .wrong-list .wl-ans { flex: 0 0 auto; font-weight: 800; color: var(--correct); font-size: 0.8rem; padding-top: 2px; white-space: nowrap; }
 .wrong-list .wl-q { flex: 1; }
+/* 弱点タグ（#8） */
+.weak-tags { margin-top: 10px; }
+.weak-tags-label { font-size: 12px; font-weight: 700; color: var(--warn); }
+.weak-tags .weak-count { font-size: 11px; opacity: 0.8; }
 /* タップ領域を確保（#19：最小44px・色だけに頼らない） */
 .selfgrade-row .btn, .misstype-btn { min-height: 44px; }
 .choice-btn { min-height: 44px; }
