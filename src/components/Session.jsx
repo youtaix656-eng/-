@@ -34,6 +34,12 @@ function buildOrder(pool, target) {
   while (ids.length < target) ids = ids.concat(shuffle(pool).map((q) => q.id));
   return ids.slice(0, target);
 }
+// 「すべて新規」用：未着手（未解答）の問題だけを出題順にする。
+//   過去に解いた問題は混ぜず、繰り返しもしない（残り新規が尽きたらそこで終了）。
+function buildNewOnlyOrder(pool, target, srs) {
+  const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
+  return shuffle(newPool).map((q) => q.id).slice(0, target);
+}
 // 指定プールを「新規◯割・復習◯割」で混ぜて target 長の出題順を作る。
 // newRatio: 0〜1（1=すべて新規）。新規＝未着手、復習＝要復習の問題。
 function buildMixedOrder(pool, target, newRatio, srs) {
@@ -105,10 +111,24 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
       onToast?.('条件に合う問題がありません');
       return;
     }
-    // 割合が「すべて新規(100%)」なら従来通り、それ以外は新規/復習をミックス
-    const ids = ratio >= 1 ? buildOrder(pool, target) : buildMixedOrder(pool, target, ratio, srs);
+    // 「すべて新規(100%)」は未着手の問題だけを出題（過去に解いた問題は混ぜない・周回しない）。
+    // opts.allowSeen（2周目・もう一度）のときは従来通り全体を周回する。
+    let ids;
+    if (ratio >= 1 && !opts.allowSeen) {
+      ids = buildNewOnlyOrder(pool, target, srs);
+      if (ids.length === 0) {
+        onToast?.('新規問題がありません（この条件はすべて解き終えています）。割合を下げて復習するか、条件を変えてください');
+        return;
+      }
+    } else if (ratio >= 1) {
+      ids = buildOrder(pool, target);
+    } else {
+      ids = buildMixedOrder(pool, target, ratio, srs);
+    }
+    // 新規が指定問数に満たない場合は、その問数だけで1セッションとする
+    const effTarget = Math.min(target, ids.length);
     updateSettings({ sessionNewRatio: ratio });
-    startSession({ subject: subj, label: opts.label, ids, pos: 0, target, round, fast: useFast, newRatio: ratio, startedAt: Date.now() });
+    startSession({ subject: subj, label: opts.label, ids, pos: 0, target: effTarget, round, fast: useFast, newRatio: ratio, startedAt: Date.now() });
     setShowBreak(false);
   };
   // 続きから（同じ科目でプールを作り直して再開位置は保持）
@@ -116,8 +136,15 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     const pool = poolFor(questions, session.subject);
     if (pool.length === 0) { onToast?.('この科目の問題がありません'); return; }
     const ratio = session.newRatio != null ? session.newRatio : 1;
-    const ids = ratio >= 1 ? buildOrder(pool, session.target) : buildMixedOrder(pool, session.target, ratio, srs);
-    startSession({ ...session, ids, pos: 0, startedAt: Date.now() });
+    let ids;
+    if (ratio >= 1) {
+      ids = buildNewOnlyOrder(pool, session.target, srs);
+      if (ids.length === 0) { onToast?.('新規問題がありません（すべて解き終えています）。復習をご利用ください'); return; }
+    } else {
+      ids = buildMixedOrder(pool, session.target, ratio, srs);
+    }
+    const effTarget = Math.min(session.target, ids.length);
+    startSession({ ...session, ids, pos: 0, target: effTarget, startedAt: Date.now() });
     setShowBreak(false);
   };
 
@@ -231,7 +258,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           <label className="section-label">今日はどれで勉強しますか？</label>
           <div className="sess-targets">
             {TARGETS.map((t) => (
-              <button key={t} className="sess-target" onClick={() => begin(t)} disabled={filteredPool.length === 0}>
+              <button key={t} className="sess-target" onClick={() => begin(t)} disabled={filteredPool.length === 0 || (newPct >= 100 && newRemaining === 0)}>
                 <span className="sess-target-n">{t}</span>
                 <span className="sess-target-l">
                   {t === 10 ? 'すきま時間' : t === 60 ? '1セット（区切り）' : t === 300 ? '1日の目標' : '1周（周回）'}
@@ -239,9 +266,19 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
               </button>
             ))}
           </div>
-          <p className="inline-note" style={{ marginTop: 10 }}>
-            収録数が少ない条件では、同じ問題を繰り返して指定問数に到達します（周回）。
-          </p>
+          {newPct >= 100 && newRemaining === 0 ? (
+            <p className="inline-note" style={{ marginTop: 10, color: 'var(--warn, #e0a800)' }}>
+              この条件の新規問題はすべて解き終えました。復習するには上のスライダーで割合を下げてください（例：復習多め）。
+            </p>
+          ) : newPct >= 100 ? (
+            <p className="inline-note" style={{ marginTop: 10 }}>
+              「すべて新規」では未着手の{newRemaining}問だけを出題します（解いた問題は混ざりません）。
+            </p>
+          ) : (
+            <p className="inline-note" style={{ marginTop: 10 }}>
+              収録数が少ない条件では、同じ問題を繰り返して指定問数に到達します（周回）。
+            </p>
+          )}
         </div>
       </div>
     );
@@ -269,9 +306,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
             {t >= 900 ? (
-              <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject) })}>2周目を開始</button>
+              <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>2周目を開始</button>
             ) : (
-              <button className="btn primary" onClick={() => begin(t, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject) })}>もう一度</button>
+              <button className="btn primary" onClick={() => begin(t, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>もう一度</button>
             )}
           </div>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>
@@ -343,6 +380,8 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           onAnswered={answered}
           onNext={() => {}}
           selfGrade
+          simple
+          compact
           GRADES={GRADES}
         />
       )}

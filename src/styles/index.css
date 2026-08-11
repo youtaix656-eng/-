@@ -1164,6 +1164,7 @@ code.block {
 }
 
 /* ---- 自己評価（SM-2）ボタン ---- */
+.grade-section { margin-top: 16px; }
 .grade-label {
   font-size: 12px;
   font-weight: 700;
@@ -1268,6 +1269,23 @@ code.block {
   border-color: var(--wrong);
   background: var(--wrong-bg);
 }
+
+/* ---- 1画面に収める省スペース表示（学習セッション）＝compact ---- */
+.qcard-compact { padding: 12px 12px; }
+.qcard-compact .q-meta { margin-bottom: 6px; }
+.qcard-compact .q-text { font-size: 1rem; line-height: 1.45; margin: 6px 0 10px; }
+.qcard-compact .choices { gap: 7px; }
+.qcard-compact .choice-btn { padding: 10px 12px; }
+.qcard-compact .card-side-label { margin: 6px 0 4px; }
+.qcard-compact .explanation { padding: 9px 11px; margin-top: 8px; }
+.qcard-compact .explanation .label { margin-bottom: 2px; }
+.qcard-compact .grade-section { margin-top: 10px; }
+.qcard-compact .grade-label { margin-bottom: 6px; font-size: 0.86rem; }
+.qcard-compact .selfgrade-row { gap: 6px; }
+.qcard-compact .selfgrade-row .btn { padding: 9px 12px; border-width: 1.2px; }
+.qcard-compact .selfgrade-row .sg-mark { font-size: 16px; width: 20px; }
+.qcard-compact .memo-box { margin-top: 8px; }
+.qcard-compact .result-banner { padding: 8px 11px; }
 
 /* ---- 問題画像 ---- */
 .q-image {

@@ -29,6 +29,7 @@ export default function QuestionCard({
   missType = '', // この問題の記録済みの間違いの型（型別の出し分け）＝改善3
   elaborate = [], // 精緻化候補（これと何がつながる？）＝#2。タップで連結キーワードに追加
   whyPrompt = false, // なぜ？チェーン（自己説明）＝#4
+  compact = false, // 1画面に収める省スペース表示（学習セッション向け）
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
@@ -111,7 +112,7 @@ export default function QuestionCard({
   };
 
   return (
-    <div className="card">
+    <div className={`card qcard${compact ? ' qcard-compact' : ''}`}>
       <div className="q-meta">
         <span className={`badge ${question.type === 'ox' ? 'ox' : 'choice'}`}>
           {question.type === 'ox' ? '○×' : '四択'}
@@ -324,7 +325,7 @@ export default function QuestionCard({
           {/* ○△✕ の自己評価（毎問）。△✕は自動で復習に入ります。 */}
           {selfGrade ? (
             askType ? (
-              <div style={{ marginTop: 16 }}>
+              <div className="grade-section">
                 <div className="grade-label">どんな間違いでしたか？（型を記録して復習に活かします）</div>
                 <div className="misstype-row">
                   {MISS_TYPES.map((t) => (
@@ -338,7 +339,7 @@ export default function QuestionCard({
                 </button>
               </div>
             ) : (
-              <div style={{ marginTop: 16 }}>
+              <div className="grade-section">
                 <div className="grade-label">この問題の理解度は？（△・✕は自動で復習リストに入ります）</div>
                 <div className="selfgrade-row">
                   <button className="btn self-maru" onClick={() => pickSelf('maru')}>
