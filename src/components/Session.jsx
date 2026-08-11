@@ -78,7 +78,7 @@ function buildMixedOrder(pool, target, newRatio, srs) {
 }
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
-  const { questions, srs, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings } = store;
+  const { questions, srs, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
   const byId = useMemo(() => Object.fromEntries(questions.map((q) => [q.id, q])), [questions]);
 
@@ -399,6 +399,8 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           selfGrade
           simple
           compact
+          bookmarked={!!bookmarks[current.id]}
+          onToggleBookmark={toggleBookmark}
           GRADES={GRADES}
         />
       )}

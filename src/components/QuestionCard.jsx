@@ -33,6 +33,8 @@ export default function QuestionCard({
   elaborate = [], // 精緻化候補（これと何がつながる？）＝#2。タップで連結キーワードに追加
   whyPrompt = false, // なぜ？チェーン（自己説明）＝#4
   compact = false, // 1画面に収める省スペース表示（学習セッション向け）
+  bookmarked = false, // ブックマーク済みか
+  onToggleBookmark, // (questionId) ブックマーク切替（右上のしおり）
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
@@ -206,9 +208,22 @@ export default function QuestionCard({
         <span className="q-subject">{question.subject}</span>
         {volatile && <span className="freshness-badge" title="毎年更新される数値。最新値を確認してください">🔄 数値要確認</span>}
         {fast && !revealed && <span className="fast-flag">⚡3秒</span>}
-        {isSpeechSupported() && (
-          <button className="q-tts" onClick={readAloud} aria-label="読み上げ" title="問題（回答後は解説も）を読み上げ">🔊</button>
-        )}
+        <span className="q-meta-actions">
+          {isSpeechSupported() && (
+            <button className="q-tts" onClick={readAloud} aria-label="読み上げ" title="問題（回答後は解説も）を読み上げ">🔊</button>
+          )}
+          {onToggleBookmark && (
+            <button
+              className={`q-bookmark${bookmarked ? ' on' : ''}`}
+              onClick={() => onToggleBookmark(question.id)}
+              aria-label={bookmarked ? 'ブックマーク解除' : '後で見直す（ブックマーク）'}
+              aria-pressed={bookmarked}
+              title={bookmarked ? 'ブックマーク中（タップで解除）' : '後で見直す'}
+            >
+              {bookmarked ? '★' : '☆'}
+            </button>
+          )}
+        </span>
       </div>
 
       {/* なぜ今この問題か（#10）＋ 自力想起の合図 */}

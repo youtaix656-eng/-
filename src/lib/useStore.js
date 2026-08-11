@@ -45,6 +45,7 @@ export function useStore() {
   const [srs, setSrs] = useState({});
   const [history, setHistory] = useState([]);
   const [memos, setMemos] = useState({});
+  const [bookmarks, setBookmarks] = useState({}); // ブックマーク（後で見直す）
   const [links, setLinks] = useState({});
   const [schedule, setSchedule] = useState([]);
   const [venues, setVenues] = useState([]);
@@ -235,6 +236,7 @@ export function useStore() {
       setSrs(s || {});
       setHistory(h || []);
       setMemos(m || {});
+      storage.loadBookmarks().then((bm) => { if (alive) setBookmarks(bm || {}); });
       setLinks(lk || {});
       setSchedule(sch || []);
       setVenues(vn || []);
@@ -291,6 +293,9 @@ export function useStore() {
   useEffect(() => {
     if (persist.current) storage.saveMemos(memos);
   }, [memos]);
+  useEffect(() => {
+    if (persist.current) storage.saveBookmarks(bookmarks);
+  }, [bookmarks]);
   useEffect(() => {
     if (persist.current) storage.saveLinks(links);
   }, [links]);
@@ -428,6 +433,16 @@ export function useStore() {
       const next = { ...prev };
       if (text && text.trim()) next[questionId] = text;
       else delete next[questionId];
+      return next;
+    });
+  }, []);
+
+  // ブックマークの切り替え（後で見直す）
+  const toggleBookmark = useCallback((questionId) => {
+    setBookmarks((prev) => {
+      const next = { ...prev };
+      if (next[questionId]) delete next[questionId];
+      else next[questionId] = Date.now();
       return next;
     });
   }, []);
@@ -601,6 +616,7 @@ export function useStore() {
     setSrs(s || {});
     setHistory(h || []);
     setMemos(m || {});
+    storage.loadBookmarks().then((bm) => setBookmarks(bm || {}));
     setLinks(lk || {});
     setSchedule(sch || []);
     setVenues(vn || []);
@@ -629,6 +645,8 @@ export function useStore() {
     srs,
     history,
     memos,
+    bookmarks,
+    toggleBookmark,
     links,
     session,
     startSession,

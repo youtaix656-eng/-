@@ -40,7 +40,7 @@ function poolForSubject(questions, subject) {
 
 // 一問一答モード
 export default function Quiz({ store, initialSubject, initialQuestions, autoResume, onConsumeAutoResume, onConsumed, onOpenKeyword }) {
-  const { questions, memos, links, recordAnswer, setMemo, setLink } = store;
+  const { questions, memos, links, recordAnswer, setMemo, setLink, bookmarks, toggleBookmark } = store;
   const subjects = useMemo(() => getSubjects(questions), [questions]);
 
   const [subject, setSubject] = useState(initialSubject || 'all'); // 'all' or 科目名
@@ -48,6 +48,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   const [order, setOrder] = useState([]);
   const [idx, setIdx] = useState(0);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
+  const [answerLog, setAnswerLog] = useState([]); // [{ q, correct }] 今回の解答（誤答一覧・ジャンル別集計用）
   // このセッションの母集団（「もう一度」で同じ条件を再現するため保持）
   const [sessionPool, setSessionPool] = useState(null);
   // 前回の途中経過（1問ごとに自動保存 → 続きから）
@@ -59,6 +60,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     setOrder(doShuffle ? spaceByBase(shuffle(pool)) : pool);
     setIdx(0);
     setSessionStats({ total: 0, correct: 0 });
+    setAnswerLog([]);
     setStarted(true);
   };
 
@@ -151,8 +153,10 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   };
 
   const handleAnswered = (correct, grade) => {
-    recordAnswer(order[idx], correct, grade);
+    const q = order[idx];
+    recordAnswer(q, correct, grade);
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
+    setAnswerLog((prev) => [...prev, { q, correct }]);
   };
 
   const handleNext = () => {
@@ -227,6 +231,16 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
       sessionStats.total > 0
         ? Math.round((sessionStats.correct / sessionStats.total) * 100)
         : 0;
+    const wrongQs = answerLog.filter((a) => !a.correct).map((a) => a.q);
+    // ジャンル別の正答率（#6）
+    const byGenre = {};
+    for (const a of answerLog) {
+      const g = a.q.genre || a.q.subject || 'その他';
+      if (!byGenre[g]) byGenre[g] = { total: 0, correct: 0 };
+      byGenre[g].total += 1;
+      if (a.correct) byGenre[g].correct += 1;
+    }
+    const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
     return (
       <div className="view">
         <h2 className="view-title">お疲れさまでした</h2>
@@ -239,20 +253,47 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
             {sessionStats.total}問中 {sessionStats.correct}問 正解
           </p>
           <div className="btn-row" style={{ marginTop: 8 }}>
-            <button
-              className="btn"
-              onClick={() => {
-                setStarted(false);
-                setSessionPool(null);
-              }}
-            >
-              科目を選び直す
-            </button>
-            <button className="btn primary" onClick={restart}>
-              もう一度
-            </button>
+            <button className="btn" onClick={() => { setStarted(false); setSessionPool(null); }}>科目を選び直す</button>
+            <button className="btn primary" onClick={restart}>もう一度</button>
           </div>
         </div>
+
+        {/* ジャンル別の正答率（#6・正答率の低い順） */}
+        {genreRows.length > 1 && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>ジャンル別の正答率（苦手順）</div>
+            <ul className="genre-stats">
+              {genreRows.map(([g, s]) => {
+                const p = Math.round((s.correct / s.total) * 100);
+                return (
+                  <li key={g}>
+                    <span className="gs-name">{g}</span>
+                    <span className="gs-bar"><i style={{ width: `${p}%`, background: p < 60 ? 'var(--wrong)' : p < 80 ? 'var(--warn)' : 'var(--correct)' }} /></span>
+                    <span className="gs-num">{p}%（{s.correct}/{s.total}）</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* 今回の誤答一覧（#1） */}
+        {wrongQs.length > 0 && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>今回の誤答（{wrongQs.length}問）</div>
+            <ul className="wrong-list">
+              {wrongQs.map((q) => (
+                <li key={q.id}>
+                  <span className="wl-ans">{q.type === 'ox' ? (q.answer === 0 ? '○' : '✕') : `正解 ${q.answer + 1}`}</span>
+                  <span className="wl-q">{q.question}</span>
+                </li>
+              ))}
+            </ul>
+            <button className="btn accent block" style={{ marginTop: 10 }} onClick={() => beginWith(wrongQs)}>
+              ✕ 間違えた{wrongQs.length}問だけ、もう一度
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -284,6 +325,8 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
         onAnswered={handleAnswered}
         onNext={handleNext}
         selfGrade
+        bookmarked={!!bookmarks[current.id]}
+        onToggleBookmark={toggleBookmark}
         GRADES={GRADES}
         isLast={idx + 1 >= order.length}
       />

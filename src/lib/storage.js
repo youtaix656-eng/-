@@ -38,6 +38,7 @@ export const KEYS = {
   examResults: 'shinkyu:examResults', // 模試の結果履歴
   activity: 'shinkyu:activity', // 直近の閲覧履歴（画面・タイトル・ジャンル）
   numberOverrides: 'shinkyu:numberOverrides', // 数値ファクトの上書き（毎年変わる数値の一括更新）
+  bookmarks: 'shinkyu:bookmarks', // ブックマーク（後で見直す問題・questionId→保存時刻）
   migrated: 'shinkyu:migrated',
 };
 
@@ -134,6 +135,11 @@ export const saveHistory = (h) => write(KEYS.history, h);
 // ---- メモ ----
 export const loadMemos = () => read(KEYS.memos, {});
 export const saveMemos = (m) => write(KEYS.memos, m);
+
+// ---- ブックマーク（後で見直す問題） ----
+// bookmarks = { [questionId]: 保存時刻(ms) }
+export const loadBookmarks = () => read(KEYS.bookmarks, {});
+export const saveBookmarks = (b) => write(KEYS.bookmarks, b);
 
 // ---- 連結リンク（連結学習法） ----
 // links[questionId] = { keywords: string[], note: string, related: string[] }
