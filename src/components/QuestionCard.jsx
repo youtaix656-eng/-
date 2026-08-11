@@ -47,18 +47,12 @@ export default function QuestionCard({
   const cardRef = useRef(null);
   const touchX = useRef(null);
 
-  // 選択肢の表示順（#1）：四択は毎問シャッフルして位置暗記を防ぐ。○×は固定。
-  // 返すのは「元インデックスの配列」。正解判定は元インデックスのまま行う。
-  const displayOrder = useMemo(() => {
-    const n = question.choices?.length || 0;
-    const base = Array.from({ length: n }, (_, i) => i);
-    if (question.type === 'ox' || n < 2) return base;
-    for (let i = base.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [base[i], base[j]] = [base[j], base[i]];
-    }
-    return base;
-  }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 選択肢は原問どおりの並びで表示（シャッフルなし）。
+  // ※解説文の「選択肢1・4が正しい」等の番号参照と①②③④を一致させるため固定。
+  const displayOrder = useMemo(
+    () => Array.from({ length: question.choices?.length || 0 }, (_, i) => i),
+    [question.id]
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 毎年変わる数値の注意（#3）：解説に「※要確認」があれば鮮度バッジを出す
   const volatile = /※要確認/.test(question.explanation || '');
