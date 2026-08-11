@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { figureFor } from '../data/figures.jsx';
 import { MISS_TYPES } from '../lib/missTypes.js';
+import { variantsOf } from '../lib/synonyms.js';
+import { comparisonsForKeyword } from '../data/mindmapData.js';
+import { speak, cancelSpeech, isSpeechSupported } from '../lib/speech.js';
 
 // 1問を表示し、解答・正誤判定・解説・メモを扱う共通コンポーネント
 //
@@ -40,6 +43,43 @@ export default function QuestionCard({
   const [askType, setAskType] = useState(false); // 間違いの型を尋ねている最中
   const [moreOpen, setMoreOpen] = useState(false); // 「もっと」（メモ・連結）の開閉
   const [addedKw, setAddedKw] = useState([]); // この問題で精緻化として追加した語（✓表示用）
+  const [zoom, setZoom] = useState(false); // 図の拡大表示（#17）
+  const cardRef = useRef(null);
+  const touchX = useRef(null);
+
+  // 選択肢の表示順（#1）：四択は毎問シャッフルして位置暗記を防ぐ。○×は固定。
+  // 返すのは「元インデックスの配列」。正解判定は元インデックスのまま行う。
+  const displayOrder = useMemo(() => {
+    const n = question.choices?.length || 0;
+    const base = Array.from({ length: n }, (_, i) => i);
+    if (question.type === 'ox' || n < 2) return base;
+    for (let i = base.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [base[i], base[j]] = [base[j], base[i]];
+    }
+    return base;
+  }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 毎年変わる数値の注意（#3）：解説に「※要確認」があれば鮮度バッジを出す
+  const volatile = /※要確認/.test(question.explanation || '');
+
+  // 正解語の別名（#4）：回答後に「別名」を表示（正式名称⇔略称の取り違え対策）
+  const aliases = useMemo(() => {
+    if (question.type === 'ox') return [];
+    const ans = question.choices?.[question.answer] || '';
+    const v = variantsOf(ans).filter((x) => x && x !== ans);
+    return [...new Set(v)].slice(0, 4);
+  }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 対比カード（#15）：propが無ければタグから補完し、正解時も控えめに提示
+  const effComparisons = useMemo(() => {
+    if (comparisons && comparisons.length) return comparisons;
+    const out = [], seen = new Set();
+    for (const t of (question.tags || [])) {
+      for (const c of comparisonsForKeyword(t)) if (!seen.has(c.id)) { seen.add(c.id); out.push(c); }
+    }
+    return out.slice(0, 2);
+  }, [question.id, comparisons]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setSelected(null);
@@ -51,6 +91,8 @@ export default function QuestionCard({
     setMoreOpen(false);
     setAddedKw([]);
     setWhy('');
+    setZoom(false);
+    try { cancelSpeech(); } catch { /* noop */ }
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 高速回転モード（#6）：3秒たったら自動で答え（裏）を表示。自力想起の合図。
@@ -111,33 +153,102 @@ export default function QuestionCard({
     setMemoOpen(false);
   };
 
+  // 読み上げ（#18）：問題文（＋回答後は解説）をTTSで音読する
+  const readAloud = () => {
+    if (!isSpeechSupported()) return;
+    cancelSpeech();
+    const parts = [question.question || ''];
+    if (revealed && question.explanation) parts.push('解説。' + question.explanation);
+    speak(parts.filter(Boolean).join('。 '), { rate: 1 }).catch(() => {});
+  };
+
+  // キーボード操作（#9）：1〜4/O・Xで解答、Enter/→で次へ
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return; // 入力中は無効
+      if (!revealed) {
+        if (question.type === 'ox') {
+          if (e.key === 'o' || e.key === 'O') { handleSelect(0); return; }
+          if (e.key === 'x' || e.key === 'X') { handleSelect(1); return; }
+        }
+        const num = parseInt(e.key, 10);
+        if (num >= 1 && num <= displayOrder.length) { handleSelect(displayOrder[num - 1]); return; }
+        if (e.key === 'Enter' || e.key === ' ') { if (selfGrade || gradeMode) { e.preventDefault(); flipToAnswer(); } }
+        return;
+      }
+      // 回答後
+      if (selfGrade && !askType) {
+        if (e.key === '1') { pickSelf('maru'); return; }
+        if (e.key === '2') { pickSelf('sankaku'); return; }
+        if (e.key === '3') { pickSelf('batsu'); return; }
+      } else if (!selfGrade && !gradeMode) {
+        if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); onNext?.(); }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }); // 依存なし＝最新のstateを常に参照（毎レンダー貼り替え）
+
+  // スワイプ（#9）：左スワイプで次へ（通常モードの回答後のみ）
+  const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touchX.current == null) return;
+    const dx = e.changedTouches[0].clientX - touchX.current;
+    touchX.current = null;
+    if (dx < -60 && revealed && !selfGrade && !gradeMode) onNext?.();
+  };
+
   return (
-    <div className={`card qcard${compact ? ' qcard-compact' : ''}`}>
+    <div className={`card qcard${compact ? ' qcard-compact' : ''}`} ref={cardRef} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      {/* スクリーンリーダー向けの正誤読み上げ（#20） */}
+      <div aria-live="polite" className="sr-only">
+        {revealed && !flippedNoSelect ? (correct ? '正解です' : '不正解です') : ''}
+      </div>
       <div className="q-meta">
         <span className={`badge ${question.type === 'ox' ? 'ox' : 'choice'}`}>
           {question.type === 'ox' ? '○×' : '四択'}
         </span>
         <span className="q-subject">{question.subject}</span>
+        {volatile && <span className="freshness-badge" title="毎年更新される数値。最新値を確認してください">🔄 数値要確認</span>}
         {fast && !revealed && <span className="fast-flag">⚡3秒</span>}
+        {isSpeechSupported() && (
+          <button className="q-tts" onClick={readAloud} aria-label="読み上げ" title="問題（回答後は解説も）を読み上げ">🔊</button>
+        )}
       </div>
 
       {/* なぜ今この問題か（#10）＋ 自力想起の合図 */}
       {reason && <div className="q-reason">🧠 {reason}</div>}
 
       {question.image && (
-        <img
-          className="q-image"
-          src={question.image}
-          alt="問題の図"
-          loading="lazy"
-        />
+        <button className="q-figbtn" onClick={() => setZoom(true)} aria-label="図を拡大">
+          <img className="q-image" src={question.image} alt="問題の図" loading="lazy" />
+          <span className="q-zoom-hint">🔍 タップで拡大</span>
+        </button>
       )}
 
       {/* 図問題：インライン模式図（オフライン対応） */}
       {question.figure && (() => {
         const Fig = figureFor(question.figure);
-        return Fig ? <Fig /> : null;
+        return Fig ? (
+          <button className="q-figbtn" onClick={() => setZoom(true)} aria-label="図を拡大">
+            <Fig />
+            <span className="q-zoom-hint">🔍 タップで拡大</span>
+          </button>
+        ) : null;
       })()}
+
+      {/* 図の拡大表示（#17） */}
+      {zoom && (question.image || question.figure) && (
+        <div className="fig-lightbox" onClick={() => setZoom(false)} role="dialog" aria-label="図の拡大">
+          <div className="fig-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            {question.image
+              ? <img src={question.image} alt="問題の図（拡大）" />
+              : (() => { const Fig = figureFor(question.figure); return Fig ? <Fig /> : null; })()}
+            <button className="btn primary block" onClick={() => setZoom(false)}>閉じる</button>
+          </div>
+        </div>
+      )}
 
       {!revealed && (selfGrade || gradeMode) && (
         <div className="card-side-label">表（問題）</div>
@@ -146,7 +257,8 @@ export default function QuestionCard({
       {question.question && <div className="q-text">{question.question}</div>}
 
       <div className="choices">
-        {question.choices.map((choice, idx) => {
+        {displayOrder.map((idx, pos) => {
+          const choice = question.choices[idx];
           let cls = 'choice-btn';
           if (revealed) {
             if (idx === question.answer) cls += ' correct';
@@ -159,7 +271,7 @@ export default function QuestionCard({
               ? idx === 0
                 ? '○'
                 : '×'
-              : String.fromCharCode(0x2460 + idx); // ①②③④
+              : String.fromCharCode(0x2460 + pos); // 表示順で①②③④
           return (
             <button
               key={idx}
@@ -169,6 +281,7 @@ export default function QuestionCard({
             >
               <span className="mark">{markLabel}</span>
               <span>{choice}</span>
+              {revealed && idx === question.answer && <span className="choice-tag">正解</span>}
             </button>
           );
         })}
@@ -199,11 +312,11 @@ export default function QuestionCard({
             <div className="recheck-prompt">🧯 ケアレスに注意。選択肢を最後まで読み、引っかけ（「誤っているのはどれか」等）を確認しましょう。</div>
           )}
 
-          {/* 対比カード（#8・改善3）：勘違い型は常時先頭で提示、それ以外は誤答時に下部で提示 */}
-          {comparisons.length > 0 && (missType === 'kanchigai' || !correct) && (
-            <div className={`compare-card ${missType === 'kanchigai' ? 'top' : ''}`}>
+          {/* 対比カード（#8・#15）：勘違い型/誤答は先頭で強調、正解時も控えめに提示して予防 */}
+          {effComparisons.length > 0 && (
+            <div className={`compare-card ${missType === 'kanchigai' ? 'top' : ''}${correct && missType !== 'kanchigai' ? ' subtle' : ''}`}>
               <div className="compare-head">⚖️ まぎらわしい対比（混同注意）</div>
-              {comparisons.slice(0, 2).map((c) => (
+              {effComparisons.slice(0, 2).map((c) => (
                 <div className="compare-item" key={c.id}>
                   <div className="compare-title">{c.title}</div>
                   <ul className="compare-members">
@@ -223,8 +336,20 @@ export default function QuestionCard({
             </div>
           )}
 
-          {/* なぜ？チェーン（#4）：自己説明で理解を深める */}
-          {whyPrompt && onSetMemo && (
+          {/* 正解語の別名（#4）：正式名称⇔略称の取り違え対策 */}
+          {aliases.length > 0 && (
+            <div className="alias-line">
+              <span className="alias-label">別名</span>
+              {aliases.map((a) => (
+                onOpenKeyword
+                  ? <button key={a} className="chip sm" onClick={() => onOpenKeyword(a)}>{a}</button>
+                  : <span key={a} className="chip sm static">{a}</span>
+              ))}
+            </div>
+          )}
+
+          {/* なぜ？チェーン（#4/#7）：自己説明。誤答（△✕）時は自動で促す */}
+          {(whyPrompt || (selfGrade && revealed && selected !== null && !correct)) && onSetMemo && (
             <div className="why-box">
               <div className="elaborate-head">🤔 なぜこの答え？（自分の言葉で一言）</div>
               <div className="goro-edit">
@@ -234,18 +359,24 @@ export default function QuestionCard({
             </div>
           )}
 
-          {/* 誤答選択肢リンク（#8）：短い選択肢は別の重要語。タップで学べる */}
-          {selfGrade && question.type === 'choice' && onOpenKeyword &&
-            question.choices.some((ch, i) => i !== question.answer && ch.length <= 12) && (
+          {/* 全選択肢の◯✕を一覧で確認（#14）：正解に○、他は✕。短い語はタップで学べる */}
+          {selfGrade && question.type === 'choice' && (
             <div className="wrongchoice-box">
-              <div className="elaborate-head">🔎 誤答の選択肢も学ぶ（タップ）</div>
-              <div className="chip-row">
-                {question.choices.map((ch, i) => (
-                  i !== question.answer && ch.length <= 12
-                    ? <button key={i} className="chip" onClick={() => onOpenKeyword(ch)}>{ch}</button>
-                    : null
-                ))}
-              </div>
+              <div className="elaborate-head">🔎 選択肢の正誤を確認（短い語はタップで学習）</div>
+              <ul className="choice-review">
+                {question.choices.map((ch, i) => {
+                  const ok = i === question.answer;
+                  const tappable = onOpenKeyword && !ok && ch.length <= 14;
+                  return (
+                    <li key={i} className={ok ? 'ok' : 'ng'}>
+                      <span className="cr-mark">{ok ? '○' : '✕'}</span>
+                      {tappable
+                        ? <button className="cr-text link" onClick={() => onOpenKeyword(ch)}>{ch}</button>
+                        : <span className="cr-text">{ch}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 

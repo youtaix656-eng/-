@@ -1287,6 +1287,44 @@ code.block {
 .qcard-compact .memo-box { margin-top: 8px; }
 .qcard-compact .result-banner { padding: 8px 11px; }
 
+/* ---- 一問一答カードの追加UI（#1〜#20） ---- */
+/* スクリーンリーダー専用（#20） */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* 鮮度バッジ（#3） */
+.freshness-badge { font-size: 11px; font-weight: 700; color: #7a5b00; background: #ffe9a8; border-radius: 6px; padding: 2px 7px; }
+:root:not([data-theme="light"]) .freshness-badge { color: #ffe9a8; background: rgba(224,168,0,0.18); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .freshness-badge { color: #ffe9a8; background: rgba(224,168,0,0.18); } }
+/* 読み上げボタン（#18） */
+.q-tts { margin-left: auto; min-width: 40px; min-height: 32px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; font-size: 16px; cursor: pointer; }
+.q-tts:hover { background: var(--surface); }
+/* 図の拡大ボタン＆ライトボックス（#17） */
+.q-figbtn { display: block; width: 100%; padding: 0; border: 0; background: none; position: relative; cursor: zoom-in; }
+.q-zoom-hint { position: absolute; right: 8px; bottom: 8px; font-size: 11px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 8px; border-radius: 6px; }
+.fig-lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.fig-lightbox-inner { max-width: 96vw; max-height: 92vh; overflow: auto; background: var(--surface); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.fig-lightbox-inner img, .fig-lightbox-inner svg { max-width: 100%; height: auto; }
+/* 正解タグ（#1 シャッフル時に正解を明示） */
+.choice-tag { margin-left: auto; font-size: 11px; font-weight: 800; color: var(--correct); }
+/* 別名（#4） */
+.alias-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.alias-label { font-size: 12px; font-weight: 700; color: var(--text-sub); }
+.chip.sm { font-size: 12px; padding: 4px 10px; min-height: 32px; }
+.chip.sm.static { background: var(--surface-2); cursor: default; }
+/* 選択肢の正誤一覧（#14） */
+.choice-review { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.choice-review li { display: flex; align-items: flex-start; gap: 8px; font-size: 0.92rem; line-height: 1.4; }
+.choice-review .cr-mark { font-weight: 800; flex: 0 0 auto; }
+.choice-review li.ok .cr-mark { color: var(--correct); }
+.choice-review li.ng .cr-mark { color: var(--wrong); }
+.choice-review .cr-text { flex: 1; }
+.choice-review .cr-text.link { background: none; border: 0; padding: 0; text-align: left; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+/* 対比カードを正解時は控えめに（#15） */
+.compare-card.subtle { opacity: 0.75; border-style: dashed; }
+/* タップ領域を確保（#19：最小44px・色だけに頼らない） */
+.selfgrade-row .btn, .misstype-btn { min-height: 44px; }
+.choice-btn { min-height: 44px; }
+.chip { min-height: 36px; }
+
 /* ---- 問題画像 ---- */
 .q-image {
   width: 100%;
@@ -2847,6 +2885,12 @@ code.block {
   color: #fff; padding: 8px 12px 6px;
   border-bottom: 1px solid rgba(255,255,255,0.12);
 }
+/* 最小化バー（#12）：細い1行だけ表示して画面を占有しない */
+.pomo-bar.mini { padding: 4px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pomo-mini-body { display: flex; align-items: center; gap: 8px; background: none; border: 0; color: inherit; cursor: pointer; font: inherit; padding: 4px 2px; flex: 1; min-height: 36px; }
+.pomo-time.sm { font-size: 15px; font-weight: 800; }
+.pomo-mini-run { color: #ff6b6b; font-size: 10px; }
+.pomo-mini-hint { font-size: 11px; opacity: 0.7; margin-left: 4px; }
 .pomo-bar.study { background: linear-gradient(180deg, #2b3f57, #1f2f43); }
 .pomo-bar.short { background: linear-gradient(180deg, #245046, #183a33); }
 .pomo-bar.long { background: linear-gradient(180deg, #4a3a24, #382b18); }

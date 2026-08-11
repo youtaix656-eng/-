@@ -21,6 +21,23 @@ function shuffle(arr) {
   }
   return a;
 }
+// 原問と派生（同じ過去問由来）を離す（#2）。id末尾の枝記号を除いた基幹idでバケット分割し、
+// ラウンドロビンで並べて同一由来が隣り合わないようにする。
+const baseId = (id) => String(id).replace(/[a-z]+$/i, '');
+function spaceById(ids) {
+  if (ids.length < 3) return ids;
+  const buckets = new Map();
+  for (const id of ids) { const b = baseId(id); if (!buckets.has(b)) buckets.set(b, []); buckets.get(b).push(id); }
+  if (buckets.size < 2) return ids;
+  const lists = shuffle([...buckets.values()]);
+  const out = [];
+  let more = true;
+  while (more) {
+    more = false;
+    for (const l of lists) { if (l.length) { out.push(l.shift()); more = true; } }
+  }
+  return out;
+}
 function poolFor(questions, subject) {
   if (subject === 'all') return questions;
   const exact = questions.filter((q) => q.subject === subject);
@@ -32,13 +49,13 @@ function buildOrder(pool, target) {
   if (pool.length === 0) return [];
   let ids = [];
   while (ids.length < target) ids = ids.concat(shuffle(pool).map((q) => q.id));
-  return ids.slice(0, target);
+  return spaceById(ids.slice(0, target));
 }
 // 「すべて新規」用：未着手（未解答）の問題だけを出題順にする。
 //   過去に解いた問題は混ぜず、繰り返しもしない（残り新規が尽きたらそこで終了）。
 function buildNewOnlyOrder(pool, target, srs) {
   const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
-  return shuffle(newPool).map((q) => q.id).slice(0, target);
+  return spaceById(shuffle(newPool).map((q) => q.id).slice(0, target));
 }
 // 指定プールを「新規◯割・復習◯割」で混ぜて target 長の出題順を作る。
 // newRatio: 0〜1（1=すべて新規）。新規＝未着手、復習＝要復習の問題。
@@ -57,7 +74,7 @@ function buildMixedOrder(pool, target, newRatio, srs) {
   const newCount = Math.round(target * Math.min(1, Math.max(0, newRatio)));
   const reviewCount = target - newCount;
   const combined = [...fill(newPool, newCount), ...fill(reviewPool, reviewCount)];
-  return shuffle(combined).slice(0, target);
+  return spaceById(shuffle(combined).slice(0, target));
 }
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {

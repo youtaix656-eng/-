@@ -55,6 +55,7 @@ export default function Pomodoro({ store, onToast }) {
 
   const [phase, setPhase] = useState('idle');
   const [running, setRunning] = useState(false);
+  const [min, setMin] = useState(true); // 省スペース：既定は最小化（#12）
   const [remaining, setRemaining] = useState((cfg.study || 25) * 60);
   const [done, setDone] = useState(0); // 完了した勉強回数（長休憩の判定に使用）
   const [open, setOpen] = useState(false);
@@ -217,6 +218,24 @@ export default function Pomodoro({ store, onToast }) {
   const ph = PHASES[phase];
   const cycles = cfg.cycles || 4;
 
+  // 最小化表示（#12）：使っていない時は細い1行だけにして画面を占有しない
+  if (min) {
+    return (
+      <div className={`pomo-bar mini ${ph.cls}`}>
+        <audio ref={audioRef} src={musicUrl || undefined} preload="auto" />
+        <button className="pomo-mini-body" onClick={() => setMin(false)} aria-label="タイマーを開く">
+          <span className="pomo-phase">{phase === 'study' ? '📖' : phase === 'short' ? '☕' : phase === 'long' ? '🌴' : '⏱️'}</span>
+          <span className="pomo-time sm">{mmss(remaining)}</span>
+          {running && <span className="pomo-mini-run">●</span>}
+          <span className="pomo-mini-hint">タイマー ▾</span>
+        </button>
+        <div className="pomo-controls">
+          <button className="pomo-btn main" onClick={toggle} aria-label="開始/一時停止">{running ? '⏸' : '▶'}</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`pomo-bar ${ph.cls}`}>
       <audio ref={audioRef} src={musicUrl || undefined} preload="auto" />
@@ -230,6 +249,7 @@ export default function Pomodoro({ store, onToast }) {
           <button className="pomo-btn" onClick={skip} aria-label="次へ">⏭</button>
           <button className="pomo-btn" onClick={reset} aria-label="リセット">⟲</button>
           <button className="pomo-btn" onClick={() => setOpen((v) => !v)} aria-label="設定">⚙</button>
+          <button className="pomo-btn" onClick={() => { setOpen(false); setMin(true); }} aria-label="最小化">▴</button>
         </div>
       </div>
       <div className="pomo-progress"><span style={{ width: `${pct}%` }} /></div>

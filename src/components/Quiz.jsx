@@ -15,6 +15,19 @@ function shuffle(arr) {
   }
   return a;
 }
+// 原問と派生（同じ過去問由来）を離す（#2）：基幹idでバケット分割しラウンドロビン
+const baseId = (id) => String(id).replace(/[a-z]+$/i, '');
+function spaceByBase(items) {
+  if (items.length < 3) return items;
+  const buckets = new Map();
+  for (const q of items) { const b = baseId(q.id); if (!buckets.has(b)) buckets.set(b, []); buckets.get(b).push(q); }
+  if (buckets.size < 2) return items;
+  const lists = shuffle([...buckets.values()]);
+  const out = [];
+  let more = true;
+  while (more) { more = false; for (const l of lists) { if (l.length) { out.push(l.shift()); more = true; } } }
+  return out;
+}
 
 // 指定科目に一致する問題を集める（表記の揺れ・別名も許容）
 function poolForSubject(questions, subject) {
@@ -43,7 +56,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   const beginWith = (pool, doShuffle = true) => {
     if (!pool || pool.length === 0) return;
     setSessionPool(pool);
-    setOrder(doShuffle ? shuffle(pool) : pool);
+    setOrder(doShuffle ? spaceByBase(shuffle(pool)) : pool);
     setIdx(0);
     setSessionStats({ total: 0, correct: 0 });
     setStarted(true);
