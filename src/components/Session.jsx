@@ -328,7 +328,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
             <input type="range" min="0" max="100" step="10" value={newPct} onChange={(e) => setNewPct(Number(e.target.value))} />
             <span className="range-val">新規{newPct}% / 復習{100 - newPct}%</span>
           </div>
-          <div className="hint">新規＝まだ解いていない問題、復習＝間違えた問題。任意の割合で混ぜて出題します。</div>
+          <div className="hint">
+            <strong>新規</strong>＝まだ一度も解いていない問題、<strong>復習</strong>＝一度解いて間違えた問題。
+            <br />「<strong>すべて新規</strong>」を選ぶと、<strong>すでに解いた問題は表示されず</strong>、未着手の問題だけが出題されます（同じ問題は繰り返しません）。復習も混ぜたいときはスライダーで割合を下げてください。
+          </div>
 
           <label className="section-label">今日はどれで勉強しますか？</label>
           <div className="sess-targets">
