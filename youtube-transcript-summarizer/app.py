@@ -7,7 +7,7 @@ import anthropic
 import requests
 import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import CouldNotRetrieveTranscript
+from youtube_transcript_api import CouldNotRetrieveTranscript, RequestBlocked
 
 DEFAULT_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-5")
 
@@ -125,6 +125,7 @@ url = st.text_input("YouTube動画のURL", placeholder="https://www.youtube.com/
 run = st.button("実行", type="primary", disabled=not api_key)
 
 if run:
+    st.session_state.pop("result", None)
     video_id = extract_video_id(url or "")
     if not video_id:
         st.error("有効なYouTubeのURLを入力してください。")
@@ -132,6 +133,13 @@ if run:
         with st.spinner("字幕を取得しています..."):
             try:
                 transcript_text, lang_code = fetch_transcript_text(video_id)
+            except RequestBlocked:
+                st.error(
+                    "YouTube側からのアクセス制限（IPブロック）により字幕を取得できませんでした。"
+                    "サーバーのIPアドレスが一時的にブロックされている可能性があります。"
+                    "時間を置いて再度お試しください。"
+                )
+                transcript_text = None
             except CouldNotRetrieveTranscript:
                 st.error("この動画には字幕（日本語・英語）が存在しないか、取得できませんでした。")
                 transcript_text = None
