@@ -19,6 +19,7 @@ import zumondaiQuestions, { ZUMONDAI_VERSION } from '../data/zumondaiQuestions.j
 import rinkakuQuestions, { RINKAKU_VERSION } from '../data/rinkakuQuestions.js';
 import rihaQuestions, { RIHA_VERSION } from '../data/rihaQuestions.js';
 import toyoQuestions, { TOYO_VERSION } from '../data/toyoQuestions.js';
+import keizetsuQuestions, { KEIRAKU_VERSION } from '../data/keizetsuQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -186,6 +187,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(toyoQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.toyoVersion = TOYO_VERSION;
+        mutated = true;
+      }
+      // 同梱の経絡経穴概論（バッチ方式・増分）。KEIRAKU_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.keirakuVersion || 0) < KEIRAKU_VERSION) {
+        const { unique } = dedupeAgainst(keizetsuQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.keirakuVersion = KEIRAKU_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
