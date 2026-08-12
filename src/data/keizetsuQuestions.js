@@ -4,7 +4,8 @@
 // 出題基準の大項目：①経絡の意義 ②経穴の意義と概要 ③所属経穴を持つ奇経
 //   ④正経十二経脈 ⑤経穴の応用 ⑥経絡・経穴の現代医学的研究
 // バッチ(1)は①経絡の意義 A.正経十二経脈（流注・接続部・井穴／p.292〜294）。
-export const KEIRAKU_VERSION = 1;
+// バッチ(2)で各原問のA核心四択・C鑑別・D確認○×を補完（一問一答×4に近づける）。
+export const KEIRAKU_VERSION = 2;
 
 const OX = ['○（正しい）', '×（誤り）'];
 const S = '経絡経穴概論';
@@ -284,6 +285,133 @@ const keizetsuQuestions = [
     choices: OX, answer: 0,
     explanation: '足の厥陰肝経は陰器（生殖器）をめぐる経脈である。',
     tags: ['足の厥陰肝経', '陰器'],
+  },
+
+  // ===== バッチ2：各原問のA核心四択・C鑑別・D確認○×を補完 =====
+  {
+    id: 'kk-keiraku-a1e', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '十二皮部の説明で正しいのはどれか。',
+    choices: [
+      '正経十二経脈が流注する体表面の皮膚支配領域',
+      '臓腑と属絡関係をもつ経脈',
+      '四肢末端に始まり頭部に終わる筋の系統',
+      '経脈から分かれた大きな絡脈',
+    ],
+    answer: 0,
+    explanation: '十二皮部（六経皮部）は正経十二経脈の流注上にある体表面の皮膚支配領域で、臓腑との属絡関係はない。',
+    tags: ['十二皮部', '皮膚支配領域', '経絡系統'],
+  },
+  {
+    id: 'kk-keiraku-a2e', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '正経十二経脈が起こる部位はどれか。',
+    choices: ['中焦', '上焦', '下焦', '臍下丹田'],
+    answer: 0,
+    explanation: '正経十二経脈は中焦に起こる手の太陰肺経に始まり、順に連絡して足の厥陰肝経で一巡し中焦に戻る。',
+    tags: ['中焦', '流注', '肺経'],
+  },
+  {
+    id: 'kk-keiraku-a3d', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '足の少陰腎経と手の厥陰心包経が接続する部位はどれか。',
+    choices: ['胸中', '心中', '内眼角', '外眼角'],
+    answer: 0,
+    explanation: '足の少陰腎経から手の厥陰心包経へは胸中で接続する。',
+    tags: ['接続部', '胸中', '腎経', '心包経'],
+  },
+  {
+    id: 'kk-keiraku-a3e', subject: S, type: 'ox', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '隠白と少衝が接続する部位は胸中である。',
+    choices: OX, answer: 1,
+    explanation: '隠白（脾）と少衝（心）の接続部は心中。胸中は湧泉（腎）と中衝（心包）の接続部。',
+    tags: ['接続部', '心中', '脾経', '心経'],
+  },
+  {
+    id: 'kk-keiraku-a4d', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '手の少陽三焦経と足の少陽胆経が接続する部位はどれか。',
+    choices: ['外眼角', '内眼角', '鼻翼外方', '胸中'],
+    answer: 0,
+    explanation: '手の少陽三焦経から足の少陽胆経へは外眼角で接続する。',
+    tags: ['接続部', '外眼角', '三焦経', '胆経'],
+  },
+  {
+    id: 'kk-keiraku-a5d', subject: S, type: 'ox', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '足の太陰脾経から手の少陰心経への接続部は胸中である。',
+    choices: OX, answer: 1,
+    explanation: '足の太陰脾経から手の少陰心経への接続部は心中。胸中は腎経から心包経への接続部で、取り違えに注意。',
+    tags: ['接続部', '心中', '胸中'],
+  },
+  {
+    id: 'kk-keiraku-a6d', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '手の太陽小腸経と足の太陽膀胱経が接続する部位はどれか。',
+    choices: ['内眼角', '外眼角', '心中', '胸中'],
+    answer: 0,
+    explanation: '手の太陽小腸経から足の太陽膀胱経へは内眼角で接続する。',
+    tags: ['接続部', '内眼角', '小腸経', '膀胱経'],
+  },
+  {
+    id: 'kk-keiraku-a7d', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '腹通谷と足通谷が所属する経脈の組合せで正しいのはどれか。',
+    choices: [
+      '腹通谷＝足の少陰腎経／足通谷＝足の太陽膀胱経',
+      'ともに足の少陽胆経',
+      '腹通谷＝足の太陰脾経／足通谷＝足の陽明胃経',
+      'ともに足の太陽膀胱経',
+    ],
+    answer: 0,
+    explanation: '腹通谷は足の少陰腎経、足通谷は足の太陽膀胱経に所属し、腎と膀胱の表裏関係にある。',
+    tags: ['腹通谷', '足通谷', '表裏関係'],
+  },
+  {
+    id: 'kk-keiraku-a7e', subject: S, type: 'ox', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '腰陽関と膝陽関は所属経脈が表裏関係にある。',
+    choices: OX, answer: 1,
+    explanation: '腰陽関は督脈、膝陽関は足の少陽胆経に所属し、表裏関係ではない。',
+    tags: ['腰陽関', '膝陽関', '督脈'],
+  },
+  {
+    id: 'kk-keiraku-a8c', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '腎経の築賓から起こる奇経はどれか。',
+    choices: ['陰維脈', '陰蹻脈', '陽維脈', '衝脈'],
+    answer: 0,
+    explanation: '陰維脈は腎経の築賓から起こる。陰蹻脈は踵から起こる腎経の別脈。',
+    tags: ['陰維脈', '築賓', '腎経'],
+  },
+  {
+    id: 'kk-keiraku-a8d', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '足の第5指の下に起こり、脊柱を貫いて腎・膀胱・肝・肺に入り舌根をはさむ経脈はどれか。',
+    choices: ['足の少陰腎経', '足の太陰脾経', '足の厥陰肝経', '足の太陽膀胱経'],
+    answer: 0,
+    explanation: '足の少陰腎経は足の第5指の下に起こり、脊柱を貫いて腎・膀胱・肝・肺に入り舌根をはさむ。舌「に至る」脾経と混同しないこと。',
+    tags: ['足の少陰腎経', '舌根', '流注'],
+  },
+  {
+    id: 'kk-keiraku-a8e', subject: S, type: 'ox', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '足の太陰脾経は腹部を経て舌に至る。',
+    choices: OX, answer: 0,
+    explanation: '足の太陰脾経は足から腹部に至り、任脈・胆経・肝経と交わって舌に至る。',
+    tags: ['足の太陰脾経', '舌', '流注'],
+  },
+  {
+    id: 'kk-keiraku-a9d', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '腹部で腎経と脾経の間を下行する経脈はどれか。',
+    choices: ['胃経', '肝経', '胆経', '膀胱経'],
+    answer: 0,
+    explanation: '腹部では腎経と脾経の間を胃経が下行する。',
+    tags: ['腹部', '胃経', '経脈の走行'],
+  },
+  {
+    id: 'kk-keiraku-a9e', subject: S, type: 'ox', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '頸部では胃経と小腸経の間を大腸経が上行する。',
+    choices: OX, answer: 0,
+    explanation: '頸部では胃経と小腸経の間を大腸経が上行する。',
+    tags: ['頸部', '大腸経', '経脈の走行'],
+  },
+  {
+    id: 'kk-keiraku-a10c', subject: S, type: 'choice', deck: S, genre: '経絡の意義｜正経十二経脈',
+    question: '生殖器（陰器）をめぐらない経脈はどれか。',
+    choices: ['足の陽明胃経', '足の厥陰肝経', '足の少陰腎経', '任脈'],
+    answer: 0,
+    explanation: '陰器をめぐるのは足の厥陰肝経を中心に、腎経・任脈なども下腹部・生殖器に関与する。足の陽明胃経は前面（胸腹部・下肢前面）を走行し、陰器を主にはめぐらない。',
+    tags: ['生殖器', '足の陽明胃経', '流注'],
   },
 ];
 
