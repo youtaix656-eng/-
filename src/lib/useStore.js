@@ -20,6 +20,7 @@ import rinkakuQuestions, { RINKAKU_VERSION } from '../data/rinkakuQuestions.js';
 import rihaQuestions, { RIHA_VERSION } from '../data/rihaQuestions.js';
 import toyoQuestions, { TOYO_VERSION } from '../data/toyoQuestions.js';
 import keizetsuQuestions, { KEIRAKU_VERSION } from '../data/keizetsuQuestions.js';
+import hariQuestions, { HARI_VERSION } from '../data/hariQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -194,6 +195,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(keizetsuQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.keirakuVersion = KEIRAKU_VERSION;
+        mutated = true;
+      }
+      // 同梱のはり理論（バッチ方式・増分）。HARI_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.hariVersion || 0) < HARI_VERSION) {
+        const { unique } = dedupeAgainst(hariQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.hariVersion = HARI_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
