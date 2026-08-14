@@ -22,6 +22,7 @@ import toyoQuestions, { TOYO_VERSION } from '../data/toyoQuestions.js';
 import keizetsuQuestions, { KEIRAKU_VERSION } from '../data/keizetsuQuestions.js';
 import hariQuestions, { HARI_VERSION } from '../data/hariQuestions.js';
 import kyuQuestions, { KYU_VERSION } from '../data/kyuQuestions.js';
+import byoriQuestions, { BYORI_VERSION } from '../data/byoriQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -210,6 +211,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(kyuQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.kyuVersion = KYU_VERSION;
+        mutated = true;
+      }
+      // 同梱の病理学概論（バッチ方式・増分）。BYORI_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.byoriVersion || 0) < BYORI_VERSION) {
+        const { unique } = dedupeAgainst(byoriQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.byoriVersion = BYORI_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
