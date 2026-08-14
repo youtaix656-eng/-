@@ -23,6 +23,7 @@ import keizetsuQuestions, { KEIRAKU_VERSION } from '../data/keizetsuQuestions.js
 import hariQuestions, { HARI_VERSION } from '../data/hariQuestions.js';
 import kyuQuestions, { KYU_VERSION } from '../data/kyuQuestions.js';
 import byoriQuestions, { BYORI_VERSION } from '../data/byoriQuestions.js';
+import torinQuestions, { TORIN_VERSION } from '../data/torinQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -218,6 +219,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(byoriQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.byoriVersion = BYORI_VERSION;
+        mutated = true;
+      }
+      // 同梱の東洋医学臨床論（バッチ方式・増分）。TORIN_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.torinVersion || 0) < TORIN_VERSION) {
+        const { unique } = dedupeAgainst(torinQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.torinVersion = TORIN_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
