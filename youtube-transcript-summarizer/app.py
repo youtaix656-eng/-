@@ -65,7 +65,7 @@ def summarize_with_claude(api_key: str, model: str, title: str, transcript_text:
     client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
         model=model,
-        max_tokens=8000,
+        max_tokens=16000,
         system=SYSTEM_PROMPT,
         messages=[
             {
@@ -80,6 +80,11 @@ def summarize_with_claude(api_key: str, model: str, title: str, transcript_text:
     detail_match = re.search(r"---DETAIL-START---(.*?)---DETAIL-END---", raw, re.DOTALL)
 
     if not summary_match or not detail_match:
+        if message.stop_reason == "max_tokens":
+            raise ValueError(
+                "動画が長く、出力が上限に達したため途中で切れました。"
+                "もう一度実行しても同じ結果になります（動画が長すぎる可能性があります）。"
+            )
         raise ValueError("Claudeの応答を解析できませんでした。もう一度お試しください。")
 
     return summary_match.group(1).strip(), detail_match.group(1).strip()
