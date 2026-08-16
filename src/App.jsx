@@ -10,6 +10,7 @@ import Session from './components/Session.jsx';
 import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
+import ChoiceQuiz from './components/ChoiceQuiz.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Analytics from './components/Analytics.jsx';
 import Memos from './components/Memos.jsx';
@@ -56,6 +57,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const VIEW_TITLES = {
   home: '鍼灸国試 対策アプリ',
   quiz: '一問一答',
+  choicequiz: '4択問題',
   session: '学習（10・60・300・900）',
   review: '間違えた問題',
   audio: '音声学習',
@@ -417,6 +419,8 @@ export default function App() {
         );
       case 'exam':
         return <Exam store={store} />;
+      case 'choicequiz':
+        return <ChoiceQuiz store={store} onStartQuiz={startCustomQuiz} />;
       case 'dashboard':
         return <Dashboard store={store} />;
       case 'analytics':

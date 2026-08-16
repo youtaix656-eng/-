@@ -226,4 +226,6 @@ const sampleQuestions = [
   },
 ];
 
-export default sampleQuestions;
+// サンプル問題は実際の過去問PDFに基づかないデモ用データのため、
+// 「4択問題」のファイル分けでは「その他」に区分する。
+export default sampleQuestions.map((q) => ({ source: 'その他', ...q }));

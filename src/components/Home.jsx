@@ -148,6 +148,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">科目別に問題演習。○×・四択に対応。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('choicequiz')}>
+          <span className="ico">4️⃣</span>
+          <span className="title">4択問題</span>
+          <span className="desc">過去問／模試／その他から選び、科目別に四択だけを演習。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('builder')}>
           <span className="ico">🎛️</span>
           <span className="title">出題を作る</span>

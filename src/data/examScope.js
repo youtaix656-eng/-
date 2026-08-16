@@ -104,6 +104,39 @@ export const SUBJECT_TAG_NAMES = [
   'きゅう理論',
 ];
 
+// 「4択問題」のファイル分け（出どころ別の3分類）。
+// q.source が未設定の問題は、これまでの取り込みが基本的に国家試験の過去問PDFに
+// 基づくため既定で「過去問」として扱う（既存問題への一括付与は不要）。
+export const QUESTION_SOURCES = [
+  { id: 'kakomon', label: '鍼灸国家試験の過去問' },
+  { id: 'mogi', label: '鍼灸国家試験の模試' },
+  { id: 'other', label: 'その他' },
+];
+const SOURCE_LABEL_TO_ID = Object.fromEntries(QUESTION_SOURCES.map((s) => [s.label, s.id]));
+export function questionSourceId(q) {
+  const raw = q && q.source;
+  if (!raw) return 'kakomon';
+  return SOURCE_LABEL_TO_ID[raw] || raw;
+}
+
+// 「4択問題」の科目一覧（表示ラベルと、収録データの科目名の対応）。
+export const CHOICE_QUIZ_SUBJECTS = [
+  { name: '医療概論', label: '医療概論（医学史を除く）', excludeTags: ['医学史'] },
+  { name: '衛生学・公衆衛生学', label: '衛生学・公衆衛生学' },
+  { name: '関係法規', label: '関係法規' },
+  { name: '解剖学', label: '解剖学' },
+  { name: '生理学', label: '生理学' },
+  { name: '病理学概論', label: '病理学概論' },
+  { name: '臨床医学総論', label: '臨床医学総論' },
+  { name: '臨床医学各論', label: '臨床医学各論' },
+  { name: 'リハビリテーション医学', label: 'リハビリテーション医学' },
+  { name: '東洋医学概論', label: '東洋医学概論' },
+  { name: '経絡経穴概論', label: '経絡経穴概論' },
+  { name: '東洋医学臨床論', label: '東洋医学臨床論' },
+  { name: 'はり理論', label: 'はり師試験：はり理論' },
+  { name: 'きゅう理論', label: 'きゅう師試験：きゅう理論' },
+];
+
 // 科目名の一致判定（アプリ内の科目名の揺れを吸収）
 function normalizeName(s) {
   return String(s || '').replace(/\s+/g, '').replace(/[・･]/g, '').toLowerCase();
