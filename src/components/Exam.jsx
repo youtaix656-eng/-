@@ -1,15 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ResetInline from './ResetInline.jsx';
 import * as storage from '../lib/storage.js';
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
+import { effectiveTags } from '../lib/query.js';
+import { genreAccuracy, keywordAccuracy, topByAccuracy, relatedKeywordMap } from '../lib/audioplan.js';
+import { buildBlueprintExam, blueprintAvailability, shuffle } from '../lib/examBuilder.js';
+import { EXAM_BLUEPRINT_AM, EXAM_BLUEPRINT_PM } from '../data/examBlueprint.js';
 
 function fmtTime(sec) {
   const m = Math.floor(sec / 60);
@@ -17,50 +12,188 @@ function fmtTime(sec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// 合格基準は総得点の60%（鍼灸国試の目安）
+const PASS_RATE = 0.6;
+// 得意／苦手／選択式モードの1回あたりの出題数上限
+const PRACTICE_COUNT = 90;
+
+const MODES = [
+  { id: 'am', label: '午前', emoji: '🌅', desc: '専門基礎科目 90問（本番同形式・時間制限あり）' },
+  { id: 'pm', label: '午後', emoji: '🌇', desc: '専門科目 90問（本番同形式・時間制限あり）' },
+  { id: 'strong', label: '得意な問題', emoji: '💪', desc: '得意なジャンル・キーワードを中心に最大90問' },
+  { id: 'weak', label: '苦手な問題', emoji: '🎯', desc: '苦手なジャンル・キーワードを中心に最大90問' },
+  { id: 'pick', label: '選択式', emoji: '🔍', desc: '科目・ジャンル・キーワードを選んで最大90問' },
+];
+const MODE_BY_ID = Object.fromEntries(MODES.map((m) => [m.id, m]));
+
 // 模擬試験モード
-// 本番想定の問題数・制限時間で通し演習し、終了後に正答率・合格判定を表示する。
-// 鍼灸国家試験（はり師・きゅう師）は各分野の設定に合わせて調整可能。
+// 午前／午後は本番同形式の科目配分・時間制限で通し演習。
+// 得意／苦手／選択式は正答率の自動提案や検索条件から出題数を組み立てる演習モード。
+// いずれも終了後に正答率・科目別内訳を表示し、解答はSRS・復習リストへ自動反映される。
 export default function Exam({ store }) {
-  const { questions, recordAnswer, examResults, addExamResult } = store;
+  const { questions, links, history, recordAnswer, examResults, addExamResult } = store;
 
-  // 既定は全問だが、問題数と制限時間を選べる
-  const presets = [
-    { label: 'ミニ模試', count: 10, minutes: 10 },
-    { label: 'ハーフ模試', count: 50, minutes: 60 },
-    { label: 'フル模試', count: 100, minutes: 120 },
-  ];
-  // 合格基準は総得点の60%（鍼灸国試の目安）
-  const PASS_RATE = 0.6;
-
-  const [stage, setStage] = useState('setup'); // setup | running | result
-  const [preset, setPreset] = useState(presets[0]);
+  const [stage, setStage] = useState('select'); // select | setup | running | result
+  const [modeId, setModeId] = useState(null);
   const [order, setOrder] = useState([]);
   const [answers, setAnswers] = useState([]); // index による解答（null=未解答）
   const [idx, setIdx] = useState(0);
   const [remain, setRemain] = useState(0);
+  const [timed, setTimed] = useState(false);
+  const [shortfalls, setShortfalls] = useState([]);
   const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
   const timerRef = useRef(null);
   const remainRef = useRef(0);
   useEffect(() => { remainRef.current = remain; }, [remain]);
 
-  const maxCount = Math.min(preset.count, questions.length);
+  // ---- 得意／苦手モード：正答率から自動提案 ----
+  const genreRanked = useMemo(() => genreAccuracy(questions, history), [questions, history]);
+  const kwRanked = useMemo(() => keywordAccuracy(questions, links, history), [questions, links, history]);
+  const direction = modeId === 'strong' ? 'strong' : modeId === 'weak' ? 'weak' : null;
+  const suggestedGenres = useMemo(
+    () => (direction ? topByAccuracy(genreRanked, { direction, limit: 3 }) : []),
+    [genreRanked, direction]
+  );
+  const suggestedKeywords = useMemo(
+    () => (direction ? topByAccuracy(kwRanked, { direction, limit: 3 }) : []),
+    [kwRanked, direction]
+  );
+  const [selectedChips, setSelectedChips] = useState(new Set());
+  const [chipSig, setChipSig] = useState('');
+  useEffect(() => {
+    if (!direction) return;
+    const sig = [
+      ...suggestedGenres.map((g) => `genre:${g.genre}`),
+      ...suggestedKeywords.map((k) => `kw:${k.keyword}`),
+    ].join(',');
+    if (sig === chipSig) return;
+    setChipSig(sig);
+    setSelectedChips(new Set(sig ? sig.split(',') : []));
+  }, [direction, suggestedGenres, suggestedKeywords, chipSig]);
+  const toggleChip = (key) => {
+    setSelectedChips((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const accuracyPool = useMemo(() => {
+    if (!direction) return [];
+    const byId = new Map();
+    for (const g of suggestedGenres) {
+      if (!selectedChips.has(`genre:${g.genre}`)) continue;
+      for (const q of g.questions) byId.set(q.id, q);
+    }
+    for (const k of suggestedKeywords) {
+      if (!selectedChips.has(`kw:${k.keyword}`)) continue;
+      for (const q of k.questions) byId.set(q.id, q);
+    }
+    return [...byId.values()];
+  }, [direction, suggestedGenres, suggestedKeywords, selectedChips]);
+
+  // ---- 選択式モード：科目→ジャンル→キーワードのカスケード検索 ----
+  const [filterSubject, setFilterSubject] = useState('');
+  const [filterGenre, setFilterGenre] = useState('');
+  const [filterKeyword, setFilterKeyword] = useState('');
+  const [relatedSelected, setRelatedSelected] = useState(new Set());
+  const subjectOptions = useMemo(
+    () => Array.from(new Set(questions.map((q) => q.subject))).sort((a, b) => a.localeCompare(b, 'ja')),
+    [questions]
+  );
+  const afterSubject = useMemo(
+    () => (filterSubject ? questions.filter((q) => q.subject === filterSubject) : questions),
+    [questions, filterSubject]
+  );
+  const genreOptions = useMemo(
+    () =>
+      Array.from(new Set(afterSubject.flatMap((q) => (q.genre ? [q.genre] : [])))).sort((a, b) =>
+        a.localeCompare(b, 'ja')
+      ),
+    [afterSubject]
+  );
+  const afterGenre = useMemo(
+    () => (filterGenre ? afterSubject.filter((q) => q.genre === filterGenre) : afterSubject),
+    [afterSubject, filterGenre]
+  );
+  const keywordOptions = useMemo(() => {
+    const all = [];
+    afterGenre.forEach((q) => all.push(...effectiveTags(q, links)));
+    return Array.from(new Set(all)).sort((a, b) => a.localeCompare(b, 'ja'));
+  }, [afterGenre, links]);
+  const relatedMapAll = useMemo(() => relatedKeywordMap(questions, links), [questions, links]);
+  const relatedForKeyword = useMemo(() => {
+    if (!filterKeyword) return [];
+    return (relatedMapAll.get(filterKeyword) || []).filter((k) => k !== filterKeyword).slice(0, 8);
+  }, [filterKeyword, relatedMapAll]);
+  const pickPool = useMemo(() => {
+    let pool = afterGenre;
+    if (filterKeyword) {
+      const kwSet = new Set([filterKeyword, ...relatedSelected]);
+      pool = pool.filter((q) => effectiveTags(q, links).some((t) => kwSet.has(t)));
+    }
+    return pool;
+  }, [afterGenre, filterKeyword, relatedSelected, links]);
+  const applyFilter = (patch) => {
+    if ('subject' in patch) {
+      setFilterSubject(patch.subject);
+      setFilterGenre('');
+      setFilterKeyword('');
+      setRelatedSelected(new Set());
+    }
+    if ('genre' in patch) {
+      setFilterGenre(patch.genre);
+      setFilterKeyword('');
+      setRelatedSelected(new Set());
+    }
+    if ('keyword' in patch) {
+      setFilterKeyword(patch.keyword);
+      setRelatedSelected(new Set());
+    }
+  };
+  const toggleRelated = (kw) => {
+    setRelatedSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(kw)) next.delete(kw);
+      else next.add(kw);
+      return next;
+    });
+  };
 
   const startExam = () => {
-    const n = Math.min(preset.count, questions.length);
-    const picked = shuffle(questions).slice(0, n);
+    let picked = [];
+    let sf = [];
+    let minutes = 0;
+    let isTimed = false;
+    if (modeId === 'am' || modeId === 'pm') {
+      const blueprint = modeId === 'am' ? EXAM_BLUEPRINT_AM : EXAM_BLUEPRINT_PM;
+      const built = buildBlueprintExam(blueprint, questions);
+      picked = built.order;
+      sf = built.shortfalls;
+      minutes = blueprint.minutes;
+      isTimed = true;
+    } else if (modeId === 'strong' || modeId === 'weak') {
+      picked = shuffle(accuracyPool).slice(0, PRACTICE_COUNT);
+    } else if (modeId === 'pick') {
+      picked = shuffle(pickPool).slice(0, PRACTICE_COUNT);
+    }
+    if (!picked.length) return;
+    setShortfalls(sf);
     setOrder(picked);
-    setAnswers(new Array(n).fill(null));
+    setAnswers(new Array(picked.length).fill(null));
     setIdx(0);
-    setRemain(preset.minutes * 60);
+    setTimed(isTimed);
+    setRemain(isTimed ? minutes * 60 : 0);
     setStage('running');
   };
 
   // 保存済みの途中経過を読み込む（続きから）
   useEffect(() => {
-    if (stage !== 'setup' || !questions.length) return;
+    if (stage !== 'select' || !questions.length) return;
     let alive = true;
     storage.loadExamProgress().then((p) => {
-      if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length || (p.remain || 0) <= 0) return;
+      if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length) return;
+      if (p.timed && (p.remain || 0) <= 0) return;
       const byId = new Map(questions.map((q) => [q.id, q]));
       const rebuilt = p.ids.map((id) => byId.get(id)).filter(Boolean);
       if (rebuilt.length !== p.ids.length) return; // 収録が変わっていたら復元しない
@@ -76,6 +209,8 @@ export default function Exam({ store }) {
     setAnswers(resume.answers || new Array(resume.ids.length).fill(null));
     setIdx(Math.min(resume.idx || 0, resume.ids.length - 1));
     setRemain(resume.remain || 0);
+    setModeId(resume.modeId || null);
+    setTimed(!!resume.timed);
     setResume(null);
     setStage('running');
   };
@@ -88,12 +223,14 @@ export default function Exam({ store }) {
       answers,
       idx,
       remain: remainRef.current,
-      presetLabel: preset.label,
+      modeId,
+      timed,
+      presetLabel: MODE_BY_ID[modeId]?.label,
       at: Date.now(),
     });
   }, [stage, idx, answers, order]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 試験をリセット（途中経過を破棄してセットアップへ戻す）
+  // 試験をリセット（途中経過を破棄してモード選択へ戻す）
   const resetExam = () => {
     clearInterval(timerRef.current);
     storage.clearExamProgress();
@@ -102,12 +239,12 @@ export default function Exam({ store }) {
     setAnswers([]);
     setIdx(0);
     setRemain(0);
-    setStage('setup');
+    setStage('select');
   };
 
-  // タイマー
+  // タイマー（時間制限モードのみ）
   useEffect(() => {
-    if (stage !== 'running') return;
+    if (stage !== 'running' || !timed) return;
     timerRef.current = setInterval(() => {
       setRemain((r) => {
         if (r <= 1) {
@@ -120,7 +257,7 @@ export default function Exam({ store }) {
     }, 1000);
     return () => clearInterval(timerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage]);
+  }, [stage, timed]);
 
   const selectAnswer = (choiceIdx) => {
     setAnswers((prev) => {
@@ -133,7 +270,6 @@ export default function Exam({ store }) {
   const finish = () => {
     clearInterval(timerRef.current);
     storage.clearExamProgress(); // 採点したら途中経過は破棄
-    // 解答を履歴・SRSに反映（採点時に一括記録）
     setStage('result');
   };
 
@@ -154,9 +290,10 @@ export default function Exam({ store }) {
         if (answers[i] == null) return; // 未解答はSRS・復習に記録しない
         recordAnswer(q, correct);
       });
-      // 模試結果を履歴に保存（合否判定つき）
       const scorePct = order.length > 0 ? Math.round((correctCount / order.length) * 100) : 0;
       addExamResult?.({
+        mode: modeId,
+        modeLabel: MODE_BY_ID[modeId]?.label,
         count: order.length,
         correct: correctCount,
         scorePct,
@@ -167,44 +304,79 @@ export default function Exam({ store }) {
     if (stage !== 'result') recordedRef.current = false;
   }, [stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ---- セットアップ ----
-  if (stage === 'setup') {
+  // ---- モード選択 ----
+  if (stage === 'select') {
     return (
       <div className="view">
         <h2 className="view-title">模擬試験</h2>
         <p className="view-desc">
-          本番を想定した問題数・制限時間で通し演習します。終了後に正答率と合格ライン判定を表示します。
+          本番同形式の午前・午後演習のほか、得意・苦手を中心にした演習、条件を選んで出題する演習ができます。
         </p>
 
         {resume && (
           <button className="btn primary block lg" style={{ marginBottom: 12 }} onClick={doResume}>
-            ▶ 前回の続きから（{resume.presetLabel || '模試'}・{(resume.idx || 0) + 1}/{resume.ids.length}問・残り{fmtTime(resume.remain || 0)}）
+            ▶ 前回の続きから（{MODE_BY_ID[resume.modeId]?.label || '模試'}・{(resume.idx || 0) + 1}/{resume.ids.length}問
+            {resume.timed ? `・残り${fmtTime(resume.remain || 0)}` : ''}）
           </button>
         )}
 
-        <div className="card">
-          <label className="section-label" style={{ marginTop: 0 }}>
-            形式を選択
-          </label>
-          <div className="chip-row">
-            {presets.map((p) => (
-              <button
-                key={p.label}
-                className={`chip ${preset.label === p.label ? 'active' : ''}`}
-                onClick={() => setPreset(p)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+        <div className="mode-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              className="card tap"
+              style={{ textAlign: 'left', cursor: 'pointer', width: '100%' }}
+              onClick={() => {
+                setModeId(m.id);
+                setStage('setup');
+              }}
+            >
+              <div style={{ fontSize: 26 }}>{m.emoji}</div>
+              <div style={{ fontWeight: 700, marginTop: 4 }}>{m.label}</div>
+              <div className="inline-note" style={{ marginTop: 4 }}>{m.desc}</div>
+            </button>
+          ))}
+        </div>
 
-          <div className="tiles" style={{ marginTop: 6 }}>
+        {examResults && examResults.length > 0 && <ExamHistory results={examResults} passLine={PASS_RATE} />}
+      </div>
+    );
+  }
+
+  // ---- セットアップ：午前／午後（本番同形式） ----
+  if (stage === 'setup' && (modeId === 'am' || modeId === 'pm')) {
+    const blueprint = modeId === 'am' ? EXAM_BLUEPRINT_AM : EXAM_BLUEPRINT_PM;
+    const avail = blueprintAvailability(blueprint, questions);
+    const shortfallSlots = avail.filter((a) => !a.sufficient);
+    return (
+      <div className="view">
+        <button className="btn ghost sm" onClick={() => setStage('select')}>← モードを選び直す</button>
+        <h2 className="view-title">{blueprint.label}問題（{blueprint.totalCount}問）</h2>
+        <p className="view-desc">
+          本番同形式の科目配分で出題します。総合問題は連問形式（1つの事例に2〜3問）で最後にまとめて出題されます。
+        </p>
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>科目別の出題数</div>
+          {avail.map((a) => (
+            <div className="stat-row" key={a.subject}>
+              <div className="stat-head">
+                <span className="stat-subject">{a.note}</span>
+                <span className="stat-pct">
+                  {a.requested}問
+                  {!a.sufficient && (
+                    <span className="inline-note"> （収録{a.available + (a.fallbackAvailable || 0)}問で代替）</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          ))}
+          <div className="tiles" style={{ marginTop: 10 }}>
             <div className="tile">
-              <div className="num">{maxCount}</div>
+              <div className="num">{blueprint.totalCount}</div>
               <div className="lbl">問題数</div>
             </div>
             <div className="tile">
-              <div className="num">{preset.minutes}</div>
+              <div className="num">{blueprint.minutes}</div>
               <div className="lbl">制限時間（分）</div>
             </div>
             <div className="tile">
@@ -212,20 +384,163 @@ export default function Exam({ store }) {
               <div className="lbl">合格ライン</div>
             </div>
           </div>
-
-          {questions.length < preset.count && (
+          {shortfallSlots.length > 0 && (
             <p className="inline-note">
-              ※ 収録問題が {questions.length}問のため、この形式では{maxCount}問で実施します。
-              本番相当で行うには設定画面から問題をインポートしてください。
+              ※ {shortfallSlots.map((s) => s.note).join('・')}
+              は収録数がまだ既定に届かないため、収録分＋関連科目の問題で代替します。総合問題は過去問を追加いただき次第、実例に切り替わります。
             </p>
           )}
-
-          <button className="btn primary block lg" onClick={startExam} style={{ marginTop: 10 }}>
+          <button className="btn primary block lg" style={{ marginTop: 10 }} onClick={startExam}>
             試験を開始する
           </button>
         </div>
+      </div>
+    );
+  }
 
-        {examResults && examResults.length > 0 && <ExamHistory results={examResults} passLine={PASS_RATE} />}
+  // ---- セットアップ：得意／苦手 ----
+  if (stage === 'setup' && (modeId === 'strong' || modeId === 'weak')) {
+    const label = MODE_BY_ID[modeId].label;
+    const noSuggestion = suggestedGenres.length === 0 && suggestedKeywords.length === 0;
+    return (
+      <div className="view">
+        <button className="btn ghost sm" onClick={() => setStage('select')}>← モードを選び直す</button>
+        <h2 className="view-title">{label}（最大{PRACTICE_COUNT}問）</h2>
+        <p className="view-desc">
+          解答実績からアプリが自動提案したジャンル・キーワードを中心に出題します。チップを外すと対象から除外できます（正答率は解答するたびに更新されます）。
+        </p>
+        {noSuggestion ? (
+          <div className="empty">
+            <div className="ico">📊</div>
+            <p>解答実績がまだ少ないため自動提案できません。クイズや音声学習で何問か解いてから、もう一度お試しください。</p>
+          </div>
+        ) : (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>{label}そうなジャンル</div>
+            <div className="chip-row">
+              {suggestedGenres.map((g) => (
+                <button
+                  key={g.genre}
+                  className={`chip ${selectedChips.has(`genre:${g.genre}`) ? 'active' : ''}`}
+                  onClick={() => toggleChip(`genre:${g.genre}`)}
+                >
+                  {g.genre}（{g.accuracy == null ? '未回答' : `${Math.round(g.accuracy * 100)}%`}）
+                </button>
+              ))}
+            </div>
+            <div className="section-label">{label}そうなキーワード</div>
+            <div className="chip-row">
+              {suggestedKeywords.map((k) => (
+                <button
+                  key={k.keyword}
+                  className={`chip ${selectedChips.has(`kw:${k.keyword}`) ? 'active' : ''}`}
+                  onClick={() => toggleChip(`kw:${k.keyword}`)}
+                >
+                  {k.keyword}（{k.accuracy == null ? '未回答' : `${Math.round(k.accuracy * 100)}%`}）
+                </button>
+              ))}
+            </div>
+            <div className="tiles" style={{ marginTop: 10 }}>
+              <div className="tile">
+                <div className="num">{Math.min(PRACTICE_COUNT, accuracyPool.length)}</div>
+                <div className="lbl">出題数</div>
+              </div>
+            </div>
+            {accuracyPool.length === 0 && <p className="inline-note">チップを1つ以上選んでください。</p>}
+            <button
+              className="btn primary block lg"
+              style={{ marginTop: 10 }}
+              onClick={startExam}
+              disabled={accuracyPool.length === 0}
+            >
+              試験を開始する
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ---- セットアップ：選択式 ----
+  if (stage === 'setup' && modeId === 'pick') {
+    return (
+      <div className="view">
+        <button className="btn ghost sm" onClick={() => setStage('select')}>← モードを選び直す</button>
+        <h2 className="view-title">選択式（最大{PRACTICE_COUNT}問）</h2>
+        <p className="view-desc">
+          科目・ジャンル・キーワードで絞り込んで出題します。キーワードを選ぶと関連キーワードも芋づる式に追加できます。
+        </p>
+        <div className="card audio-search">
+          <div className="section-label" style={{ marginTop: 0 }}>🔍 検索（しぼり込み）</div>
+          <div className="search-grid">
+            <label className="mini-field">
+              <span>科目名</span>
+              <select value={filterSubject} onChange={(e) => applyFilter({ subject: e.target.value })}>
+                <option value="">指定なし</option>
+                {subjectOptions.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label className="mini-field">
+              <span>ジャンル</span>
+              <select
+                value={filterGenre}
+                onChange={(e) => applyFilter({ genre: e.target.value })}
+                disabled={!genreOptions.length}
+              >
+                <option value="">指定なし</option>
+                {genreOptions.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </label>
+            <label className="mini-field">
+              <span>キーワード</span>
+              <select
+                value={filterKeyword}
+                onChange={(e) => applyFilter({ keyword: e.target.value })}
+                disabled={!keywordOptions.length}
+              >
+                <option value="">指定なし</option>
+                {keywordOptions.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {relatedForKeyword.length > 0 && (
+            <>
+              <div className="section-label">関連キーワード（芋づる式に追加できます）</div>
+              <div className="chip-row">
+                {relatedForKeyword.map((k) => (
+                  <button
+                    key={k}
+                    className={`chip ${relatedSelected.has(k) ? 'active' : ''}`}
+                    onClick={() => toggleRelated(k)}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="tiles" style={{ marginTop: 10 }}>
+            <div className="tile">
+              <div className="num">{Math.min(PRACTICE_COUNT, pickPool.length)}</div>
+              <div className="lbl">出題数</div>
+            </div>
+          </div>
+          {pickPool.length === 0 && <p className="inline-note">条件に一致する問題がありません。条件を変えてください。</p>}
+          <button
+            className="btn primary block lg"
+            style={{ marginTop: 10 }}
+            onClick={startExam}
+            disabled={pickPool.length === 0}
+          >
+            試験を開始する
+          </button>
+        </div>
       </div>
     );
   }
@@ -238,6 +553,7 @@ export default function Exam({ store }) {
     );
     const rate = order.length > 0 ? correctCount / order.length : 0;
     const passed = rate >= PASS_RATE;
+    const showPassLine = modeId === 'am' || modeId === 'pm';
     // 科目別の内訳
     const perSubject = {};
     order.forEach((q, i) => {
@@ -248,18 +564,25 @@ export default function Exam({ store }) {
 
     return (
       <div className="view">
-        <h2 className="view-title">模擬試験の結果</h2>
+        <h2 className="view-title">{MODE_BY_ID[modeId]?.label || '演習'}の結果</h2>
 
         <div className={`result-hero ${passed ? 'pass' : 'fail'}`}>
-          <div className="verdict">{passed ? '合格ライン到達' : '合格ライン未満'}</div>
+          {showPassLine && <div className="verdict">{passed ? '合格ライン到達' : '合格ライン未満'}</div>}
           <div className="score">
             {Math.round(rate * 100)}
             <small>%</small>
           </div>
           <div className="sub">
-            {order.length}問中 {correctCount}問 正解 ／ 合格ライン {Math.round(PASS_RATE * 100)}%
+            {order.length}問中 {correctCount}問正解 ／ {order.length - correctCount}問不正解
+            {showPassLine && `　合格ライン ${Math.round(PASS_RATE * 100)}%`}
           </div>
         </div>
+
+        {shortfalls.length > 0 && (
+          <p className="inline-note">
+            ※ {shortfalls.map((s) => s.note).join('・')} は収録不足のため一部を関連科目で代替しました。
+          </p>
+        )}
 
         <div className="section-label" style={{ marginTop: 0 }}>
           科目別の内訳
@@ -283,12 +606,23 @@ export default function Exam({ store }) {
           );
         })}
 
+        <p className="inline-note" style={{ marginTop: 10 }}>
+          不正解・未解答の問題は復習リストへ自動的に追加されました。
+        </p>
+
         <button
           className="btn primary block lg"
           style={{ marginTop: 16 }}
           onClick={() => setStage('setup')}
         >
           もう一度挑戦する
+        </button>
+        <button
+          className="btn ghost block sm"
+          style={{ marginTop: 8 }}
+          onClick={() => setStage('select')}
+        >
+          他のモードを選ぶ
         </button>
       </div>
     );
@@ -297,12 +631,16 @@ export default function Exam({ store }) {
   // ---- 試験中 ----
   const current = order[idx];
   const answered = answers.filter((a) => a !== null).length;
-  const timeWarn = remain <= 60;
+  const timeWarn = timed && remain <= 60;
 
   return (
     <div className="view">
       <div className="exam-timer">
-        <span className={`time ${timeWarn ? 'warn' : ''}`}>⏱ {fmtTime(remain)}</span>
+        {timed ? (
+          <span className={`time ${timeWarn ? 'warn' : ''}`}>⏱ {fmtTime(remain)}</span>
+        ) : (
+          <span className="time">📝 演習モード（時間無制限）</span>
+        )}
         <span className="count">
           解答済み {answered} / {order.length}
         </span>
@@ -407,16 +745,19 @@ function predictExam(results, passLine) {
 }
 
 // 模試の結果履歴と、合格ライン到達の推移グラフ＋合否予測
+// 対象は午前／午後（本番同形式）の結果のみ（得意・苦手・選択式は合格ラインの対象外のため除く）。
 function ExamHistory({ results, passLine }) {
+  const scoped = results.filter((r) => !r.mode || r.mode === 'am' || r.mode === 'pm');
+  if (scoped.length === 0) return null;
   // 古い→新しい（左→右）に並べ、直近20件
-  const items = [...results].slice(0, 20).reverse();
-  const passCount = results.filter((r) => r.passed).length;
-  const best = Math.max(...results.map((r) => r.scorePct));
+  const items = [...scoped].slice(0, 20).reverse();
+  const passCount = scoped.filter((r) => r.passed).length;
+  const best = Math.max(...scoped.map((r) => r.scorePct));
   const passPct = Math.round(passLine * 100);
-  const pred = predictExam(results, passLine);
+  const pred = predictExam(scoped, passLine);
   return (
     <div style={{ marginTop: 18 }}>
-      <div className="section-label" style={{ marginTop: 0 }}>模試の記録（{results.length}回）</div>
+      <div className="section-label" style={{ marginTop: 0 }}>午前・午後の記録（{scoped.length}回）</div>
 
       {pred && (
         <div className="card exam-predict">
@@ -446,7 +787,7 @@ function ExamHistory({ results, passLine }) {
 
       <div className="tiles">
         <div className="tile">
-          <div className="num">{results.length}</div>
+          <div className="num">{scoped.length}</div>
           <div className="lbl">受験回数</div>
         </div>
         <div className="tile">

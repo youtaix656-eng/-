@@ -24,6 +24,7 @@ import hariQuestions, { HARI_VERSION } from '../data/hariQuestions.js';
 import kyuQuestions, { KYU_VERSION } from '../data/kyuQuestions.js';
 import byoriQuestions, { BYORI_VERSION } from '../data/byoriQuestions.js';
 import torinQuestions, { TORIN_VERSION } from '../data/torinQuestions.js';
+import integratedQuestions, { INTEGRATED_VERSION } from '../data/integratedQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
@@ -226,6 +227,13 @@ export function useStore() {
         const { unique } = dedupeAgainst(torinQuestions, baseQuestions);
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.torinVersion = TORIN_VERSION;
+        mutated = true;
+      }
+      // 同梱の総合問題（連問形式・バッチ方式・増分）。INTEGRATED_VERSION が上がるたびに未収録分を追加。
+      if ((cfg.integratedVersion || 0) < INTEGRATED_VERSION) {
+        const { unique } = dedupeAgainst(integratedQuestions, baseQuestions);
+        if (unique.length) baseQuestions = [...baseQuestions, ...unique];
+        cfg.integratedVersion = INTEGRATED_VERSION;
         mutated = true;
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映

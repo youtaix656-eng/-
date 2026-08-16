@@ -116,6 +116,54 @@ export function keywordAccuracy(questions, links, history) {
   });
 }
 
+// ジャンル（q.genre）別の正答率（弱点＝低い順）。keywordAccuracy のジャンル版。
+export function genreAccuracy(questions, history) {
+  const byQ = new Map();
+  for (const h of history || []) {
+    const r = byQ.get(h.questionId) || { c: 0, t: 0 };
+    r.t += 1;
+    if (h.correct) r.c += 1;
+    byQ.set(h.questionId, r);
+  }
+  const byGenre = new Map();
+  for (const q of questions) {
+    if (!q.genre) continue;
+    if (!byGenre.has(q.genre)) byGenre.set(q.genre, []);
+    byGenre.get(q.genre).push(q);
+  }
+  const res = [];
+  for (const [genre, qs] of byGenre) {
+    let c = 0;
+    let t = 0;
+    for (const q of qs) {
+      const r = byQ.get(q.id);
+      if (r) {
+        c += r.c;
+        t += r.t;
+      }
+    }
+    res.push({ genre, questions: qs, answered: t, accuracy: t ? c / t : null });
+  }
+  return res.sort((a, b) => {
+    const aa = a.accuracy == null ? 0.5 : a.accuracy;
+    const ab = b.accuracy == null ? 0.5 : b.accuracy;
+    if (aa !== ab) return aa - ab;
+    return b.questions.length - a.questions.length;
+  });
+}
+
+// 正答率ランキング（keywordAccuracy／genreAccuracy の結果）から、
+// 得意（正答率が高い）／苦手（正答率が低い）上位を抽出する。
+// 解答実績が少なすぎるもの（minAnswered未満）はノイズになりやすいので優先度を下げる。
+export function topByAccuracy(ranked, { direction = 'weak', minAnswered = 3, limit = 3 } = {}) {
+  const qualified = ranked.filter((x) => x.answered >= minAnswered);
+  const pool = qualified.length >= limit ? qualified : ranked.filter((x) => x.answered > 0);
+  const sorted = [...pool].sort((a, b) =>
+    direction === 'weak' ? a.accuracy - b.accuracy : b.accuracy - a.accuracy
+  );
+  return sorted.slice(0, limit);
+}
+
 // 「今日の連結」用：日替わりでキーワードの開始点を1つ選ぶ（同じ日は同じ）
 export function dailyKeyword(questions, links, key) {
   const kws = allKeywords(questions, links);
