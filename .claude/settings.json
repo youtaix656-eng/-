@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(rm -rf*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // empty' | grep -qE 'git[[:space:]]+push[^|;&]*(--force(-with-lease)?\\b|[[:space:]]-f([[:space:]]|$))|rm[[:space:]]+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r|--recursive[[:space:]]+--force|--force[[:space:]]+--recursive)|git[[:space:]]+reset[[:space:]]+--hard|git[[:space:]]+clean[[:space:]]+-[a-zA-Z]*f|--no-verify|--no-gpg-sign' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"危険操作の可能性があるコマンドをブロックしました（force push・rm -rf・reset --hard・clean -f・--no-verify・--no-gpg-sign）。ユーザーの明示的な許可なしに実行しないでください。\"}}' || echo '{}'",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path // empty' | { read -r f; case \"$f\" in */src/*.jsx|*/src/*.js) if ! err=$(/home/user/-/node_modules/.bin/esbuild \"$f\" --format=esm --outfile=/dev/null 2>&1); then printf '%s' \"$err\" | jq -Rs '{systemMessage: (\"⚠ 構文エラーの可能性（esbuild）: \" + .)}'; fi ;; esac; }",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

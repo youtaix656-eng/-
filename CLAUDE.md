@@ -13,17 +13,24 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 - 変更後は必ず最新URLを出す。読みやすい写真を使う。
 
 ## 継続して意識する開発方針（ユーザー指定・重要）
-1. **全科目のコンテンツ拡充＋網羅管理** — 医療概論92問＋サンプル中心の現状から、
-   残り12科目を拡充。「出題基準の項目 × 収録数」の網羅マップで手薄な所を可視化し、
-   抜け漏れなく作る。問題を足すたびに網羅状況を意識する。
+1. **全科目のコンテンツ拡充＋網羅管理** — 14科目（下記「科目一覧」参照）を拡充。
+   「出題基準の項目 × 収録数」の網羅マップ（`CoverageMap.jsx`）で手薄な所を可視化し、
+   抜け漏れなく作る。問題を足すたびに網羅状況を意識する。現状の手薄科目は
+   関係法規(80)・医療概論(92)・衛生学公衆衛生学(92)・解剖学(117)・臨床医学各論(123)・
+   生理学(127)（2026年8月時点、随時変わる）。
 2. **正確性・鮮度の管理** — 医療内容は正確に。毎年変わる数字（国民医療費・統計等）は
    更新前提。曖昧・要更新は「※要確認」を付け、数値問題を抽出した年1回の見直しを想定。
-3. **本番同形式の模試** — 時間制限・科目配分・合格ライン判定（例年6割）付きの通し模試を
-   強化（`src/components/Exam.jsx`）。
-4. **復習（SRS）の前面化** — 「今日復習すべき問題」をホーム/カレンダーに出す導線
-   （`src/lib/srs.js`）。間違い→復習→定着のループを回す。
-5. **画像問題への対応** — 経穴図・解剖図など図が要る問題は音声だけでは不足。
-   図つき問題の扱い（画像添付／「図を見る」誘導）を用意する。
+3. **本番同形式の模試** — ✅実装済み（`src/components/Exam.jsx`）。午前90問／午後90問
+   （科目別配分は`src/data/examBlueprint.js`）・得意な問題／苦手な問題（正答率から
+   ジャンル・キーワードを自動提案）・選択式（科目/ジャンル/キーワード検索）の5モード。
+   総合問題（連問）は`src/data/integratedQuestions.js`に過去問が届き次第追加。
+4. **復習（SRS）の前面化** — ✅実装済み。ホーム画面に「今日の復習」カード
+   （`dueReviewQuestions`、`src/lib/srs.js`）。間違い→復習→定着のループは
+   `missTypes.js`（誤答理由：勘違い/知識不足/ケアレス）、`forgetting.js`（忘却予測）、
+   `weakClusters.js`（弱点クラスタ）でも多角的に支援済み（下記「機能一覧」参照）。
+5. **画像問題への対応** — ✅基盤は実装済み。`question.image`（外部URL）と
+   `question.figure`（`src/data/figures.jsx`のオフラインSVG図、キーで参照）の2方式。
+   図問題データは`src/data/zumondaiQuestions.js`（現状サンプルのみ、361穴同様に拡充余地あり）。
 
 ## コンテンツ投入の型（過去問→教材化）
 過去問1問ごとに「原問(4択)×1＋一問一答×4（角度A核心/B定義・逆引き/C鑑別/D○×）」を
@@ -63,18 +70,59 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 アプリ内の誤りチェック機能（`src/components/QuestionTools.jsx` の `runAllChecks`）も活用する。
 
 ## データモデル / 実装メモ
-- 問題: `{ id, subject, type:'choice'|'ox', question, choices[], answer(0始まり), explanation, round?, tags?, deck? }`。
-- 検索の役割分担（音声学習）: **科目名=subject / ジャンル=q.genre（現状ほぼ未使用・枠は残す） /
+- 問題: `{ id, subject, type:'choice'|'ox', question, choices[], answer(0始まり), explanation,
+  round?, tags?, deck?, genre?, source?, image?, figure? }`。
+- 検索の役割分担（音声学習）: **科目名=subject / ジャンル=q.genre（8/14科目で実利用中：
+  byori/riha/toyo/keizetsu/hari/kyu/torin/rinkaku。anat/seiri/eisei/houki/rinsho/iryouは未使用） /
   キーワード=tags∪連結キーワード**。
-- 同梱データ `src/data/iryouQuestions.js`（医療概論92問）。起動時に一度だけバンクへ
-  取り込む（`cfg.iryouSeeded`）。移行フラグ: `iryouSeeded / subjectTagsCleaned / genreFolded`。
+- `source`：「4択問題」のファイル分け用（`ChoiceQuiz.jsx`）。未設定は既定で「過去問」扱い
+  （`questionSourceId()`、`src/data/examScope.js`）。模試・その他を追加する時だけ明示指定。
+- 科目一覧・正式表記は `src/data/examScope.js`（`SUBJECT_TAG_NAMES` / `EXAM_SUBJECTS` /
+  `CHOICE_QUIZ_SUBJECTS`）を単一の正とする。14科目：医療概論・衛生学公衆衛生学・関係法規・
+  解剖学・生理学・病理学概論・臨床医学総論・臨床医学各論・リハビリテーション医学・
+  東洋医学概論・経絡経穴概論・東洋医学臨床論・はり理論・きゅう理論。
+- 各科目の同梱データは `src/data/<科目>Questions.js`＋`<X>_VERSION`（バッチ増分方式）。
+  `useStore.js`で`dedupeAgainst`により起動時に未収録分だけ取り込む。
 - 音声学習（`src/components/AudioMode.jsx`）: 検索フィルタ＋連結学習モード1〜10
   （連鎖/比較/数値/穴埋め/弱点/選択肢読み/章通し/ナレーション/適応/今日の連結）。
 - 端末だけに取り込むリンク: `#import=`（`src/lib/noteshare.js`）。重複は
   `dedupeAgainst`（問題文で判定、`src/lib/importer.js`）。同一問題文の別問は
   末尾に（第XX回）を付けて衝突回避。
 
+## 機能一覧（早見表・2026年8月更新）— 新機能を提案・追加する前に必ずここを見る
+「〇〇が無い」と判断する前に、下記と `components/`・`lib/` 全体を検索すること
+（過去に誤って「未実装」と案内した失敗があるため）。
+| 分野 | どこにあるか | 中身 |
+|---|---|---|
+| 模擬試験 | `Exam.jsx` | 午前/午後(本番同形式)・得意/苦手(自動提案)・選択式の5モード |
+| 4択問題 | `ChoiceQuiz.jsx` | ファイル分け(過去問/模試/その他)→科目の2段階 |
+| SRS復習 | `srs.js`／Home「今日の復習」／`Review.jsx` | 間隔反復。ホームに期限件数を前面化 |
+| 忘却予測 | `lib/forgetting.js`（Analytics内`InsightsSection.jsx`） | 保持率を指数減衰で推定し先読み表示 |
+| 弱点クラスタ | `lib/weakClusters.js`（同上） | タグ共起から弱点テーマを自動抽出 |
+| 難易度推定 | `lib/difficulty.js`（同上） | 正答率から難問を抽出 |
+| 誤答理由の分類 | `lib/missTypes.js`／`Review.jsx` | 勘違い/知識不足/ケアレスをワンタップ記録、型別に解説を出し分け |
+| 自己説明ステップ | `QuestionCard.jsx`の`whyPrompt` | 誤答時に「なぜこの答え？」を自動で促す |
+| 知識グラフ・連想 | `KnowledgeGraph.jsx`＋`AssocQuiz.jsx`／`AssocTrainer.jsx`／`RelationAuthor.jsx` | 経路クイズ・束グルーピング・対比識別ドリル・関係の手動オーサリング |
+| 連結学習 | `ConnectedLearning.jsx`＋`lib/connectlab.js` | 今日の1問・キーワード自動提案・表記ゆれ統合・ヒートマップ |
+| 語呂合わせ | `kwMeta`（保存）／`MnemonicNotebook.jsx`（一覧・編集） | 登録・一覧・関連問題数表示 |
+| フラッシュカード | `Flashcards.jsx` | 経穴カード＋全科目対応（問題から自動生成） |
+| 画像・図問題 | `figures.jsx`（オフラインSVG）／`question.image` | `zumondaiQuestions.js`にサンプルあり |
+| 網羅マップ | `CoverageMap.jsx` | 出題基準×収録数の可視化 |
+| エラーログ | `lib/errorLog.js`／`ErrorLogCard.jsx`（Settings内） | 端末内エラーの閲覧・消去 |
+
+## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
+- **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
+  `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
+  似た名前の既存コンポーネント（Assoc*・Insights*・Connected*等）を見落としやすい。
+- **自信がない・未確認の情報は断定しない** — 「実装済みかどうか未確認です」と明言してから、
+  確認後に訂正する。
+- **10個・全部のような大きな依頼は、まず一覧化→ユーザー確認→実装の順で進める**
+  （すでに存在するものを重複実装しない）。
+- 大きな変更ほど、実装後にブラウザ（Playwright＋Chromium）で実際に操作して確認する。
+  ビルドが通ることと機能することは別。
+- 同じ種類の間違いが起きたら、このセクションに追記して残す。
+
 ## 検証
-- `npm run build` と `node --test`（現状100件）を通す。
+- `npm run build` と `node --test`（現状178件）を通す。
 - 可能なら Chromium（`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`）で
-  プレビュー描画を確認。
+  プレビュー描画を確認（`npm run preview` → Playwrightでスクリーンショット）。
