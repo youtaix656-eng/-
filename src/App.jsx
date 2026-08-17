@@ -11,6 +11,7 @@ import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import ChoiceQuiz from './components/ChoiceQuiz.jsx';
+import MnemonicNotebook from './components/MnemonicNotebook.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Analytics from './components/Analytics.jsx';
 import Memos from './components/Memos.jsx';
@@ -84,7 +85,8 @@ const VIEW_TITLES = {
   examcontent: '鍼灸国家試験の内容',
   experiences: '体験談ノート',
   mindmap: 'マインドマップ',
-  flashcards: '経穴フラッシュカード',
+  flashcards: 'フラッシュカード',
+  mnemonics: '語呂合わせノート',
   toc: '目次',
   settings: '設定',
 };
@@ -483,7 +485,9 @@ export default function App() {
       case 'mindmap':
         return <MindMap store={store} onOpenKeyword={openKeyword} />;
       case 'flashcards':
-        return <Flashcards />;
+        return <Flashcards store={store} />;
+      case 'mnemonics':
+        return <MnemonicNotebook store={store} onToast={showToast} />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':

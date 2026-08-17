@@ -6,9 +6,10 @@ import Mascot from './Mascot.jsx';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
 export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall }) {
-  const { questions, history, reviewQuestions, session, unread, settings } = store;
+  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings } = store;
   const overall = overallStats(history);
   const reviewCount = reviewQuestions.length;
+  const dueCount = (dueReviewQuestions || []).length;
   const unreadCount = (unread || []).length;
   const sessionActive = session && session.pos < session.target;
   const { streak, longestStreak, studiedToday } = studyStreak(history);
@@ -74,6 +75,18 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
         <button className="exam-countdown" onClick={() => onNavigate('settings')}>
           <span className="ec-days">試験日まで残り <strong>{examLeft}</strong> 日！</span>
           <span className="ec-date">試験日 {formatExamDate(settings.examDate)}</span>
+        </button>
+      )}
+
+      {/* 今日の復習（SRSで期限が来ている件数）を大きく前面化 */}
+      {dueCount > 0 && (
+        <button className="today-review-card" onClick={() => onNavigate('review')}>
+          <span className="trc-ico">🔁</span>
+          <span className="trc-main">
+            <span className="trc-num">{dueCount}</span>問
+            <span className="trc-label">今日、復習すべき問題があります</span>
+          </span>
+          <span className="trc-cta">復習する →</span>
         </button>
       )}
 
@@ -174,8 +187,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
 
         <button className="menu-item" onClick={() => onNavigate('flashcards')}>
           <span className="ico">🃏</span>
-          <span className="title">経穴フラッシュカード</span>
-          <span className="desc">経穴名→経絡・部位・主治を反復。図つきサンプル5枚（今後拡充）。</span>
+          <span className="title">フラッシュカード</span>
+          <span className="desc">経穴カード＋全科目対応。問題からその場でカードを作って反復。</span>
+        </button>
+
+        <button className="menu-item" onClick={() => onNavigate('mnemonics')}>
+          <span className="ico">💡</span>
+          <span className="title">語呂合わせノート</span>
+          <span className="desc">登録した語呂合わせを一覧で見返す。その場で追加・編集も。</span>
         </button>
 
         <button className="menu-item" onClick={() => onNavigate('toc')}>
