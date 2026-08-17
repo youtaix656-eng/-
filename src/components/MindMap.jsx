@@ -23,6 +23,17 @@ export default function MindMap({ store, onOpenKeyword }) {
 
   const [showIndex, setShowIndex] = useState(false);
   const kanaIndex = useMemo(() => buildKanaIndex(cands.user), [cands.user]);
+  // 「中心にする言葉」は数千語になり得るため、フィルタなしでは先頭だけ描画し、
+  // 検索すればそこから絞り込めるようにする（DOMを軽く保つ）。
+  const CENTER_CHIP_CAP = 80;
+  const [centerFilter, setCenterFilter] = useState('');
+  const filteredCenterCands = useMemo(() => {
+    const q = centerFilter.trim().toLowerCase();
+    if (!q) return cands.user;
+    return cands.user.filter((k) => k.toLowerCase().includes(q));
+  }, [cands.user, centerFilter]);
+  const visibleCenterCands = filteredCenterCands.slice(0, CENTER_CHIP_CAP);
+  const hiddenCenterCount = filteredCenterCands.length - visibleCenterCands.length;
   const clickBranch = (b) => {
     if (b.type === 'linked') setCenter(b.id); // つながる語は再センター
     else {
@@ -64,13 +75,29 @@ export default function MindMap({ store, onOpenKeyword }) {
       )}
 
       {/* センター選択 */}
-      <div className="section-label" style={{ marginTop: 0 }}>中心にする言葉</div>
+      <div className="section-label" style={{ marginTop: 0 }}>中心にする言葉（{cands.user.length}語）</div>
       {cands.user.length > 0 && (
-        <div className="chip-row">
-          {cands.user.map((k) => (
-            <button key={k} className={`chip ${center === k ? 'active' : ''}`} onClick={() => setCenter(k)}>{k}</button>
-          ))}
-        </div>
+        <>
+          {cands.user.length > CENTER_CHIP_CAP && (
+            <input
+              type="text"
+              value={centerFilter}
+              onChange={(e) => setCenterFilter(e.target.value)}
+              placeholder="言葉で絞り込む（例：合谷、腎陽虚 など）"
+              style={{ marginBottom: 8 }}
+            />
+          )}
+          <div className="chip-row">
+            {visibleCenterCands.map((k) => (
+              <button key={k} className={`chip ${center === k ? 'active' : ''}`} onClick={() => setCenter(k)}>{k}</button>
+            ))}
+          </div>
+          {hiddenCenterCount > 0 && (
+            <p className="inline-note">
+              他{hiddenCenterCount}語あります。検索するか、上の「索引」から選んでください。
+            </p>
+          )}
+        </>
       )}
       {cands.suggested.length > 0 && (
         <>

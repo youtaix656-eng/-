@@ -109,6 +109,27 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 | 画像・図問題 | `figures.jsx`（オフラインSVG）／`question.image` | `zumondaiQuestions.js`にサンプルあり |
 | 網羅マップ | `CoverageMap.jsx` | 出題基準×収録数の可視化 |
 | エラーログ | `lib/errorLog.js`／`ErrorLogCard.jsx`（Settings内） | 端末内エラーの閲覧・消去 |
+| 全機能一覧 | `src/data/featureRegistry.js`＋`FeatureIndex.jsx` | 上表と同じ内容の単一の正。検索・カテゴリ絞り込み付き |
+
+上表は概要用のスナップショット。**正確な最新の全機能リストは `src/data/featureRegistry.js`**
+（`{id,title,icon,category,view,desc,tags}`の配列）。**新機能を追加・削除・改名したら、
+このファイルにも必ずエントリを追加/更新する**（`npm run validate` が `view` の実在を
+機械チェックする。CLAUDE.mdのこの表は概要のみで自動生成ではないため、大きく変わったら
+このセクションも合わせて更新する）。
+
+## パフォーマンス方針（2026-08-17 追加）
+- **コード分割**：`App.jsx`はホーム/一問一答/復習/音声/模試（下部ナビの5画面）と常時マウントの
+  コンポーネント（`MiniPlayer`/`AuthGate`/`Pomodoro`/`HistoryPanel`）だけ即時import。
+  それ以外の画面は`lazy(() => import(...))`＋`<Suspense>`。**新しい画面を追加する時も
+  基本はlazy importにする**（頻繁に使う下部ナビ相当のみ例外）。
+- **科目データの動的import**：`useStore.js`の`subjectDataModules()`が全科目データを
+  `Promise.all([import(...)])`でまとめて動的読み込みする。**新しい科目データファイルを
+  追加したら、ここにもimportを追加する**（トップレベルの`import X from '../data/...'`に
+  戻さない。バンドルが再び1つの巨大ファイルに戻ってしまう）。
+- **長いリストは無条件に全件描画しない**：`MindMap.jsx`の「中心にする言葉」（数千語になり得る）は
+  検索フィルタ＋先頭80件キャップ方式（`CENTER_CHIP_CAP`）。新しく数百件以上になり得る
+  一覧を作る時は、同じパターン（検索欄＋件数キャップ、または開閉アコーディオン）を使う。
+  外部の仮想化ライブラリは導入しない方針（外部ランタイム依存なしのため）。
 
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、

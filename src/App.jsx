@@ -1,46 +1,61 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useStore } from './lib/useStore.js';
 import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import { daysUntil } from './lib/gamify.js';
 import { haripanReminder } from './data/haripan.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
+// 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
 import Home from './components/Home.jsx';
 import Quiz from './components/Quiz.jsx';
-import Session from './components/Session.jsx';
 import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
-import ChoiceQuiz from './components/ChoiceQuiz.jsx';
-import MnemonicNotebook from './components/MnemonicNotebook.jsx';
-import Dashboard from './components/Dashboard.jsx';
-import Analytics from './components/Analytics.jsx';
-import Memos from './components/Memos.jsx';
-import Settings from './components/Settings.jsx';
-import Ocr from './components/Ocr.jsx';
-import QuestionTools from './components/QuestionTools.jsx';
-import ExamScope from './components/ExamScope.jsx';
-import ConnectedLearning from './components/ConnectedLearning.jsx';
-import Builder from './components/Builder.jsx';
-import Import from './components/Import.jsx';
-import Parse from './components/Parse.jsx';
-import NoteGen from './components/NoteGen.jsx';
-import Calendar from './components/Calendar.jsx';
-import Venues from './components/Venues.jsx';
-import ExamContent from './components/ExamContent.jsx';
-import Experiences from './components/Experiences.jsx';
-import MindMap from './components/MindMap.jsx';
-import TableOfContents from './components/TableOfContents.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
-import UnreadPages from './components/UnreadPages.jsx';
 import AuthGate from './components/AuthGate.jsx';
 import Pomodoro from './components/Pomodoro.jsx';
-import MistakeNote from './components/MistakeNote.jsx';
-import Roadmap from './components/Roadmap.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
-import NumberFacts from './components/NumberFacts.jsx';
-import CoverageMap from './components/CoverageMap.jsx';
-import KnowledgeGraph from './components/KnowledgeGraph.jsx';
-import Flashcards from './components/Flashcards.jsx';
+// それ以外の画面は初回訪問時だけ読み込む（コード分割）。1.6MBの単一バンドルを分割し、
+// ホーム/一問一答/復習/音声/模試だけで開いた時の初期表示を軽くする。
+const Session = lazy(() => import('./components/Session.jsx'));
+const ChoiceQuiz = lazy(() => import('./components/ChoiceQuiz.jsx'));
+const MnemonicNotebook = lazy(() => import('./components/MnemonicNotebook.jsx'));
+const FeatureIndex = lazy(() => import('./components/FeatureIndex.jsx'));
+const Dashboard = lazy(() => import('./components/Dashboard.jsx'));
+const Analytics = lazy(() => import('./components/Analytics.jsx'));
+const Memos = lazy(() => import('./components/Memos.jsx'));
+const Settings = lazy(() => import('./components/Settings.jsx'));
+const Ocr = lazy(() => import('./components/Ocr.jsx'));
+const QuestionTools = lazy(() => import('./components/QuestionTools.jsx'));
+const ExamScope = lazy(() => import('./components/ExamScope.jsx'));
+const ConnectedLearning = lazy(() => import('./components/ConnectedLearning.jsx'));
+const Builder = lazy(() => import('./components/Builder.jsx'));
+const Import = lazy(() => import('./components/Import.jsx'));
+const Parse = lazy(() => import('./components/Parse.jsx'));
+const NoteGen = lazy(() => import('./components/NoteGen.jsx'));
+const Calendar = lazy(() => import('./components/Calendar.jsx'));
+const Venues = lazy(() => import('./components/Venues.jsx'));
+const ExamContent = lazy(() => import('./components/ExamContent.jsx'));
+const Experiences = lazy(() => import('./components/Experiences.jsx'));
+const MindMap = lazy(() => import('./components/MindMap.jsx'));
+const TableOfContents = lazy(() => import('./components/TableOfContents.jsx'));
+const UnreadPages = lazy(() => import('./components/UnreadPages.jsx'));
+const MistakeNote = lazy(() => import('./components/MistakeNote.jsx'));
+const Roadmap = lazy(() => import('./components/Roadmap.jsx'));
+const NumberFacts = lazy(() => import('./components/NumberFacts.jsx'));
+const CoverageMap = lazy(() => import('./components/CoverageMap.jsx'));
+const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph.jsx'));
+const Flashcards = lazy(() => import('./components/Flashcards.jsx'));
+
+function ViewLoading() {
+  return (
+    <div className="view">
+      <div className="empty">
+        <div className="ico">⏳</div>
+        <p>読み込み中…</p>
+      </div>
+    </div>
+  );
+}
 
 const UNLOCK_KEY = 'shinkyu:unlocked';
 
@@ -87,6 +102,7 @@ const VIEW_TITLES = {
   mindmap: 'マインドマップ',
   flashcards: 'フラッシュカード',
   mnemonics: '語呂合わせノート',
+  features: '全機能一覧',
   toc: '目次',
   settings: '設定',
 };
@@ -488,6 +504,8 @@ export default function App() {
         return <Flashcards store={store} />;
       case 'mnemonics':
         return <MnemonicNotebook store={store} onToast={showToast} />;
+      case 'features':
+        return <FeatureIndex onNavigate={setView} />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':
@@ -581,7 +599,7 @@ export default function App() {
             </div>
           </div>
         )}
-        {renderView()}
+        <Suspense fallback={<ViewLoading />}>{renderView()}</Suspense>
       </main>
 
       {toast && <div className="toast">{toast}</div>}

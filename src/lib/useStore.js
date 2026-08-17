@@ -10,22 +10,27 @@ import { decodeSync, syncToBackup, isSyncExpired } from './sync.js';
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
-import eiseiQuestions, { EISEI_VERSION } from '../data/eiseiQuestions.js';
-import houkiQuestions, { HOUKI_VERSION } from '../data/houkiQuestions.js';
-import anatQuestions, { ANAT_VERSION } from '../data/anatQuestions.js';
-import seiriQuestions, { SEIRI_VERSION } from '../data/seiriQuestions.js';
-import rinshoQuestions, { RINSHO_VERSION } from '../data/rinshoQuestions.js';
-import zumondaiQuestions, { ZUMONDAI_VERSION } from '../data/zumondaiQuestions.js';
-import rinkakuQuestions, { RINKAKU_VERSION } from '../data/rinkakuQuestions.js';
-import rihaQuestions, { RIHA_VERSION } from '../data/rihaQuestions.js';
-import toyoQuestions, { TOYO_VERSION } from '../data/toyoQuestions.js';
-import keizetsuQuestions, { KEIRAKU_VERSION } from '../data/keizetsuQuestions.js';
-import hariQuestions, { HARI_VERSION } from '../data/hariQuestions.js';
-import kyuQuestions, { KYU_VERSION } from '../data/kyuQuestions.js';
-import byoriQuestions, { BYORI_VERSION } from '../data/byoriQuestions.js';
-import torinQuestions, { TORIN_VERSION } from '../data/torinQuestions.js';
-import integratedQuestions, { INTEGRATED_VERSION } from '../data/integratedQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
+// 各科目の問題データは動的import（コード分割）。起動時に main バンドルへ全部詰め込まず、
+// 別チャンクとして並行取得する（バンドル縮小・科目ごとの差分キャッシュのため）。
+const subjectDataModules = () =>
+  Promise.all([
+    import('../data/eiseiQuestions.js'),
+    import('../data/houkiQuestions.js'),
+    import('../data/anatQuestions.js'),
+    import('../data/seiriQuestions.js'),
+    import('../data/rinshoQuestions.js'),
+    import('../data/zumondaiQuestions.js'),
+    import('../data/rinkakuQuestions.js'),
+    import('../data/rihaQuestions.js'),
+    import('../data/toyoQuestions.js'),
+    import('../data/keizetsuQuestions.js'),
+    import('../data/hariQuestions.js'),
+    import('../data/kyuQuestions.js'),
+    import('../data/byoriQuestions.js'),
+    import('../data/torinQuestions.js'),
+    import('../data/integratedQuestions.js'),
+  ]);
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
 
 function newNoteId() {
@@ -100,6 +105,8 @@ export function useStore() {
       } catch (e) {
         /* 無効な sync データは無視 */
       }
+      // IndexedDB読み込みと並行して、科目データのチャンクも取得を始める（ネットワークとDBを同時に進める）。
+      const subjectDataPromise = subjectDataModules();
       const [q, s, h, m, lk, sch, vn, ec, sn, km, ud, cfg] = await Promise.all([
         storage.loadQuestions(),
         storage.loadSrs(),
@@ -120,6 +127,23 @@ export function useStore() {
       const er = await storage.loadExamResults();
       const act = await storage.loadActivity();
       const numOv = await storage.loadNumberOverrides();
+      const [
+        { default: eiseiQuestions, EISEI_VERSION },
+        { default: houkiQuestions, HOUKI_VERSION },
+        { default: anatQuestions, ANAT_VERSION },
+        { default: seiriQuestions, SEIRI_VERSION },
+        { default: rinshoQuestions, RINSHO_VERSION },
+        { default: zumondaiQuestions, ZUMONDAI_VERSION },
+        { default: rinkakuQuestions, RINKAKU_VERSION },
+        { default: rihaQuestions, RIHA_VERSION },
+        { default: toyoQuestions, TOYO_VERSION },
+        { default: keizetsuQuestions, KEIRAKU_VERSION },
+        { default: hariQuestions, HARI_VERSION },
+        { default: kyuQuestions, KYU_VERSION },
+        { default: byoriQuestions, BYORI_VERSION },
+        { default: torinQuestions, TORIN_VERSION },
+        { default: integratedQuestions, INTEGRATED_VERSION },
+      ] = await subjectDataPromise;
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか

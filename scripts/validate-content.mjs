@@ -5,10 +5,13 @@
 //
 //   実行: node scripts/validate-content.mjs
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { SEED_BANKS, allSeedQuestions } from '../src/data/seedRegistry.js';
 import { validateBank } from '../src/lib/questionSchema.js';
 import { coverageBySubject, coverageSummary, coverageLevel } from '../src/lib/coverage.js';
 import { volatileNumberFacts } from '../src/data/mindmapData.js';
+import featureRegistry from '../src/data/featureRegistry.js';
 
 const line = (s = '') => process.stdout.write(s + '\n');
 let hardFail = 0;
@@ -73,6 +76,20 @@ for (const n of vol) {
   line(`  ⚠ ${n.topic} = ${n.value}${n.asOf ? `（as of ${n.asOf}）` : '（asOf 未設定）'}`);
 }
 line('  ※ 毎年見直す数値。国民医療費・結核患者数などは最新値を確認（※要確認）。');
+line('');
+
+// 6) 全機能一覧（featureRegistry.js）の view が App.jsx に実在するか
+line('■ 全機能一覧（featureRegistry.js）');
+const appJsxPath = fileURLToPath(new URL('../src/App.jsx', import.meta.url));
+const appJsxSrc = readFileSync(appJsxPath, 'utf8');
+const validViews = new Set([...appJsxSrc.matchAll(/case '([a-z0-9]+)':/g)].map((m) => m[1]));
+const orphanFeatures = featureRegistry.filter((f) => !validViews.has(f.view));
+line(`  登録機能数: ${featureRegistry.length}`);
+if (orphanFeatures.length) {
+  hardFail += orphanFeatures.length;
+  line(`  ✗ view が App.jsx に存在しない機能 ${orphanFeatures.length} 件:`);
+  for (const f of orphanFeatures) line(`      [${f.id}] view="${f.view}"（${f.title}）`);
+} else line('  ✓ 全機能の view はApp.jsxに実在する');
 line('');
 
 line('===== 結果 =====');

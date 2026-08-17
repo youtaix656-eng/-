@@ -129,6 +129,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
       </div>
 
       <div className="menu-grid">
+        <button className="menu-item wide" onClick={() => onNavigate('features')}>
+          <span className="ico">🔍</span>
+          <span className="title">全機能一覧</span>
+          <span className="desc">このアプリの機能をすべて検索・確認できます。迷ったらここ。</span>
+        </button>
+
         <button className="menu-item wide featured roadmap-card" onClick={() => onNavigate('roadmap')}>
           <span className="ico">🗺️</span>
           <span className="title">合格するためのロードマップ</span>
