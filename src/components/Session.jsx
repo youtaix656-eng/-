@@ -58,6 +58,11 @@ function buildNewOnlyOrder(pool, target, srs) {
   const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
   return spaceById(shuffle(newPool).map((q) => q.id).slice(0, target));
 }
+// 「すべて復習」用：復習期限が来た問題だけを出題順にする（繰り返さない・足りなければそこで終了）。
+function buildReviewOnlyOrder(pool, target, srs) {
+  const reviewPool = pool.filter((q) => isInReview(srs[q.id]));
+  return spaceById(shuffle(reviewPool).map((q) => q.id).slice(0, target));
+}
 // 指定プールを「新規◯割・復習◯割」で混ぜて target 長の出題順を作る。
 // newRatio: 0〜1（1=すべて新規）。新規＝未着手、復習＝要復習の問題。
 function buildMixedOrder(pool, target, newRatio, srs) {
@@ -149,6 +154,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     () => filteredPool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0).length,
     [filteredPool, srs]
   );
+  // 現在の条件で「復習期限が来ている問題」が何問あるか（buildMixedOrder の reviewPool と同じ定義）
+  const reviewRemaining = useMemo(
+    () => filteredPool.filter((q) => isInReview(srs[q.id])).length,
+    [filteredPool, srs]
+  );
 
   // 上位を変えたら下位をリセット
   useEffect(() => { setGenre(''); setKeyword(''); setRound(''); }, [subject]);
@@ -164,13 +174,19 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
       onToast?.('条件に合う問題がありません');
       return;
     }
-    // 「すべて新規(100%)」は未着手の問題だけを出題（過去に解いた問題は混ぜない・周回しない）。
-    // opts.allowSeen（2周目・もう一度）のときは従来通り全体を周回する。
+    // 「すべて新規(100%)」は未着手の問題だけ、「すべて復習(0%)」は復習期限の来た問題だけを出題
+    // （どちらも過去の周回を混ぜず、繰り返さない）。opts.allowSeen（2周目・もう一度）のときは従来通り全体を周回する。
     let ids;
     if (ratio >= 1 && !opts.allowSeen) {
       ids = buildNewOnlyOrder(pool, target, srs);
       if (ids.length === 0) {
         onToast?.('新規問題がありません（この条件はすべて解き終えています）。割合を下げて復習するか、条件を変えてください');
+        return;
+      }
+    } else if (ratio <= 0 && !opts.allowSeen) {
+      ids = buildReviewOnlyOrder(pool, target, srs);
+      if (ids.length === 0) {
+        onToast?.('復習が必要な問題がありません（まだ間違えた問題がないか、復習期限が来ていません）。割合を上げて新規を混ぜるか、条件を変えてください');
         return;
       }
     } else if (ratio >= 1) {
@@ -193,6 +209,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     if (ratio >= 1) {
       ids = buildNewOnlyOrder(pool, session.target, srs);
       if (ids.length === 0) { onToast?.('新規問題がありません（すべて解き終えています）。復習をご利用ください'); return; }
+    } else if (ratio <= 0) {
+      ids = buildReviewOnlyOrder(pool, session.target, srs);
+      if (ids.length === 0) { onToast?.('復習が必要な問題がありません。新規を混ぜてご利用ください'); return; }
     } else {
       ids = buildMixedOrder(pool, session.target, ratio, srs);
     }
@@ -307,7 +326,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
             style={{ marginTop: 10 }}
           />
           <div className="search-foot" style={{ marginTop: 8 }}>
-            <span>この条件で <strong>{filteredPool.length}</strong> 問（残り新規 <strong>{newRemaining}</strong> 問）</span>
+            <span>この条件で <strong>{filteredPool.length}</strong> 問（残り新規 <strong>{newRemaining}</strong> 問・復習対象 <strong>{reviewRemaining}</strong> 問）</span>
             {(genre || keyword || round || term || bookmarkOnly || subject !== 'all') && (
               <button className="btn ghost sm" onClick={() => { setSubject('all'); setGenre(''); setKeyword(''); setRound(''); setTerm(''); setBookmarkOnly(false); }}>クリア</button>
             )}
@@ -348,7 +367,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           <label className="section-label">今日はどれで勉強しますか？</label>
           <div className="sess-targets">
             {TARGETS.map((t) => (
-              <button key={t} className="sess-target" onClick={() => begin(t)} disabled={filteredPool.length === 0 || (newPct >= 100 && newRemaining === 0)}>
+              <button key={t} className="sess-target" onClick={() => begin(t)} disabled={filteredPool.length === 0 || (newPct >= 100 && newRemaining === 0) || (newPct <= 0 && reviewRemaining === 0)}>
                 <span className="sess-target-n">{t}</span>
                 <span className="sess-target-l">
                   {t === 10 ? 'すきま時間' : t === 60 ? '1セット（区切り）' : t === 300 ? '1日の目標' : '1周（周回）'}
@@ -363,6 +382,14 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           ) : newPct >= 100 ? (
             <p className="inline-note" style={{ marginTop: 10 }}>
               「すべて新規」では未着手の{newRemaining}問だけを出題します（解いた問題は混ざりません）。
+            </p>
+          ) : newPct <= 0 && reviewRemaining === 0 ? (
+            <p className="inline-note" style={{ marginTop: 10, color: 'var(--warn, #e0a800)' }}>
+              この条件で復習が必要な問題はありません（まだ間違えた問題がないか、復習期限が来ていません）。新規を混ぜるには上のスライダーで割合を上げてください。
+            </p>
+          ) : newPct <= 0 ? (
+            <p className="inline-note" style={{ marginTop: 10 }}>
+              「すべて復習」では復習対象の{reviewRemaining}問だけを出題します（同じ問題は繰り返しません）。
             </p>
           ) : (
             <p className="inline-note" style={{ marginTop: 10 }}>
