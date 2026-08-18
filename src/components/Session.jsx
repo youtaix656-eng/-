@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import { GRADES, isInReview } from '../lib/srs.js';
 import { getSubjects } from '../lib/stats.js';
-import { subjectMatches } from '../data/examScope.js';
+import { subjectMatches, SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { effectiveTags } from '../lib/query.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
@@ -79,7 +79,13 @@ function buildMixedOrder(pool, target, newRatio, srs) {
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark } = store;
-  const subjects = useMemo(() => getSubjects(questions), [questions]);
+  // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
+  const subjects = useMemo(() => {
+    const present = getSubjects(questions);
+    const ordered = SUBJECT_TAG_NAMES.filter((s) => present.includes(s));
+    const extra = present.filter((s) => !SUBJECT_TAG_NAMES.includes(s));
+    return [...ordered, ...extra];
+  }, [questions]);
   const byId = useMemo(() => Object.fromEntries(questions.map((q) => [q.id, q])), [questions]);
 
   const [subject, setSubject] = useState('all');
@@ -243,7 +249,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
               <span>科目</span>
               <select value={subject} onChange={(e) => setSubject(e.target.value)}>
                 <option value="all">全科目</option>
-                {subjects.map((s) => (<option key={s} value={s}>{s}</option>))}
+                {subjects.map((s, i) => (<option key={s} value={s}>{i + 1}. {s}</option>))}
               </select>
             </label>
             <label className="mini-field">
