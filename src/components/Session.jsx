@@ -5,6 +5,7 @@ import { getSubjects } from '../lib/stats.js';
 import { subjectMatches, SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { effectiveTags } from '../lib/query.js';
+import { COMPARISONS } from '../data/mindmapData.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -99,6 +100,29 @@ function buildMixedNoRepeatOrder(pool, target, newRatio, srs) {
   const takeNew = shuffle(newPool).map((q) => q.id).slice(0, newCount);
   const takeReview = shuffle(reviewPool).map((q) => q.id).slice(0, reviewCount);
   return spaceById(shuffle([...takeNew, ...takeReview]));
+}
+
+// 誤答・あいまい（△✕）の問題群から、弱点を文章と関連対比で示す材料を作る。
+//   実際に出た誤答のジャンル・キーワードの頻度だけを根拠にする（憶測での説明は行わない）。
+function buildWeaknessSummary(wrongQs, links) {
+  if (wrongQs.length === 0) return null;
+  const tagCount = {};
+  for (const q of wrongQs) {
+    for (const tg of effectiveTags(q, links)) tagCount[tg] = (tagCount[tg] || 0) + 1;
+  }
+  const topTags = Object.entries(tagCount)
+    .filter(([, c]) => c >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  const genreCount = {};
+  for (const q of wrongQs) {
+    const g = q.genre || q.subject || 'その他';
+    genreCount[g] = (genreCount[g] || 0) + 1;
+  }
+  const topGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const tagSet = new Set(Object.keys(tagCount));
+  const relatedComparisons = COMPARISONS.filter((c) => (c.terms || []).some((t) => tagSet.has(t))).slice(0, 3);
+  return { topTags, topGenres, relatedComparisons };
 }
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
@@ -477,10 +501,43 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           </div>
         )}
 
-        {/* 今回の誤答一覧（#1） */}
+        {/* 今回の弱点分析（誤答・△・✕をまとめて対象に、実際の頻度だけから作成） */}
+        {wrongQs.length > 0 && (() => {
+          const summary = buildWeaknessSummary(wrongQs, links);
+          if (!summary) return null;
+          return (
+            <div className="card">
+              <div className="section-label" style={{ marginTop: 0 }}>今回の弱点分析</div>
+              <p className="inline-note" style={{ marginTop: 0 }}>
+                {summary.topGenres.length > 0 && (
+                  <>「{summary.topGenres.map(([g, c]) => `${g}（${c}問）`).join('」「')}」で誤答・あいまいが目立ちました。</>
+                )}
+                {summary.topTags.length > 0 && (
+                  <><br />繰り返しつまずいたキーワード：{summary.topTags.map(([tg, c]) => `${tg}（×${c}）`).join('・')}</>
+                )}
+              </p>
+              {summary.relatedComparisons.length > 0 && (
+                <>
+                  <div className="section-label">関連する対比（混同しやすいポイント）</div>
+                  {summary.relatedComparisons.map((c) => (
+                    <div className="compare-item" key={c.id}>
+                      <div className="compare-title">{c.title}</div>
+                      <ul className="compare-members">
+                        {(c.members || []).slice(0, 4).map((m, i) => (<li key={i}>{m}</li>))}
+                      </ul>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* 今回の誤答・あいまい一覧（#1）：○以外（△・✕）はすべてここに含まれる */}
         {wrongQs.length > 0 && (
           <div className="card">
-            <div className="section-label" style={{ marginTop: 0 }}>今回の誤答（{wrongQs.length}問）</div>
+            <div className="section-label" style={{ marginTop: 0 }}>今回の誤答・あいまい（{wrongQs.length}問）</div>
+            <p className="inline-note" style={{ marginTop: 0 }}>自己採点で「△ あいまい」「✕ わからない」を選んだ問題も含みます。</p>
             <ul className="wrong-list">
               {wrongQs.map((q) => (
                 <li key={q.id}>
@@ -490,7 +547,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
               ))}
             </ul>
             <button className="btn accent block" style={{ marginTop: 10 }} onClick={() => begin(wrongQs.length, { pool: wrongQs, subject: session.subject, newRatio: 1, allowSeen: true, label: '誤答復習' })}>
-              ✕ 間違えた{wrongQs.length}問だけ、もう一度
+              🔁 誤答・あいまいだった{wrongQs.length}問を復習
             </button>
           </div>
         )}
