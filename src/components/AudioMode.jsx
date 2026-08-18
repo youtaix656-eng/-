@@ -8,6 +8,7 @@ import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { COMPARISONS, NUMBER_FACTS } from '../data/mindmapData.js';
+import { buildKanaIndex } from '../lib/yomi.js';
 
 // 連結モード（検索窓の下に並ぶ10項目）。id=0 は通常（全部順に読む）。
 const MODES = [
@@ -119,6 +120,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     () => uniqJa(afterGenre.flatMap(kwsOf)),
     [afterGenre, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const keywordSections = useMemo(() => buildKanaIndex(keywordOptions), [keywordOptions]);
   const filteredPool = useMemo(
     () => (filterKeyword ? afterGenre.filter((q) => kwsOf(q).includes(filterKeyword)) : afterGenre),
     [afterGenre, filterKeyword, links] // eslint-disable-line react-hooks/exhaustive-deps
@@ -664,8 +666,10 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
             <span>キーワード</span>
             <select value={filterKeyword} onChange={(e) => applyFilter({ keyword: e.target.value })} disabled={keywordOptions.length === 0}>
               <option value="">指定なし</option>
-              {keywordOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {keywordSections.map((sec) => (
+                <optgroup key={sec.label} label={`- ${sec.label} -`}>
+                  {sec.items.map((s) => (<option key={s} value={s}>{s}</option>))}
+                </optgroup>
               ))}
             </select>
           </label>

@@ -5,6 +5,7 @@ import { effectiveTags } from '../lib/query.js';
 import { genreAccuracy, keywordAccuracy, topByAccuracy, relatedKeywordMap } from '../lib/audioplan.js';
 import { buildBlueprintExam, blueprintAvailability, shuffle } from '../lib/examBuilder.js';
 import { EXAM_BLUEPRINT_AM, EXAM_BLUEPRINT_PM } from '../data/examBlueprint.js';
+import { buildKanaIndex } from '../lib/yomi.js';
 
 function fmtTime(sec) {
   const m = Math.floor(sec / 60);
@@ -121,6 +122,7 @@ export default function Exam({ store }) {
     afterGenre.forEach((q) => all.push(...effectiveTags(q, links)));
     return Array.from(new Set(all)).sort((a, b) => a.localeCompare(b, 'ja'));
   }, [afterGenre, links]);
+  const keywordSections = useMemo(() => buildKanaIndex(keywordOptions), [keywordOptions]);
   const relatedMapAll = useMemo(() => relatedKeywordMap(questions, links), [questions, links]);
   const relatedForKeyword = useMemo(() => {
     if (!filterKeyword) return [];
@@ -503,8 +505,10 @@ export default function Exam({ store }) {
                 disabled={!keywordOptions.length}
               >
                 <option value="">指定なし</option>
-                {keywordOptions.map((k) => (
-                  <option key={k} value={k}>{k}</option>
+                {keywordSections.map((sec) => (
+                  <optgroup key={sec.label} label={`- ${sec.label} -`}>
+                    {sec.items.map((k) => (<option key={k} value={k}>{k}</option>))}
+                  </optgroup>
                 ))}
               </select>
             </label>

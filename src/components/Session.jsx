@@ -3,6 +3,7 @@ import QuestionCard from './QuestionCard.jsx';
 import { GRADES, isInReview } from '../lib/srs.js';
 import { getSubjects } from '../lib/stats.js';
 import { subjectMatches, SUBJECT_TAG_NAMES } from '../data/examScope.js';
+import { buildKanaIndex } from '../lib/yomi.js';
 import { effectiveTags } from '../lib/query.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
@@ -105,6 +106,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   const genreOptions = useMemo(() => uniqJa(afterSubject.flatMap((q) => (q.genre ? [q.genre] : []))), [afterSubject]);
   const afterGenre = useMemo(() => (genre ? afterSubject.filter((q) => q.genre === genre) : afterSubject), [afterSubject, genre]);
   const kwOptions = useMemo(() => uniqJa(afterGenre.flatMap((q) => effectiveTags(q, links))), [afterGenre, links]);
+  const kwSections = useMemo(() => buildKanaIndex(kwOptions), [kwOptions]);
   const afterKw = useMemo(() => (keyword ? afterGenre.filter((q) => effectiveTags(q, links).includes(keyword)) : afterGenre), [afterGenre, keyword, links]);
   // 回（第XX回）の選択肢（#5）
   const roundOptions = useMemo(
@@ -263,7 +265,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
               <span>キーワード</span>
               <select value={keyword} onChange={(e) => setKeyword(e.target.value)} disabled={kwOptions.length === 0}>
                 <option value="">指定なし</option>
-                {kwOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+                {kwSections.map((sec) => (
+                  <optgroup key={sec.label} label={`- ${sec.label} -`}>
+                    {sec.items.map((s) => (<option key={s} value={s}>{s}</option>))}
+                  </optgroup>
+                ))}
               </select>
             </label>
             <label className="mini-field">
