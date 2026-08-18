@@ -479,7 +479,7 @@ export function useStore() {
   }, []);
 
   // 解答を記録（grade 省略時は正誤から自動判定）
-  const recordAnswer = useCallback((question, correct, grade, source) => {
+  const recordAnswer = useCallback((question, correct, grade, source, selfKind) => {
     const now = Date.now();
     setSrs((prev) => ({
       ...prev,
@@ -491,7 +491,8 @@ export function useStore() {
     setHistory((prev) => [
       ...prev,
       // source: 'review' なら復習由来（復習専用の到達集計に使う）
-      { questionId: question.id, subject: question.subject, correct, at: now, ...(source ? { source } : {}) },
+      // selfKind: 自己採点の種類（'maru'|'sankaku'|'batsu'）。○△✕を区別する自己採点UIからのみ付与
+      { questionId: question.id, subject: question.subject, correct, at: now, ...(source ? { source } : {}), ...(selfKind ? { selfKind } : {}) },
     ]);
     // バックアップ促し用のカウンタ
     setSettings((prev) => ({

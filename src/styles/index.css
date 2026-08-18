@@ -1337,6 +1337,9 @@ code.block {
 .wrong-list li { display: flex; gap: 8px; font-size: 0.9rem; line-height: 1.4; }
 .wrong-list .wl-ans { flex: 0 0 auto; font-weight: 800; color: var(--correct); font-size: 0.8rem; padding-top: 2px; white-space: nowrap; }
 .wrong-list .wl-q { flex: 1; }
+.wrong-list .wl-mark { flex: 0 0 auto; font-weight: 800; font-size: 0.95rem; padding-top: 1px; }
+.wrong-list .wl-mark.sankaku { color: var(--warn, #e0a800); }
+.wrong-list .wl-mark.batsu { color: var(--wrong); }
 /* 弱点タグ（#8） */
 .weak-tags { margin-top: 10px; }
 .weak-tags-label { font-size: 12px; font-weight: 700; color: var(--warn); }

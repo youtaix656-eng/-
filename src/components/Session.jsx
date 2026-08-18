@@ -105,7 +105,8 @@ function buildMixedNoRepeatOrder(pool, target, newRatio, srs) {
 // 誤答・あいまい（△✕）の問題群から、弱点を文章と関連対比で示す材料を作る。
 //   実際に出た誤答のジャンル・キーワードの頻度だけを根拠にする（憶測での説明は行わない）。
 function buildWeaknessSummary(wrongQs, links) {
-  if (wrongQs.length === 0) return null;
+  // 母数が少なすぎると偏った印象を与えるだけなので表示しない
+  if (wrongQs.length < 3) return null;
   const tagCount = {};
   for (const q of wrongQs) {
     for (const tg of effectiveTags(q, links)) tagCount[tg] = (tagCount[tg] || 0) + 1;
@@ -119,7 +120,12 @@ function buildWeaknessSummary(wrongQs, links) {
     const g = q.genre || q.subject || 'その他';
     genreCount[g] = (genreCount[g] || 0) + 1;
   }
-  const topGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const topGenres = Object.entries(genreCount)
+    .filter(([, c]) => c >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+  // ジャンル・キーワードとも繰り返しの傾向が無ければ、情報が薄いので表示しない
+  if (topTags.length === 0 && topGenres.length === 0) return null;
   const tagSet = new Set(Object.keys(tagCount));
   const relatedComparisons = COMPARISONS.filter((c) => (c.terms || []).some((t) => tagSet.has(t))).slice(0, 3);
   return { topTags, topGenres, relatedComparisons };
@@ -145,6 +151,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
   const [fast, setFast] = useState(false);
   const [showBreak, setShowBreak] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [showAllGenres, setShowAllGenres] = useState(false); // 完了画面のジャンル別正答率を全件表示するか
   // 新規◯割・復習◯割（0〜100の新規%）。既定は設定値。
   const [newPct, setNewPct] = useState(Math.round((settings.sessionNewRatio ?? 1) * 100));
 
@@ -247,6 +254,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     // 該当数が指定問数に満たない場合は、その問数だけで1セッションとする
     const effTarget = Math.min(target, ids.length);
     updateSettings({ sessionNewRatio: ratio });
+    setShowAllGenres(false);
     startSession({ subject: subj, label: opts.label, ids, pos: 0, target: effTarget, requestedTarget: target, round, fast: useFast, newRatio: ratio, startedAt: Date.now() });
     setShowBreak(false);
   };
@@ -259,9 +267,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     onToast?.('学習をリセットしました');
   };
 
-  const answered = (correct, grade) => {
+  const answered = (correct, grade, selfKind) => {
     const cur = byId[session.ids[session.pos]];
-    if (cur) recordAnswer(cur, correct, grade);
+    if (cur) recordAnswer(cur, correct, grade, undefined, selfKind);
     const newPos = session.pos + 1;
     updateSession({ pos: newPos });
     if (newPos < session.target && newPos % SET_SIZE === 0) setShowBreak(true);
@@ -437,19 +445,28 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
     // このセッションの解答を history から復元（誤答一覧・ジャンル別＝#1/#6）
     const idsSet = new Set(session.ids || []);
     const startedAt = session.startedAt || 0;
-    const latest = new Map(); // questionId → 最新の correct
+    const latest = new Map(); // questionId → { correct, selfKind }
     for (const h of history) {
-      if (h.at >= startedAt && idsSet.has(h.questionId)) latest.set(h.questionId, h.correct);
+      if (h.at >= startedAt && idsSet.has(h.questionId)) latest.set(h.questionId, { correct: h.correct, selfKind: h.selfKind });
     }
-    const wrongQs = [...latest.entries()].filter(([, c]) => !c).map(([qid]) => byId[qid]).filter(Boolean);
+    // 誤答・あいまい（○以外）一覧。selfKind（'sankaku'|'batsu'）が分かれば△✕を区別して表示する。
+    const wrongEntries = [...latest.entries()]
+      .filter(([, v]) => !v.correct)
+      .map(([qid, v]) => ({ q: byId[qid], selfKind: v.selfKind }))
+      .filter((e) => e.q);
+    const wrongQs = wrongEntries.map((e) => e.q);
+    const sankakuCount = wrongEntries.filter((e) => e.selfKind === 'sankaku').length;
+    const batsuCount = wrongEntries.length - sankakuCount;
     const byGenre = {};
-    for (const [qid, c] of latest) {
+    for (const [qid, v] of latest) {
       const q = byId[qid]; if (!q) continue;
       const g = q.genre || q.subject || 'その他';
       if (!byGenre[g]) byGenre[g] = { total: 0, correct: 0 };
-      byGenre[g].total += 1; if (c) byGenre[g].correct += 1;
+      byGenre[g].total += 1; if (v.correct) byGenre[g].correct += 1;
     }
     const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
+    const GENRE_ROWS_CAP = 8;
+    const visibleGenreRows = showAllGenres ? genreRows : genreRows.slice(0, GENRE_ROWS_CAP);
     return (
       <div className="view">
         <div className="card sess-done">
@@ -487,7 +504,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           <div className="card">
             <div className="section-label" style={{ marginTop: 0 }}>ジャンル別の正答率（苦手順）</div>
             <ul className="genre-stats">
-              {genreRows.map(([g, s]) => {
+              {visibleGenreRows.map(([g, s]) => {
                 const p = Math.round((s.correct / s.total) * 100);
                 return (
                   <li key={g}>
@@ -498,6 +515,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
                 );
               })}
             </ul>
+            {genreRows.length > GENRE_ROWS_CAP && (
+              <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={() => setShowAllGenres((v) => !v)}>
+                {showAllGenres ? '折りたたむ' : `もっと見る（残り${genreRows.length - GENRE_ROWS_CAP}件）`}
+              </button>
+            )}
           </div>
         )}
 
@@ -537,10 +559,13 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
         {wrongQs.length > 0 && (
           <div className="card">
             <div className="section-label" style={{ marginTop: 0 }}>今回の誤答・あいまい（{wrongQs.length}問）</div>
-            <p className="inline-note" style={{ marginTop: 0 }}>自己採点で「△ あいまい」「✕ わからない」を選んだ問題も含みます。</p>
+            <p className="inline-note" style={{ marginTop: 0 }}>
+              自己採点で「△ あいまい」「✕ わからない」を選んだ問題も含みます（△{sankakuCount}問・✕{batsuCount}問）。
+            </p>
             <ul className="wrong-list">
-              {wrongQs.map((q) => (
+              {wrongEntries.map(({ q, selfKind }) => (
                 <li key={q.id}>
+                  <span className={`wl-mark ${selfKind === 'sankaku' ? 'sankaku' : 'batsu'}`}>{selfKind === 'sankaku' ? '△' : '✕'}</span>
                   <span className="wl-ans">{q.type === 'ox' ? (q.answer === 0 ? '○' : '✕') : `正解 ${q.answer + 1}`}</span>
                   <span className="wl-q">{q.question}</span>
                 </li>
@@ -673,7 +698,7 @@ function FastCard({ question, onGraded, GRADES }) {
     return () => clearTimeout(t);
   }, [count, revealed]);
   const answer = question.choices[question.answer];
-  const pick = (kind) => onGraded(kind === 'maru', kind === 'maru' ? (GRADES ? GRADES.easy : 5) : (GRADES ? GRADES.again : 0));
+  const pick = (kind) => onGraded(kind === 'maru', kind === 'maru' ? (GRADES ? GRADES.easy : 5) : (GRADES ? GRADES.again : 0), kind);
   return (
     <div className="card fast-card">
       <div className="q-meta">

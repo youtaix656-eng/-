@@ -119,15 +119,17 @@ export default function QuestionCard({
   };
 
   // ○△✕ の自己評価（毎問）。△✕は「間違えた問題」として復習サイクルへ。
+  //   kind（'maru'|'sankaku'|'batsu'）はonAnsweredの第3引数でそのまま渡し、
+  //   あとで△（あいまい）と✕（わからない）を区別できるようにする。
   const pickSelf = (kind) => {
     if (kind === 'maru') {
-      onAnswered?.(true, GRADES ? GRADES.easy : 5);
+      onAnswered?.(true, GRADES ? GRADES.easy : 5, kind);
       setRecorded(true);
       onNext?.();
       return;
     }
     // △・✕：復習対象に。型記録が有効なら型を尋ねてから次へ。
-    onAnswered?.(false, GRADES ? GRADES.again : 0);
+    onAnswered?.(false, GRADES ? GRADES.again : 0, kind);
     setRecorded(true);
     if (onMissType) setAskType(true);
     else onNext?.();
