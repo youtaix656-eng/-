@@ -179,6 +179,7 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 | エラーログ | `lib/errorLog.js`／`ErrorLogCard.jsx`（Settings内） | 端末内エラーの閲覧・消去 |
 | 3分の2バッファ術 | `lib/bufferSession.js`／`Session.jsx`／`Calendar.jsx` | 学習時間を基礎タスク:バッファ=2:1（設定で調整可）に自動分割。完了後はマネージャービュー（振り返り）でバッファ用途を自動判定、ハリオが声かけ。詳細は下記セクション |
 | 鍼灸過去問題の傾向と対策 | `lib/pastExamTrends.js`／`PastExamTrends.jsx`（Home内） | 収録済み過去問（round付き＝原問のみ）を実際に集計し、複数回にまたがる頻出ジャンル・頻出キーワードをデータドリブンに可視化。科目別の対策優先度、学習法・音声学習での活かし方、やるべきこと／やってはいけないことも提示。頻出テーマ・キーワードから一問一答へワンタップで絞り込める |
+| 機種変更・端末移行（2026-08-19拡張） | `MigrationGuide.jsx`（Home/Settings内導線）／`Settings.jsx`内 `SyncQR.jsx`・`SyncScan.jsx`・`FileBackupCard.jsx`・`CloudBackup.jsx`・`P2PTransfer.jsx` | QR受け渡し（`lib/transferCodec.js`で圧縮＋`lib/chunk.js`で自動分割・アニメーション連続表示、テキストのコピー＆ペーストでも可、`lib/sync.js`の`summarizeHistoryForTransfer`で古い履歴を要約し軽量化）／バックアップファイルの保存・復元・共有（Web Share API、非対応端末はダウンロードにフォールバック）／Googleドライブ連携（`lib/googleDrive.js`、任意・要OAuthクライアントID自己発行、appDataFolderのみ・プライバシー方針の明示的な例外）／WebRTC直接転送（`lib/webrtcTransfer.js`、公開STUNのみ・TURN無し、シグナリングはQR/テキストで手動交換）。`MigrationGuide.jsx`は`lib/migrationAdvice.js`の`recommendMigrationMethod`で現在のデータ量から最適な方法を自動提案 |
 | 全機能一覧 | `src/data/featureRegistry.js`＋`FeatureIndex.jsx` | 上表と同じ内容の単一の正。検索・カテゴリ絞り込み付き |
 
 上表は概要用のスナップショット。**正確な最新の全機能リストは `src/data/featureRegistry.js`**
@@ -259,6 +260,6 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 - 同じ種類の間違いが起きたら、このセクションに追記して残す。
 
 ## 検証
-- `npm run build` と `node --test`（現状196件）を通す。
+- `npm run build` と `node --test`（現状227件）を通す。
 - 可能なら Chromium（`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`）で
   プレビュー描画を確認（`npm run preview` → Playwrightでスクリーンショット）。
