@@ -75,6 +75,8 @@ export function useStore() {
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
   const [syncToast, setSyncToast] = useState(0); // 別端末からの進捗取り込み
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
+  const [cloudAutoSyncToast, setCloudAutoSyncToast] = useState(0); // クラウド自動同期で他端末の進捗を取り込んだ回数
+  const [cloudSyncStatus, setCloudSyncStatus] = useState(null); // { ok, at, pulled, error } | null（CloudBackup.jsxの状態表示用）
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
   useEffect(() => {
@@ -431,6 +433,74 @@ export function useStore() {
   useEffect(() => {
     if (persist.current) storage.saveSettings(settings);
   }, [settings]);
+
+  // ==== クラウド自動同期（Googleドライブ・任意、設定でONの場合のみ） ====
+  // アプリを開いた時と、進捗（srs/history/memos/links/examResults）が変わった数秒後に、
+  // 同意画面を出さずに（サイレント認証で）クラウドの最新版を確認し、
+  // lib/progressMerge.js のマージ規則で統合してから書き戻す。単純な「新しい方で上書き」
+  // だと片方の端末の進捗が消えることがあるため、種類ごとに適したマージを使う。
+  // googleDrive.js・progressMerge.js は実際に使う時だけ動的import（未使用ユーザーの
+  // バンドルを増やさないため）。サイレント認証・通信の失敗は静かに諦める（ユーザー操作を妨げない）。
+  const cloudSyncBusy = useRef(false);
+  useEffect(() => {
+    if (!loaded) return;
+    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
+    let alive = true;
+    const clientId = settings.googleDriveClientId;
+    const timer = setTimeout(async () => {
+      if (cloudSyncBusy.current) return;
+      cloudSyncBusy.current = true;
+      try {
+        const [gd, pm, meta] = await Promise.all([
+          import('./googleDrive.js'),
+          import('./progressMerge.js'),
+          storage.loadSyncMeta(),
+        ]);
+        const token = await gd.requestAccessToken(clientId, { silent: true });
+        if (!alive) return;
+        const remoteText = await gd.downloadBackup(token, gd.SYNC_FILENAME);
+        const localSnapshot = { srs, history, memos, links, examResults, settings };
+        let merged = localSnapshot;
+        let pulled = false;
+        if (remoteText) {
+          const remote = JSON.parse(remoteText);
+          merged = pm.mergeProgress(localSnapshot, remote.data || {}, {
+            localUpdatedAt: meta.updatedAt || 0,
+            remoteUpdatedAt: (remote.meta && remote.meta.updatedAt) || 0,
+          });
+          pulled =
+            Object.keys(merged.srs).length !== Object.keys(localSnapshot.srs).length ||
+            merged.history.length !== localSnapshot.history.length ||
+            Object.keys(merged.memos).length !== Object.keys(localSnapshot.memos).length ||
+            Object.keys(merged.links).length !== Object.keys(localSnapshot.links).length ||
+            merged.examResults.length !== localSnapshot.examResults.length;
+        }
+        const newUpdatedAt = Date.now();
+        await gd.uploadBackup(token, JSON.stringify({ meta: { updatedAt: newUpdatedAt }, data: merged }), gd.SYNC_FILENAME);
+        await storage.saveSyncMeta({ updatedAt: newUpdatedAt });
+        if (!alive) return;
+        if (pulled) {
+          setSrs(merged.srs);
+          setHistory(merged.history);
+          setMemos(merged.memos);
+          setLinks(merged.links);
+          setExamResultsState(merged.examResults);
+          setCloudAutoSyncToast((n) => n + 1);
+        }
+        if (JSON.stringify(merged.settings) !== JSON.stringify(localSnapshot.settings)) {
+          setSettings(merged.settings);
+        }
+        setCloudSyncStatus({ ok: true, at: newUpdatedAt, pulled });
+      } catch (e) {
+        setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message });
+      } finally {
+        cloudSyncBusy.current = false;
+      }
+    }, 5000); // 変更が落ち着くのを待ってから同期（連打での通信を避ける）。loaded直後の初回実行も兼ねる
+    return () => { alive = false; clearTimeout(timer); };
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults]);
+
+  const clearCloudAutoSyncToast = useCallback(() => setCloudAutoSyncToast(0), []);
 
   // 読み取れなかったページ・問題の控え（追加・削除）
   const addUnread = useCallback((entry) => {
@@ -808,6 +878,9 @@ export function useStore() {
     clearImportedToast,
     syncToast,
     clearSyncToast,
+    cloudAutoSyncToast,
+    clearCloudAutoSyncToast,
+    cloudSyncStatus,
     settings,
     reviewQuestions,
     dueReviewQuestions,

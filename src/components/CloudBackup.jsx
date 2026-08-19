@@ -11,7 +11,7 @@ import {
 // Googleドライブ（アプリ専用のappDataFolダー・ユーザーには見えない領域）への
 // クラウドバックアップ。他の機能と違いGoogleのサーバーと通信するため、
 // 既定ではオフ（クライアントID未設定の間は何も送信しない）で、注記も明示する。
-export default function CloudBackup({ settings, updateSettings, onToast, importBackup }) {
+export default function CloudBackup({ settings, updateSettings, onToast, importBackup, cloudSyncStatus }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -127,6 +127,31 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
             )}
             <button className="btn ghost sm" onClick={() => setOpen(false)}>閉じる</button>
           </div>
+
+          <div className="section-label">③ 自動同期（任意）</div>
+          <label className="switch-row" style={{ marginTop: 0 }}>
+            <input
+              type="checkbox"
+              checked={!!settings.googleDriveAutoSync}
+              onChange={(e) => updateSettings({ googleDriveAutoSync: e.target.checked })}
+            />
+            <span>
+              開くたびに自動で同期する
+              <small>
+                アプリを開いた時と、解答・メモ等が変わった数秒後に、確認画面を出さず裏で
+                Googleドライブと同期します（進捗・設定のみ、問題データは含みません）。片方の端末だけの
+                進捗が消えないよう、問題ごと・解答記録ごとにマージします。初回は上の「保存」または
+                「復元」を一度手動で行い、Googleへのログインを済ませてください（以後は自動）。
+              </small>
+            </span>
+          </label>
+          {settings.googleDriveAutoSync && cloudSyncStatus && (
+            <p className="inline-note" style={{ marginTop: 6 }}>
+              {cloudSyncStatus.ok
+                ? `最終自動同期：${new Date(cloudSyncStatus.at).toLocaleString('ja-JP')}${cloudSyncStatus.pulled ? '（他端末の進捗を反映しました）' : ''}`
+                : `自動同期を試みましたが失敗しました（${cloudSyncStatus.error || '不明なエラー'}）。次の機会に再試行します。`}
+            </p>
+          )}
         </div>
       )}
     </div>

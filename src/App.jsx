@@ -211,6 +211,14 @@ export default function App() {
     }
   }, [store.syncToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Googleドライブ自動同期で他端末の進捗を取り込んだら知らせる（画面遷移はしない＝作業の邪魔をしない）
+  useEffect(() => {
+    if (store.cloudAutoSyncToast > 0) {
+      showToast('他の端末の進捗をクラウドから反映しました');
+      store.clearCloudAutoSyncToast();
+    }
+  }, [store.cloudAutoSyncToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 毎日のリマインド通知（指定時刻以降にアプリを開いていたら1日1回）
   useEffect(() => {
     if (!store.loaded) return;

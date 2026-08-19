@@ -6,6 +6,7 @@ import {
   buildUploadUrl,
   buildDownloadUrl,
   BACKUP_FILENAME,
+  SYNC_FILENAME,
   DRIVE_SCOPE,
 } from '../src/lib/googleDrive.js';
 
@@ -45,4 +46,13 @@ test('buildDownloadUrl: alt=media でファイル本体を取得するURLを組�
 
 test('DRIVE_SCOPE は appdata スコープのみ（通常のDriveファイルへはアクセスしない）', () => {
   assert.equal(DRIVE_SCOPE, 'https://www.googleapis.com/auth/drive.appdata');
+});
+
+test('BACKUP_FILENAME と SYNC_FILENAME は別ファイル（手動バックアップと自動同期が競合しない）', () => {
+  assert.notEqual(BACKUP_FILENAME, SYNC_FILENAME);
+});
+
+test('buildSearchUrl: SYNC_FILENAMEでも正しく検索クエリを組み立てられる', () => {
+  const url = buildSearchUrl(SYNC_FILENAME);
+  assert.ok(url.includes(encodeURIComponent(`name='${SYNC_FILENAME}' and trashed=false`)));
 });

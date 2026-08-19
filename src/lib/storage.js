@@ -40,6 +40,7 @@ export const KEYS = {
   numberOverrides: 'shinkyu:numberOverrides', // 数値ファクトの上書き（毎年変わる数値の一括更新）
   bookmarks: 'shinkyu:bookmarks', // ブックマーク（後で見直す問題・questionId→保存時刻）
   migrated: 'shinkyu:migrated',
+  syncMeta: 'shinkyu:syncMeta', // クラウド自動同期用：進捗（srs/history/memos/links/examResults/settings）の最終更新時刻
 };
 
 const useIdb = isIdbSupported();
@@ -212,6 +213,11 @@ export const clearAudioProgress = () => remove(KEYS.audioProgress);
 // examResults = [{ id, at, count, correct, scorePct, passed, perSubject }]
 export const loadExamResults = () => read(KEYS.examResults, []);
 export const saveExamResults = (r) => write(KEYS.examResults, r);
+
+// ---- クラウド自動同期用メタ（進捗の最終更新時刻。lib/progressMerge.jsのマージ判定に使う） ----
+// syncMeta = { updatedAt }（ミリ秒epoch）
+export const loadSyncMeta = () => read(KEYS.syncMeta, { updatedAt: 0 });
+export const saveSyncMeta = (m) => write(KEYS.syncMeta, m);
 
 // ---- 直近の閲覧履歴（ホーム右上からスライドで確認） ----
 // activity = [{ id, at, view, title, genre, subject, keyword }]（新しい順）

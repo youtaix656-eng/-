@@ -13,6 +13,9 @@ const GIS_SRC = 'https://accounts.google.com/gsi/client';
 const DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files';
 const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files';
 export const BACKUP_FILENAME = 'shinkyu_backup.json';
+// 自動同期（進捗のみ・軽量）用。手動の「バックアップを保存」（問題データ込みの全体）とは
+// 別ファイルにして、形式の違うデータが同じファイルを奪い合わないようにする。
+export const SYNC_FILENAME = 'shinkyu_progress_sync.json';
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
 let gisLoadPromise = null;
@@ -39,7 +42,10 @@ export function hasSession() {
   return !!(cachedToken && cachedToken.expiresAt > Date.now());
 }
 
-export function requestAccessToken(clientId) {
+// silent: true の場合、同意画面などのUIを一切出さず、既にログイン・同意済みの場合だけ
+// 静かにトークンを取得する（自動同期用）。ダメなら例外を投げて終わる＝呼び出し側は
+// ユーザーに気づかせず諦めるのが正しい使い方（毎回ログイン画面を出すと迷惑になるため）。
+export function requestAccessToken(clientId, { silent = false } = {}) {
   return new Promise((resolve, reject) => {
     if (!clientId || !clientId.trim()) {
       reject(new Error('OAuthクライアントIDが未設定です。設定手順に沿って発行・入力してください'));
@@ -64,7 +70,7 @@ export function requestAccessToken(clientId) {
           },
           error_callback: (err) => reject(new Error(`Googleへのログインに失敗しました（${err?.type || '不明なエラー'}）`)),
         });
-        client.requestAccessToken();
+        client.requestAccessToken(silent ? { prompt: '' } : undefined);
       })
       .catch(reject);
   });
@@ -106,17 +112,19 @@ export function buildDownloadUrl(fileId) {
 
 // ===== 以下はfetchを伴う実処理 =====
 
-async function findBackupFileId(token) {
-  const res = await fetch(buildSearchUrl(), { headers: { Authorization: `Bearer ${token}` } });
+async function findFileId(token, filename) {
+  const res = await fetch(buildSearchUrl(filename), { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Drive内の検索に失敗しました（HTTP ${res.status}）`);
   const data = await res.json();
   return data.files && data.files[0] ? data.files[0].id : null;
 }
 
-// content: バックアップ本体のJSON文字列（storage.exportAll()の結果をJSON.stringifyしたもの）
-export async function uploadBackup(token, content) {
-  const existingId = await findBackupFileId(token);
-  const metadata = existingId ? { name: BACKUP_FILENAME } : { name: BACKUP_FILENAME, parents: ['appDataFolder'] };
+// content: 書き出すJSON文字列。filenameを分けることで、手動の全体バックアップ
+// （BACKUP_FILENAME）と自動同期の軽量ペイロード（SYNC_FILENAME）が同じファイルを
+// 奪い合わないようにしている。
+export async function uploadBackup(token, content, filename = BACKUP_FILENAME) {
+  const existingId = await findFileId(token, filename);
+  const metadata = existingId ? { name: filename } : { name: filename, parents: ['appDataFolder'] };
   const boundary = `shinkyu-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const body = buildMultipartBody(metadata, content, boundary);
   const res = await fetch(buildUploadUrl(existingId), {
@@ -128,9 +136,9 @@ export async function uploadBackup(token, content) {
   return res.json();
 }
 
-// 戻り値: バックアップ本体のJSON文字列。appDataFolderに保存が無ければ null
-export async function downloadBackup(token) {
-  const fileId = await findBackupFileId(token);
+// 戻り値: 書き出されたJSON文字列。appDataFolderに保存が無ければ null
+export async function downloadBackup(token, filename = BACKUP_FILENAME) {
+  const fileId = await findFileId(token, filename);
   if (!fileId) return null;
   const res = await fetch(buildDownloadUrl(fileId), { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Google Driveからの取得に失敗しました（HTTP ${res.status}）`);

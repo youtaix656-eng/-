@@ -229,7 +229,13 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
 
       {/* ===== クラウド連携（Googleドライブ・任意／プライバシー方針の例外） ===== */}
       <div className="section-label">クラウドバックアップ（Googleドライブ・任意）</div>
-      <CloudBackup settings={settings} updateSettings={updateSettings} onToast={onToast} importBackup={importBackup} />
+      <CloudBackup
+        settings={settings}
+        updateSettings={updateSettings}
+        onToast={onToast}
+        importBackup={importBackup}
+        cloudSyncStatus={store.cloudSyncStatus}
+      />
 
       {/* ===== 問題データのインポート ===== */}
       <div className="section-label">問題データのインポート</div>

@@ -80,7 +80,13 @@ export default function MigrationGuide({ store, onToast }) {
       />
 
       <div className="section-label">③ Googleドライブ連携（任意）</div>
-      <CloudBackup settings={settings} updateSettings={updateSettings} onToast={onToast} importBackup={importBackup} />
+      <CloudBackup
+        settings={settings}
+        updateSettings={updateSettings}
+        onToast={onToast}
+        importBackup={importBackup}
+        cloudSyncStatus={store.cloudSyncStatus}
+      />
 
       <div className="section-label">④ WebRTCで直接転送{recommendation.id === 'webrtc' ? '（おすすめ）' : ''}</div>
       <p className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
