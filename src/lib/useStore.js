@@ -32,7 +32,7 @@ const subjectDataModules = () =>
     import('../data/integratedQuestions.js'),
   ]);
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
-import { DEFAULT_MNEMONICS, DEFAULT_MNEMONICS_VERSION } from '../data/defaultMnemonics.js';
+import { DEFAULT_MNEMONICS, DEFAULT_MNEMONICS_VERSION, LEGACY_MNEMONIC_KEYS_V1 } from '../data/defaultMnemonics.js';
 
 function newNoteId() {
   return `sn-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
@@ -339,14 +339,24 @@ export function useStore() {
       let baseKwMeta = km || {};
       if ((cfg.mnemonicsVersion || 0) < DEFAULT_MNEMONICS_VERSION) {
         const merged = { ...baseKwMeta };
-        let added = false;
+        let changed = false;
+        // v1→v2：経穴横並びを1本の長文からセンテンスごとの個別登録に作り直したため、
+        // 旧キー（長文版）は削除してから新しい個別キーを追加する。
+        if ((cfg.mnemonicsVersion || 0) < 2) {
+          for (const oldKey of LEGACY_MNEMONIC_KEYS_V1) {
+            if (merged[oldKey]) {
+              delete merged[oldKey];
+              changed = true;
+            }
+          }
+        }
         for (const d of DEFAULT_MNEMONICS) {
           if (!merged[d.keyword] || !merged[d.keyword].mnemonic) {
             merged[d.keyword] = { mnemonic: d.mnemonic, reading: d.reading, ...(d.subject ? { subject: d.subject } : {}) };
-            added = true;
+            changed = true;
           }
         }
-        if (added) {
+        if (changed) {
           baseKwMeta = merged;
           storage.saveKwMeta(baseKwMeta);
         }
