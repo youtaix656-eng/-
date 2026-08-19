@@ -12,6 +12,7 @@ import {
 import SyncQR from './SyncQR.jsx';
 import SyncScan from './SyncScan.jsx';
 import CloudBackup from './CloudBackup.jsx';
+import P2PTransfer from './P2PTransfer.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
 import SnapshotsCard from './SnapshotsCard.jsx';
@@ -260,6 +261,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       <div className="section-label">QRで別端末へ受け渡し</div>
       <SyncQR store={store} onToast={onToast} />
       <SyncScan onToast={onToast} />
+      <P2PTransfer store={store} onToast={onToast} />
 
       {/* ===== ポモドーロタイマー ===== */}
       <div className="section-label">ポモドーロタイマー（画面上部）</div>

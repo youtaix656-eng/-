@@ -2,39 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { qrMatrix } from '../lib/qr.js';
 import { buildSyncPayload, encodeSync, syncUrl, SYNC_TTL_MS, HISTORY_SUMMARY_CUTOFF_MS } from '../lib/sync.js';
 import { splitIntoChunks } from '../lib/chunk.js';
+import QRImage from './QRImage.jsx';
 
 // 1枚のQRに載せるチャンクデータの目安文字数（URLのprefix・チャンクヘッダぶんの余裕を見た値）。
 // QR誤り訂正レベルLの実用上限（約2,953バイト）に対して十分小さく、スキャンもしやすい。
 const CHUNK_DATA_LEN = 900;
-
-// QRのモジュール配列を SVG で描画
-function QRImage({ matrix, size = 260, dim = false }) {
-  if (!matrix) return null;
-  const n = matrix.length;
-  const quiet = 2;
-  const total = n + quiet * 2;
-  const cell = size / total;
-  const rects = [];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if (matrix[r][c]) {
-        rects.push(
-          <rect key={`${r}-${c}`} x={(c + quiet) * cell} y={(r + quiet) * cell} width={cell} height={cell} fill="#000" />
-        );
-      }
-    }
-  }
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      style={{ background: '#fff', borderRadius: 8, opacity: dim ? 0.18 : 1, transition: 'opacity .2s' }}
-    >
-      {rects}
-    </svg>
-  );
-}
 
 function fmtRemain(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));

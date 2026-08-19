@@ -69,6 +69,7 @@ const featureRegistry = [
   { id: 'syncqr', title: 'QRで端末移行', icon: '📱', category: '設定・その他', view: 'settings', sub: true, desc: '進捗・設定をQR/URLで別端末へ受け渡し。大きい時は圧縮＋自動でQRを複数枚に分割して連続表示（テキストのコピー＆ペーストでも可）、履歴の要約による軽量化オプションあり（設定画面内）。', tags: ['QR', '機種変更', '移行'] },
   { id: 'sharebackup', title: 'バックアップの共有', icon: '📤', category: '設定・その他', view: 'settings', sub: true, desc: 'バックアップファイルをWeb Share API対応端末でAirDrop/LINE/Google Drive等の共有シートへ直接渡す（設定画面内）。', tags: ['共有', '機種変更'] },
   { id: 'clouddrive', title: 'Googleドライブ連携', icon: '☁️', category: '設定・その他', view: 'settings', sub: true, desc: '（任意・要OAuthクライアントID自己発行）Googleドライブのアプリ専用領域へバックアップを保存・復元。他機能と異なりGoogleのサーバーと通信する明示的な例外（設定画面内）。', tags: ['クラウド', 'Googleドライブ', '機種変更'] },
+  { id: 'p2ptransfer', title: 'WebRTCで直接転送', icon: '📶', category: '設定・その他', view: 'settings', sub: true, desc: 'サーバーを経由せず端末間を直接つなぎ、容量制限なくバックアップを転送。接続の合図（オファー/アンサー）だけQR/テキストで手動交換（設定画面内）。TURN未使用のため一部ネットワークでは接続できないことがある。', tags: ['WebRTC', '機種変更', 'P2P'] },
 ];
 
 export default featureRegistry;

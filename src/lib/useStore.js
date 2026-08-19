@@ -718,7 +718,7 @@ export function useStore() {
   // バックアップから全復元し、state に反映
   const importBackup = useCallback(async (data) => {
     await storage.importAll(data);
-    const [q, s, h, m, lk, sch, vn, ec, sn, km, cfg] = await Promise.all([
+    const [q, s, h, m, lk, sch, vn, ec, sn, km, ud, cfg] = await Promise.all([
       storage.loadQuestions(),
       storage.loadSrs(),
       storage.loadHistory(),
@@ -729,6 +729,7 @@ export function useStore() {
       storage.loadExamContent(),
       storage.loadSelfNotes(),
       storage.loadKwMeta(),
+      storage.loadUserDict(),
       storage.loadSettings(),
     ]);
     setQuestions(q || sampleQuestions);
