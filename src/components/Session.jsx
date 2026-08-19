@@ -6,6 +6,7 @@ import { subjectMatches, SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { effectiveTags } from '../lib/query.js';
 import { COMPARISONS } from '../data/mindmapData.js';
+import { forgettingRisk } from '../lib/forgetting.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -59,12 +60,26 @@ function buildNewOnlyOrder(pool, target, srs) {
   const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
   return spaceById(shuffle(newPool).map((q) => q.id).slice(0, target));
 }
+// 忘却リスクのしきい値・「念のため確認」の混入上限（InsightsSection.jsx の忘却予測と同じしきい値）。
+const FORGETTING_THRESHOLD = 0.4;
+const SAFETY_CHECK_MIN = 3;
+const SAFETY_CHECK_RATIO = 0.15;
+
 // 復習対象プール：復習期限が来ている問題を優先し、無ければ復習対象全体にフォールバック。
 //   lib/useStore.js の dueReviewQuestions と同じ優先順位に揃える（画面間の食い違いを防ぐ）。
+//   加えて、一度も間違えていない（＝isInReviewの対象外）が保持率が下がってきた問題を
+//   「念のため確認」として少数混ぜる。自信満々の○だけで一度も復習に出ないまま忘れるのを防ぐため。
 function reviewPoolFor(pool, srs) {
   const inReview = pool.filter((q) => isInReview(srs[q.id]));
   const due = inReview.filter((q) => isDue(srs[q.id]));
-  return due.length > 0 ? due : inReview;
+  const base = due.length > 0 ? due : inReview;
+  const inReviewIds = new Set(inReview.map((q) => q.id));
+  const atRisk = forgettingRisk(pool, srs, { threshold: FORGETTING_THRESHOLD })
+    .map((r) => r.question)
+    .filter((q) => !inReviewIds.has(q.id));
+  if (atRisk.length === 0) return base;
+  const cap = base.length > 0 ? Math.max(SAFETY_CHECK_MIN, Math.round(base.length * SAFETY_CHECK_RATIO)) : Math.min(atRisk.length, 20);
+  return [...base, ...atRisk.slice(0, cap)];
 }
 // 「すべて復習」用：復習対象プールだけを出題順にする（繰り返さない・足りなければそこで終了）。
 function buildReviewOnlyOrder(pool, target, srs) {
@@ -100,6 +115,15 @@ function buildMixedNoRepeatOrder(pool, target, newRatio, srs) {
   const takeNew = shuffle(newPool).map((q) => q.id).slice(0, newCount);
   const takeReview = shuffle(reviewPool).map((q) => q.id).slice(0, reviewCount);
   return spaceById(shuffle([...takeNew, ...takeReview]));
+}
+
+// 「今日のおすすめ」：復習の溜まり具合から新規◯割を自動で決める（迷ったときの初期値提案）。
+function recommendNewPct(newRemaining, reviewRemaining) {
+  if (reviewRemaining === 0) return { pct: 100, reason: '復習対象が無いので、すべて新規にしました。' };
+  if (newRemaining === 0) return { pct: 0, reason: '新規問題が無いので、すべて復習にしました。' };
+  if (reviewRemaining >= 30) return { pct: 30, reason: `復習対象が${reviewRemaining}問溜まっているので、復習多めにしました。` };
+  if (reviewRemaining >= 10) return { pct: 50, reason: `復習対象が${reviewRemaining}問あるので、半々にしました。` };
+  return { pct: 70, reason: `復習対象は${reviewRemaining}問だけなので、新規多めにしました。` };
 }
 
 // 誤答・あいまい（△✕）の問題群から、弱点を文章と関連対比で示す材料を作る。
@@ -363,7 +387,20 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
             <span>⚡ 高速回転モード（問題→3秒想起→答え。サクサク周回）</span>
           </label>
 
-          <div className="section-label">新規と復習の割合</div>
+          <div className="section-label">
+            新規と復習の割合
+            <button
+              className="btn ghost sm"
+              style={{ float: 'right' }}
+              onClick={() => {
+                const rec = recommendNewPct(newRemaining, reviewRemaining);
+                setNewPct(rec.pct);
+                onToast?.(rec.reason);
+              }}
+            >
+              🎯 今日のおすすめ
+            </button>
+          </div>
           <div className="chip-row">
             {[
               { p: 100, l: 'すべて新規' },
@@ -422,6 +459,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           ) : newPct <= 0 ? (
             <p className="inline-note" style={{ marginTop: 10 }}>
               「すべて復習」では残り復習の{reviewRemaining}問だけを出題します（同じ問題は繰り返しません）。
+              一度も間違えていなくても保持率が下がってきた問題は「念のため確認」として少し混ざります。
             </p>
           ) : newRemaining === 0 && reviewRemaining === 0 ? (
             <p className="inline-note" style={{ marginTop: 10, color: 'var(--warn, #e0a800)' }}>
