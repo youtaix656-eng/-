@@ -4,7 +4,7 @@ import { useAudioEngine } from '../lib/audioEngine.js';
 // どの画面からでも表示される音声ミニプレーヤー。
 // 音声学習で再生を始めた後に他の画面へ移っても、ここから停止・スキップできる。
 // （音声学習画面そのものにいる時は、フルプレーヤーがあるので非表示）
-export default function MiniPlayer({ hidden, onOpen }) {
+export default function MiniPlayer({ hidden, onOpen, lifted }) {
   const snap = useAudioEngine();
   if (hidden) return null;
   // 再生を始めた後だけ表示（読み込んだだけの停止状態では出さない）。
@@ -16,7 +16,7 @@ export default function MiniPlayer({ hidden, onOpen }) {
   const sub = subOf(d);
 
   return (
-    <div className="mini-player" role="region" aria-label="音声ミニプレーヤー">
+    <div className={`mini-player${lifted ? ' lifted' : ''}`} role="region" aria-label="音声ミニプレーヤー">
       <button className="mini-open" onClick={onOpen} aria-label="音声学習を開く">
         <span className={`mini-eq ${snap.playing ? 'on' : ''}`}><i /><i /><i /></span>
         <span className="mini-texts">

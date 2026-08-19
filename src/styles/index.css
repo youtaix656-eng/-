@@ -20,6 +20,7 @@
   --radius: 14px;
   --radius-sm: 9px;
   --nav-h: 62px;
+  --roadmap-bar-h: 42px;
   --max-w: 640px;
   /* 一部の新機能UIが参照するフォールバック変数も黒テーマ側に固定 */
   --card: #161616;
@@ -75,7 +76,7 @@ button {
   margin: 0 auto;
   min-height: 100vh;
   background: var(--bg);
-  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--nav-h) + var(--roadmap-bar-h) + env(safe-area-inset-bottom, 0px));
   position: relative;
 }
 
@@ -346,6 +347,30 @@ button {
   color: var(--correct);
 }
 
+/* ---- 合格ロードマップ（常設バー、下部ナビの直上） ---- */
+.roadmap-bar {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: var(--nav-h);
+  height: var(--roadmap-bar-h);
+  max-width: var(--max-w);
+  margin: 0 auto;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background: linear-gradient(90deg, var(--navy), var(--navy-light));
+  border-top: 1px solid var(--border);
+  border: none;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+.roadmap-bar-ico { font-size: 17px; }
+.roadmap-bar-label { flex: 1; text-align: left; font-size: 13.5px; }
+.roadmap-bar-cta { font-size: 12px; font-weight: 700; opacity: 0.9; }
+
 /* ---- ボトムナビ ---- */
 .bottom-nav {
   position: fixed;
@@ -371,9 +396,9 @@ button {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  color: var(--text-mute);
-  font-size: 10.5px;
-  font-weight: 600;
+  color: var(--text-sub);
+  font-size: 11px;
+  font-weight: 700;
   padding: 6px 2px;
   transition: color 0.15s;
 }
@@ -870,16 +895,16 @@ textarea {
 }
 .menu-item .title {
   display: block;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   color: #ffffff;
 }
 .menu-item .desc {
   display: block;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--text-sub);
   margin-top: 3px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .menu-item .ico {
   display: block;
@@ -2812,6 +2837,10 @@ code.block {
   border-top: 1px solid var(--border);
   box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.28);
 }
+/* 合格ロードマップの常設バーが出ている画面では、その上に重ならないよう1段上げる */
+.mini-player.lifted {
+  bottom: calc(var(--nav-h) + var(--roadmap-bar-h) + env(safe-area-inset-bottom, 0px));
+}
 .mini-open {
   flex: 1; min-width: 0;
   display: flex; align-items: center; gap: 10px;
@@ -3138,6 +3167,13 @@ code.block {
 .resume-top-label {
   font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 8px;
 }
+.resume-top-hint { font-weight: 600; color: var(--text-mute); margin-left: 4px; }
+.resume-delete-confirm {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px;
+  margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--text);
+}
+.resume-delete-confirm:last-child { margin-bottom: 0; }
 .resume-top-item {
   display: block; width: 100%; text-align: left; cursor: pointer;
   background: var(--surface-2); border: none; border-radius: var(--radius-sm);

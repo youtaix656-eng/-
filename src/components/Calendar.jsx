@@ -33,7 +33,7 @@ function monthGrid(year, month) {
   return cells;
 }
 
-export default function Calendar({ store, onToast }) {
+export default function Calendar({ store, onToast, onNavigate }) {
   const { schedule, setSchedule } = store;
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -181,6 +181,11 @@ export default function Calendar({ store, onToast }) {
               <i style={{ background: p.color }} />フェーズ{p.no}・{p.label}
             </span>
           ))}
+          {onNavigate && (
+            <button className="btn ghost sm" onClick={() => onNavigate('roadmap')}>
+              全期間のロードマップを見る →
+            </button>
+          )}
         </div>
       )}
 

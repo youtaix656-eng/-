@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { overallStats, studyStreak } from '../lib/stats.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
-import { loadQuizProgress } from '../lib/storage.js';
+import { loadQuizProgress, clearQuizProgress } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import {
   detectBrokenYesterday,
@@ -12,6 +12,35 @@ import {
   dismissStreakBreak,
 } from '../lib/streakBreak.js';
 import Mascot from './Mascot.jsx';
+
+const LONG_PRESS_MS = 550;
+
+// 長押しで削除確認、タップで通常動作。ボタンに ...longPress(onLongPress, onTap) を展開して使う。
+function useLongPress(onLongPress, onTap) {
+  const timerRef = useRef(null);
+  const firedRef = useRef(false);
+  const start = () => {
+    firedRef.current = false;
+    timerRef.current = setTimeout(() => {
+      firedRef.current = true;
+      onLongPress();
+    }, LONG_PRESS_MS);
+  };
+  const clear = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+  };
+  return {
+    onPointerDown: start,
+    onPointerUp: clear,
+    onPointerLeave: clear,
+    onPointerCancel: clear,
+    onContextMenu: (e) => e.preventDefault(),
+    onClick: () => {
+      if (firedRef.current) { firedRef.current = false; return; }
+      onTap();
+    },
+  };
+}
 
 // ホーム画面：学習状況の概要と各モードへの入り口
 export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall }) {
@@ -40,6 +69,23 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   }, [history]);
 
   const hasResume = sessionActive || quizResume;
+
+  // 「前回の続きから」長押しで削除確認（誤タップでの消去を防ぐため、通常タップは今まで通り再開）
+  const [confirmDelete, setConfirmDelete] = useState(null); // 'session' | 'quiz' | null
+  const deleteSessionResume = () => {
+    store.clearSession();
+    setConfirmDelete(null);
+  };
+  const deleteQuizResume = () => {
+    clearQuizProgress();
+    setQuizResume(null);
+    setConfirmDelete(null);
+  };
+  const sessionLongPress = useLongPress(() => setConfirmDelete('session'), () => onNavigate('session'));
+  const quizLongPress = useLongPress(
+    () => setConfirmDelete('quiz'),
+    () => (onResumeQuiz ? onResumeQuiz() : onNavigate('quiz'))
+  );
 
   // 明日の最初の1タスク（学習セッション完了画面で決めたもの）をホームの一番上に固定表示
   const [nextTask, setNextTask] = useState(null);
@@ -112,29 +158,49 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
         </div>
       )}
 
-      {/* 前回の続きから（画面上部） */}
+      {/* 前回の続きから（画面上部）。長押しで削除確認、タップで再開。 */}
       {hasResume && (
         <div className="resume-top">
-          <div className="resume-top-label">▶ 前回の続きから</div>
+          <div className="resume-top-label">▶ 前回の続きから<span className="resume-top-hint">（長押しで削除）</span></div>
           {sessionActive && (
-            <button className="resume-top-item" onClick={() => onNavigate('session')}>
-              <div className="rt-main">
-                <span className="rt-ico">📚</span>
-                <span className="rt-title">学習（{session.subject === 'all' ? '全科目' : session.subject}）</span>
-                <span className="rt-frac">{session.pos}/{session.target}問</span>
+            confirmDelete === 'session' ? (
+              <div className="resume-top-item resume-delete-confirm">
+                <span>この「続きから」を削除しますか？</span>
+                <div className="btn-row">
+                  <button className="btn danger sm" onClick={deleteSessionResume}>はい</button>
+                  <button className="btn ghost sm" onClick={() => setConfirmDelete(null)}>いいえ</button>
+                </div>
               </div>
-              <div className="rt-bar"><span style={{ width: `${(session.pos / session.target) * 100}%` }} /></div>
-            </button>
+            ) : (
+              <button className="resume-top-item" {...sessionLongPress}>
+                <div className="rt-main">
+                  <span className="rt-ico">📚</span>
+                  <span className="rt-title">学習（{session.subject === 'all' ? '全科目' : session.subject}）</span>
+                  <span className="rt-frac">{session.pos}/{session.target}問</span>
+                </div>
+                <div className="rt-bar"><span style={{ width: `${(session.pos / session.target) * 100}%` }} /></div>
+              </button>
+            )
           )}
           {quizResume && (
-            <button className="resume-top-item" onClick={() => (onResumeQuiz ? onResumeQuiz() : onNavigate('quiz'))}>
-              <div className="rt-main">
-                <span className="rt-ico">✏️</span>
-                <span className="rt-title">一問一答（{quizResume.subject === 'all' ? '全科目' : quizResume.subject}）</span>
-                <span className="rt-frac">{quizResume.idx + 1}/{quizResume.len}問</span>
+            confirmDelete === 'quiz' ? (
+              <div className="resume-top-item resume-delete-confirm">
+                <span>この「続きから」を削除しますか？</span>
+                <div className="btn-row">
+                  <button className="btn danger sm" onClick={deleteQuizResume}>はい</button>
+                  <button className="btn ghost sm" onClick={() => setConfirmDelete(null)}>いいえ</button>
+                </div>
               </div>
-              <div className="rt-bar"><span style={{ width: `${((quizResume.idx + 1) / quizResume.len) * 100}%` }} /></div>
-            </button>
+            ) : (
+              <button className="resume-top-item" {...quizLongPress}>
+                <div className="rt-main">
+                  <span className="rt-ico">✏️</span>
+                  <span className="rt-title">一問一答（{quizResume.subject === 'all' ? '全科目' : quizResume.subject}）</span>
+                  <span className="rt-frac">{quizResume.idx + 1}/{quizResume.len}問</span>
+                </div>
+                <div className="rt-bar"><span style={{ width: `${((quizResume.idx + 1) / quizResume.len) * 100}%` }} /></div>
+              </button>
+            )
           )}
         </div>
       )}

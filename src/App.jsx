@@ -6,6 +6,7 @@ import { haripanReminder } from './data/haripan.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
 // 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
 import Home from './components/Home.jsx';
+import CalendarScreen from './components/Calendar.jsx';
 import Quiz from './components/Quiz.jsx';
 import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
@@ -15,7 +16,7 @@ import AuthGate from './components/AuthGate.jsx';
 import Pomodoro from './components/Pomodoro.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 // それ以外の画面は初回訪問時だけ読み込む（コード分割）。1.6MBの単一バンドルを分割し、
-// ホーム/一問一答/復習/音声/模試だけで開いた時の初期表示を軽くする。
+// ホーム/カレンダー/一問一答/復習/音声/模試だけで開いた時の初期表示を軽くする。
 const Session = lazy(() => import('./components/Session.jsx'));
 const ChoiceQuiz = lazy(() => import('./components/ChoiceQuiz.jsx'));
 const MnemonicNotebook = lazy(() => import('./components/MnemonicNotebook.jsx'));
@@ -32,7 +33,6 @@ const Builder = lazy(() => import('./components/Builder.jsx'));
 const Import = lazy(() => import('./components/Import.jsx'));
 const Parse = lazy(() => import('./components/Parse.jsx'));
 const NoteGen = lazy(() => import('./components/NoteGen.jsx'));
-const Calendar = lazy(() => import('./components/Calendar.jsx'));
 const Venues = lazy(() => import('./components/Venues.jsx'));
 const ExamContent = lazy(() => import('./components/ExamContent.jsx'));
 const Experiences = lazy(() => import('./components/Experiences.jsx'));
@@ -61,6 +61,7 @@ const UNLOCK_KEY = 'shinkyu:unlocked';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
+  { id: 'calendar', label: 'カレンダー', ico: '🗓️' },
   { id: 'quiz', label: '一問一答', ico: '✏️' },
   { id: 'review', label: '復習', ico: '🔁' },
   { id: 'audio', label: '音声', ico: '🎧' },
@@ -495,7 +496,7 @@ export default function App() {
       case 'notegen':
         return <NoteGen store={store} onToast={showToast} onDone={() => setView('import')} />;
       case 'calendar':
-        return <Calendar store={store} onToast={showToast} />;
+        return <CalendarScreen store={store} onToast={showToast} onNavigate={setView} />;
       case 'venues':
         return <Venues store={store} onToast={showToast} />;
       case 'examcontent':
@@ -609,7 +610,16 @@ export default function App() {
       {toast && <div className="toast">{toast}</div>}
 
       {/* 音声ミニプレーヤー：他の画面へ移っても再生を続けられる（音声画面では非表示） */}
-      <MiniPlayer hidden={view === 'audio'} onOpen={() => setView('audio')} />
+      <MiniPlayer hidden={view === 'audio'} onOpen={() => setView('audio')} lifted={view !== 'roadmap'} />
+
+      {/* 合格ロードマップ：どの画面からでも開ける常設バー（ロードマップ画面自体では非表示） */}
+      {view !== 'roadmap' && (
+        <button className="roadmap-bar" onClick={() => setView('roadmap')}>
+          <span className="roadmap-bar-ico">🗺️</span>
+          <span className="roadmap-bar-label">合格ロードマップ</span>
+          <span className="roadmap-bar-cta">開く ›</span>
+        </button>
+      )}
 
       <nav className="bottom-nav">
         {NAV.map((n) => (
