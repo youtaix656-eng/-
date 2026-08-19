@@ -112,18 +112,20 @@ export default function SyncQR({ store, onToast }) {
     return () => clearInterval(iv);
   }, [multi, playing, expired, building, chunks, intervalMs]);
 
+  // カメラが使えない環境向け：現在表示中の枠（QRが出せない場合も含む）をテキストとしてコピーする。
+  // 複数枚に分かれている場合は、この操作を枚数ぶん繰り返して相手に1つずつ貼り付けてもらう。
   const copyUrl = async () => {
     if (expired) {
       onToast?.('有効期限切れです。再発行してください');
       return;
     }
-    if (multi) {
-      onToast?.('複数QRに分割されているためコピーはできません。カメラでの読み取りをご利用ください');
-      return;
-    }
     try {
       await navigator.clipboard.writeText(currentUrl);
-      onToast?.('受け渡しURLをコピーしました（5分間だけ有効）');
+      onToast?.(
+        multi
+          ? `（${frameIdx + 1}/${chunks.length}枚目）をコピーしました。相手の端末に貼り付けて「取り込む」→ 次の枚も同じ手順で`
+          : '受け渡しURLをコピーしました（5分間だけ有効）'
+      );
     } catch (e) {
       onToast?.('コピーできませんでした');
     }
@@ -138,6 +140,8 @@ export default function SyncQR({ store, onToast }) {
         <br />
         🔒 <strong>安全のため、発行から5分を過ぎると使えなくなります</strong>（過ぎたら再発行してください）。
         <br />※ 問題データ本体や画像・音楽は含みません（容量のため）。
+        <br />※ カメラが使えない環境では、QRの代わりに「受け渡しURLをコピー」でテキストとして送り、
+        相手側の「URLを貼り付けて取り込む」に貼り付ける方法も使えます（複数枚の場合は1枚ずつ）。
       </p>
       {!open ? (
         <button className="btn primary" onClick={issue}>📱 QRコード／URLを発行（5分間有効）</button>
@@ -146,10 +150,25 @@ export default function SyncQR({ store, onToast }) {
           {building ? (
             <p className="inline-note">圧縮・準備中…</p>
           ) : tooBig ? (
-            <div className="auth-error" style={{ marginBottom: 10 }}>
-              データが大きすぎてQRでの受け渡しができませんでした。
-              {withHistory ? '下の「解答履歴を含めない」をオフにするか、' : ''}
-              「共有」ボタンやバックアップファイルでの移行をご利用ください。
+            <div style={{ marginBottom: 10 }}>
+              <div className="auth-error" style={{ marginBottom: 10 }}>
+                データが大きすぎてQRとしては表示できませんでした。
+                {withHistory ? '下の「解答履歴を含めない」をオフにするか、' : ''}
+                下の「コピー」でテキストとして1枚ずつ送るか、「共有」ボタンやバックアップファイルでの移行をご利用ください。
+              </div>
+              {!expired && chunks && chunks.length > 0 && (
+                <div style={{ textAlign: 'center' }}>
+                  <p className="inline-note">
+                    <strong>{chunks.length}個のテキストブロックに分割中</strong>（{frameIdx + 1}/{chunks.length}個目）
+                  </p>
+                  <div className="progress"><span style={{ width: `${((frameIdx + 1) / chunks.length) * 100}%` }} /></div>
+                  <div className="btn-row" style={{ marginTop: 8, justifyContent: 'center' }}>
+                    <button className="btn ghost sm" onClick={() => setFrameIdx((i) => (i - 1 + chunks.length) % chunks.length)}>◀ 前へ</button>
+                    <button className="btn primary sm" onClick={copyUrl}>📋 この枠をコピー</button>
+                    <button className="btn ghost sm" onClick={() => setFrameIdx((i) => (i + 1) % chunks.length)}>次へ ▶</button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ textAlign: 'center', marginBottom: 10, position: 'relative' }}>
@@ -200,6 +219,10 @@ export default function SyncQR({ store, onToast }) {
                       </button>
                     ))}
                   </div>
+                  <p className="inline-note" style={{ marginTop: 6 }}>
+                    カメラが使えない場合は、下の「受け渡しURLをコピー」で今表示中の枚をテキストとしてコピーし、
+                    相手に貼り付けてもらう方法も使えます（枚数ぶん繰り返します）。
+                  </p>
                 </div>
               )}
             </div>
@@ -224,7 +247,11 @@ export default function SyncQR({ store, onToast }) {
             </label>
           )}
           <div className="btn-row" style={{ marginTop: 10 }}>
-            {!multi && !tooBig && !expired && <button className="btn" onClick={copyUrl}>受け渡しURLをコピー</button>}
+            {!tooBig && !expired && (
+              <button className="btn" onClick={copyUrl}>
+                受け渡しURLをコピー{multi ? `（${frameIdx + 1}/${chunks.length}枚目）` : ''}
+              </button>
+            )}
             <button className="btn" onClick={issue}>🔄 再発行</button>
             <button className="btn ghost" onClick={() => setOpen(false)}>閉じる</button>
           </div>
