@@ -96,13 +96,49 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     URL.revokeObjectURL(url);
   };
 
-  // 全データ（問題＋進捗＋メモ＋設定）のバックアップ
-  const backupAll = async () => {
+  // バックアップの中身（JSON文字列とファイル名）を作る（保存・共有で共用）
+  const buildBackupFile = async () => {
     const data = await exportAll();
     const stamp = new Date().toISOString().slice(0, 10);
-    download(JSON.stringify(data, null, 2), `shinkyu_backup_${stamp}.json`, 'application/json');
+    const filename = `shinkyu_backup_${stamp}.json`;
+    const content = JSON.stringify(data, null, 2);
+    return { content, filename };
+  };
+
+  // 全データ（問題＋進捗＋メモ＋設定）のバックアップ
+  const backupAll = async () => {
+    const { content, filename } = await buildBackupFile();
+    download(content, filename, 'application/json');
     markBackedUp();
     onToast('バックアップを書き出しました');
+  };
+
+  // 対応端末では共有シート（AirDrop/LINE/Google Drive等）へ直接渡す。
+  // 非対応（Web Share APIやファイル共有に未対応のブラウザ）は通常のダウンロードにフォールバック。
+  const hasShareApi = typeof navigator !== 'undefined' && !!navigator.share;
+  const shareBackup = async () => {
+    const { content, filename } = await buildBackupFile();
+    if (hasShareApi) {
+      const file = new File([content], filename, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: '鍼灸国試 対策アプリ バックアップ',
+            text: '学習データのバックアップです。別の端末の「復元」で読み込めます。',
+          });
+          markBackedUp();
+          onToast('共有しました');
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // ユーザーが共有をキャンセル
+          // それ以外の失敗はダウンロードにフォールバック
+        }
+      }
+    }
+    download(content, filename, 'application/json');
+    markBackedUp();
+    onToast('この端末は共有に未対応のため、ダウンロードしました');
   };
 
   // バックアップからの復元
@@ -251,11 +287,17 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           問題・学習進捗・メモ・設定をまとめて1つのファイルに書き出せます。
           別の端末で「復元」すれば、そのまま学習を引き継げます（クラウド保存やUSB、
           Google Drive 等のファイル共有経由で持ち運べます）。
+          {hasShareApi && '「共有」を使うとAirDropやLINEなどの共有シートへ直接渡せます。'}
         </p>
         <div className="btn-row">
           <button className="btn primary" onClick={backupAll}>
             💾 バックアップを保存
           </button>
+          {hasShareApi && (
+            <button className="btn" onClick={shareBackup}>
+              📤 共有
+            </button>
+          )}
           <button className="btn" onClick={() => backupRef.current?.click()}>
             復元（読み込み）
           </button>
