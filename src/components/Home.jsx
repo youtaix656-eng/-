@@ -396,6 +396,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">収録済み過去問（回・タグ・ジャンル）を実際に集計した頻出テーマ・頻出キーワード。学習法への活かし方も。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('migrationguide')}>
+          <span className="ico">🧭</span>
+          <span className="title">機種変更ガイド</span>
+          <span className="desc">新しい端末への引き継ぎ方法（QR・共有・Googleドライブ・WebRTC）をデータ量に応じて自動でおすすめ。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('scope')}>
           <span className="ico">🗂️</span>
           <span className="title">試験範囲</span>

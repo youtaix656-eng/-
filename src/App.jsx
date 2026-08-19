@@ -46,6 +46,7 @@ const NumberFacts = lazy(() => import('./components/NumberFacts.jsx'));
 const CoverageMap = lazy(() => import('./components/CoverageMap.jsx'));
 const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph.jsx'));
 const Flashcards = lazy(() => import('./components/Flashcards.jsx'));
+const MigrationGuide = lazy(() => import('./components/MigrationGuide.jsx'));
 
 function ViewLoading() {
   return (
@@ -83,6 +84,7 @@ const VIEW_TITLES = {
   dashboard: '弱点分析',
   coverage: '網羅マップ',
   pasttrends: '鍼灸過去問題の傾向と対策',
+  migrationguide: '機種変更ガイド',
   kgraph: '知識グラフ',
   analytics: '分析・攻略率・合格診断',
   roadmap: '合格するためのロードマップ',
@@ -461,6 +463,8 @@ export default function App() {
         return <CoverageMap store={store} onStartSubject={startSubjectQuiz} />;
       case 'pasttrends':
         return <PastExamTrends store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
+      case 'migrationguide':
+        return <MigrationGuide store={store} onToast={showToast} />;
       case 'kgraph':
         return <KnowledgeGraph store={store} onOpenKeyword={openKeyword} onStudyConcepts={(concepts) => {
           const set = new Set(concepts);
@@ -535,6 +539,7 @@ export default function App() {
             onOpenOcr={openOcr}
             importText={importText}
             onConsumeImportText={() => setImportText('')}
+            onNavigate={setView}
           />
         );
       default:

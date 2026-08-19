@@ -70,6 +70,7 @@ const featureRegistry = [
   { id: 'sharebackup', title: 'バックアップの共有', icon: '📤', category: '設定・その他', view: 'settings', sub: true, desc: 'バックアップファイルをWeb Share API対応端末でAirDrop/LINE/Google Drive等の共有シートへ直接渡す（設定画面内）。', tags: ['共有', '機種変更'] },
   { id: 'clouddrive', title: 'Googleドライブ連携', icon: '☁️', category: '設定・その他', view: 'settings', sub: true, desc: '（任意・要OAuthクライアントID自己発行）Googleドライブのアプリ専用領域へバックアップを保存・復元。他機能と異なりGoogleのサーバーと通信する明示的な例外（設定画面内）。', tags: ['クラウド', 'Googleドライブ', '機種変更'] },
   { id: 'p2ptransfer', title: 'WebRTCで直接転送', icon: '📶', category: '設定・その他', view: 'settings', sub: true, desc: 'サーバーを経由せず端末間を直接つなぎ、容量制限なくバックアップを転送。接続の合図（オファー/アンサー）だけQR/テキストで手動交換（設定画面内）。TURN未使用のため一部ネットワークでは接続できないことがある。', tags: ['WebRTC', '機種変更', 'P2P'] },
+  { id: 'migrationguide', title: '機種変更ガイド', icon: '🧭', category: '設定・その他', view: 'migrationguide', desc: 'QR・共有・Googleドライブ・WebRTC・バックアップファイルの全移行方法を1画面に集約し、今のデータ量から最適な方法を自動でおすすめ。ホーム・設定画面から導線あり。', tags: ['機種変更', '移行', 'ガイド'] },
 ];
 
 export default featureRegistry;

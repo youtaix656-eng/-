@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { importFile, exportCsv, exportJson } from '../lib/importer.js';
-import { exportAll } from '../lib/storage.js';
 import { loadVoices } from '../lib/speech.js';
 import {
   validateEmail,
@@ -13,6 +12,7 @@ import SyncQR from './SyncQR.jsx';
 import SyncScan from './SyncScan.jsx';
 import CloudBackup from './CloudBackup.jsx';
 import P2PTransfer from './P2PTransfer.jsx';
+import FileBackupCard from './FileBackupCard.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
 import SnapshotsCard from './SnapshotsCard.jsx';
@@ -20,7 +20,7 @@ import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 
 // 設定・問題データ管理画面
-export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText }) {
+export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText, onNavigate }) {
   const {
     questions,
     settings,
@@ -34,7 +34,6 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
   } = store;
 
   const fileRef = useRef(null);
-  const backupRef = useRef(null);
   const [importMode, setImportMode] = useState('append'); // append | replace
   const [preview, setPreview] = useState(null); // { questions, errors, warnings, fileName }
   const [voices, setVoices] = useState([]);
@@ -86,76 +85,6 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     const result = importFile(pasteText, pasteText.trim().startsWith('[') ? 'paste.json' : 'paste.csv');
     setPreview({ ...result, fileName: '貼り付けデータ' });
     setPasteOpen(false);
-  };
-
-  const download = (content, filename, type) => {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // バックアップの中身（JSON文字列とファイル名）を作る（保存・共有で共用）
-  const buildBackupFile = async () => {
-    const data = await exportAll();
-    const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `shinkyu_backup_${stamp}.json`;
-    const content = JSON.stringify(data, null, 2);
-    return { content, filename };
-  };
-
-  // 全データ（問題＋進捗＋メモ＋設定）のバックアップ
-  const backupAll = async () => {
-    const { content, filename } = await buildBackupFile();
-    download(content, filename, 'application/json');
-    markBackedUp();
-    onToast('バックアップを書き出しました');
-  };
-
-  // 対応端末では共有シート（AirDrop/LINE/Google Drive等）へ直接渡す。
-  // 非対応（Web Share APIやファイル共有に未対応のブラウザ）は通常のダウンロードにフォールバック。
-  const hasShareApi = typeof navigator !== 'undefined' && !!navigator.share;
-  const shareBackup = async () => {
-    const { content, filename } = await buildBackupFile();
-    if (hasShareApi) {
-      const file = new File([content], filename, { type: 'application/json' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: '鍼灸国試 対策アプリ バックアップ',
-            text: '学習データのバックアップです。別の端末の「復元」で読み込めます。',
-          });
-          markBackedUp();
-          onToast('共有しました');
-          return;
-        } catch (e) {
-          if (e && e.name === 'AbortError') return; // ユーザーが共有をキャンセル
-          // それ以外の失敗はダウンロードにフォールバック
-        }
-      }
-    }
-    download(content, filename, 'application/json');
-    markBackedUp();
-    onToast('この端末は共有に未対応のため、ダウンロードしました');
-  };
-
-  // バックアップからの復元
-  const restoreAll = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    if (!confirm('現在の学習データをバックアップの内容で上書きします。よろしいですか？')) return;
-    try {
-      const data = JSON.parse(await file.text());
-      await importBackup(data);
-      onToast('バックアップから復元しました');
-    } catch (err) {
-      onToast('復元に失敗しました（ファイル形式をご確認ください）');
-    }
   };
 
   const sampleCsv = `科目,問題文,選択肢,正解,解説
@@ -285,46 +214,18 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       <div className="section-label" style={{ marginTop: 0 }}>
         バックアップと復元
       </div>
-      <div className="card">
-        <p className="inline-note" style={{ marginBottom: 10 }}>
-          問題・学習進捗・メモ・設定をまとめて1つのファイルに書き出せます。
-          別の端末で「復元」すれば、そのまま学習を引き継げます（クラウド保存やUSB、
-          Google Drive 等のファイル共有経由で持ち運べます）。
-          {hasShareApi && '「共有」を使うとAirDropやLINEなどの共有シートへ直接渡せます。'}
-        </p>
-        <div className="btn-row">
-          <button className="btn primary" onClick={backupAll}>
-            💾 バックアップを保存
-          </button>
-          {hasShareApi && (
-            <button className="btn" onClick={shareBackup}>
-              📤 共有
-            </button>
-          )}
-          <button className="btn" onClick={() => backupRef.current?.click()}>
-            復元（読み込み）
-          </button>
-        </div>
-        <input
-          ref={backupRef}
-          type="file"
-          accept="application/json,.json"
-          onChange={restoreAll}
-          style={{ display: 'none' }}
-        />
-
-        <label className="switch-row" style={{ marginTop: 14 }}>
-          <input
-            type="checkbox"
-            checked={settings.autoBackupOnStart}
-            onChange={(e) => updateSettings({ autoBackupOnStart: e.target.checked })}
-          />
-          <span>
-            起動時に自動バックアップ
-            <small>1日1回まで、アプリを開いた時にバックアップを自動保存します。</small>
-          </span>
-        </label>
-      </div>
+      {onNavigate && (
+        <button className="btn ghost sm" style={{ marginBottom: 8 }} onClick={() => onNavigate('migrationguide')}>
+          🧭 データ量に応じたおすすめの移行方法を見る（機種変更ガイド）
+        </button>
+      )}
+      <FileBackupCard
+        settings={settings}
+        updateSettings={updateSettings}
+        markBackedUp={markBackedUp}
+        importBackup={importBackup}
+        onToast={onToast}
+      />
 
       {/* ===== クラウド連携（Googleドライブ・任意／プライバシー方針の例外） ===== */}
       <div className="section-label">クラウドバックアップ（Googleドライブ・任意）</div>
