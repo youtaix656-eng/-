@@ -11,6 +11,7 @@ import {
 } from '../lib/auth.js';
 import SyncQR from './SyncQR.jsx';
 import SyncScan from './SyncScan.jsx';
+import CloudBackup from './CloudBackup.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
 import SnapshotsCard from './SnapshotsCard.jsx';
@@ -322,6 +323,10 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           </span>
         </label>
       </div>
+
+      {/* ===== クラウド連携（Googleドライブ・任意／プライバシー方針の例外） ===== */}
+      <div className="section-label">クラウドバックアップ（Googleドライブ・任意）</div>
+      <CloudBackup settings={settings} updateSettings={updateSettings} onToast={onToast} importBackup={importBackup} />
 
       {/* ===== 問題データのインポート ===== */}
       <div className="section-label">問題データのインポート</div>

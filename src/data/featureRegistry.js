@@ -66,6 +66,9 @@ const featureRegistry = [
   // ---- 設定・その他 ----
   { id: 'settings', title: '設定・問題データ管理', icon: '⚙️', category: '設定・その他', view: 'settings', desc: 'CSV / JSON のインポート、音声設定、データ管理。', tags: ['設定'] },
   { id: 'errorlog', title: 'エラーログ', icon: '🪵', category: '設定・その他', view: 'settings', sub: true, desc: '端末内エラーの閲覧・消去（外部送信なし、設定画面内）。', tags: ['エラーログ'] },
+  { id: 'syncqr', title: 'QRで端末移行', icon: '📱', category: '設定・その他', view: 'settings', sub: true, desc: '進捗・設定をQR/URLで別端末へ受け渡し。大きい時は圧縮＋自動でQRを複数枚に分割して連続表示（テキストのコピー＆ペーストでも可）、履歴の要約による軽量化オプションあり（設定画面内）。', tags: ['QR', '機種変更', '移行'] },
+  { id: 'sharebackup', title: 'バックアップの共有', icon: '📤', category: '設定・その他', view: 'settings', sub: true, desc: 'バックアップファイルをWeb Share API対応端末でAirDrop/LINE/Google Drive等の共有シートへ直接渡す（設定画面内）。', tags: ['共有', '機種変更'] },
+  { id: 'clouddrive', title: 'Googleドライブ連携', icon: '☁️', category: '設定・その他', view: 'settings', sub: true, desc: '（任意・要OAuthクライアントID自己発行）Googleドライブのアプリ専用領域へバックアップを保存・復元。他機能と異なりGoogleのサーバーと通信する明示的な例外（設定画面内）。', tags: ['クラウド', 'Googleドライブ', '機種変更'] },
 ];
 
 export default featureRegistry;
