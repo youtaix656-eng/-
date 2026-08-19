@@ -6,6 +6,10 @@ import { genreAccuracy, keywordAccuracy, topByAccuracy, relatedKeywordMap } from
 import { buildBlueprintExam, blueprintAvailability, shuffle } from '../lib/examBuilder.js';
 import { EXAM_BLUEPRINT_AM, EXAM_BLUEPRINT_PM } from '../data/examBlueprint.js';
 import { buildKanaIndex } from '../lib/yomi.js';
+import { figureFor } from '../data/figures.jsx';
+import { normalize, isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
+import { buildWeaknessSummary } from '../lib/reviewPool.js';
+import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 
 function fmtTime(sec) {
   const m = Math.floor(sec / 60);
@@ -31,8 +35,8 @@ const MODE_BY_ID = Object.fromEntries(MODES.map((m) => [m.id, m]));
 // 午前／午後は本番同形式の科目配分・時間制限で通し演習。
 // 得意／苦手／選択式は正答率の自動提案や検索条件から出題数を組み立てる演習モード。
 // いずれも終了後に正答率・科目別内訳を表示し、解答はSRS・復習リストへ自動反映される。
-export default function Exam({ store }) {
-  const { questions, links, history, recordAnswer, examResults, addExamResult } = store;
+export default function Exam({ store, onNavigate }) {
+  const { questions, links, history, srs, recordAnswer, examResults, addExamResult, bookmarks } = store;
 
   const [stage, setStage] = useState('select'); // select | setup | running | result
   const [modeId, setModeId] = useState(null);
@@ -43,6 +47,8 @@ export default function Exam({ store }) {
   const [timed, setTimed] = useState(false);
   const [shortfalls, setShortfalls] = useState([]);
   const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
+  const [paused, setPaused] = useState(false); // タイマーの一時停止
+  const [zoom, setZoom] = useState(false); // 図の拡大表示
   const timerRef = useRef(null);
   const remainRef = useRef(0);
   useEffect(() => { remainRef.current = remain; }, [remain]);
@@ -97,11 +103,16 @@ export default function Exam({ store }) {
   const [filterSubject, setFilterSubject] = useState('');
   const [filterGenre, setFilterGenre] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
+  const [filterRound, setFilterRound] = useState('');
+  const [pickBookmarkOnly, setPickBookmarkOnly] = useState(false);
   const [relatedSelected, setRelatedSelected] = useState(new Set());
-  const subjectOptions = useMemo(
-    () => Array.from(new Set(questions.map((q) => q.subject))).sort((a, b) => a.localeCompare(b, 'ja')),
-    [questions]
-  );
+  // 出題基準の1〜14番順（基準にない科目名は末尾に五十音順）
+  const subjectOptions = useMemo(() => {
+    const present = Array.from(new Set(questions.map((q) => q.subject)));
+    const ordered = SUBJECT_TAG_NAMES.filter((s) => present.includes(s));
+    const extra = present.filter((s) => !SUBJECT_TAG_NAMES.includes(s)).sort((a, b) => a.localeCompare(b, 'ja'));
+    return [...ordered, ...extra];
+  }, [questions]);
   const afterSubject = useMemo(
     () => (filterSubject ? questions.filter((q) => q.subject === filterSubject) : questions),
     [questions, filterSubject]
@@ -128,14 +139,20 @@ export default function Exam({ store }) {
     if (!filterKeyword) return [];
     return (relatedMapAll.get(filterKeyword) || []).filter((k) => k !== filterKeyword).slice(0, 8);
   }, [filterKeyword, relatedMapAll]);
+  const roundOptions = useMemo(
+    () => Array.from(new Set(afterGenre.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    [afterGenre]
+  );
   const pickPool = useMemo(() => {
     let pool = afterGenre;
     if (filterKeyword) {
       const kwSet = new Set([filterKeyword, ...relatedSelected]);
       pool = pool.filter((q) => effectiveTags(q, links).some((t) => kwSet.has(t)));
     }
+    if (filterRound) pool = pool.filter((q) => String(q.round) === String(filterRound));
+    if (pickBookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
     return pool;
-  }, [afterGenre, filterKeyword, relatedSelected, links]);
+  }, [afterGenre, filterKeyword, relatedSelected, links, filterRound, pickBookmarkOnly, bookmarks]);
   const applyFilter = (patch) => {
     if ('subject' in patch) {
       setFilterSubject(patch.subject);
@@ -186,6 +203,7 @@ export default function Exam({ store }) {
     setIdx(0);
     setTimed(isTimed);
     setRemain(isTimed ? minutes * 60 : 0);
+    setPaused(false);
     setStage('running');
   };
 
@@ -213,6 +231,7 @@ export default function Exam({ store }) {
     setRemain(resume.remain || 0);
     setModeId(resume.modeId || null);
     setTimed(!!resume.timed);
+    setPaused(false);
     setResume(null);
     setStage('running');
   };
@@ -241,12 +260,13 @@ export default function Exam({ store }) {
     setAnswers([]);
     setIdx(0);
     setRemain(0);
+    setPaused(false);
     setStage('select');
   };
 
-  // タイマー（時間制限モードのみ）
+  // タイマー（時間制限モードのみ・一時停止中はカウントしない）
   useEffect(() => {
-    if (stage !== 'running' || !timed) return;
+    if (stage !== 'running' || !timed || paused) return;
     timerRef.current = setInterval(() => {
       setRemain((r) => {
         if (r <= 1) {
@@ -259,7 +279,9 @@ export default function Exam({ store }) {
     }, 1000);
     return () => clearInterval(timerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, timed]);
+  }, [stage, timed, paused]);
+  // 問題が切り替わったら図の拡大表示は閉じる
+  useEffect(() => { setZoom(false); }, [idx]);
 
   const selectAnswer = (choiceIdx) => {
     setAnswers((prev) => {
@@ -512,7 +534,28 @@ export default function Exam({ store }) {
                 ))}
               </select>
             </label>
+            <label className="mini-field">
+              <span>回（第◯回）</span>
+              <select
+                value={filterRound}
+                onChange={(e) => setFilterRound(e.target.value)}
+                disabled={!roundOptions.length}
+              >
+                <option value="">指定なし</option>
+                {roundOptions.map((r) => (
+                  <option key={r} value={r}>第{r}回</option>
+                ))}
+              </select>
+            </label>
           </div>
+          <label className="autokw-row" style={{ marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={pickBookmarkOnly}
+              onChange={(e) => setPickBookmarkOnly(e.target.checked)}
+            />
+            <span>★ ブックマークした問題だけ出題</span>
+          </label>
           {relatedForKeyword.length > 0 && (
             <>
               <div className="section-label">関連キーワード（芋づる式に追加できます）</div>
@@ -565,6 +608,32 @@ export default function Exam({ store }) {
       perSubject[q.subject].total += 1;
       if (answers[i] === q.answer) perSubject[q.subject].correct += 1;
     });
+    // ジャンル別の内訳（科目よりさらに細かい）
+    const perGenre = {};
+    order.forEach((q, i) => {
+      const g = q.genre || q.subject || 'その他';
+      if (!perGenre[g]) perGenre[g] = { total: 0, correct: 0 };
+      perGenre[g].total += 1;
+      if (answers[i] === q.answer) perGenre[g].correct += 1;
+    });
+    const genreRows = Object.entries(perGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
+    // 誤答・未解答の一覧
+    const wrongEntries = order
+      .map((q, i) => ({ q, chosen: answers[i] }))
+      .filter((e) => e.chosen !== e.q.answer);
+    const wrongQs = wrongEntries.map((e) => e.q);
+    const weakness = wrongQs.length > 0 ? buildWeaknessSummary(wrongQs, links) : null;
+    const retryWrong = () => {
+      if (wrongQs.length === 0) return;
+      setShortfalls([]);
+      setOrder(wrongQs);
+      setAnswers(new Array(wrongQs.length).fill(null));
+      setIdx(0);
+      setTimed(false);
+      setRemain(0);
+      setPaused(false);
+      setStage('running');
+    };
 
     return (
       <div className="view">
@@ -621,6 +690,11 @@ export default function Exam({ store }) {
         >
           もう一度挑戦する
         </button>
+        {wrongQs.length > 0 && (
+          <button className="btn accent block lg" style={{ marginTop: 10 }} onClick={retryWrong}>
+            ✕ 誤答・未解答の{wrongQs.length}問だけ、もう一度
+          </button>
+        )}
         <button
           className="btn ghost block sm"
           style={{ marginTop: 8 }}
@@ -628,6 +702,65 @@ export default function Exam({ store }) {
         >
           他のモードを選ぶ
         </button>
+        {onNavigate && wrongQs.length > 0 && (
+          <button className="btn ghost block sm" style={{ marginTop: 8 }} onClick={() => onNavigate('mistakes')}>
+            📓 間違いノートを開く
+          </button>
+        )}
+
+        {/* ジャンル別の内訳（苦手順） */}
+        {genreRows.length > 1 && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <div className="section-label" style={{ marginTop: 0 }}>ジャンル別の内訳（苦手順）</div>
+            <ul className="genre-stats">
+              {genreRows.map(([g, s]) => {
+                const p = Math.round((s.correct / s.total) * 100);
+                return (
+                  <li key={g}>
+                    <span className="gs-name">{g}</span>
+                    <span className="gs-bar"><i style={{ width: `${p}%`, background: p < 60 ? 'var(--wrong)' : p < 80 ? 'var(--warn)' : 'var(--correct)' }} /></span>
+                    <span className="gs-num">{p}%（{s.correct}/{s.total}）</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* 弱点分析 */}
+        {weakness && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>今回の弱点分析</div>
+            <p className="inline-note" style={{ marginTop: 0 }}>
+              {weakness.topGenres.length > 0 && (
+                <>「{weakness.topGenres.map(([g, c]) => `${g}（${c}問）`).join('」「')}」で誤答が目立ちました。</>
+              )}
+              {weakness.topTags.length > 0 && (
+                <><br />繰り返しつまずいたキーワード：{weakness.topTags.map(([tg, c]) => `${tg}（×${c}）`).join('・')}</>
+              )}
+            </p>
+          </div>
+        )}
+
+        {/* 誤答・未解答の一覧（問題文・正解・解説） */}
+        {wrongEntries.length > 0 && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>誤答・未解答（{wrongEntries.length}問）</div>
+            {wrongEntries.map(({ q, chosen }) => (
+              <div className="list-item" key={q.id}>
+                <div className="li-subject">{q.subject}{isLeech(srs[q.id]) && <span className="risk-badge lv-hot" title={`${LEECH_THRESHOLD}回以上間違えています`}>⚠️ 要注意</span>}</div>
+                <div className="li-q">{q.question || '（図の問題）'}</div>
+                <div className="li-stat" style={{ color: 'var(--wrong)' }}>
+                  あなたの解答：{chosen == null ? '未解答' : (q.type === 'ox' ? (chosen === 0 ? '○' : '✕') : `${chosen + 1}. ${q.choices[chosen]}`)}
+                </div>
+                <div className="li-stat" style={{ color: 'var(--correct)' }}>
+                  正解：{q.type === 'ox' ? (q.answer === 0 ? '○' : '✕') : `${q.answer + 1}. ${q.choices[q.answer]}`}
+                </div>
+                {q.explanation && <div className="li-stat">解説：{q.explanation}</div>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -636,23 +769,57 @@ export default function Exam({ store }) {
   const current = order[idx];
   const answered = answers.filter((a) => a !== null).length;
   const timeWarn = timed && remain <= 60;
+  const CurFig = current.figure ? figureFor(current.figure) : null;
+  // 総合問題（連問）のセクション区切り
+  const isIntegrated = current.subject === '総合問題';
+  const prevQ = idx > 0 ? order[idx - 1] : null;
+  const enteringIntegrated = isIntegrated && (!prevQ || prevQ.subject !== '総合問題');
+  let caseProgress = null;
+  if (isIntegrated) {
+    const cid = current.caseId || current.id;
+    let start = idx;
+    while (start > 0 && order[start - 1].subject === '総合問題' && (order[start - 1].caseId || order[start - 1].id) === cid) start--;
+    let end = idx;
+    while (end < order.length - 1 && order[end + 1].subject === '総合問題' && (order[end + 1].caseId || order[end + 1].id) === cid) end++;
+    caseProgress = { pos: idx - start + 1, total: end - start + 1 };
+  }
 
   return (
     <div className="view">
       <div className="exam-timer">
         {timed ? (
-          <span className={`time ${timeWarn ? 'warn' : ''}`}>⏱ {fmtTime(remain)}</span>
+          <span className={`time ${timeWarn ? 'warn' : ''}`}>⏱ {paused ? '一時停止中' : fmtTime(remain)}</span>
         ) : (
           <span className="time">📝 演習モード（時間無制限）</span>
         )}
         <span className="count">
           解答済み {answered} / {order.length}
         </span>
+        {timed && (
+          <button className="btn ghost sm" onClick={() => setPaused((v) => !v)}>
+            {paused ? '▶ 再開' : '⏸ 一時停止'}
+          </button>
+        )}
       </div>
       <div className="progress">
         <span style={{ width: `${((idx + 1) / order.length) * 100}%` }} />
       </div>
 
+      {paused ? (
+        <div className="empty">
+          <div className="ico">⏸</div>
+          <p>一時停止中です。再開するとタイマーが動き出します。</p>
+        </div>
+      ) : (
+      <>
+      {enteringIntegrated && (
+        <div className="card" style={{ background: 'var(--accent-soft, #eef4ff)', textAlign: 'center' }}>
+          <div style={{ fontWeight: 700 }}>🧩 ここから総合問題（連問）です</div>
+          <p className="inline-note" style={{ margin: '4px 0 0' }}>
+            同じ症例文をもとにした複数の設問が続きます。
+          </p>
+        </div>
+      )}
       <div className="card">
         <div className="q-meta">
           <span className={`badge ${current.type === 'ox' ? 'ox' : 'choice'}`}>
@@ -660,9 +827,30 @@ export default function Exam({ store }) {
           </span>
           <span className="q-subject">
             第{idx + 1}問 ・ {current.subject}
+            {isIntegrated && caseProgress && ` （設問 ${caseProgress.pos}/${caseProgress.total}）`}
           </span>
         </div>
         <div className="q-text">{current.question}</div>
+        {current.image && (
+          <button className="q-figbtn" onClick={() => setZoom(true)} aria-label="図を拡大">
+            <img className="q-image" src={current.image} alt="問題の図" loading="lazy" />
+            <span className="q-zoom-hint">🔍 タップで拡大</span>
+          </button>
+        )}
+        {CurFig && (
+          <button className="q-figbtn" onClick={() => setZoom(true)} aria-label="図を拡大">
+            <CurFig />
+            <span className="q-zoom-hint">🔍 タップで拡大</span>
+          </button>
+        )}
+        {zoom && (current.image || CurFig) && (
+          <div className="fig-lightbox" onClick={() => setZoom(false)} role="dialog" aria-label="図の拡大">
+            <div className="fig-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+              {current.image ? <img src={current.image} alt="問題の図（拡大）" /> : <CurFig />}
+              <button className="btn primary block" onClick={() => setZoom(false)}>閉じる</button>
+            </div>
+          </div>
+        )}
         <div className="choices">
           {current.choices.map((choice, i) => {
             const mark =
@@ -711,6 +899,8 @@ export default function Exam({ store }) {
       </button>
 
       <ResetInline label="模試をリセット（採点せず破棄）" onReset={resetExam} />
+      </>
+      )}
     </div>
   );
 }

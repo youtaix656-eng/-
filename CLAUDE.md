@@ -172,6 +172,7 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 | 画像・図問題 | `figures.jsx`（オフラインSVG）／`question.image` | `zumondaiQuestions.js`にサンプルあり |
 | 網羅マップ | `CoverageMap.jsx` | 出題基準×収録数の可視化 |
 | エラーログ | `lib/errorLog.js`／`ErrorLogCard.jsx`（Settings内） | 端末内エラーの閲覧・消去 |
+| 3分の2バッファ術 | `lib/bufferSession.js`／`Session.jsx`／`Calendar.jsx` | 学習時間を基礎タスク:バッファ=2:1（設定で調整可）に自動分割。完了後はマネージャービュー（振り返り）でバッファ用途を自動判定、ハリオが声かけ。詳細は下記セクション |
 | 全機能一覧 | `src/data/featureRegistry.js`＋`FeatureIndex.jsx` | 上表と同じ内容の単一の正。検索・カテゴリ絞り込み付き |
 
 上表は概要用のスナップショット。**正確な最新の全機能リストは `src/data/featureRegistry.js`**
@@ -179,6 +180,46 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 このファイルにも必ずエントリを追加/更新する**（`npm run validate` が `view` の実在を
 機械チェックする。CLAUDE.mdのこの表は概要のみで自動生成ではないため、大きく変わったら
 このセクションも合わせて更新する）。
+
+## 3分の2バッファ術（2026-08-19 追加）
+河野ゆかり著『「仕組み化」勉強法』の考え方（「やる気があるから勉強する」のではなく
+「勉強が始まる形になっているから、やる気があとからついてくる」）を取り込んだ学習計画機能。
+- **ロジックは `src/lib/bufferSession.js` を単一の正とする**。学習予定時間（分）を
+  基礎タスク:バッファ=2:1（`DEFAULT_BASE_RATIO`）で自動分割する（`planStudySession`）。
+  比率はハードコーディングせず、Settings画面（`settings.bufferBaseRatioPct`、40〜80%で調整可）
+  から変更できる。基礎タスクの問題数は過去の解答間隔（`history`のタイムスタンプ差の中央値、
+  休憩とみなす間隔は除外）から逆算し（`averageAnswerSeconds`）、履歴が少ない初回はジャンル別
+  デフォルト解答時間（`DEFAULT_ANSWER_SECONDS`）にフォールバックする（`estimatedAnswerSeconds`）。
+- **シフト連動・体調連携は未実装（将来拡張用の関数のみ用意）**：`baseRatioFor`は
+  `shiftContext`（'work_day'|'off_day'）や`conditionScore`（0-100）を渡せる設計だが、
+  実際に呼ぶ`Session.jsx`/`Calendar.jsx`はどちらも未指定のまま呼んでおり、常に標準比率
+  （Settings値、既定2:1）で動作する。将来、勤務シフト・睡眠アプリ連携を追加する時は
+  `planStudySession`の呼び出し側に`shiftContext`/`conditionScore`を渡すだけで良い設計。
+- **Session.jsx への統合**：学習画面の開始前に「⏱ 時間で計画する」カードがあり、
+  分数を選ぶと基礎タスク／バッファの問題数・時間が即座に計算される。「この計画で基礎タスクを
+  始める」を押すと通常の学習セッションと同じ仕組みで開始し、`session.buffer`にプラン
+  （`StudySession`相当のオブジェクト）を保持する（既存の`session`データ構造に追加フィールドとして
+  同居させているだけで、一問一答・原問・音声学習・マインドマップのデータ構造とは衝突しない）。
+  出題画面では基礎タスクであることを「🧩 基礎タスク・」とラベル表示し、残り5問以下になると
+  ハリオが「あと◯問だけ頑張ろう」とリマインドする（`harioBaseTaskReminder`、`data/haripan.js`）。
+- **マネージャービュー（振り返り）**：基礎タスクの問題を解き終えると、通常の完了画面より先に
+  `ManagerReview`（Session.jsx内のローカルコンポーネント）が表示され、「予定通り完了したか」を
+  Yes/Noで記録する（Noの場合は自由記述の理由メモを任意で追加）。**文言は一貫して
+  「悪いのは実行役ではなく、無理な計画を立てたマネージャー」という前提**（自己否定を招く表現は
+  使わない）。判定結果は`resolveBufferUsage(completed)`が`'review'`（ご褒美復習）／
+  `'catchup'`（積み残し消化）を返し、通常の完了画面に「🧩 バッファ枠」カードとして表示。
+  ハリオの声かけは`harioBufferEncourage(usage)`（同じく`data/haripan.js`）。カードのボタンから
+  バッファ用途に応じたセッション（ご褒美復習＝`reviewPoolFor`で復習対象のみ／積み残し消化＝
+  元の科目プールの続き）をそのまま開始できる。
+- **カレンダー連携**：`Calendar.jsx`の日付詳細に「🧩 今日の学習ブロック（目安）」カードがあり、
+  選択中の日が属する合格ロードマップのフェーズ（`phaseForDate`、`focus`/`mix`）と、
+  60分プラン時の基礎タスク／バッファ目安（`planStudySession`）を並べて表示する
+  （実際の時間入力・開始は学習画面で行う設計。カレンダー側はあくまで目安の提示のみ）。
+- ハマりやすい点：Session.jsxの出題画面は完了画面・開始画面などの早期`return`が複数ある
+  コンポーネント本体に直接書かれているため、**このセクション以降に新しいフックを増やす時は
+  必ずコンポーネント本体の先頭（他の`useMemo`/`useState`と同じ場所）に置くこと**。
+  条件分岐の後ろにフックを置くと「Rendered fewer hooks than expected」で本番ビルドが
+  クラッシュする（このセクションの実装中に一度混入し、Playwrightのconsoleエラー監視で発見・修正した）。
 
 ## パフォーマンス方針（2026-08-17 追加）
 - **コード分割**：`App.jsx`はホーム/カレンダー/一問一答/復習/音声/模試（下部ナビの6画面）と常時マウントの

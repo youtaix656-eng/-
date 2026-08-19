@@ -11,6 +11,11 @@ import { COMPARISONS, NUMBER_FACTS } from '../data/mindmapData.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { reviewPoolFor, buildWeaknessSummary, weaknessSummaryToText, recommendNewPct } from '../lib/reviewPool.js';
 import { studyStreak } from '../lib/stats.js';
+import { normalize, MASTER_STREAK, isLeech as isLeechState } from '../lib/srs.js';
+import { riskOf } from '../lib/reviewOrder.js';
+import { loadTodayMood } from '../lib/mood.js';
+import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
+import { loadNextTask } from '../lib/nextTask.js';
 
 // 連結モード（検索窓の下に並ぶ10項目）。id=0 は通常（全部順に読む）。
 const MODES = [
@@ -78,6 +83,53 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 復習対象プール：期限優先＋「念のため確認」込み（Session.jsxの「すべて復習」と同じ定義）
   const reviewPool = useMemo(() => reviewPoolFor(questions, srs), [questions, srs]);
   const { streak, studiedToday } = useMemo(() => studyStreak(history), [history]);
+  const [mood, setMood] = useState(null);
+  useEffect(() => { loadTodayMood().then(setMood); }, []);
+  const [streakBreakReasonLabel, setStreakBreakReasonLabel] = useState(null);
+  useEffect(() => {
+    const broken = detectBrokenYesterday(history);
+    if (!broken) return;
+    loadStreakBreakLog().then((log) => {
+      const entry = log[String(broken)];
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      if (entry && new Date(entry.at).setHours(0, 0, 0, 0) === today.getTime()) {
+        setStreakBreakReasonLabel(breakReasonLabel(entry.reason));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history]);
+  // マスター済み累計・科目別マスター率（復習経由＝一度でも間違えた問題のうち）
+  const masteredCount = useMemo(
+    () => questions.filter((q) => {
+      const s = normalize(srs[q.id]);
+      return (s.wrongCount || 0) > 0 && (s.correctStreak || 0) >= MASTER_STREAK;
+    }).length,
+    [questions, srs]
+  );
+  // 直近の学習セッション（10・60・300・900）で間違えた問題
+  const lastSessionMisses = useMemo(() => {
+    const session = store.session;
+    if (!session || !session.startedAt || !Array.isArray(session.ids)) return [];
+    const idsSet = new Set(session.ids);
+    const wrongIds = new Set();
+    for (const h of history) {
+      if (h.at >= session.startedAt && idsSet.has(h.questionId) && !h.correct) wrongIds.add(h.questionId);
+    }
+    return questions.filter((q) => wrongIds.has(q.id));
+  }, [store.session, history, questions]);
+  // 週間の読み上げ量（○△✕の自己採点回数）ミニグラフ
+  const weeklyAudio = useMemo(() => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d0 = base.getTime() - i * DAY;
+      const d1 = d0 + DAY;
+      days.push(history.filter((h) => h.at >= d0 && h.at < d1).length);
+    }
+    return days;
+  }, [history]);
+  const weeklyAudioMax = Math.max(1, ...weeklyAudio);
 
   // 連結学習の下ごしらえ（キーワードのクラスタ・関連・弱点・今日の分）
   const kwList = useMemo(() => allKeywords(questions, links), [questions, links]);
@@ -100,6 +152,12 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const [filterSubject, setFilterSubject] = useState('');
   const [filterGenre, setFilterGenre] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
+  const [filterRound, setFilterRound] = useState('');
+  const [bookmarkOnly, setBookmarkOnly] = useState(false);
+  const [minRisk, setMinRisk] = useState(0);
+  const [minWrong, setMinWrong] = useState(0);
+  const [leechFirst, setLeechFirst] = useState(false); // リーチ（要注意）を優先して読む
+  const [recentOnly, setRecentOnly] = useState(''); // ''|'today'|'week'：直近の誤答だけに絞る
   const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
   // 上の選択で段階的にしぼり込む（科目→ジャンル→キーワード）
   // 科目名は公式13科目（はり/きゅうは分割）＋実際に収録されている科目を合わせて表示。
@@ -126,11 +184,31 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     [afterGenre, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const keywordSections = useMemo(() => buildKanaIndex(keywordOptions), [keywordOptions]);
-  const filteredPool = useMemo(
+  const afterKeyword = useMemo(
     () => (filterKeyword ? afterGenre.filter((q) => kwsOf(q).includes(filterKeyword)) : afterGenre),
     [afterGenre, filterKeyword, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const filterActive = !!(filterSubject || filterGenre || filterKeyword);
+  const roundOptions = useMemo(
+    () => Array.from(new Set(afterKeyword.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    [afterKeyword]
+  );
+  const recentWrongIds = useMemo(() => {
+    if (!recentOnly) return null;
+    const now = Date.now();
+    const since = recentOnly === 'today' ? now - 24 * 60 * 60 * 1000 : now - 7 * 24 * 60 * 60 * 1000;
+    const ids = new Set();
+    for (const h of history) if (!h.correct && h.at >= since) ids.add(h.questionId);
+    return ids;
+  }, [recentOnly, history]);
+  const filteredPool = useMemo(() => {
+    let pool = filterRound ? afterKeyword.filter((q) => String(q.round) === String(filterRound)) : afterKeyword;
+    if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
+    if (minWrong > 0) pool = pool.filter((q) => (normalize(srs[q.id]).wrongCount || 0) >= minWrong);
+    if (minRisk > 0) pool = pool.filter((q) => Math.round(riskOf(q, srs) * 100) >= minRisk);
+    if (recentWrongIds) pool = pool.filter((q) => recentWrongIds.has(q.id));
+    return pool;
+  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, minWrong, minRisk, srs, recentWrongIds]);
+  const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || minWrong > 0 || minRisk > 0 || recentOnly);
 
   // 連結の工夫（プラン構造を変えるもの＝再構築が必要）
   const [chain, setChain] = useState(false); // #1 関連へ連鎖
@@ -313,6 +391,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     if (source === 'filter') {
       let base = filteredPool;
       if (shuffleOn) base = shuffle(base);
+      if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
       return base.map((q) => ({ kind: 'question', q }));
     }
     if (source === 'keyword') {
@@ -337,9 +416,10 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     } else if (source === 'tagged') base = taggedQuestions;
     else base = questions;
     if (shuffleOn) base = shuffle(base);
+    if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
@@ -568,19 +648,21 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const total = snap.total || builtPlan.length;
   const index = snap.index;
   const phase = snap.phase;
+  // 「今日の調子」がしんどい日は目標を自動で軽くする（Review.jsxと同じ考え方）
+  const effectiveGoal = goal > 0 && mood === 'tired' ? Math.max(5, Math.round(goal * 0.5)) : goal;
 
   // 今日の目標（問題数）に達したら1回だけ知らせる
   useEffect(() => {
-    if (!goal) { goalNotifiedRef.current = false; return; }
-    if (index + 1 >= goal) {
+    if (!effectiveGoal) { goalNotifiedRef.current = false; return; }
+    if (index + 1 >= effectiveGoal) {
       if (!goalNotifiedRef.current) {
         goalNotifiedRef.current = true;
-        onToast?.(`🎯 今日の目標（${goal}問）を達成しました！`);
+        onToast?.(`🎯 今日の目標（${effectiveGoal}問）を達成しました！`);
       }
     } else {
       goalNotifiedRef.current = false;
     }
-  }, [index, goal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [index, effectiveGoal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePlay = () => {
     if (!playing) {
@@ -623,20 +705,39 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 検索フィルタの変更（科目→ジャンル→キーワードの順に段階的にしぼる）
   const applyFilter = (patch) => {
     rebuildStop();
-    const ns = { subject: filterSubject, genre: filterGenre, keyword: filterKeyword, ...patch };
-    if ('subject' in patch) { ns.genre = ''; ns.keyword = ''; } // 上位が変わったら下位をリセット
-    if ('genre' in patch) { ns.keyword = ''; }
+    const ns = { subject: filterSubject, genre: filterGenre, keyword: filterKeyword, round: filterRound, ...patch };
+    if ('subject' in patch) { ns.genre = ''; ns.keyword = ''; ns.round = ''; } // 上位が変わったら下位をリセット
+    if ('genre' in patch) { ns.keyword = ''; ns.round = ''; }
+    if ('keyword' in patch) { ns.round = ''; }
     setFilterSubject(ns.subject);
     setFilterGenre(ns.genre);
     setFilterKeyword(ns.keyword);
-    setSource(ns.subject || ns.genre || ns.keyword ? 'filter' : 'all');
+    setFilterRound(ns.round);
+    setSource(ns.subject || ns.genre || ns.keyword || ns.round || bookmarkOnly || minRisk > 0 || minWrong > 0 || recentOnly ? 'filter' : 'all');
   };
   const clearFilter = () => {
     rebuildStop();
     setFilterSubject('');
     setFilterGenre('');
     setFilterKeyword('');
+    setFilterRound('');
+    setBookmarkOnly(false);
+    setMinRisk(0);
+    setMinWrong(0);
+    setRecentOnly('');
     setSource('all');
+  };
+  const changeRecentOnly = (v) => {
+    rebuildStop();
+    const next = recentOnly === v ? '' : v;
+    setRecentOnly(next);
+    setSource(next || filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly ? 'filter' : 'all');
+  };
+  const toggleBookmarkOnly = () => {
+    rebuildStop();
+    const next = !bookmarkOnly;
+    setBookmarkOnly(next);
+    setSource(next || filterSubject || filterGenre || filterKeyword || filterRound ? 'filter' : 'all');
   };
   const changeKeyword = (kw) => { rebuildStop(); setSelectedKeyword(kw); };
   const toggleChain = () => { rebuildStop(); setChain((v) => !v); };
@@ -732,6 +833,36 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         </div>
       )}
 
+      {streakBreakReasonLabel && (
+        <div className="card" style={{ marginBottom: 10 }}>
+          きのうは『{streakBreakReasonLabel}』だったんですね。気にせず、今日は無理せず1問からいきましょう。
+        </div>
+      )}
+
+      {masteredCount > 0 && (
+        <div className="card" style={{ marginBottom: 10 }}>
+          🏆 マスター済み累計 <strong>{masteredCount}</strong> 問
+          <div className="weekbar" title="直近7日の読み上げ量" style={{ marginTop: 6 }}>
+            {weeklyAudio.map((c, i) => (
+              <span key={i} className="weekbar-col">
+                <i style={{ height: `${Math.round((c / weeklyAudioMax) * 100)}%` }} />
+              </span>
+            ))}
+            <span className="weekbar-label">7日</span>
+          </div>
+        </div>
+      )}
+
+      {lastSessionMisses.length > 0 && (
+        <button
+          className="btn block"
+          style={{ marginBottom: 10 }}
+          onClick={() => { startReviewSource(); setCustomReviewIds(lastSessionMisses.map((q) => q.id)); }}
+        >
+          📚 さっきの学習で間違えた{lastSessionMisses.length}問をすぐ読み上げ
+        </button>
+      )}
+
       {reviewPool.length >= 3 && source !== 'review' && (
         <div className="card" style={{ borderColor: 'var(--accent)' }}>
           <div className="section-label" style={{ marginTop: 0 }}>🎯 今日のおすすめ</div>
@@ -776,6 +907,34 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               ))}
             </select>
           </label>
+          <label className="mini-field">
+            <span>回（年度）</span>
+            <select value={filterRound} onChange={(e) => applyFilter({ round: e.target.value })} disabled={roundOptions.length === 0}>
+              <option value="">指定なし</option>
+              {roundOptions.map((r) => (<option key={r} value={r}>第{r}回</option>))}
+            </select>
+          </label>
+        </div>
+        <label className="autokw-row" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={bookmarkOnly} onChange={toggleBookmarkOnly} />
+          <span>★ ブックマークした問題だけ読み上げ</span>
+        </label>
+        <label className="autokw-row" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={leechFirst} onChange={(e) => setLeechFirst(e.target.checked)} />
+          <span>⚠️ リーチ（要注意）問題を優先して読む</span>
+        </label>
+        <div className="chip-row" style={{ marginTop: 8 }}>
+          <span className="section-hint">直近の誤答だけ：</span>
+          <button className={`chip ${recentOnly === 'today' ? 'active' : ''}`} onClick={() => changeRecentOnly('today')}>今日</button>
+          <button className={`chip ${recentOnly === 'week' ? 'active' : ''}`} onClick={() => changeRecentOnly('week')}>今週</button>
+        </div>
+        <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
+          <label>忘却リスクの下限（{minRisk === 0 ? '指定なし' : `${minRisk}%以上だけ`}）</label>
+          <input type="range" min="0" max="90" step="10" value={minRisk} onChange={(e) => { rebuildStop(); setMinRisk(Number(e.target.value)); }} />
+        </div>
+        <div className="field" style={{ marginTop: 8 }}>
+          <label>誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
+          <input type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => { rebuildStop(); setMinWrong(Number(e.target.value)); }} />
         </div>
         <div className="search-foot">
           {filterActive ? (
@@ -856,9 +1015,10 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 {phase === PHASES.NOTE && (currentItem?.kind === 'summary' ? 'まとめ' : 'つながり')}
               </span>
               <span className="now-index">{index + 1} / {total}</span>
-              {goal > 0 && (
+              {effectiveGoal > 0 && (
                 <span className="now-index" style={{ marginLeft: 8 }}>
-                  🎯 目標 {Math.min(index + 1, goal)} / {goal}問
+                  🎯 目標 {Math.min(index + 1, effectiveGoal)} / {effectiveGoal}問
+                  {mood === 'tired' && goal > 0 && effectiveGoal < goal && '（少なめに調整中）'}
                 </span>
               )}
             </div>

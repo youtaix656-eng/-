@@ -442,7 +442,7 @@ export default function App() {
           />
         );
       case 'exam':
-        return <Exam store={store} />;
+        return <Exam store={store} onNavigate={setView} />;
       case 'choicequiz':
         return <ChoiceQuiz store={store} onStartQuiz={startCustomQuiz} />;
       case 'dashboard':

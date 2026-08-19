@@ -8,6 +8,9 @@ import { effectiveTags } from '../lib/query.js';
 import { COMPARISONS } from '../data/mindmapData.js';
 import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/reviewPool.js';
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
+import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
+import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLabel, managerReviewMessage } from '../lib/bufferSession.js';
+import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -17,85 +20,13 @@ const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => 
 const SET_SIZE = 60;
 const TARGETS = [10, 60, 300, 900];
 
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-// 原問と派生（同じ過去問由来）を離す（#2）。id末尾の枝記号を除いた基幹idでバケット分割し、
-// ラウンドロビンで並べて同一由来が隣り合わないようにする。
-const baseId = (id) => String(id).replace(/[a-z]+$/i, '');
-function spaceById(ids) {
-  if (ids.length < 3) return ids;
-  const buckets = new Map();
-  for (const id of ids) { const b = baseId(id); if (!buckets.has(b)) buckets.set(b, []); buckets.get(b).push(id); }
-  if (buckets.size < 2) return ids;
-  const lists = shuffle([...buckets.values()]);
-  const out = [];
-  let more = true;
-  while (more) {
-    more = false;
-    for (const l of lists) { if (l.length) { out.push(l.shift()); more = true; } }
-  }
-  return out;
-}
 function poolFor(questions, subject) {
   if (subject === 'all') return questions;
   const exact = questions.filter((q) => q.subject === subject);
   if (exact.length) return exact;
   return questions.filter((q) => subjectMatches(q.subject, { name: subject }));
 }
-// pool を繰り返して target 長の出題順（id 配列）を作る
-function buildOrder(pool, target) {
-  if (pool.length === 0) return [];
-  let ids = [];
-  while (ids.length < target) ids = ids.concat(shuffle(pool).map((q) => q.id));
-  return spaceById(ids.slice(0, target));
-}
-// 「すべて新規」用：未着手（未解答）の問題だけを出題順にする。
-//   過去に解いた問題は混ぜず、繰り返しもしない（残り新規が尽きたらそこで終了）。
-function buildNewOnlyOrder(pool, target, srs) {
-  const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
-  return spaceById(shuffle(newPool).map((q) => q.id).slice(0, target));
-}
-// 「すべて復習」用：復習対象プールだけを出題順にする（繰り返さない・足りなければそこで終了）。
-function buildReviewOnlyOrder(pool, target, srs) {
-  const reviewPool = reviewPoolFor(pool, srs);
-  return spaceById(shuffle(reviewPool).map((q) => q.id).slice(0, target));
-}
-// 指定プールを「新規◯割・復習◯割」で混ぜて target 長の出題順を作る（周回あり＝繰り返して埋める）。
-// newRatio: 0〜1（1=すべて新規）。新規＝未着手、復習＝復習対象。
-function buildMixedOrder(pool, target, newRatio, srs) {
-  if (pool.length === 0) return [];
-  const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
-  const reviewPool = reviewPoolFor(pool, srs);
-  // どちらかが空なら、その分をもう一方（無ければ全体）で補う
-  const fill = (base, count) => {
-    if (count <= 0) return [];
-    const src = base.length ? base : pool;
-    let ids = [];
-    while (ids.length < count) ids = ids.concat(shuffle(src).map((q) => q.id));
-    return ids.slice(0, count);
-  };
-  const newCount = Math.round(target * Math.min(1, Math.max(0, newRatio)));
-  const reviewCount = target - newCount;
-  const combined = [...fill(newPool, newCount), ...fill(reviewPool, reviewCount)];
-  return spaceById(shuffle(combined).slice(0, target));
-}
-// 指定プールを「新規◯割・復習◯割」で混ぜる（周回なし＝繰り返さず、該当分だけで終わる）。
-function buildMixedNoRepeatOrder(pool, target, newRatio, srs) {
-  if (pool.length === 0) return [];
-  const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
-  const reviewPool = reviewPoolFor(pool, srs);
-  const newCount = Math.round(target * Math.min(1, Math.max(0, newRatio)));
-  const reviewCount = target - newCount;
-  const takeNew = shuffle(newPool).map((q) => q.id).slice(0, newCount);
-  const takeReview = shuffle(reviewPool).map((q) => q.id).slice(0, reviewCount);
-  return spaceById(shuffle([...takeNew, ...takeReview]));
-}
+// 出題順の組み立ては src/lib/sessionOrder.js に集約（Quiz.jsxと共用）。
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio }) {
   const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark } = store;
@@ -133,6 +64,15 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   };
   // 新規◯割・復習◯割（0〜100の新規%）。既定は設定値。
   const [newPct, setNewPct] = useState(Math.round((settings.sessionNewRatio ?? 1) * 100));
+
+  // 3分の2バッファ術：学習予定時間（分）→ 基礎タスク/バッファの自動計算（#A・#B）。
+  //   シフト連携・睡眠アプリ連携は未実装のため、常に設定画面の標準比率（既定2:1）で動作する。
+  const [planMinutes, setPlanMinutes] = useState(60);
+  const standardBaseRatio = (settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100)) / 100;
+  const bufferPlan = useMemo(
+    () => planStudySession({ totalMinutes: planMinutes, subject, history, standardRatio: standardBaseRatio }),
+    [planMinutes, subject, history, standardBaseRatio]
+  );
 
   // 検索（科目→ジャンル→キーワード の段階しぼり＋フリーワード）
   const afterSubject = useMemo(() => (subject === 'all' ? questions : poolFor(questions, subject)), [questions, subject]);
@@ -234,7 +174,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     const effTarget = Math.min(target, ids.length);
     updateSettings({ sessionNewRatio: ratio });
     setShowAllGenres(false);
-    startSession({ subject: subj, label: opts.label, ids, pos: 0, target: effTarget, requestedTarget: target, round, fast: useFast, newRatio: ratio, startedAt: Date.now() });
+    startSession({
+      subject: subj, label: opts.label, ids, pos: 0, target: effTarget, requestedTarget: target,
+      round, fast: useFast, newRatio: ratio, startedAt: Date.now(),
+      ...(opts.buffer ? { buffer: opts.buffer } : {}),
+    });
     setShowBreak(false);
   };
 
@@ -426,12 +370,68 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             </p>
           )}
         </div>
+
+        {/* 3分の2バッファ術：学習時間から基礎タスク/バッファを自動計算する */}
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>⏱ 時間で計画する（3分の2バッファ術）</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            学習予定時間を入力すると、基礎タスク（必須の演習）とバッファ（復習・積み残し消化用）に自動で分けます。
+            「やる気が出たら」ではなく「始まる形」にして、あとからやる気がついてくる仕組みです。
+          </p>
+          <div className="chip-row">
+            {[15, 30, 45, 60, 90, 120].map((m) => (
+              <button key={m} className={`chip ${planMinutes === m ? 'active' : ''}`} onClick={() => setPlanMinutes(m)}>
+                {m}分
+              </button>
+            ))}
+          </div>
+          <div className="range-row" style={{ marginTop: 8 }}>
+            <input type="range" min="10" max="180" step="5" value={planMinutes} onChange={(e) => setPlanMinutes(Number(e.target.value))} />
+            <span className="range-val">{planMinutes}分</span>
+          </div>
+          <div className="tiles" style={{ marginTop: 10 }}>
+            <div className="tile">
+              <div className="num">{bufferPlan.baseTaskQuestionCount}</div>
+              <div className="lbl">基礎タスク（約{bufferPlan.baseTaskMinutes}分）</div>
+            </div>
+            <div className="tile">
+              <div className="num">{bufferPlan.bufferQuestionCount}</div>
+              <div className="lbl">バッファ（約{bufferPlan.bufferMinutes}分）</div>
+            </div>
+          </div>
+          <p className="hint" style={{ marginTop: 8 }}>
+            基礎タスク:バッファ = {Math.round(bufferPlan.ratio * 100)}:{100 - Math.round(bufferPlan.ratio * 100)}
+            （設定画面で調整できます）。問題数は、あなたの過去の平均解答時間（1問あたり約{bufferPlan.secPerQuestion}秒）から概算しています。
+          </p>
+          <button
+            className="btn primary block lg"
+            style={{ marginTop: 10 }}
+            onClick={() => begin(bufferPlan.baseTaskQuestionCount, { buffer: bufferPlan })}
+            disabled={filteredPool.length === 0}
+          >
+            この計画で基礎タスクを始める（{bufferPlan.baseTaskQuestionCount}問）
+          </button>
+        </div>
       </div>
+    );
+  }
+
+  // ===== マネージャービュー（3分の2バッファ術：基礎タスク完了直後の振り返り） =====
+  if (session && session.pos >= session.target && session.buffer && !session.buffer.managerReview) {
+    return (
+      <ManagerReview
+        buffer={session.buffer}
+        onDecide={(completed, note) => {
+          const usage = resolveBufferUsage(completed);
+          updateSession({ buffer: { ...session.buffer, managerReview: { completed, ...(note ? { note } : {}) }, bufferUsage: usage } });
+        }}
+      />
     );
   }
 
   // ===== 完了画面 =====
   if (session && session.pos >= session.target) {
+    const buf = session.buffer || null;
     const t = session.target; // 実際に出題された問数
     const requested = session.requestedTarget || session.target; // 押したボタンの目標値（見出し・絵文字の判定用）
     const capped = t < requested;
@@ -494,6 +494,33 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           </div>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>
         </div>
+
+        {/* 3分の2バッファ術：振り返り後のバッファ枠（ご褒美復習／積み残し消化） */}
+        {buf && buf.managerReview && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>🧩 バッファ枠：{bufferUsageLabel(buf.bufferUsage)}</div>
+            <p className="inline-note" style={{ marginTop: 0 }}>ハリオ：「{harioBufferEncourage(buf.bufferUsage)}」</p>
+            <button
+              className="btn primary block lg"
+              onClick={() => {
+                if (buf.bufferUsage === 'review') {
+                  const pool = reviewPoolFor(poolFor(questions, session.subject), srs);
+                  if (pool.length === 0) { onToast?.('復習対象が見つかりませんでした。またの機会に'); return; }
+                  begin(Math.min(buf.bufferQuestionCount || pool.length, pool.length) || pool.length, {
+                    pool, subject: session.subject, allowSeen: true, newRatio: 0, label: 'バッファ（ご褒美復習）',
+                  });
+                } else {
+                  const pool = poolFor(questions, session.subject);
+                  begin(Math.max(1, buf.bufferQuestionCount || 10), {
+                    pool, subject: session.subject, allowSeen: true, newRatio: session.newRatio, label: 'バッファ（積み残し消化）',
+                  });
+                }
+              }}
+            >
+              {buf.bufferUsage === 'review' ? `🎁 ご褒美復習（約${buf.bufferQuestionCount}問）を始める` : `📥 積み残し（約${buf.bufferQuestionCount}問）を消化する`}
+            </button>
+          </div>
+        )}
 
         {/* ジャンル別の正答率（#6・苦手順） */}
         {genreRows.length > 1 && (
@@ -644,15 +671,24 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   }
   const setNo = Math.floor(session.pos / SET_SIZE) + 1;
   const totalSets = Math.ceil(session.target / SET_SIZE);
+  // 3分の2バッファ術：基礎タスク進捗（実行役ビュー）＋ 未達が近い時のハリオのリマインド
+  const bufRemaining = session.buffer ? session.target - session.pos : 0;
+  const harioReminder = session.buffer && bufRemaining > 0 && bufRemaining <= 5 ? harioBaseTaskReminder(bufRemaining) : null;
   return (
     <div className="view">
       <div className="sess-topbar">
-        <span className="sess-topbar-sub">{session.subject === 'all' ? '全科目' : session.subject}</span>
+        <span className="sess-topbar-sub">
+          {session.buffer && '🧩 基礎タスク・'}
+          {session.subject === 'all' ? '全科目' : session.subject}
+        </span>
         <span className="sess-topbar-frac">{session.pos + 1} / {session.target}　（セット{setNo}/{totalSets}）</span>
       </div>
       <div className="progress">
         <span style={{ width: `${((session.pos + 1) / session.target) * 100}%` }} />
       </div>
+      {harioReminder && (
+        <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{harioReminder}」</p>
+      )}
       {session.fast ? (
         <FastCard key={current.id + '@' + session.pos} question={current} onGraded={answered} GRADES={GRADES} />
       ) : (
@@ -684,6 +720,49 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
         onConfirm={doReset}
         onCancel={() => setConfirmReset(false)}
       />
+    </div>
+  );
+}
+
+// 3分の2バッファ術：マネージャービュー（基礎タスク完了直後の振り返り）。
+//   「悪いのは実行役ではなく、無理な計画を立てたマネージャー」という前提で、
+//   集中が切れた・進まなかった場合もユーザーを責めるトーンの文言は一切使わない。
+function ManagerReview({ buffer, onDecide }) {
+  const [showNote, setShowNote] = useState(false);
+  const [note, setNote] = useState('');
+  return (
+    <div className="view">
+      <div className="card sess-done">
+        <div className="sess-done-ico">🧑‍💼</div>
+        <h2>マネージャービュー：振り返り</h2>
+        <p className="view-desc" style={{ textAlign: 'center' }}>
+          基礎タスク、おつかれさまでした。予定（約{buffer.baseTaskMinutes}分・{buffer.baseTaskQuestionCount}問）通りに進みましたか？
+        </p>
+        {!showNote ? (
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button className="btn primary" onClick={() => onDecide(true)}>✅ 予定通り完了した</button>
+            <button className="btn" onClick={() => setShowNote(true)}>⏳ 予定通りには終わらなかった</button>
+          </div>
+        ) : (
+          <>
+            <p className="inline-note" style={{ textAlign: 'center' }}>
+              大丈夫です。悪いのは実行役ではなく、無理な計画を立てたマネージャー（＝設定した時間や問題数）の方です。
+              よければ理由をひとことだけ（任意・あとで見返す用）。
+            </p>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="例：思ったより1問に時間がかかった／急な予定が入った　など（空欄でもOK）"
+              rows={3}
+              style={{ width: '100%', marginTop: 6 }}
+            />
+            <div className="btn-row" style={{ marginTop: 8 }}>
+              <button className="btn primary" onClick={() => onDecide(false, note.trim() || undefined)}>この内容で続ける</button>
+              <button className="btn ghost" onClick={() => setShowNote(false)}>戻る</button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import ErrorLogCard from './ErrorLogCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
 import SnapshotsCard from './SnapshotsCard.jsx';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
+import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 
 // 設定・問題データ管理画面
 export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText }) {
@@ -163,6 +164,26 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             ))}
           </div>
           <div className="hint">ハリオ先生の「今日の進捗」表示（ホーム画面）で使う1日のノルマです。</div>
+        </div>
+        <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+          <label>基礎タスクの比率（3分の2バッファ術）</label>
+          <div className="range-row">
+            <input
+              type="range"
+              min="40"
+              max="80"
+              step="5"
+              value={Math.round((settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100)))}
+              onChange={(e) => updateSettings({ bufferBaseRatioPct: Number(e.target.value) })}
+            />
+            <span className="range-val">
+              基礎{Math.round(settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100))}% / バッファ{100 - Math.round(settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100))}%
+            </span>
+          </div>
+          <div className="hint">
+            学習（10・60・300・900）の「時間で計画する」で使う配分です。既定は2:1（基礎67%）。
+            シフト連携なしの時は常にこの比率で動作します。
+          </div>
         </div>
         <label className="switch-row" style={{ marginTop: 6 }}>
           <input

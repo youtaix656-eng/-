@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { phaseForDate, phasesInMonth } from '../data/roadmapPhases.js';
+import { planStudySession, DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 
 // カレンダー：勉強や試験などの予定を入力・管理する。
 // 予定は store.schedule = [{ id, date, time, title, memo, kind }] に保存。
@@ -42,7 +43,7 @@ function monthGrid(year, month) {
 }
 
 export default function Calendar({ store, onToast, onNavigate }) {
-  const { schedule, setSchedule, reviewQuestions, srs } = store;
+  const { schedule, setSchedule, reviewQuestions, srs, history, settings } = store;
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -135,6 +136,15 @@ export default function Calendar({ store, onToast, onNavigate }) {
   };
 
   const selectedEvents = byDate[selected] || [];
+
+  // 3分の2バッファ術：選択中の日のロードマップフェーズを参考にした学習ブロックの目安。
+  //   カレンダーはあくまで「見立て」用。実際の時間入力・開始は学習画面（Session.jsx）で行う。
+  const selPhase = useMemo(() => phaseForDate(selected), [selected]);
+  const standardBaseRatio = (settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100)) / 100;
+  const dayPlan = useMemo(
+    () => planStudySession({ totalMinutes: 60, subject: 'all', history, standardRatio: standardBaseRatio }),
+    [history, standardBaseRatio]
+  );
 
   return (
     <div className="view">
@@ -253,6 +263,34 @@ export default function Calendar({ store, onToast, onNavigate }) {
             </button>
           ))
         )}
+      </div>
+
+      {/* 3分の2バッファ術：この日のロードマップフェーズを参考にした学習ブロックの目安 */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="section-label" style={{ marginTop: 0 }}>🧩 今日の学習ブロック（目安）</div>
+        {selPhase && (
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            <strong>{selPhase.label}</strong>フェーズ：{selPhase.focus}
+            <br />新規・復習の目安：{selPhase.mix}
+          </p>
+        )}
+        <div className="tiles">
+          <div className="tile">
+            <div className="num">{dayPlan.baseTaskQuestionCount}</div>
+            <div className="lbl">基礎タスク（約{dayPlan.baseTaskMinutes}分）</div>
+          </div>
+          <div className="tile">
+            <div className="num">{dayPlan.bufferQuestionCount}</div>
+            <div className="lbl">バッファ（約{dayPlan.bufferMinutes}分）</div>
+          </div>
+        </div>
+        <p className="hint" style={{ marginTop: 8 }}>
+          60分で計画した場合の目安です（3分の2バッファ術・基礎タスク:バッファ={Math.round(dayPlan.ratio * 100)}:{100 - Math.round(dayPlan.ratio * 100)}）。
+          実際の時間・問題数は「学習」画面で入力して計画できます。
+        </p>
+        <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={() => onNavigate?.('session')}>
+          📚 学習画面で時間を計画する →
+        </button>
       </div>
 
       {upcoming.length > 0 && (

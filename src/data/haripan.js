@@ -112,6 +112,33 @@ export function haripanMessages(ctx = {}) {
   return msgs;
 }
 
+// 3分の2バッファ術：バッファ枠に入ったタイミングの声かけ（複数候補からランダムに1つ）。
+// 常に励まし・伴走型。プレッシャーを与える表現は避ける。
+export function harioBufferEncourage(usage) {
+  const review = [
+    'よくやった！ここからは復習タイムだよ。得意なとこ、確認しとくか。',
+    '基礎タスク、予定通り終わったな。……上出来だ。あとは好きに使え。',
+    'ここからはご褒美タイムだ。得意分野をサラッとおさらいしてけ。',
+  ];
+  const catchup = [
+    'ここからはバッファ枠だ。残りをゆっくり消化していくぞ。焦らんでいい。',
+    '時間内には終わらなかったが……気にすんな。バッファで続きをやっつけよう。',
+    '積み残し、ここで片づけるぞ。無理はすんな、お前のペースでいい。',
+  ];
+  const list = usage === 'catchup' ? catchup : review;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// 基礎タスクが未達のままバッファ枠に入りそうな時のリマインド（残り問題数を伝える）。
+export function harioBaseTaskReminder(remaining) {
+  const list = [
+    `あと${remaining}問だけ頑張ろう。ここを乗り切りゃ、バッファでゆっくりできるぞ。`,
+    `残り${remaining}問だ。……いいペースだ、そのまま押し切れ。`,
+    `もう少しだ。${remaining}問、片づけちまおう。`,
+  ];
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 // リマインド通知用の一言
 export function haripanReminder(examDate, dueCount = 0) {
   const left = daysUntil(examDate);
