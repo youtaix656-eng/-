@@ -8,6 +8,8 @@ import {
   isSyncExpired,
   syncAgeMs,
   extractSyncCode,
+  summarizeHistoryForTransfer,
+  HISTORY_SUMMARY_CUTOFF_MS,
   SYNC_TTL_MS,
 } from '../src/lib/sync.js';
 
@@ -79,4 +81,59 @@ test('t の無い旧データは期限切れにしない', () => {
 test('decodeSync は未対応バージョンを弾く', async () => {
   const badEnc = await encodeSync({ v: 2, s: {} });
   await assert.rejects(() => decodeSync(badEnc), /未対応/);
+});
+
+test('summarizeHistoryForTransfer: 直近90日はそのまま、それより前は日×科目×正誤で集計', () => {
+  const now = Date.now();
+  const recentAt = now - 1 * 24 * 60 * 60 * 1000; // 1日前（要約対象外）
+  const oldDay = '2020-01-01';
+  const oldAt = new Date(`${oldDay}T09:00:00.000Z`).getTime(); // 90日超過（要約対象）
+  const history = [
+    { questionId: 'q-recent', subject: '解剖学', correct: true, at: recentAt },
+    { questionId: 'q-old-1', subject: '解剖学', correct: true, at: oldAt },
+    { questionId: 'q-old-2', subject: '解剖学', correct: true, at: oldAt + 1000 },
+    { questionId: 'q-old-3', subject: '解剖学', correct: false, at: oldAt + 2000 },
+    { questionId: 'q-old-4', subject: '生理学', correct: true, at: oldAt + 3000 },
+  ];
+  const out = summarizeHistoryForTransfer(history, now);
+  // 直近1件はそのまま残る
+  assert.ok(out.some((e) => e.questionId === 'q-recent'));
+  // 古い5件のうち4件は3バケット（解剖学×正, 解剖学×誤, 生理学×正）に集約される
+  const aggregated = out.filter((e) => e.n != null);
+  assert.equal(aggregated.length, 3);
+  const anatCorrect = aggregated.find((e) => e.subject === '解剖学' && e.correct === true);
+  assert.equal(anatCorrect.n, 2);
+  const anatWrong = aggregated.find((e) => e.subject === '解剖学' && e.correct === false);
+  assert.equal(anatWrong.n, 1);
+  // 集約後の件数（1件の直近 + 3バケット）は元の5件より少ない
+  assert.equal(out.length, 4);
+});
+
+test('summarizeHistoryForTransfer: 90日以内のデータだけなら要約せずそのまま', () => {
+  const now = Date.now();
+  const history = [
+    { questionId: 'a', subject: 'X', correct: true, at: now - 1000 },
+    { questionId: 'b', subject: 'X', correct: false, at: now - 2000 },
+  ];
+  const out = summarizeHistoryForTransfer(history, now);
+  assert.equal(out.length, 2);
+  assert.ok(out.every((e) => e.n == null));
+});
+
+test('buildSyncPayload: summarizeHistory オプションで履歴が圧縮される', async () => {
+  const now = Date.now();
+  const oldAt = now - (HISTORY_SUMMARY_CUTOFF_MS + 10 * 24 * 60 * 60 * 1000);
+  const history = Array.from({ length: 30 }, (_, i) => ({
+    questionId: `q-${i}`,
+    subject: '解剖学',
+    correct: i % 2 === 0,
+    at: oldAt + i * 1000,
+  }));
+  const raw = buildSyncPayload({ history }, { includeHistory: true, summarizeHistory: false });
+  const summarized = buildSyncPayload({ history }, { includeHistory: true, summarizeHistory: true });
+  assert.equal(raw.h.length, 30);
+  assert.ok(summarized.h.length < raw.h.length);
+  // 要約後も往復できる（decodeSync が読める形のまま）
+  const back = syncToBackup(await decodeSync(await encodeSync(summarized)));
+  assert.ok(Array.isArray(back.history));
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { qrMatrix } from '../lib/qr.js';
-import { buildSyncPayload, encodeSync, syncUrl, SYNC_TTL_MS } from '../lib/sync.js';
+import { buildSyncPayload, encodeSync, syncUrl, SYNC_TTL_MS, HISTORY_SUMMARY_CUTOFF_MS } from '../lib/sync.js';
 import { splitIntoChunks } from '../lib/chunk.js';
 
 // 1枚のQRに載せるチャンクデータの目安文字数（URLのprefix・チャンクヘッダぶんの余裕を見た値）。
@@ -52,6 +52,7 @@ export default function SyncQR({ store, onToast }) {
   const { srs, history, memos, links, examResults, settings } = store;
   const [open, setOpen] = useState(false);
   const [withHistory, setWithHistory] = useState(true);
+  const [summarizeHistory, setSummarizeHistory] = useState(false);
   const [issuedAt, setIssuedAt] = useState(0); // 発行時刻（再発行で更新）
   const [now, setNow] = useState(Date.now());
   const [building, setBuilding] = useState(false);
@@ -85,7 +86,7 @@ export default function SyncQR({ store, onToast }) {
     setFrameIdx(0);
     (async () => {
       const data = { srs, history, memos, links, examResults, settings };
-      const payload = buildSyncPayload(data, { includeHistory: withHistory });
+      const payload = buildSyncPayload(data, { includeHistory: withHistory, summarizeHistory });
       const encoded = await encodeSync(payload);
       if (!alive) return;
       // 常にチャンク形式（1枚で収まる場合は of=1 の1枚だけ）にして、読み取り側の処理を1本化する。
@@ -95,7 +96,7 @@ export default function SyncQR({ store, onToast }) {
     })();
     return () => { alive = false; };
     // issuedAt を依存に含めることで「再発行」時に焼き直す
-  }, [open, issuedAt, withHistory, srs, history, memos, links, examResults, settings]);
+  }, [open, issuedAt, withHistory, summarizeHistory, srs, history, memos, links, examResults, settings]);
 
   const multi = chunks && chunks.length > 1;
   const currentUrl = chunks ? chunks[frameIdx] : '';
@@ -210,6 +211,18 @@ export default function SyncQR({ store, onToast }) {
               <small>オフにすると容量が減り、QRの枚数を減らせます（弱点分析の履歴は移りません）。</small>
             </span>
           </label>
+          {withHistory && (
+            <label className="switch-row" style={{ marginTop: 4 }}>
+              <input type="checkbox" checked={summarizeHistory} onChange={(e) => setSummarizeHistory(e.target.checked)} />
+              <span>
+                古い履歴を要約して軽量化する
+                <small>
+                  直近{Math.round(HISTORY_SUMMARY_CUTOFF_MS / (24 * 60 * 60 * 1000))}日分はそのまま、それより前は
+                  「日付・科目・正誤ごとの件数」に要約してQRの枚数を減らします（要約後は問題ごとの詳細は失われます）。
+                </small>
+              </span>
+            </label>
+          )}
           <div className="btn-row" style={{ marginTop: 10 }}>
             {!multi && !tooBig && !expired && <button className="btn" onClick={copyUrl}>受け渡しURLをコピー</button>}
             <button className="btn" onClick={issue}>🔄 再発行</button>

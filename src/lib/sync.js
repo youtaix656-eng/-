@@ -9,12 +9,43 @@ import { encodeTransferString, decodeTransferString } from './transferCodec.js';
 // 受け渡し（QR／URL）の有効期限：発行から5分間だけ使える（安全のため）
 export const SYNC_TTL_MS = 5 * 60 * 1000;
 
+// 解答履歴の要約（軽量バックアップオプション）：直近90日は1件ずつそのまま残し、
+// それより前は「日付×科目×正誤」で件数集計にまとめて件数を大きく減らす。
+// QRなど容量が厳しい転送方式向けの近似（問題ごとの詳細は失われる）。
+export const HISTORY_SUMMARY_CUTOFF_MS = 90 * 24 * 60 * 60 * 1000;
+
+export function summarizeHistoryForTransfer(history, now = Date.now()) {
+  const cutoff = now - HISTORY_SUMMARY_CUTOFF_MS;
+  const recent = [];
+  const buckets = new Map(); // `${day}|${subject}|${correct}` -> count
+  for (const e of history) {
+    if (!e || e.at == null) continue;
+    if (e.at >= cutoff) { recent.push(e); continue; }
+    const day = new Date(e.at).toISOString().slice(0, 10);
+    const key = `${day}|${e.subject || ''}|${e.correct ? 1 : 0}`;
+    buckets.set(key, (buckets.get(key) || 0) + 1);
+  }
+  const aggregated = [];
+  for (const [key, n] of buckets) {
+    const [day, subject, correctFlag] = key.split('|');
+    aggregated.push({
+      at: new Date(`${day}T00:00:00.000Z`).getTime(),
+      ...(subject ? { subject } : {}),
+      correct: correctFlag === '1',
+      n,
+    });
+  }
+  return [...aggregated, ...recent].sort((a, b) => a.at - b.at);
+}
+
 // バックアップ全体 → 軽量ペイロード（キーを短縮して容量節約）
-export function buildSyncPayload(data, { includeHistory = true } = {}) {
+export function buildSyncPayload(data, { includeHistory = true, summarizeHistory = false } = {}) {
   // t = 発行時刻（秒）。受け取り側で5分以内かどうかを判定する。
   const p = { v: 1, t: Math.floor(Date.now() / 1000) };
   if (data.srs && Object.keys(data.srs).length) p.s = data.srs;
-  if (includeHistory && Array.isArray(data.history) && data.history.length) p.h = data.history;
+  if (includeHistory && Array.isArray(data.history) && data.history.length) {
+    p.h = summarizeHistory ? summarizeHistoryForTransfer(data.history) : data.history;
+  }
   if (data.memos && Object.keys(data.memos).length) p.m = data.memos;
   if (data.links && Object.keys(data.links).length) p.l = data.links;
   if (Array.isArray(data.examResults) && data.examResults.length) p.e = data.examResults;
