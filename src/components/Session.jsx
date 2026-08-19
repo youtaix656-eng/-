@@ -155,7 +155,7 @@ function buildWeaknessSummary(wrongQs, links) {
   return { topTags, topGenres, relatedComparisons };
 }
 
-export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
+export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio }) {
   const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark } = store;
   // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
   const subjects = useMemo(() => {
@@ -528,6 +528,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview }) {
           </p>
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
+            {onGoAudio && (
+              <button className="btn" onClick={() => onGoAudio?.()}>🔊 音声で復習する</button>
+            )}
             {requested >= 900 ? (
               <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>2周目を開始</button>
             ) : (

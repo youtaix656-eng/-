@@ -413,6 +413,10 @@ export default function App() {
             onToast={showToast}
             onOpenKeyword={openKeyword}
             onGoReview={() => setView('review')}
+            onGoAudio={() => {
+              setAudioReview(true);
+              setView('audio');
+            }}
           />
         );
       case 'review':
