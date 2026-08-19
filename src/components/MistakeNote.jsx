@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { normalize } from '../lib/srs.js';
+import { normalize, isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
 
 // 間違いノートの自動生成
 // 間違えた問題（＝△✕を含む復習対象）＋自分メモをまとめ、テキスト/PDF(印刷)で出力。
+// 何度も間違えている「要注意」問題は自動で先頭にピン留めする。
 export default function MistakeNote({ store, onToast }) {
   const { reviewQuestions, memos, links, srs } = store;
   const [subjectFilter, setSubjectFilter] = useState('all');
@@ -11,10 +12,15 @@ export default function MistakeNote({ store, onToast }) {
     () => Array.from(new Set(reviewQuestions.map((q) => q.subject).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja')),
     [reviewQuestions]
   );
-  const list = useMemo(
-    () => (subjectFilter === 'all' ? reviewQuestions : reviewQuestions.filter((q) => q.subject === subjectFilter)),
-    [reviewQuestions, subjectFilter]
-  );
+  const list = useMemo(() => {
+    const base = subjectFilter === 'all' ? reviewQuestions : reviewQuestions.filter((q) => q.subject === subjectFilter);
+    return [...base].sort((a, b) => {
+      const la = isLeech(srs[a.id]) ? 1 : 0;
+      const lb = isLeech(srs[b.id]) ? 1 : 0;
+      if (la !== lb) return lb - la; // 要注意（リーチ）を先頭にピン留め
+      return (normalize(srs[b.id]).wrongCount || 0) - (normalize(srs[a.id]).wrongCount || 0);
+    });
+  }, [reviewQuestions, subjectFilter, srs]);
 
   const answerOf = (q) =>
     q.type === 'ox' ? q.choices[q.answer] : `${q.answer + 1}. ${q.choices[q.answer]}`;
@@ -26,7 +32,8 @@ export default function MistakeNote({ store, onToast }) {
     lines.push('');
     list.forEach((q, i) => {
       const st = normalize(srs[q.id]);
-      lines.push(`【${i + 1}】${q.subject || ''}${q.round ? '（' + q.round + '）' : ''}  誤答${st.wrongCount || 0}回`);
+      const leechTag = isLeech(srs[q.id]) ? ' ⚠️要注意' : '';
+      lines.push(`【${i + 1}】${q.subject || ''}${q.round ? '（' + q.round + '）' : ''}  誤答${st.wrongCount || 0}回${leechTag}`);
       lines.push(`Q. ${q.question || '（図の問題）'}`);
       lines.push(`A. ${answerOf(q)}`);
       if (q.explanation) lines.push(`解説: ${q.explanation}`);
@@ -62,7 +69,7 @@ export default function MistakeNote({ store, onToast }) {
         const memo = memos[q.id];
         const note = links[q.id]?.note;
         return `<div class="item">
-          <div class="head">【${i + 1}】${escapeHtml(q.subject || '')} ${q.round ? '（' + escapeHtml(q.round) + '）' : ''} <span class="wrong">誤答${st.wrongCount || 0}回</span></div>
+          <div class="head">【${i + 1}】${escapeHtml(q.subject || '')} ${q.round ? '（' + escapeHtml(q.round) + '）' : ''} <span class="wrong">誤答${st.wrongCount || 0}回</span>${isLeech(srs[q.id]) ? ' <span class="wrong">⚠️要注意</span>' : ''}</div>
           <div class="q">Q. ${escapeHtml(q.question || '（図の問題）')}</div>
           <div class="a">A. ${escapeHtml(answerOf(q))}</div>
           ${q.explanation ? `<div class="exp">解説：${escapeHtml(q.explanation)}</div>` : ''}
@@ -143,6 +150,7 @@ export default function MistakeNote({ store, onToast }) {
               <div className="list-item" key={q.id}>
                 <div className="li-subject">
                   【{i + 1}】{q.subject} ・ 誤答{st.wrongCount || 0}回
+                  {isLeech(srs[q.id]) && <span className="risk-badge lv-hot" title={`${LEECH_THRESHOLD}回以上間違えています`}>⚠️ 要注意</span>}
                 </div>
                 <div className="li-q">{q.question || '（図の問題）'}</div>
                 <div className="li-stat" style={{ color: 'var(--correct)' }}>

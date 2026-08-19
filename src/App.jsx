@@ -220,8 +220,8 @@ export default function App() {
       const target = new Date(now);
       target.setHours(hh || 7, mm || 0, 0, 0);
       if (now < target) return;
-      // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）
-      const body = haripanReminder(store.settings.examDate);
+      // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）。復習期限の件数も伝える。
+      const body = haripanReminder(store.settings.examDate, (store.dueReviewQuestions || []).length);
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('ハリオ先生', { body });
@@ -424,9 +424,10 @@ export default function App() {
         return (
           <Review
             store={store}
+            onToast={showToast}
             onOpenKeyword={openKeyword}
-            onGoAudio={() => {
-              setAudioReview(true);
+            onGoAudio={(ids) => {
+              setAudioReview(ids && ids.length ? { ids } : true);
               setView('audio');
             }}
           />

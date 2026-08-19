@@ -20,6 +20,12 @@ const DEFAULT_EF = 2.5;
 // 5回連続「○（完璧）」でマスター（復習リストから外れる）
 export const MASTER_STREAK = 5;
 
+// この回数以上間違えた問題は「リーチ（要注意）」— Review.jsx・MistakeNote.jsxで共用
+export const LEECH_THRESHOLD = 8;
+export function isLeech(state) {
+  return (normalize(state).wrongCount || 0) >= LEECH_THRESHOLD;
+}
+
 // エビングハウスの忘却曲線に沿った復習間隔（連続「完璧」回数 → 次回までの日数）
 //   1回目の完璧の後は1日後、以降 3日・7日・16日 と広げ、5回目でマスター。
 const EBBINGHAUS_DAYS = [0, 1, 3, 7, 16];

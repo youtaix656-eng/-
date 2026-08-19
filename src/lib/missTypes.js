@@ -15,6 +15,14 @@ export function missTypeLabel(id) {
   return MISS_TYPES.find((t) => t.id === id)?.label || '';
 }
 
+// 型別の再出題までの間隔。ケアレスは短め（もう一度落ち着いて確認）、
+//   知識不足は長め（解説を読み込む時間を作ってから再出題）。既定（型なし）は20分。
+export const MISS_TYPE_DELAY_MS = {
+  careless: 10 * 60 * 1000,
+  kanchigai: 20 * 60 * 1000,
+  chishiki: 24 * 60 * 60 * 1000,
+};
+
 export async function loadMissTypes() {
   try { return (await idbGet(KEY)) || {}; } catch (e) { return {}; }
 }

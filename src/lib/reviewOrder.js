@@ -27,12 +27,33 @@ export function matchesSearch(q, term, links) {
   return false;
 }
 
-// 復習リストを絞り込み（科目＋弱点タグ＋検索語）
-export function filterReview(questions, { subject = '', tag = '', term = '', links = {} } = {}) {
+// 復習リストを絞り込み（科目（複数可）＋弱点タグ＋検索語＋回＋ブックマーク＋忘却リスク／誤答回数の下限）
+export function filterReview(
+  questions,
+  {
+    subject = '',
+    subjects = [],
+    tag = '',
+    term = '',
+    links = {},
+    round = '',
+    bookmarkOnly = false,
+    bookmarks = {},
+    minRisk = 0,
+    minWrong = 0,
+    srs = {},
+    now = Date.now(),
+  } = {}
+) {
   return questions.filter((q) => {
     if (subject && q.subject !== subject) return false;
+    if (subjects.length > 0 && !subjects.includes(q.subject)) return false;
     if (tag && !effectiveTags(q, links).includes(tag)) return false;
     if (term && !matchesSearch(q, term, links)) return false;
+    if (round && String(q.round) !== String(round)) return false;
+    if (bookmarkOnly && !bookmarks[q.id]) return false;
+    if (minWrong > 0 && (normalize(srs[q.id]).wrongCount || 0) < minWrong) return false;
+    if (minRisk > 0 && Math.round(riskOf(q, srs, now) * 100) < minRisk) return false;
     return true;
   });
 }

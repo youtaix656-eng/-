@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import ResetInline from './ResetInline.jsx';
-import { normalize, MASTER_STREAK } from '../lib/srs.js';
+import { normalize, MASTER_STREAK, LEECH_THRESHOLD, isLeech as isLeechState } from '../lib/srs.js';
 import * as storage from '../lib/storage.js';
 import { effectiveTags } from '../lib/query.js';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { relatedQuestions } from '../lib/related.js';
 import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
-import { comparisonsForKeyword } from '../data/mindmapData.js';
-import { loadMissTypes, recordMissType, missTypeLabel } from '../lib/missTypes.js';
+import { comparisonsForKeyword, COMPARISONS } from '../data/mindmapData.js';
+import { loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS } from '../lib/missTypes.js';
 import { buildGraphFromSolved } from '../lib/kgService.js';
 import { conceptsOf } from '../lib/concepts.js';
 import { elaborationSuggestions, chainNext } from '../lib/kgRecall.js';
+import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
+import { buildKanaIndex } from '../lib/yomi.js';
+import { reviewPoolFor, buildWeaknessSummary } from '../lib/reviewPool.js';
+import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
+import { loadTodayMood } from '../lib/mood.js';
+import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -78,10 +84,29 @@ function RelatedPanel({ q, questions, links }) {
 }
 
 // 間違えた問題だけを解くモード（エビングハウスの忘却曲線・5回連続の完璧でマスター）
-export default function Review({ store, onOpenKeyword, onGoAudio }) {
+// 原問と派生（同じ過去問由来）を離す。id末尾の枝記号を除いた基幹idでバケット分割し、
+//   ラウンドロビンで並べて同一由来が隣り合わないようにする（Session.jsxと同じ考え方）。
+const baseId = (id) => String(id).replace(/[a-z]+$/i, '');
+function spaceByOrigin(qs) {
+  if (qs.length < 3) return qs;
+  const buckets = new Map();
+  for (const q of qs) { const b = baseId(q.id); if (!buckets.has(b)) buckets.set(b, []); buckets.get(b).push(q); }
+  if (buckets.size < 2) return qs;
+  const lists = [...buckets.values()];
+  const out = [];
+  let more = true;
+  while (more) {
+    more = false;
+    for (const l of lists) { if (l.length) { out.push(l.shift()); more = true; } }
+  }
+  return out;
+}
+
+export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const {
     questions, dueReviewQuestions, reviewQuestions, history,
     memos, links, recordAnswer, setMemo, setLink, srs, GRADES,
+    bookmarks, toggleBookmark, removeFromReview, setNextDue, session,
   } = store;
 
   const [started, setStarted] = useState(false);
@@ -89,57 +114,170 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   const [idx, setIdx] = useState(0);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
   const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
-  const missRef = useRef([]); // この回で ○ にならなかった（不正解・△・✕）問題
+  const missRef = useRef([]); // この回で ○ にならなかった（不正解・△・✕）問題（{ q, selfKind }）
+  const masteredRef = useRef([]); // このセッション中に新たにマスターした問題
+  const [nextTaskInput, setNextTaskInput] = useState('');
+  const [nextTaskSavedAt, setNextTaskSavedAt] = useState(0);
+  useEffect(() => { loadNextTask().then((t) => { if (t && t.text) setNextTaskInput(t.text); }); }, []);
+  const saveNextTaskDraft = () => {
+    const text = nextTaskInput.trim();
+    if (!text) return;
+    saveNextTask(text);
+    setNextTaskSavedAt(Date.now());
+    onToast?.('📌 明日の最初の1タスクを保存しました');
+  };
 
-  // 出題・一覧の制御（#1/#4/#5/#8）
+  // 出題・一覧の制御
   const [orderMode, setOrderMode] = useState('forget'); // 既定＝忘れそうな順
-  const [filterTag, setFilterTag] = useState('');
+  const [filterTag, setFilterTag] = useState(''); // 弱点タグ or キーワードプルダウンで選んだ語
   const [search, setSearch] = useState('');
-  const [subject, setSubject] = useState('all'); // 科目ごとの検索
+  const [subjectsSel, setSubjectsSel] = useState([]); // 複数選択可（空＝すべて）
+  const [round, setRound] = useState(''); // 回（第XX回）
+  const [bookmarkOnly, setBookmarkOnly] = useState(false);
+  const [minRisk, setMinRisk] = useState(0); // 忘却リスクの下限（%）
+  const [minWrong, setMinWrong] = useState(0); // 誤答回数の下限
+  const [recentOnly, setRecentOnly] = useState(''); // ''|'today'|'week'：直近の誤答だけに絞る
   const [batch, setBatch] = useState(60); // 1回の問題数（0=すべて）
-  const [showAll, setShowAll] = useState(false); // リストの折りたたみ（#4）
-  const [fast, setFast] = useState(false); // 高速回転モード（#6）
-  const [simple, setSimple] = useState(true); // 段階表示：シンプル/じっくり（改善1）
-  const [missTypes, setMissTypes] = useState({}); // 間違いの型（#9）
+  const [showAll, setShowAll] = useState(false); // リストの折りたたみ
+  const [fast, setFast] = useState(false); // 高速回転モード
+  const [simple, setSimple] = useState(true); // 段階表示：シンプル/じっくり
+  const [missTypes, setMissTypes] = useState({}); // 間違いの型
+  const [mood, setMood] = useState(null); // 今日の調子（Homeで記録したもの）
+  const [weeklyExpanded, setWeeklyExpanded] = useState(false); // 週間バー→月間ヒートマップ
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
-  const onMissType = (id, type) => recordMissType(id, type).then(setMissTypes);
+  useEffect(() => { loadTodayMood().then(setMood); }, []);
+  const onMissType = (id, type) => {
+    recordMissType(id, type).then(setMissTypes);
+    // 型別に次回の再出題間隔を調整（ケアレスは短め、知識不足は長め＝解説を読み込む時間を作る）
+    setNextDue?.(id, MISS_TYPE_DELAY_MS[type] || 20 * 60 * 1000);
+  };
 
-  // 復習リストにある科目の一覧
-  const subjects = useMemo(
-    () => Array.from(new Set(reviewQuestions.map((q) => q.subject).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja')),
-    [reviewQuestions]
+  // きのう出来なかった理由（あれば今日だけ一言表示）
+  const [streakBreakReasonLabel, setStreakBreakReasonLabel] = useState(null);
+  useEffect(() => {
+    const broken = detectBrokenYesterday(history);
+    if (!broken) return;
+    loadStreakBreakLog().then((log) => {
+      const entry = log[String(broken)];
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      if (entry && new Date(entry.at).setHours(0, 0, 0, 0) === today.getTime()) {
+        setStreakBreakReasonLabel(breakReasonLabel(entry.reason));
+      }
+    });
+  }, [history]);
+
+  // 復習対象プール（拡張版）：通常の復習対象（isInReview）に加え、マスター済みでも
+  //   保持率が下がってきた問題を「念のため確認」として少数含む（reviewPool.jsを流用）。
+  const extendedReviewPool = useMemo(() => reviewPoolFor(questions, srs), [questions, srs]);
+  const reviewIdSet = useMemo(() => new Set(reviewQuestions.map((q) => q.id)), [reviewQuestions]);
+  const nagameQuestions = useMemo(
+    () => extendedReviewPool.filter((q) => !reviewIdSet.has(q.id)),
+    [extendedReviewPool, reviewIdSet]
+  );
+  // リーチ（要注意）：規定回数以上間違えている問題
+  const isLeech = (q) => isLeechState(srs[q.id]);
+
+  // 復習リストにある科目の一覧（出題基準の1〜14番順、無いものは末尾に五十音順）
+  const subjects = useMemo(() => {
+    const present = Array.from(new Set(extendedReviewPool.map((q) => q.subject).filter(Boolean)));
+    const ordered = SUBJECT_TAG_NAMES.filter((s) => present.includes(s));
+    const extra = present.filter((s) => !SUBJECT_TAG_NAMES.includes(s)).sort((a, b) => a.localeCompare(b, 'ja'));
+    return [...ordered, ...extra];
+  }, [extendedReviewPool]);
+  const toggleSubjectSel = (s) => setSubjectsSel((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
+
+  // キーワード（プルダウン・あ〜ん順）／回（第XX回）の選択肢
+  const kwOptions = useMemo(
+    () => Array.from(new Set(extendedReviewPool.flatMap((q) => effectiveTags(q, links)))),
+    [extendedReviewPool, links]
+  );
+  const kwSections = useMemo(() => buildKanaIndex(kwOptions), [kwOptions]);
+  const roundOptions = useMemo(
+    () => Array.from(new Set(extendedReviewPool.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    [extendedReviewPool]
   );
 
-  // 弱点テーマ（誤答が多いタグ）＝ #4
+  // 弱点テーマ（誤答が多いタグ）
   const weakTags = useMemo(
-    () => weakTagClusters(history, reviewQuestions, links, { minWrong: 1, limit: 10 }),
-    [history, reviewQuestions, links]
+    () => weakTagClusters(history, extendedReviewPool, links, { minWrong: 1, limit: 10 }),
+    [history, extendedReviewPool, links]
   );
 
-  const filterOpts = { subject: subject === 'all' ? '' : subject, tag: filterTag, term: search, links };
+  // 弱点テーマの改善トレンド（今週の誤答率 vs 先週の誤答率）
+  const qById = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions]);
+  const weakTagsWithTrend = useMemo(() => {
+    const now = Date.now();
+    const WEEK = 7 * 24 * 60 * 60 * 1000;
+    const thisWeek = {};
+    const lastWeek = {};
+    for (const h of history) {
+      const q = qById.get(h.questionId);
+      if (!q) continue;
+      const age = now - h.at;
+      const bucket = age <= WEEK ? thisWeek : age <= 2 * WEEK ? lastWeek : null;
+      if (!bucket) continue;
+      for (const tg of effectiveTags(q, links)) {
+        if (!bucket[tg]) bucket[tg] = { wrong: 0, total: 0 };
+        bucket[tg].total += 1;
+        if (!h.correct) bucket[tg].wrong += 1;
+      }
+    }
+    return weakTags.map((w) => {
+      const cur = thisWeek[w.tag];
+      const prev = lastWeek[w.tag];
+      const curRate = cur && cur.total >= 2 ? cur.wrong / cur.total : null;
+      const prevRate = prev && prev.total >= 2 ? prev.wrong / prev.total : null;
+      let trend = null;
+      if (curRate != null && prevRate != null) {
+        const diff = curRate - prevRate;
+        trend = diff <= -0.15 ? 'better' : diff >= 0.15 ? 'worse' : 'flat';
+      }
+      return { ...w, trend };
+    });
+  }, [weakTags, history, qById, links]);
 
-  // 絞り込み＋並べ替え後のリスト（#8）
+  // 直近（今日／今週）に誤答した問題だけに絞る補助フィルタ
+  const recentWrongIds = useMemo(() => {
+    if (!recentOnly) return null;
+    const now = Date.now();
+    const since = recentOnly === 'today' ? now - 24 * 60 * 60 * 1000 : now - 7 * 24 * 60 * 60 * 1000;
+    const ids = new Set();
+    for (const h of history) if (!h.correct && h.at >= since) ids.add(h.questionId);
+    return ids;
+  }, [recentOnly, history]);
+
+  const filterOpts = {
+    subjects: subjectsSel, tag: filterTag, term: search, links,
+    round, bookmarkOnly, bookmarks, minRisk, minWrong, srs,
+  };
+
+  const applyRecent = (qs) => (recentWrongIds ? qs.filter((q) => recentWrongIds.has(q.id)) : qs);
+
+  // 絞り込み＋並べ替え後のリスト（マスター後の「念のため確認」も対象に含む）
   const shownList = useMemo(() => {
-    const filtered = filterReview(reviewQuestions, filterOpts);
+    const filtered = applyRecent(filterReview(extendedReviewPool, filterOpts));
     return sortReview(filtered, orderMode, { srs, history, links });
-  }, [reviewQuestions, subject, filterTag, search, orderMode, srs, history, links]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extendedReviewPool, subjectsSel, filterTag, search, round, bookmarkOnly, bookmarks, minRisk, minWrong, recentWrongIds, orderMode, srs, history, links]);
 
   // 出題プール：絞り込みがあれば全リストから、無ければ「今日の復習」から。並びは orderMode。
-  const filtering = subject !== 'all' || !!filterTag || !!search.trim();
+  const filtering = subjectsSel.length > 0 || !!filterTag || !!search.trim() || !!round || bookmarkOnly || minRisk > 0 || minWrong > 0 || !!recentOnly;
   const startPool = useMemo(() => {
-    const base = filtering ? filterReview(reviewQuestions, filterOpts) : dueReviewQuestions;
+    const base = filtering ? applyRecent(filterReview(extendedReviewPool, filterOpts)) : dueReviewQuestions;
     return sortReview(base, orderMode, { srs, history, links });
-  }, [filtering, subject, filterTag, search, reviewQuestions, dueReviewQuestions, orderMode, srs, history, links]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtering, subjectsSel, filterTag, search, round, bookmarkOnly, bookmarks, minRisk, minWrong, recentWrongIds, extendedReviewPool, dueReviewQuestions, orderMode, srs, history, links]);
 
   // 実際に出題される問数（バッチ上限と在庫の小さい方）
   const effectiveCount = batch > 0 ? Math.min(batch, startPool.length) : startPool.length;
 
-  // pool を出題開始（続けるループ用に任意の配列でも開始できる）
+  // pool を出題開始（続けるループ用に任意の配列でも開始できる）。原問と派生は離して出題。
   const startWith = (pool) => {
     if (!pool || pool.length === 0) return;
     missRef.current = [];
-    setOrder(pool);
+    masteredRef.current = [];
+    setOrder(spaceByOrigin(pool));
     setIdx(0);
     setSessionStats({ total: 0, correct: 0 });
     setStarted(true);
@@ -150,10 +288,26 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     startWith(pool);
   };
 
-  // 弱点テーマをワンタップで即復習（#5）：フィルタ状態に依存せずその場でプールを作る
+  // 弱点テーマをワンタップで即復習：フィルタ状態に依存せずその場でプールを作る
   const quickStartTag = (tag) => {
-    const pool = sortReview(filterReview(reviewQuestions, { tag, links }), orderMode, { srs, history, links });
+    const pool = sortReview(filterReview(extendedReviewPool, { tag, links }), orderMode, { srs, history, links });
     startWith(batch > 0 ? pool.slice(0, batch) : pool);
+  };
+
+  // 直近の学習セッション（10・60・300・900）で間違えた問題を、その場ですぐ復習できるように
+  const lastSessionMisses = useMemo(() => {
+    if (!session || !session.startedAt || !Array.isArray(session.ids)) return [];
+    const idsSet = new Set(session.ids);
+    const wrongIds = new Set();
+    for (const h of history) {
+      if (h.at >= session.startedAt && idsSet.has(h.questionId) && !h.correct) wrongIds.add(h.questionId);
+    }
+    return questions.filter((q) => wrongIds.has(q.id));
+  }, [session, history, questions]);
+
+  const clearFilters = () => {
+    setSubjectsSel([]); setFilterTag(''); setSearch(''); setRound('');
+    setBookmarkOnly(false); setMinRisk(0); setMinWrong(0); setRecentOnly('');
   };
 
   // 今日の到達・連続日数（改善2）：復習由来の解答だけを数える
@@ -163,8 +317,10 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     const start0 = d.getTime();
     return history.filter((h) => h.source === 'review' && h.at >= start0).length;
   }, [history]);
-  // 日次目標＝今日こなした復習＋まだ期限が来ている数（今日中に片づけたい総量）
-  const dailyGoal = Math.max(1, todayReviewDone + dueReviewQuestions.length);
+  // 日次目標＝今日こなした復習＋まだ期限が来ている数（今日中に片づけたい総量）。
+  //   「今日の調子＝しんどい」の日はノルマを半分に緩める（Homeの今日の調子と連動）。
+  const goalDueBase = mood === 'tired' ? Math.ceil(dueReviewQuestions.length * 0.5) : dueReviewQuestions.length;
+  const dailyGoal = Math.max(1, todayReviewDone + goalDueBase);
   const goalPct = Math.min(100, Math.round((todayReviewDone / dailyGoal) * 100));
 
   // 前進感（改善5）：あと1問でマスター／マスターまで延べ何回／週間の復習量
@@ -188,6 +344,43 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     return days;
   }, [history]);
   const weekMax = Math.max(1, ...weekly);
+  // 週間バーの拡大表示：直近5週間（35日）分の復習量ヒートマップ
+  const monthly = useMemo(() => {
+    if (!weeklyExpanded) return [];
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = 34; i >= 0; i--) {
+      const d0 = base.getTime() - i * DAY;
+      const d1 = d0 + DAY;
+      days.push(history.filter((h) => h.source === 'review' && h.at >= d0 && h.at < d1).length);
+    }
+    return days;
+  }, [weeklyExpanded, history]);
+  const monthlyMax = Math.max(1, ...monthly);
+
+  // マスター済み問題の累計数・科目別マスター率（復習経由＝一度でも間違えた問題のうち）
+  const masteredCount = useMemo(
+    () => questions.filter((q) => {
+      const s = normalize(srs[q.id]);
+      return (s.wrongCount || 0) > 0 && (s.correctStreak || 0) >= MASTER_STREAK;
+    }).length,
+    [questions, srs]
+  );
+  const masterySubjectStats = useMemo(() => {
+    const stats = {};
+    for (const q of questions) {
+      const s = normalize(srs[q.id]);
+      if ((s.wrongCount || 0) === 0) continue;
+      const subj = q.subject || 'その他';
+      if (!stats[subj]) stats[subj] = { total: 0, mastered: 0 };
+      stats[subj].total += 1;
+      if ((s.correctStreak || 0) >= MASTER_STREAK) stats[subj].mastered += 1;
+    }
+    return Object.entries(stats)
+      .map(([subject, v]) => ({ subject, ...v, rate: v.total ? v.mastered / v.total : 0 }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6);
+  }, [questions, srs]);
 
   // 知識グラフ（解答済みから構築）＝精緻化候補・関連1問チェインに使う
   const kgraph = useMemo(
@@ -234,11 +427,17 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
     setResume(null);
   };
 
-  const handleAnswered = (correct, grade) => {
+  const handleAnswered = (correct, grade, selfKind) => {
     const q = order[idx];
-    recordAnswer(q, correct, grade, 'review'); // 復習由来として記録（到達集計用）
+    const priorStreak = normalize(srs[q?.id]).correctStreak || 0;
+    recordAnswer(q, correct, grade, 'review', selfKind); // 復習由来として記録（到達集計用）
     // ○（完璧）以外＝不正解・△・✕ は「まだ定着していない」として記憶
-    if (!correct && q) missRef.current.push(q);
+    if (!correct && q) missRef.current.push({ q, selfKind });
+    // ちょうど5回連続の○に到達＝マスターの瞬間。その場でお祝いする
+    if (correct && q && priorStreak === MASTER_STREAK - 1) {
+      masteredRef.current.push(q);
+      onToast?.(`🏆 マスター達成！「${(q.question || '').slice(0, 20)}」`);
+    }
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
   };
 
@@ -248,7 +447,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
   };
 
   // ---- 復習対象が無い ----
-  if (!started && reviewQuestions.length === 0) {
+  if (!started && extendedReviewPool.length === 0) {
     return (
       <div className="view">
         <h2 className="view-title">間違えた問題</h2>
@@ -272,7 +471,14 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         <p className="view-desc">
           間違えた・△・✕（自信のない）問題だけを、<strong>エビングハウスの忘却曲線</strong>に沿って再出題します。
           <strong>○（完璧）が5回連続</strong>で続くまでマスターになりません（△・✕・誤答でリセット）。
+          {nagameQuestions.length > 0 && <>マスター済みでも保持率が下がった問題を「念のため確認」として少数含みます（{nagameQuestions.length}問）。</>}
         </p>
+
+        {streakBreakReasonLabel && (
+          <div className="card" style={{ marginBottom: 10 }}>
+            きのうは『{streakBreakReasonLabel}』だったんですね。気にせず、今日は無理せず1問からいきましょう。
+          </div>
+        )}
 
         <div className="tiles">
           <div className="tile">
@@ -299,22 +505,52 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           </button>
         )}
 
-        {/* 前進感（改善5）：あと1問でマスター／延べ回数／週間の復習量 */}
+        {lastSessionMisses.length > 0 && (
+          <button className="btn block lg" style={{ marginBottom: 10 }} onClick={() => startWith(lastSessionMisses)}>
+            📚 さっきの学習で間違えた{lastSessionMisses.length}問をすぐ復習
+          </button>
+        )}
+
+        {/* 前進感：あと1問でマスター／延べ回数／マスター累計／週間の復習量（タップで月間に拡大） */}
         {reviewQuestions.length > 0 && (
           <div className="progress-hint">
             🎯 あと1問でマスター <strong>{nearMaster}</strong> 件 ・ マスターまで延べ <strong>{toMasterTotal}</strong> 回
-            <div className="weekbar" title="直近7日の復習量">
-              {weekly.map((c, i) => (
+            <br />🏆 マスター済み累計 <strong>{masteredCount}</strong> 問
+            <button
+              className="weekbar"
+              title="タップで月間表示に切り替え"
+              onClick={() => setWeeklyExpanded((v) => !v)}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              {(weeklyExpanded ? monthly : weekly).map((c, i) => (
                 <span key={i} className="weekbar-col">
-                  <i style={{ height: `${Math.round((c / weekMax) * 100)}%` }} />
+                  <i style={{ height: `${Math.round((c / (weeklyExpanded ? monthlyMax : weekMax)) * 100)}%` }} />
                 </span>
               ))}
-              <span className="weekbar-label">7日</span>
-            </div>
+              <span className="weekbar-label">{weeklyExpanded ? '35日（タップで戻す）' : '7日（タップで月間）'}</span>
+            </button>
           </div>
         )}
 
-        {/* ===== 今日の到達リング＋連続日数（改善2・5） ===== */}
+        {masterySubjectStats.length > 0 && (
+          <div className="card" style={{ marginBottom: 10 }}>
+            <div className="section-label" style={{ marginTop: 0 }}>科目別マスター率</div>
+            <ul className="genre-stats">
+              {masterySubjectStats.map((s) => {
+                const p = Math.round(s.rate * 100);
+                return (
+                  <li key={s.subject}>
+                    <span className="gs-name">{s.subject}</span>
+                    <span className="gs-bar"><i style={{ width: `${p}%`, background: p < 40 ? 'var(--wrong)' : p < 80 ? 'var(--warn)' : 'var(--correct)' }} /></span>
+                    <span className="gs-num">{p}%（{s.mastered}/{s.total}）</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* ===== 今日の到達リング＋連続日数 ===== */}
         <div className="review-goal">
           <div className="goal-ring" style={{ '--pct': goalPct }}>
             <div className="goal-ring-in">{goalPct}%</div>
@@ -325,6 +561,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
               🔥 連続 <strong>{streak}</strong> 日
               {todayReviewDone === 0 && streak > 0 && <span className="goal-nudge">　今日やれば {streak + 1} 日目！</span>}
               {goalPct >= 100 && <span className="goal-done">　🎉 今日の目標達成！</span>}
+              {mood === 'tired' && <span className="goal-nudge">　今日は少なめに調整中</span>}
             </div>
           </div>
         </div>
@@ -337,7 +574,7 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             </div>
             <div className="chip-row">
               <button className={`chip ${filterTag === '' ? 'active' : ''}`} onClick={() => setFilterTag('')}>すべて</button>
-              {weakTags.map((w) => {
+              {weakTagsWithTrend.map((w) => {
                 const lvl = w.rate >= 0.6 ? 'hot' : w.rate >= 0.3 ? 'warm' : 'mild';
                 return (
                   <span key={w.tag} className={`weak-chip ${filterTag === w.tag ? 'active' : ''} lv-${lvl}`}>
@@ -347,6 +584,8 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
                       title={`誤答${w.wrong}／${w.attempts}（誤答率${Math.round(w.rate * 100)}%）`}
                     >
                       <i className="weak-dot" />{w.tag} <b>誤答{w.wrong}</b>
+                      {w.trend === 'better' && <span style={{ color: 'var(--correct)' }}> ↓改善</span>}
+                      {w.trend === 'worse' && <span style={{ color: 'var(--wrong)' }}> ↑悪化</span>}
                     </button>
                     <button className="weak-chip-go" onClick={() => quickStartTag(w.tag)} aria-label={`${w.tag}を即復習`}>▶</button>
                   </span>
@@ -356,22 +595,35 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           </>
         )}
 
-        {/* ===== 検索（科目・キーワード）＋並べ替え・出題順 ===== */}
+        {/* ===== 検索（科目・キーワード・回・ブックマーク・直近誤答・忘却リスク/誤答回数）＋並べ替え ===== */}
+        <div className="section-label" style={{ marginTop: 0 }}>科目でしぼる（複数選択可・未選択で全科目）</div>
+        <div className="chip-row">
+          {subjects.map((s, i) => (
+            <button key={s} className={`chip ${subjectsSel.includes(s) ? 'active' : ''}`} onClick={() => toggleSubjectSel(s)}>
+              {i + 1}. {s}
+            </button>
+          ))}
+        </div>
+
         <div className="review-controls">
           <label className="review-order">
-            <span>科目</span>
-            <select value={subject} onChange={(e) => setSubject(e.target.value)}>
-              <option value="all">すべての科目</option>
-              {subjects.map((s) => (<option key={s} value={s}>{s}</option>))}
+            <span>キーワード</span>
+            <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} disabled={kwOptions.length === 0}>
+              <option value="">指定なし</option>
+              {kwSections.map((sec) => (
+                <optgroup key={sec.label} label={`- ${sec.label} -`}>
+                  {sec.items.map((s) => (<option key={s} value={s}>{s}</option>))}
+                </optgroup>
+              ))}
             </select>
           </label>
-          <input
-            type="text"
-            className="review-search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="🔎 キーワード検索（語・タグ）"
-          />
+          <label className="review-order">
+            <span>回（年度）</span>
+            <select value={round} onChange={(e) => setRound(e.target.value)} disabled={roundOptions.length === 0}>
+              <option value="">指定なし</option>
+              {roundOptions.map((r) => (<option key={r} value={r}>第{r}回</option>))}
+            </select>
+          </label>
           <label className="review-order">
             <span>出題・並び順</span>
             <select value={orderMode} onChange={(e) => setOrderMode(e.target.value)}>
@@ -379,9 +631,38 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
             </select>
           </label>
         </div>
+        <input
+          type="text"
+          className="review-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="🔎 キーワード検索（語・タグ）"
+        />
+
+        <label className="autokw-row" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={bookmarkOnly} onChange={(e) => setBookmarkOnly(e.target.checked)} />
+          <span>★ ブックマークした問題だけ出題</span>
+        </label>
+
+        <div className="chip-row" style={{ marginTop: 8 }}>
+          <span className="section-hint">直近の誤答だけ：</span>
+          <button className={`chip ${recentOnly === '' ? 'active' : ''}`} onClick={() => setRecentOnly('')}>指定なし</button>
+          <button className={`chip ${recentOnly === 'today' ? 'active' : ''}`} onClick={() => setRecentOnly(recentOnly === 'today' ? '' : 'today')}>今日</button>
+          <button className={`chip ${recentOnly === 'week' ? 'active' : ''}`} onClick={() => setRecentOnly(recentOnly === 'week' ? '' : 'week')}>今週</button>
+        </div>
+
+        <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+          <label>忘却リスクの下限（{minRisk === 0 ? '指定なし' : `${minRisk}%以上だけ`}）</label>
+          <input type="range" min="0" max="90" step="10" value={minRisk} onChange={(e) => setMinRisk(Number(e.target.value))} />
+        </div>
+        <div className="field" style={{ marginTop: 8 }}>
+          <label>誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
+          <input type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => setMinWrong(Number(e.target.value))} />
+        </div>
+
         <div className="review-count">
           この条件で <strong>{startPool.length}</strong> 問
-          {filtering && <button className="btn ghost sm" onClick={() => { setSubject('all'); setFilterTag(''); setSearch(''); }}>クリア</button>}
+          {filtering && <button className="btn ghost sm" onClick={clearFilters}>クリア</button>}
         </div>
 
         {/* ===== 1回の問題数（10・60・300・900・すべて） ===== */}
@@ -414,10 +695,10 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
         <button
           className="btn block lg"
           style={{ marginTop: 10 }}
-          onClick={() => onGoAudio?.()}
-          disabled={reviewQuestions.length === 0}
+          onClick={() => onGoAudio?.(filtering ? shownList.map((q) => q.id) : undefined)}
+          disabled={(filtering ? shownList.length : reviewQuestions.length) === 0}
         >
-          🎧 音声で復習（{reviewQuestions.length}問を読み上げ）
+          🎧 音声で復習（{filtering ? `${shownList.length}問・絞り込み条件を反映` : `${reviewQuestions.length}問を読み上げ`}）
         </button>
         <p className="inline-note" style={{ marginTop: 8 }}>
           「忘れそうな順」は保持率の推定、「難問順」はあなたの誤答率で並べます。弱点テーマや検索で絞ると、その範囲だけを狙い撃ちできます。
@@ -444,10 +725,13 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           // 忘却リスク（#2）：高いほど赤
           const risk = Math.round(riskOf(q, srs, now) * 100);
           const rlvl = risk >= 70 ? 'hot' : risk >= 40 ? 'warm' : 'mild';
+          const nagame = !reviewIdSet.has(q.id);
           return (
             <div className="list-item" key={q.id}>
               <div className="li-top">
                 <span className="li-subject">{q.subject}</span>
+                {nagame && <span className="risk-badge lv-mild" title="マスター済みだが保持率が下がってきたので念のため確認">念のため</span>}
+                {isLeech(q) && <span className="risk-badge lv-hot" title={`${LEECH_THRESHOLD}回以上間違えています。解説の読み方を変えてみましょう`}>⚠️ 要注意</span>}
                 <span className={`risk-badge lv-${rlvl}`} title="忘却リスク（高いほど早く復習を）">忘却{risk}%</span>
               </div>
               <div className="li-q">{q.question || '（図の問題）'}</div>
@@ -462,6 +746,13 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
               </div>
               {memos[q.id] && <div className="li-memo">📝 {memos[q.id]}</div>}
               <RelatedPanel q={q} questions={questions} links={links} />
+              <div className="btn-row" style={{ marginTop: 8 }}>
+                <button className="btn ghost sm" onClick={() => toggleBookmark(q.id)}>
+                  {bookmarks[q.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
+                </button>
+                <button className="btn ghost sm" onClick={() => setNextDue(q.id, 24 * 60 * 60 * 1000)}>😴 明日まで先送り</button>
+                <button className="btn ghost sm" onClick={() => removeFromReview(q.id)}>🗑 リストから外す</button>
+              </div>
             </div>
           );
         })}
@@ -483,12 +774,20 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
       sessionStats.total > 0
         ? Math.round((sessionStats.correct / sessionStats.total) * 100)
         : 0;
-    // この回で ○ にならなかった（不正解・△・✕）問題（重複除去）
-    const misses = [];
+    // この回で ○ にならなかった（不正解・△・✕）問題（重複除去。selfKindが分かれば△✕を区別）
+    const missEntries = [];
     const seen = new Set();
-    for (const q of missRef.current) if (!seen.has(q.id)) { seen.add(q.id); misses.push(q); }
-    const backToList = () => { missRef.current = []; setStarted(false); };
-    // 関連1問チェイン（#1）：この回の問題と概念を共有する“つながり”を辿って続ける
+    for (const { q, selfKind } of missRef.current) {
+      if (!q || seen.has(q.id)) continue;
+      seen.add(q.id);
+      missEntries.push({ q, selfKind });
+    }
+    const misses = missEntries.map((e) => e.q);
+    const sankakuCount = missEntries.filter((e) => e.selfKind === 'sankaku').length;
+    const batsuCount = missEntries.length - sankakuCount;
+    const masteredThisRound = [...new Map(masteredRef.current.map((q) => [q.id, q])).values()];
+    const backToList = () => { missRef.current = []; masteredRef.current = []; setStarted(false); };
+    // 関連1問チェイン：この回の問題と概念を共有する“つながり”を辿って続ける
     const chainPool = [];
     const excl = new Set(order.map((q) => q.id));
     for (const q of order) {
@@ -496,6 +795,17 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
       if (nx) { chainPool.push(nx.question); excl.add(nx.question.id); }
       if (chainPool.length >= 10) break;
     }
+    // ジャンル別正答率（苦手順）：このセッションで出た問題（order）を対象に
+    const byGenre = {};
+    const missIdSet = new Set(misses.map((q) => q.id));
+    for (const q of order) {
+      const g = q.genre || q.subject || 'その他';
+      if (!byGenre[g]) byGenre[g] = { total: 0, correct: 0 };
+      byGenre[g].total += 1;
+      if (!missIdSet.has(q.id)) byGenre[g].correct += 1;
+    }
+    const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
+    const weakness = misses.length > 0 ? buildWeaknessSummary(misses, links, COMPARISONS) : null;
     return (
       <div className="view">
         <h2 className="view-title">復習完了</h2>
@@ -510,10 +820,15 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
           <p className="inline-note" style={{ marginBottom: 8 }}>
             マスターまで延べ <strong>{toMasterTotal}</strong> 回（あと1問で <strong>{nearMaster}</strong> 件がマスター）
           </p>
+          {masteredThisRound.length > 0 && (
+            <p className="inline-note" style={{ marginBottom: 8, color: 'var(--correct)' }}>
+              🏆 このセッションで新たにマスター：<strong>{masteredThisRound.length}問</strong>
+            </p>
+          )}
           {misses.length > 0 ? (
             <>
               <p className="inline-note" style={{ marginBottom: 12 }}>
-                まだ定着していない（不正解・△・✕）問題が <strong style={{ color: 'var(--wrong)' }}>{misses.length}問</strong> あります。続けますか？
+                まだ定着していない（不正解・△・✕）問題が <strong style={{ color: 'var(--wrong)' }}>{misses.length}問</strong> あります（△{sankakuCount}問・✕{batsuCount}問）。続けますか？
               </p>
               <div className="btn-row">
                 <button className="btn primary" onClick={() => startWith(misses)}>
@@ -537,6 +852,83 @@ export default function Review({ store, onOpenKeyword, onGoAudio }) {
               🔗 関連をたどって続ける（{chainPool.length}問）
             </button>
           )}
+        </div>
+
+        {/* ジャンル別の正答率（苦手順） */}
+        {genreRows.length > 1 && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>ジャンル別の正答率（苦手順）</div>
+            <ul className="genre-stats">
+              {genreRows.map(([g, s]) => {
+                const p = Math.round((s.correct / s.total) * 100);
+                return (
+                  <li key={g}>
+                    <span className="gs-name">{g}</span>
+                    <span className="gs-bar"><i style={{ width: `${p}%`, background: p < 60 ? 'var(--wrong)' : p < 80 ? 'var(--warn)' : 'var(--correct)' }} /></span>
+                    <span className="gs-num">{p}%（{s.correct}/{s.total}）</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* 今回の弱点分析（誤答・△・✕から） */}
+        {weakness && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>今回の弱点分析</div>
+            <p className="inline-note" style={{ marginTop: 0 }}>
+              {weakness.topGenres.length > 0 && (
+                <>「{weakness.topGenres.map(([g, c]) => `${g}（${c}問）`).join('」「')}」で誤答・あいまいが目立ちました。</>
+              )}
+              {weakness.topTags.length > 0 && (
+                <><br />繰り返しつまずいたキーワード：{weakness.topTags.map(([tg, c]) => `${tg}（×${c}）`).join('・')}</>
+              )}
+            </p>
+          </div>
+        )}
+
+        {/* 今回の誤答・あいまい一覧（△・✕を区別して表示） */}
+        {missEntries.length > 0 && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>今回の誤答・あいまい（{missEntries.length}問）</div>
+            <ul className="wrong-list">
+              {missEntries.map(({ q, selfKind }) => (
+                <li key={q.id}>
+                  <span className={`wl-mark ${selfKind === 'sankaku' ? 'sankaku' : 'batsu'}`}>{selfKind === 'sankaku' ? '△' : '✕'}</span>
+                  <span className="wl-ans">{q.type === 'ox' ? (q.answer === 0 ? '○' : '✕') : `正解 ${q.answer + 1}`}</span>
+                  <span className="wl-q">{q.question}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* 明日の最初の1タスクを決めておく */}
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>📌 明日の最初の1タスクを決めておく</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            次にアプリを開いた時、ホーム画面の一番上に表示されます。
+          </p>
+          <div className="chip-row" style={{ marginBottom: 8 }}>
+            {misses.length > 0 && (
+              <button className="chip" onClick={() => setNextTaskInput(`苦手を${Math.min(misses.length, 10)}問だけ復習する`)}>
+                苦手を{Math.min(misses.length, 10)}問だけ復習する
+              </button>
+            )}
+            <button className="chip" onClick={() => setNextTaskInput('今日の復習を片づける')}>今日の復習を片づける</button>
+          </div>
+          <div className="kw-add">
+            <input
+              type="text"
+              value={nextTaskInput}
+              onChange={(e) => setNextTaskInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveNextTaskDraft()}
+              placeholder="例：苦手を5問だけ復習する"
+            />
+            <button className="btn sm primary" onClick={saveNextTaskDraft}>保存</button>
+          </div>
+          {nextTaskSavedAt > 0 && <p className="hint" style={{ marginTop: 6 }}>保存しました。</p>}
         </div>
       </div>
     );

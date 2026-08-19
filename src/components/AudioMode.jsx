@@ -93,6 +93,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const [source, setSource] = useState('all'); // all|filter（旧: review|tagged|keyword|daily|weak）
   const [mode, setMode] = useState(0); // 連結モード（0=通常, 1〜10）
   const [selectedKeyword, setSelectedKeyword] = useState('');
+  // 復習画面の絞り込み条件から渡された問題idだけに絞る場合に使う（未指定なら通常の復習プール全体）
+  const [customReviewIds, setCustomReviewIds] = useState(null);
 
   // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
   const [filterSubject, setFilterSubject] = useState('');
@@ -330,13 +332,14 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       return buildKw(weakNames);
     }
     let base;
-    if (source === 'review') base = reviewPool;
-    else if (source === 'tagged') base = taggedQuestions;
+    if (source === 'review') {
+      base = customReviewIds ? questions.filter((q) => customReviewIds.includes(q.id)) : reviewPool;
+    } else if (source === 'tagged') base = taggedQuestions;
     else base = questions;
     if (shuffleOn) base = shuffle(base);
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
@@ -552,10 +555,13 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     setFilterKeyword('');
     setMode(0);
     setSource('review');
+    setCustomReviewIds(null);
   };
   useEffect(() => {
     if (!reviewPreset) return;
     startReviewSource();
+    const ids = typeof reviewPreset === 'object' && reviewPreset.ids ? reviewPreset.ids : null;
+    if (ids) setCustomReviewIds(ids);
     onConsumePreset?.();
   }, [reviewPreset]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -783,13 +789,16 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         </div>
       </div>
 
-      {source === 'review' && (
-        <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--surface-2)' }}>
-          {reviewPool.length > 0
-            ? `🔁 「間違えた問題」を読み上げ中（${reviewPool.length}問）。上の検索で条件を選ぶと通常の読み上げに戻ります。`
-            : '🔁 「間違えた問題」を読もうとしましたが、復習対象が0問でした。上の検索で条件を選ぶと通常の読み上げに戻ります。'}
-        </div>
-      )}
+      {source === 'review' && (() => {
+        const n = customReviewIds ? customReviewIds.length : reviewPool.length;
+        return (
+          <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--surface-2)' }}>
+            {n > 0
+              ? `🔁 「間違えた問題」を読み上げ中（${n}問${customReviewIds ? '・復習画面の絞り込み条件を反映' : ''}）。上の検索で条件を選ぶと通常の読み上げに戻ります。`
+              : '🔁 「間違えた問題」を読もうとしましたが、復習対象が0問でした。上の検索で条件を選ぶと通常の読み上げに戻ります。'}
+          </div>
+        );
+      })()}
 
       {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ。よく使う順に並びます。 */}
       <div className="section-label">連結学習モード（読み方を選ぶ・よく使う順）</div>

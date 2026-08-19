@@ -113,8 +113,9 @@ export function haripanMessages(ctx = {}) {
 }
 
 // リマインド通知用の一言
-export function haripanReminder(examDate) {
+export function haripanReminder(examDate, dueCount = 0) {
   const left = daysUntil(examDate);
   const tail = left != null && left >= 0 ? `本番まであと${left}日だ。` : '';
-  return `よう、ハリオだ。${tail}今日も一問からいくぞ。`;
+  const due = dueCount > 0 ? `復習が${dueCount}問たまってるぞ。` : '';
+  return `よう、ハリオだ。${tail}${due}今日も一問からいくぞ。`;
 }

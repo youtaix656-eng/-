@@ -106,6 +106,22 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
   - `recommendNewPct`：新規問題と復習の比率を復習の溜まり具合から自動提案（Session.jsxの
     「今日のおすすめ」）。
   - 新しい画面で「復習」を扱う時は、この4関数を再実装せず`reviewPool.js`からimportすること。
+- **Review.jsx（間違えた問題）の主な仕組み**（2026-08-19拡張）：
+  - 出題対象は`reviewPoolFor(questions, srs)`（マスター後の「念のため確認」込み）。
+    純粋な`isInReview`だけの`reviewQuestions`は件数表示など厳密な集計にのみ使う。
+  - 絞り込み：科目（複数選択・`SUBJECT_TAG_NAMES`順）／キーワード（プルダウン）／回／
+    ブックマーク／直近の誤答（今日・今週）／忘却リスク・誤答回数の下限。すべて
+    `src/lib/reviewOrder.js`の`filterReview`が単一の実装（他画面から使う時もここを拡張する）。
+  - リーチ（要注意）：`src/lib/srs.js`の`LEECH_THRESHOLD`（既定8）・`isLeech(state)`が単一の正。
+    Review.jsxの一覧バッジと`MistakeNote.jsx`の自動並べ替え（要注意を先頭にピン留め）で共用。
+  - 個別操作：`useStore.js`の`setNextDue(id, delayMs)`（スヌーズ・誤答理由別の間隔調整で共用）、
+    `removeFromReview(id)`（○5回連続と同じ状態にして手動で外す）。
+  - 出題順は`spaceByOrigin`で原問と派生（同じ過去問由来）を離す（Session.jsxの`spaceById`と同じ考え方、
+    実装はReview.jsx内に独立）。
+  - 誤答理由（型）別の再出題間隔は`src/lib/missTypes.js`の`MISS_TYPE_DELAY_MS`が単一の正。
+  - 音声で復習（`onGoAudio`）は、Review画面で絞り込み中ならその条件のidだけをAudioModeへ渡す
+    （`App.jsx`の`audioReview`が`true`（全体）または`{ids}`（絞り込み結果）を保持し、
+    `AudioMode.jsx`の`customReviewIds`で反映）。
 - **習慣化の仕組み**（「始めるまでに迷う」「戻るルールがない」対策、2026-08-19追加）：
   - `src/lib/nextTask.js`（明日の最初の1タスク）：Session.jsxの完了画面で次にやることを1つだけ
     決めて保存すると、Home.jsxの一番上に固定表示される。「何から始めるか」で迷う時間をなくす。

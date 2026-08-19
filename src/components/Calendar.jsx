@@ -42,12 +42,25 @@ function monthGrid(year, month) {
 }
 
 export default function Calendar({ store, onToast, onNavigate }) {
-  const { schedule, setSchedule } = store;
+  const { schedule, setSchedule, reviewQuestions, srs } = store;
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [selected, setSelected] = useState(todayKey());
   const [editing, setEditing] = useState(null); // 編集中イベント or 新規テンプレ
+
+  // 復習期限の問題数を日付ごとに集計（期限切れは「今日」に計上）
+  const reviewDueByDay = useMemo(() => {
+    const map = {};
+    const todayK = todayKey();
+    for (const q of reviewQuestions) {
+      const due = srs[q.id]?.due || 0;
+      if (!due) continue;
+      const key = ymd(new Date(due));
+      map[key < todayK ? todayK : key] = (map[key < todayK ? todayK : key] || 0) + 1;
+    }
+    return map;
+  }, [reviewQuestions, srs]);
 
   const byDate = useMemo(() => {
     const m = {};
@@ -126,7 +139,10 @@ export default function Calendar({ store, onToast, onNavigate }) {
   return (
     <div className="view">
       <h2 className="view-title">カレンダー</h2>
-      <p className="view-desc">勉強や試験の予定を書き込めます。日付をタップして予定を追加。</p>
+      <p className="view-desc">
+        勉強や試験の予定を書き込めます。日付をタップして予定を追加。
+        右下の🔴数字はその日の復習期限の問題数です。
+      </p>
 
       {/* 合格ロードマップ：この月のフェーズと色分けの凡例、全期間を見るリンク（画面上部に固定） */}
       {phasesInMonth(year, month).length > 0 && (
@@ -177,6 +193,7 @@ export default function Calendar({ store, onToast, onNavigate }) {
           const isToday = key === todayKey();
           const isSel = key === selected;
           const ph = phaseForDate(key);
+          const dueCount = reviewDueByDay[key] || 0;
           return (
             <button
               key={key}
@@ -195,6 +212,9 @@ export default function Calendar({ store, onToast, onNavigate }) {
                   ))}
                 </span>
               )}
+              {dueCount > 0 && (
+                <span className="cal-review-badge" title={`復習期限 ${dueCount}件`}>{dueCount > 9 ? '9+' : dueCount}</span>
+              )}
             </button>
           );
         })}
@@ -205,6 +225,15 @@ export default function Calendar({ store, onToast, onNavigate }) {
           <strong>{selected}（{WD[new Date(selected.replace(/-/g, '/')).getDay()]}）</strong>
           <button className="btn primary sm" onClick={startNew}>＋ 予定を追加</button>
         </div>
+        {reviewDueByDay[selected] > 0 && (
+          <button className="event-row" onClick={() => onNavigate?.('review')}>
+            <span className="event-kind" style={{ background: 'var(--wrong)' }}>🔁</span>
+            <span className="event-main">
+              <span className="event-title">復習期限の問題が{reviewDueByDay[selected]}件</span>
+            </span>
+            <span className="event-chev">›</span>
+          </button>
+        )}
         {selectedEvents.length === 0 ? (
           <p className="inline-note">この日の予定はまだありません。</p>
         ) : (

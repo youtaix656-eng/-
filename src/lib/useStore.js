@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as storage from './storage.js';
-import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES } from './srs.js';
+import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
 import { decodeSync, syncToBackup, isSyncExpired } from './sync.js';
@@ -531,6 +531,22 @@ export function useStore() {
     }));
   }, []);
 
+  // 復習リストから手動で外す（○5回連続＝マスターと同じ状態にする。誤登録・簡単すぎる問題対策）
+  const removeFromReview = useCallback((questionId) => {
+    setSrs((prev) => ({
+      ...prev,
+      [questionId]: { ...normalize(prev[questionId]), correctStreak: MASTER_STREAK, lastAnswered: Date.now() },
+    }));
+  }, []);
+
+  // この問題だけ次回期限を指定ミリ秒だけ先送りする（スヌーズ・誤答理由別の間隔調整で共用）
+  const setNextDue = useCallback((questionId, delayMs) => {
+    setSrs((prev) => ({
+      ...prev,
+      [questionId]: { ...normalize(prev[questionId]), due: Date.now() + delayMs },
+    }));
+  }, []);
+
   const setMemo = useCallback((questionId, text) => {
     setMemos((prev) => {
       const next = { ...prev };
@@ -795,6 +811,8 @@ export function useStore() {
     reviewQuestions,
     dueReviewQuestions,
     recordAnswer,
+    removeFromReview,
+    setNextDue,
     setMemo,
     setLink,
     markDeepDive,

@@ -2202,6 +2202,11 @@ code.block {
 .cal-dot.k-exam { background: #c0392b; }
 .cal-dot.k-todo { background: #2f537f; }
 .cal-dot.k-deadline { background: #b8860b; }
+.cal-review-badge {
+  position: absolute; right: 3px; bottom: 3px; background: var(--wrong); color: #fff;
+  font-size: 9px; font-weight: 800; border-radius: 999px; min-width: 14px; height: 14px;
+  display: flex; align-items: center; justify-content: center; padding: 0 3px; line-height: 1;
+}
 
 .cal-selected { margin-top: 14px; }
 .cal-sel-head {
