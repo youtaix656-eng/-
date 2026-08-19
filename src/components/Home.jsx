@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react';
 import { overallStats, studyStreak } from '../lib/stats.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress } from '../lib/storage.js';
+import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
+import {
+  detectBrokenYesterday,
+  BREAK_REASONS,
+  loadStreakBreakLog,
+  loadStreakBreakDismissed,
+  recordStreakBreakReason,
+  dismissStreakBreak,
+} from '../lib/streakBreak.js';
 import Mascot from './Mascot.jsx';
 
 // ホーム画面：学習状況の概要と各モードへの入り口
@@ -32,6 +41,38 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
 
   const hasResume = sessionActive || quizResume;
 
+  // 明日の最初の1タスク（学習セッション完了画面で決めたもの）をホームの一番上に固定表示
+  const [nextTask, setNextTask] = useState(null);
+  useEffect(() => {
+    loadNextTask().then((t) => setNextTask(t && t.text ? t : null));
+  }, []);
+  const doneNextTask = () => {
+    clearNextTask();
+    setNextTask(null);
+  };
+
+  // 「できなかった日は、原因を分解する」：連続日数が前日で途切れていたら、理由をワンタップで振り返る
+  const [breakPrompt, setBreakPrompt] = useState(null);
+  useEffect(() => {
+    const broken = detectBrokenYesterday(history);
+    if (!broken) { setBreakPrompt(null); return; }
+    const dayKey = String(broken);
+    Promise.all([loadStreakBreakLog(), loadStreakBreakDismissed()]).then(([log, dismissed]) => {
+      if (log[dayKey] || dismissed[dayKey]) { setBreakPrompt(null); return; }
+      setBreakPrompt({ dayKey });
+    });
+  }, [history]);
+  const chooseBreakReason = (reasonId) => {
+    if (!breakPrompt) return;
+    recordStreakBreakReason(breakPrompt.dayKey, reasonId);
+    setBreakPrompt(null);
+  };
+  const dismissBreak = () => {
+    if (!breakPrompt) return;
+    dismissStreakBreak(breakPrompt.dayKey);
+    setBreakPrompt(null);
+  };
+
   return (
     <div className="view">
       {installPrompt && (
@@ -43,6 +84,33 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
 
       {/* ハリオ先生（AIマスコット） */}
       <Mascot store={store} />
+
+      {/* 明日の最初の1タスク：セッション完了画面で決めたもの。何から始めるか迷わないよう一番上に固定 */}
+      {nextTask && (
+        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>📌 今日の最初の1タスク</div>
+          <p style={{ margin: '4px 0 10px', fontSize: 16 }}>{nextTask.text}</p>
+          <div className="btn-row">
+            <button className="btn ghost sm" onClick={doneNextTask}>やった・消す</button>
+          </div>
+        </div>
+      )}
+
+      {/* できなかった日は、原因を分解する（責めるのではなく、また今日から戻るためのワンタップ記録） */}
+      {breakPrompt && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>きのうはお休みでした</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            完璧じゃなくて大丈夫。原因だけ振り返って、また今日から戻りましょう。
+          </p>
+          <div className="chip-row">
+            {BREAK_REASONS.map((r) => (
+              <button key={r.id} className="chip" onClick={() => chooseBreakReason(r.id)}>{r.label}</button>
+            ))}
+          </div>
+          <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={dismissBreak}>あとで</button>
+        </div>
+      )}
 
       {/* 前回の続きから（画面上部） */}
       {hasResume && (

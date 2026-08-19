@@ -106,6 +106,14 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
   - `recommendNewPct`：新規問題と復習の比率を復習の溜まり具合から自動提案（Session.jsxの
     「今日のおすすめ」）。
   - 新しい画面で「復習」を扱う時は、この4関数を再実装せず`reviewPool.js`からimportすること。
+- **習慣化の仕組み**（「始めるまでに迷う」「戻るルールがない」対策、2026-08-19追加）：
+  - `src/lib/nextTask.js`（明日の最初の1タスク）：Session.jsxの完了画面で次にやることを1つだけ
+    決めて保存すると、Home.jsxの一番上に固定表示される。「何から始めるか」で迷う時間をなくす。
+  - `src/lib/streakBreak.js`（できなかった日の原因分解）：`detectBrokenYesterday(history)`で
+    「きのうだけ記録が無く前日には記録がある＝直前で連続が途切れた」状態を検知し、Home.jsxで
+    理由（時間がなかった／やる気が出なかった等）をワンタップ記録できるカードを出す。責めるのが
+    目的ではなく、記録して「また今日から戻る」ための一手間。同じ日に何度も出さないよう
+    記録済み／「あとで」でdismissした日はidbで管理。
 - 端末だけに取り込むリンク: `#import=`（`src/lib/noteshare.js`）。重複は
   `dedupeAgainst`（問題文で判定、`src/lib/importer.js`）。同一問題文の別問は
   末尾に（第XX回）を付けて衝突回避。

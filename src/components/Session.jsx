@@ -7,6 +7,7 @@ import { buildKanaIndex } from '../lib/yomi.js';
 import { effectiveTags } from '../lib/query.js';
 import { COMPARISONS } from '../data/mindmapData.js';
 import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/reviewPool.js';
+import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -117,6 +118,19 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const [showBreak, setShowBreak] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [showAllGenres, setShowAllGenres] = useState(false); // 完了画面のジャンル別正答率を全件表示するか
+  // 明日の最初の1タスク（完了画面で決めておく。次回ホーム画面の一番上に表示）
+  const [nextTaskInput, setNextTaskInput] = useState('');
+  const [nextTaskSavedAt, setNextTaskSavedAt] = useState(0);
+  useEffect(() => {
+    loadNextTask().then((t) => { if (t && t.text) setNextTaskInput(t.text); });
+  }, []);
+  const saveNextTaskDraft = () => {
+    const text = nextTaskInput.trim();
+    if (!text) return;
+    saveNextTask(text);
+    setNextTaskSavedAt(Date.now());
+    onToast?.('📌 明日の最初の1タスクを保存しました');
+  };
   // 新規◯割・復習◯割（0〜100の新規%）。既定は設定値。
   const [newPct, setNewPct] = useState(Math.round((settings.sessionNewRatio ?? 1) * 100));
 
@@ -558,6 +572,34 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             </button>
           </div>
         )}
+
+        {/* 明日の最初の1タスク：次に開いた時「何から始めるか」で迷わないよう、1つだけ決めておく */}
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>📌 明日の最初の1タスクを決めておく</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            次にアプリを開いた時、ホーム画面の一番上に表示されます。迷う時間をなくすため、1つだけ決めましょう。
+          </p>
+          <div className="chip-row" style={{ marginBottom: 8 }}>
+            {wrongQs.length > 0 && (
+              <button className="chip" onClick={() => setNextTaskInput(`苦手を${Math.min(wrongQs.length, 10)}問だけ復習する`)}>
+                苦手を{Math.min(wrongQs.length, 10)}問だけ復習する
+              </button>
+            )}
+            <button className="chip" onClick={() => setNextTaskInput(`${requested}問から始める`)}>{requested}問から始める</button>
+            <button className="chip" onClick={() => setNextTaskInput('音声学習で5分だけ聞く')}>音声学習で5分だけ聞く</button>
+          </div>
+          <div className="kw-add">
+            <input
+              type="text"
+              value={nextTaskInput}
+              onChange={(e) => setNextTaskInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveNextTaskDraft()}
+              placeholder="例：苦手を5問だけ復習する"
+            />
+            <button className="btn sm primary" onClick={saveNextTaskDraft}>保存</button>
+          </div>
+          {nextTaskSavedAt > 0 && <p className="hint" style={{ marginTop: 6 }}>保存しました。ホーム画面の一番上に出ます。</p>}
+        </div>
       </div>
     );
   }

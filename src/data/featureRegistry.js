@@ -9,7 +9,7 @@
 
 const featureRegistry = [
   // ---- 学習・演習 ----
-  { id: 'session', title: '学習（10・60・300・900）', icon: '📚', category: '学習・演習', view: 'session', desc: '60問で区切り・300問で今日の目標・900問で1周。1問ごと自動保存で、いつでも続きから。', tags: ['学習セッション', '習慣化'] },
+  { id: 'session', title: '学習（10・60・300・900）', icon: '📚', category: '学習・演習', view: 'session', desc: '60問で区切り・300問で今日の目標・900問で1周。1問ごと自動保存で、いつでも続きから。完了画面で「明日の最初の1タスク」も決められます。', tags: ['学習セッション', '習慣化', '明日のタスク'] },
   { id: 'connect', title: '連結学習（今日の1問）', icon: '🔗', category: '学習・演習', view: 'connect', desc: '過去問を一生モノの知識に。1日1問を深掘りし、キーワードでつなげて知識の地図を育てる。', tags: ['連結学習', 'キーワード'] },
   { id: 'quiz', title: '一問一答', icon: '✏️', category: '学習・演習', view: 'quiz', desc: '科目別に問題演習。○×・四択に対応。', tags: ['一問一答'] },
   { id: 'quiz-why', title: '自己説明ステップ（なぜこの答え？）', icon: '🤔', category: '学習・演習', view: 'quiz', sub: true, desc: '誤答時に「なぜこの答え？」を自分の言葉で一言書くよう自動で促す（一問一答・復習画面）。', tags: ['自己説明', '誤答', 'whyPrompt'] },
@@ -24,6 +24,8 @@ const featureRegistry = [
   // ---- 復習・弱点対策 ----
   { id: 'review', title: '間違えた問題', icon: '🔁', category: '復習・弱点対策', view: 'review', desc: '間隔反復（SRS）で弱点を集中復習。', tags: ['SRS', '復習'] },
   { id: 'home-due-review', title: '今日の復習カード（ホーム前面化）', icon: '🔁', category: '復習・弱点対策', view: 'home', sub: true, desc: 'SRSで期限が来ている件数をホーム画面に大きく表示。タップで復習へ直行。', tags: ['SRS', 'ホーム'] },
+  { id: 'next-task', title: '明日の最初の1タスク', icon: '📌', category: '復習・弱点対策', view: 'home', sub: true, desc: '学習セッション完了画面で次にやることを1つだけ決めておくと、次回ホーム画面の一番上に固定表示。「何から始めるか」で迷う時間をなくす。', tags: ['習慣化', 'ホーム', '次のタスク'] },
+  { id: 'streak-break', title: 'できなかった日の原因分解', icon: '🌱', category: '復習・弱点対策', view: 'home', sub: true, desc: '連続日数が前日で途切れると、責めずに理由（時間がなかった／やる気が出なかった等）をワンタップ記録。また今日から戻れるようにする。', tags: ['ストリーク', 'ホーム', '習慣化'] },
   { id: 'mistakes', title: '間違いノート', icon: '📓', category: '復習・弱点対策', view: 'mistakes', desc: '間違えた問題＋メモをPDF/テキスト出力。移動中の見返しに。', tags: ['間違いノート', '出力'] },
   { id: 'misstypes', title: '誤答理由の分類', icon: '🏷️', category: '復習・弱点対策', view: 'review', sub: true, desc: '勘違い／知識不足／ケアレスをワンタップ記録し、型別に解説の出し方を変える。', tags: ['誤答理由', 'missTypes'] },
   { id: 'dashboard', title: '弱点分析', icon: '📊', category: '復習・弱点対策', view: 'dashboard', desc: '科目別の正答率をグラフで確認。', tags: ['正答率'] },
