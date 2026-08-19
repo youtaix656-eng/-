@@ -390,6 +390,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">全13科目の収録状況を色で俯瞰。手薄・未収録の科目が一目で分かる。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('pasttrends')}>
+          <span className="ico">📈</span>
+          <span className="title">鍼灸過去問題の傾向と対策</span>
+          <span className="desc">収録済み過去問（回・タグ・ジャンル）を実際に集計した頻出テーマ・頻出キーワード。学習法への活かし方も。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('scope')}>
           <span className="ico">🗂️</span>
           <span className="title">試験範囲</span>

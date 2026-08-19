@@ -36,6 +36,7 @@ const featureRegistry = [
   { id: 'weakclusters', title: '弱点クラスタ', icon: '🧩', category: '復習・弱点対策', view: 'analytics', sub: true, desc: 'タグの共起から弱点テーマを自動抽出（分析画面内）。', tags: ['弱点クラスタ', 'weakClusters.js'] },
   { id: 'difficulty', title: '難易度推定', icon: '🎚️', category: '復習・弱点対策', view: 'analytics', sub: true, desc: '正答率から難問を抽出（分析画面内）。', tags: ['難易度'] },
   { id: 'coverage', title: '網羅マップ', icon: '🗺️', category: '復習・弱点対策', view: 'coverage', desc: '出題基準×収録数を色で俯瞰。手薄・未収録の科目が一目で分かる。', tags: ['網羅マップ'] },
+  { id: 'pasttrends', title: '鍼灸過去問題の傾向と対策', icon: '📈', category: '復習・弱点対策', view: 'pasttrends', desc: '収録済み過去問（round・tags・genre）を実際に集計し、複数回にまたがる頻出テーマ・頻出キーワードをデータドリブンに可視化。科目別の対策優先度、日々の学習法・音声学習での活かし方、やるべきこと／やってはいけないことも提示。頻出テーマ・キーワードから一問一答へワンタップで絞り込める。', tags: ['傾向と対策', '頻出テーマ', '頻出キーワード', 'データ分析'] },
 
   // ---- 知識の整理 ----
   { id: 'mindmap', title: 'マインドマップ', icon: '🧠', category: '知識の整理', view: 'mindmap', desc: 'つながる語・比較・数値注意を1枚に。引っかけに強くなる。', tags: ['マインドマップ', '比較'] },

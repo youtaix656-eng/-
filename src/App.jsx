@@ -37,6 +37,7 @@ const Venues = lazy(() => import('./components/Venues.jsx'));
 const ExamContent = lazy(() => import('./components/ExamContent.jsx'));
 const Experiences = lazy(() => import('./components/Experiences.jsx'));
 const MindMap = lazy(() => import('./components/MindMap.jsx'));
+const PastExamTrends = lazy(() => import('./components/PastExamTrends.jsx'));
 const TableOfContents = lazy(() => import('./components/TableOfContents.jsx'));
 const UnreadPages = lazy(() => import('./components/UnreadPages.jsx'));
 const MistakeNote = lazy(() => import('./components/MistakeNote.jsx'));
@@ -81,6 +82,7 @@ const VIEW_TITLES = {
   exam: '模擬試験',
   dashboard: '弱点分析',
   coverage: '網羅マップ',
+  pasttrends: '鍼灸過去問題の傾向と対策',
   kgraph: '知識グラフ',
   analytics: '分析・攻略率・合格診断',
   roadmap: '合格するためのロードマップ',
@@ -457,6 +459,8 @@ export default function App() {
         return <NumberFacts store={store} onToast={showToast} />;
       case 'coverage':
         return <CoverageMap store={store} onStartSubject={startSubjectQuiz} />;
+      case 'pasttrends':
+        return <PastExamTrends store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'kgraph':
         return <KnowledgeGraph store={store} onOpenKeyword={openKeyword} onStudyConcepts={(concepts) => {
           const set = new Set(concepts);

@@ -75,9 +75,14 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 ## データモデル / 実装メモ
 - 問題: `{ id, subject, type:'choice'|'ox', question, choices[], answer(0始まり), explanation,
   round?, tags?, deck?, genre?, source?, image?, figure? }`。
-- 検索の役割分担（音声学習）: **科目名=subject / ジャンル=q.genre（8/14科目で実利用中：
-  byori/riha/toyo/keizetsu/hari/kyu/torin/rinkaku。anat/seiri/eisei/houki/rinsho/iryouは未使用） /
-  キーワード=tags∪連結キーワード**。
+- 検索の役割分担（音声学習）: **科目名=subject / ジャンル=q.genre（13/14科目で実利用中。
+  医療概論=iryouQuestions.jsのみ未使用） / キーワード=tags∪連結キーワード**。
+- 「回」フィールド（`round`）は科目データファイルによって`round: 34`（数値）と
+  `round: "第34回"`（フル文字列）が混在する。比較・並び替え・表示は必ず
+  `src/lib/round.js`の`roundKey`/`formatRound`/`isSameRound`を経由すること（直接
+  `String(q.round)`比較や`第{r}回`のようなテンプレート結合をすると、フル文字列側で
+  「第第34回回」のように二重表記される）。新しい画面で「回」の絞り込み・表示を追加する時も
+  同様にこのヘルパーを使う。
 - `source`：「4択問題」のファイル分け用（`ChoiceQuiz.jsx`）。未設定は既定で「過去問」扱い
   （`questionSourceId()`、`src/data/examScope.js`）。模試・その他を追加する時だけ明示指定。
 - 科目一覧・正式表記は `src/data/examScope.js`（`SUBJECT_TAG_NAMES` / `EXAM_SUBJECTS` /
@@ -173,6 +178,7 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 | 網羅マップ | `CoverageMap.jsx` | 出題基準×収録数の可視化 |
 | エラーログ | `lib/errorLog.js`／`ErrorLogCard.jsx`（Settings内） | 端末内エラーの閲覧・消去 |
 | 3分の2バッファ術 | `lib/bufferSession.js`／`Session.jsx`／`Calendar.jsx` | 学習時間を基礎タスク:バッファ=2:1（設定で調整可）に自動分割。完了後はマネージャービュー（振り返り）でバッファ用途を自動判定、ハリオが声かけ。詳細は下記セクション |
+| 鍼灸過去問題の傾向と対策 | `lib/pastExamTrends.js`／`PastExamTrends.jsx`（Home内） | 収録済み過去問（round付き＝原問のみ）を実際に集計し、複数回にまたがる頻出ジャンル・頻出キーワードをデータドリブンに可視化。科目別の対策優先度、学習法・音声学習での活かし方、やるべきこと／やってはいけないことも提示。頻出テーマ・キーワードから一問一答へワンタップで絞り込める |
 | 全機能一覧 | `src/data/featureRegistry.js`＋`FeatureIndex.jsx` | 上表と同じ内容の単一の正。検索・カテゴリ絞り込み付き |
 
 上表は概要用のスナップショット。**正確な最新の全機能リストは `src/data/featureRegistry.js`**
@@ -245,9 +251,14 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
   （すでに存在するものを重複実装しない）。
 - 大きな変更ほど、実装後にブラウザ（Playwright＋Chromium）で実際に操作して確認する。
   ビルドが通ることと機能することは別。
+- **過去問PDFの内容は、既存収録との突き合わせ作業中であっても記憶で再現しない** —
+  同じ会話内で既にPDFを読んでいても、問題文・選択肢・問題番号を記憶から書き出すと
+  番号のズレや「実際は収録済みなのに未収録と誤判定する」類の間違いが起きる
+  （2026-08-19、第34回過去問の収録漏れ調査中に自己発見・修正）。既存収録と照合する時は
+  ページ内容を再度読み直すか、直前のツール出力を直接参照し、記憶のみで一覧化しない。
 - 同じ種類の間違いが起きたら、このセクションに追記して残す。
 
 ## 検証
-- `npm run build` と `node --test`（現状178件）を通す。
+- `npm run build` と `node --test`（現状196件）を通す。
 - 可能なら Chromium（`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`）で
   プレビュー描画を確認（`npm run preview` → Playwrightでスクリーンショット）。
