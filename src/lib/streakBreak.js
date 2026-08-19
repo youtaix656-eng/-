@@ -15,6 +15,10 @@ export const BREAK_REASONS = [
   { id: 'tired', label: '疲れていた' },
 ];
 
+export function breakReasonLabel(id) {
+  return BREAK_REASONS.find((r) => r.id === id)?.label || '';
+}
+
 function dayStart(ms) {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);

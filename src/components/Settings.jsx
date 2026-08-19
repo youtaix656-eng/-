@@ -149,6 +149,21 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             </div>
           )}
         </div>
+        <div className="field" style={{ marginTop: 10 }}>
+          <label>今日の目標（問題数）</label>
+          <div className="chip-row" style={{ marginBottom: 0 }}>
+            {[60, 100, 200, 300, 500].map((g) => (
+              <button
+                key={g}
+                className={`chip ${(settings.dailyGoal ?? 300) === g ? 'active' : ''}`}
+                onClick={() => updateSettings({ dailyGoal: g })}
+              >
+                {g}問
+              </button>
+            ))}
+          </div>
+          <div className="hint">ハリオ先生の「今日の進捗」表示（ホーム画面）で使う1日のノルマです。</div>
+        </div>
         <label className="switch-row" style={{ marginTop: 6 }}>
           <input
             type="checkbox"

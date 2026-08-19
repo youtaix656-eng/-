@@ -258,6 +258,7 @@ const DEFAULT_SETTINGS = {
   authSkipped: false, // 初回のログイン設定案内をスキップ済みか
   examDate: '', // 試験日（YYYY-MM-DD）カウントダウン用
   sessionNewRatio: 1, // 学習セッションの新規割合（0〜1、1=すべて新規）
+  dailyGoal: 300, // 1日の目標問題数（ハリオ先生の「今日の進捗」表示に使用）
   reminder: { enabled: false, time: '07:00', lastNotified: '' }, // 毎日の学習リマインド通知
   // ポモドーロタイマー（全画面上部）
   pomodoro: {

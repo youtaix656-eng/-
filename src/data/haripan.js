@@ -16,7 +16,8 @@ const todayStr = () => {
 };
 
 // 状況に応じた「ひとこと」を1つ返す。
-// ctx: { examDate, dueCount, streak, historyLen }
+// ctx: { examDate, dueCount, streak, historyLen, weakTag, riskCount, streakBreakReasonLabel,
+//        nextTaskText, latestExam, mood, hour }
 export function haripanMessage(ctx = {}) {
   const list = haripanMessages(ctx);
   return list[Math.floor(Math.random() * list.length)];
@@ -24,7 +25,12 @@ export function haripanMessage(ctx = {}) {
 
 // 候補一覧（「次のひとこと」で切り替え）
 export function haripanMessages(ctx = {}) {
-  const { examDate, dueCount = 0, streak = 0, historyLen = 0 } = ctx;
+  const {
+    examDate, dueCount = 0, streak = 0, historyLen = 0,
+    weakTag = null, riskCount = 0, streakBreakReasonLabel = null,
+    nextTaskText = null, latestExam = null, mood = null,
+    hour = new Date().getHours(),
+  } = ctx;
   const left = daysUntil(examDate);
   const ph = phaseForDate(todayStr());
   const msgs = [];
@@ -63,6 +69,39 @@ export function haripanMessages(ctx = {}) {
     if (ph.id === 'p3') msgs.push('仕上げの11月だ。模試で6割、2回続けば合格実力だぞ。');
     if (ph.id === 'c2') msgs.push('△✕だけに絞れ。新規はもういい。穴をふさぐことに集中しろ。');
   }
+
+  // 弱点タグ・忘却リスク（詳しくは「分析」カードへ）
+  if (weakTag) msgs.push(`最近「${weakTag}」でよく詰まってるな。……そこ、集中的にほぐすか？`);
+  if (riskCount > 0) msgs.push(`忘れかけてる問題が${riskCount}問あるぞ。放っておくと消えちまう。`);
+
+  // きのう出来なかった理由を踏まえて（責めずに、また今日から）
+  if (streakBreakReasonLabel) {
+    msgs.push(`きのうは『${streakBreakReasonLabel}』だったんだってな。……気にすんな。今日は無理せず1問からいくぞ。`);
+  }
+
+  // 明日の最初の1タスク（決めてあれば代わりに読み上げる）
+  if (nextTaskText) {
+    msgs.push(`お前が決めてた次の1つ、『${nextTaskText}』。……やる時間だぞ。`);
+  }
+
+  // 模試の結果（今日受けたものがあれば）
+  if (latestExam) {
+    const pct = Math.round(latestExam.scorePct || 0);
+    msgs.push(
+      latestExam.passed
+        ? `今日の模試、${pct}%か。……上出来だ。合格ラインは超えてるぞ。`
+        : `今日の模試、${pct}%だったな。……気にすんな。伸びしろだ、次で埋めろ。`
+    );
+  }
+
+  // 今日の調子
+  if (mood === 'tired') msgs.push('しんどい日は、無理すんな。今日は少なめでいい。……続けることの方が大事だ。');
+  else if (mood === 'good') msgs.push('調子いいらしいな。……せっかくだ、1問多くいっとくか。');
+
+  // 時間帯
+  if (hour < 6) msgs.push('こんな時間まで……無理すんなよ。寝るのも勉強のうちだ。');
+  else if (hour < 10) msgs.push('朝からえらいな。……1日、いい流れで始めろ。');
+  else if (hour >= 23) msgs.push('遅いな。……あと少しで切り上げろ。明日にも回せる。');
 
   // 汎用
   msgs.push('身体はウソつかねぇ。勉強も同じだ。ごまかしはきかねぇが、やった分は必ず返る。');

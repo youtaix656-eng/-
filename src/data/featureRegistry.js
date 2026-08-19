@@ -25,6 +25,7 @@ const featureRegistry = [
   { id: 'review', title: '間違えた問題', icon: '🔁', category: '復習・弱点対策', view: 'review', desc: '間隔反復（SRS）で弱点を集中復習。', tags: ['SRS', '復習'] },
   { id: 'home-due-review', title: '今日の復習カード（ホーム前面化）', icon: '🔁', category: '復習・弱点対策', view: 'home', sub: true, desc: 'SRSで期限が来ている件数をホーム画面に大きく表示。タップで復習へ直行。', tags: ['SRS', 'ホーム'] },
   { id: 'next-task', title: '明日の最初の1タスク', icon: '📌', category: '復習・弱点対策', view: 'home', sub: true, desc: '学習セッション完了画面で次にやることを1つだけ決めておくと、次回ホーム画面の一番上に固定表示。「何から始めるか」で迷う時間をなくす。', tags: ['習慣化', 'ホーム', '次のタスク'] },
+  { id: 'mascot', title: 'ハリオ先生（AIマスコット）', icon: '🧑‍⚕️', category: '復習・弱点対策', view: 'home', sub: true, desc: '状況に応じた一言（試験日・復習件数・連続日数・前日の理由・模試結果・今日の調子など）に加え、苦手・忘却リスクの分析／今日の進捗（1日の目標との差）をタップで各画面へ。今日の調子（元気・普通・しんどい）をワンタップ記録するとノルマも自動調整。', tags: ['マスコット', 'ハリオ先生', '分析', '今日の進捗', '今日の調子'] },
   { id: 'streak-break', title: 'できなかった日の原因分解', icon: '🌱', category: '復習・弱点対策', view: 'home', sub: true, desc: '連続日数が前日で途切れると、責めずに理由（時間がなかった／やる気が出なかった等）をワンタップ記録。また今日から戻れるようにする。', tags: ['ストリーク', 'ホーム', '習慣化'] },
   { id: 'mistakes', title: '間違いノート', icon: '📓', category: '復習・弱点対策', view: 'mistakes', desc: '間違えた問題＋メモをPDF/テキスト出力。移動中の見返しに。', tags: ['間違いノート', '出力'] },
   { id: 'misstypes', title: '誤答理由の分類', icon: '🏷️', category: '復習・弱点対策', view: 'review', sub: true, desc: '勘違い／知識不足／ケアレスをワンタップ記録し、型別に解説の出し方を変える。', tags: ['誤答理由', 'missTypes'] },

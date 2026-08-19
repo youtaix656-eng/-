@@ -83,7 +83,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
       )}
 
       {/* ハリオ先生（AIマスコット） */}
-      <Mascot store={store} />
+      <Mascot store={store} onNavigate={onNavigate} />
 
       {/* 明日の最初の1タスク：セッション完了画面で決めたもの。何から始めるか迷わないよう一番上に固定 */}
       {nextTask && (
