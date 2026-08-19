@@ -18,7 +18,7 @@ const featureRegistry = [
   { id: 'toc', title: '目次', icon: '📖', category: '学習・演習', view: 'toc', desc: '取り込んだ問題を科目・キーワードで一覧。範囲を選んで演習。', tags: ['目次', '一覧'] },
   { id: 'flashcards', title: 'フラッシュカード', icon: '🃏', category: '学習・演習', view: 'flashcards', desc: '経穴カード＋全科目対応。問題からその場でカードを作って反復。', tags: ['フラッシュカード', '経穴'] },
   { id: 'mnemonics', title: '語呂合わせノート', icon: '💡', category: '学習・演習', view: 'mnemonics', desc: '登録した語呂合わせを一覧で見返す。その場で追加・編集も。', tags: ['語呂合わせ'] },
-  { id: 'audio', title: '音声学習', icon: '🎧', category: '学習・演習', view: 'audio', desc: '検索フィルタ＋連結学習モード1〜10（連鎖/比較/数値/穴埋め/弱点/選択肢読み/章通し/ナレーション/適応/今日の連結）。', tags: ['音声学習', 'ながら学習'] },
+  { id: 'audio', title: '音声学習', icon: '🎧', category: '学習・演習', view: 'audio', desc: '検索フィルタ＋連結学習モード1〜10（よく使う順）。今日のおすすめ・弱点分析・問題数の目標・ブックマーク・読み方の手動補正辞書つき。', tags: ['音声学習', 'ながら学習', '弱点分析', 'ブックマーク'] },
   { id: 'exam', title: '模擬試験', icon: '📝', category: '学習・演習', view: 'exam', desc: '午前/午後(本番同形式)・得意/苦手(自動提案)・選択式の5モード。', tags: ['模試', '本番形式'] },
 
   // ---- 復習・弱点対策 ----

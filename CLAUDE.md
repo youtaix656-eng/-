@@ -87,7 +87,25 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 - 各科目の同梱データは `src/data/<科目>Questions.js`＋`<X>_VERSION`（バッチ増分方式）。
   `useStore.js`で`dedupeAgainst`により起動時に未収録分だけ取り込む。
 - 音声学習（`src/components/AudioMode.jsx`）: 検索フィルタ＋連結学習モード1〜10
-  （連鎖/比較/数値/穴埋め/弱点/選択肢読み/章通し/ナレーション/適応/今日の連結）。
+  （連鎖/比較/数値/穴埋め/弱点/選択肢読み/章通し/ナレーション/適応/今日の連結、よく使う順に自動並べ替え）。
+  「今日のおすすめ」バナー（復習が溜まっていたら復習読み上げを提案）、セッション内の弱点分析
+  （△✕をつけた問題からジャンル・キーワードを集計し読み上げ）、問題数ベースの「今日の目標」
+  （タイマーの代わり）、自己採点にブックマークを追加、読み方の手動補正辞書（TTS誤読の修正、
+  `settings.pronunciationFixes`）も実装済み。
+- **「復習」の定義は `src/lib/reviewPool.js` を単一の正とする**（Session.jsx・AudioMode.jsx が共用。
+  画面ごとに定義がズレて再発しないための集約）。
+  - `isInReview`/`isDue`（`src/lib/srs.js`）：問題1問の復習対象・期限判定の基礎。
+  - `dueReviewQuestions`（`useStore.js`）：ホーム「今日の復習」・`Review.jsx`が使う、期限が来た
+    問題だけの単純なリスト（`isInReview`＋`isDue`のみ、忘却リスクは混ぜない）。
+  - `reviewPoolFor(pool, srs)`（`reviewPool.js`）：Session.jsxの「すべて復習」・AudioModeの
+    「間違えた問題を読み上げる」が使う、より広い定義。期限が来た問題を優先しつつ、一度も
+    間違えていないが保持率が下がってきた問題（忘却リスク、しきい値`FORGETTING_THRESHOLD=0.4`）を
+    「念のため確認」として少数混ぜる。
+  - `buildWeaknessSummary`/`weaknessSummaryToText`：誤答・あいまい（△✕）問題からジャンル・
+    キーワードの傾向を文章化（Session.jsxの完了画面／AudioModeのセッション内弱点分析で共用）。
+  - `recommendNewPct`：新規問題と復習の比率を復習の溜まり具合から自動提案（Session.jsxの
+    「今日のおすすめ」）。
+  - 新しい画面で「復習」を扱う時は、この4関数を再実装せず`reviewPool.js`からimportすること。
 - 端末だけに取り込むリンク: `#import=`（`src/lib/noteshare.js`）。重複は
   `dedupeAgainst`（問題文で判定、`src/lib/importer.js`）。同一問題文の別問は
   末尾に（第XX回）を付けて衝突回避。

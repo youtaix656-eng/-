@@ -9,6 +9,8 @@ import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { COMPARISONS, NUMBER_FACTS } from '../data/mindmapData.js';
 import { buildKanaIndex } from '../lib/yomi.js';
+import { reviewPoolFor, buildWeaknessSummary, weaknessSummaryToText, recommendNewPct } from '../lib/reviewPool.js';
+import { studyStreak } from '../lib/stats.js';
 
 // 連結モード（検索窓の下に並ぶ10項目）。id=0 は通常（全部順に読む）。
 const MODES = [
@@ -62,7 +64,7 @@ function Opt({ on, onToggle, title, desc, disabled }) {
 }
 
 export default function AudioMode({ store, onToast, reviewPreset, onConsumePreset }) {
-  const { reviewQuestions, questions, links, history, settings, updateSettings, recordAnswer, setLink } = store;
+  const { questions, links, history, srs, settings, updateSettings, recordAnswer, setLink, bookmarks, toggleBookmark } = store;
 
   const taggedQuestions = useMemo(
     () =>
@@ -73,8 +75,9 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       ),
     [questions, links]
   );
-  const hasReview = reviewQuestions.length > 0;
-  const hasTagged = taggedQuestions.length > 0;
+  // 復習対象プール：期限優先＋「念のため確認」込み（Session.jsxの「すべて復習」と同じ定義）
+  const reviewPool = useMemo(() => reviewPoolFor(questions, srs), [questions, srs]);
+  const { streak, studiedToday } = useMemo(() => studyStreak(history), [history]);
 
   // 連結学習の下ごしらえ（キーワードのクラスタ・関連・弱点・今日の分）
   const kwList = useMemo(() => allKeywords(questions, links), [questions, links]);
@@ -143,6 +146,21 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
 
   const [loop, setLoop] = useState(false);
   const [sleepMin, setSleepMin] = useState(0);
+
+  // 今日の目標（問題数）。0=未設定。再生位置(index)が目標に達したら1回だけ知らせる。
+  const [goal, setGoal] = useState(0);
+  const goalNotifiedRef = useRef(false);
+
+  // 今のセッションで △・✕ と自己採点した問題（弱点分析の材料）
+  const [sessionWrong, setSessionWrong] = useState([]);
+  const weaknessSummary = useMemo(
+    () => buildWeaknessSummary(sessionWrong, links, COMPARISONS),
+    [sessionWrong, links]
+  );
+
+  // 読み方の手動補正辞書（TTSの誤読を直す）
+  const [pfTerm, setPfTerm] = useState('');
+  const [pfReading, setPfReading] = useState('');
 
   // ---- 読み上げ文の部品 ----
   const questionText = (q) => {
@@ -276,7 +294,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       if (mode === 8) return poolKw.length ? readCluster(byCount, true) : fallback();
       if (mode === 9) return weakSort(pool).map((q) => ({ kind: 'question', q }));
       if (mode === 10) {
-        const dueFirst = reviewQuestions.filter((q) => poolIds.has(q.id)).map((q) => ({ kind: 'question', q }));
+        const dueFirst = reviewPool.filter((q) => poolIds.has(q.id)).map((q) => ({ kind: 'question', q }));
         const seed = dailyKw && cl.has(dailyKw) ? dailyKw : byCount[0];
         const chainItems = seed ? readCluster(chainOrder(seed, relatedMap, poolKw)) : [];
         const seen = new Set();
@@ -311,16 +329,14 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       if (!hasKeywords) return [];
       return buildKw(weakNames);
     }
-    let base =
-      source === 'review' && hasReview
-        ? reviewQuestions
-        : source === 'tagged' && hasTagged
-        ? taggedQuestions
-        : questions;
+    let base;
+    if (source === 'review') base = reviewPool;
+    else if (source === 'tagged') base = taggedQuestions;
+    else base = questions;
     if (shuffleOn) base = shuffle(base);
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewQuestions, taggedQuestions, hasKeywords, hasReview, hasTagged, filteredPool, filterActive]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
@@ -350,9 +366,20 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     speak('こんにちは。鍼灸国家試験の勉強を、いっしょに始めましょう。', { rate: preset.rate, pitch: preset.pitch, voice }).catch(() => {});
   };
 
+  // 読み方の手動補正辞書（TTSの誤読を直す）。読み上げ直前にだけ置き換える＝表示テキストはそのまま。
+  const applyPronunciation = (text) => {
+    const fixes = settings.pronunciationFixes || {};
+    let t = text;
+    for (const term of Object.keys(fixes)) {
+      if (!term) continue;
+      t = t.split(term).join(fixes[term]);
+    }
+    return t;
+  };
+
   // 1項目を「読み上げステップ（phase／読む文／間）」の配列へ変換。
   // 画面OFF・バックグラウンドではOSの仕様で停止する点は従来どおり。
-  const buildSteps = (item) => {
+  const buildStepsRaw = (item) => {
     const K = PHASES.KEYWORD, Q = PHASES.QUESTION, G = PHASES.GAP, A = PHASES.ANSWER, N = PHASES.NOTE;
     const steps = [];
     if (item.kind === 'flashcard') {
@@ -460,11 +487,13 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     steps.push({ wait: 700 });
     return steps;
   };
+  // 読み上げ文にだけ手動補正辞書を適用（画面表示のテキストには影響しない）
+  const buildSteps = (item) => buildStepsRaw(item).map((s) => (s.say ? { ...s, say: applyPronunciation(s.say) } : s));
 
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, links] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, links, settings.pronunciationFixes] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
@@ -515,21 +544,37 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     // ※ 画面を離れても再生を続けるため、アンマウント時に停止しない（エンジンが保持）。
   }, []);
 
-  // 「間違えた問題」から音声で復習：復習セットに切り替える
-  useEffect(() => {
-    if (!reviewPreset) return;
+  // 「間違えた問題」から音声で復習：復習セットに切り替える（「今日のおすすめ」バナーからも使う）
+  const startReviewSource = () => {
     engine.stop();
     setFilterSubject('');
     setFilterGenre('');
     setFilterKeyword('');
     setMode(0);
     setSource('review');
+  };
+  useEffect(() => {
+    if (!reviewPreset) return;
+    startReviewSource();
     onConsumePreset?.();
   }, [reviewPreset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const total = snap.total || builtPlan.length;
   const index = snap.index;
   const phase = snap.phase;
+
+  // 今日の目標（問題数）に達したら1回だけ知らせる
+  useEffect(() => {
+    if (!goal) { goalNotifiedRef.current = false; return; }
+    if (index + 1 >= goal) {
+      if (!goalNotifiedRef.current) {
+        goalNotifiedRef.current = true;
+        onToast?.(`🎯 今日の目標（${goal}問）を達成しました！`);
+      }
+    } else {
+      goalNotifiedRef.current = false;
+    }
+  }, [index, goal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePlay = () => {
     if (!playing) {
@@ -562,6 +607,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const changeMode = (m) => {
     rebuildStop();
     setMode((cur) => (cur === m ? 0 : m));
+    if (m > 0) {
+      const usage = { ...(settings.audioModeUsage || {}) };
+      usage[m] = (usage[m] || 0) + 1;
+      updateSettings({ audioModeUsage: usage });
+    }
   };
 
   // 検索フィルタの変更（科目→ジャンル→キーワードの順に段階的にしぼる）
@@ -594,6 +644,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     if (!q) return;
     const ok = kind === 'maru';
     recordAnswer(q, ok);
+    if (!ok) setSessionWrong((prev) => (prev.some((x) => x.id === q.id) ? prev : [...prev, q]));
     onToast?.(
       kind === 'maru'
         ? '「○ できた」を記録しました'
@@ -601,6 +652,29 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         ? '「△ あいまい」を記録（復習に追加）'
         : '「✕ できない」を記録（復習に追加）'
     );
+  };
+  const toggleCurrentBookmark = () => {
+    const q = current;
+    if (!q) return;
+    toggleBookmark(q.id);
+    onToast?.(bookmarks[q.id] ? 'ブックマークを解除しました' : '🔖 ブックマークに追加しました（後で見直す）');
+  };
+  // 読み方の手動補正辞書（例：「経穴」→「けいけつ」）
+  const addPronunciationFix = () => {
+    const term = pfTerm.trim();
+    const reading = pfReading.trim();
+    if (!term || !reading) return;
+    const cur = { ...(settings.pronunciationFixes || {}) };
+    cur[term] = reading;
+    updateSettings({ pronunciationFixes: cur });
+    setPfTerm('');
+    setPfReading('');
+    onToast?.(`「${term}」→「${reading}」を登録しました`);
+  };
+  const removePronunciationFix = (term) => {
+    const cur = { ...(settings.pronunciationFixes || {}) };
+    delete cur[term];
+    updateSettings({ pronunciationFixes: cur });
   };
   const addTag = () => {
     const q = current;
@@ -631,6 +705,10 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const rateOptions = [0.7, 0.85, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0];
   const sleepOptions = [0, 5, 10, 15, 20, 30];
   const kwLike = source === 'keyword' || source === 'daily' || source === 'weak';
+  const goalOptions = [0, 10, 30, 60, 100];
+  // よく使うモードほど上に表示（使った回数、settings.audioModeUsage に保存）
+  const modeUsage = settings.audioModeUsage || {};
+  const sortedModes = MODES.slice().sort((a, b) => (modeUsage[b.id] || 0) - (modeUsage[a.id] || 0));
 
   return (
     <div className="view">
@@ -639,6 +717,25 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         「問題 →（間）→ 正解と解説」を自動で読み上げます。連結の工夫で、ひとつの言葉を
         いろいろな角度から耳で覚えられます。
       </p>
+
+      {streak > 0 && (
+        <div className={`streak-card${studiedToday ? ' lit' : ''}`} style={{ marginBottom: 12 }}>
+          <span className="streak-flame">🔥</span>
+          <span className="streak-main"><strong>{streak}</strong>日連続</span>
+          <span className="streak-sub">{studiedToday ? '今日も学習済み！' : '今日まだ未学習。1問でも解いて継続！'}</span>
+        </div>
+      )}
+
+      {reviewPool.length >= 3 && source !== 'review' && (
+        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>🎯 今日のおすすめ</div>
+          <p style={{ margin: '4px 0 10px' }}>
+            間違えた問題（△・✕、念のため確認を含む）が <strong>{reviewPool.length}問</strong> たまっています。
+            先に復習すると定着しやすくなります。
+          </p>
+          <button className="btn accent" onClick={startReviewSource}>🔁 間違えた問題を読み上げる</button>
+        </div>
+      )}
 
       {/* 上部の検索（科目名・ジャンル・キーワードでしぼり込む） */}
       <div className="card audio-search">
@@ -688,12 +785,14 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
 
       {source === 'review' && (
         <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--surface-2)' }}>
-          🔁 「間違えた問題」を読み上げ中（{reviewQuestions.length}問）。上の検索で条件を選ぶと通常の読み上げに戻ります。
+          {reviewPool.length > 0
+            ? `🔁 「間違えた問題」を読み上げ中（${reviewPool.length}問）。上の検索で条件を選ぶと通常の読み上げに戻ります。`
+            : '🔁 「間違えた問題」を読もうとしましたが、復習対象が0問でした。上の検索で条件を選ぶと通常の読み上げに戻ります。'}
         </div>
       )}
 
-      {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ */}
-      <div className="section-label">連結学習モード（読み方を選ぶ）</div>
+      {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ。よく使う順に並びます。 */}
+      <div className="section-label">連結学習モード（読み方を選ぶ・よく使う順）</div>
       <div className="mode-list">
         <button className={`mode-card ${mode === 0 ? 'active' : ''}`} onClick={() => changeMode(0)}>
           <span className="mode-ico">🎧</span>
@@ -702,7 +801,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
             <span className="mode-desc">検索でしぼった問題を、問題→間→正解の順にそのまま読み上げます。</span>
           </span>
         </button>
-        {MODES.map((m) => (
+        {sortedModes.map((m) => (
           <button
             key={m.id}
             className={`mode-card ${mode === m.id ? 'active' : ''}`}
@@ -723,7 +822,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
           <div className="ico">🎧</div>
           <p>読み上げる項目がありません。</p>
           <p className="inline-note">
-            {source === 'filter'
+            {source === 'review'
+              ? '復習対象がありません。一問一答や模擬試験で問題を解き、間違えた問題（△・✕）を溜めましょう。'
+              : source === 'tagged'
+              ? 'キーワード（連結キーワード / タグ）を付けた問題がありません。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
+              : source === 'filter'
               ? '選んだ条件に合う問題がありません。上の検索で条件をゆるめる（別の科目・ジャンルにする、キーワードを「指定なし」に戻す）か、「クリア」してください。'
               : kwLike
               ? 'キーワード（連結キーワード / タグ）を付けた問題を用意すると、ここで回せます。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
@@ -744,6 +847,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 {phase === PHASES.NOTE && (currentItem?.kind === 'summary' ? 'まとめ' : 'つながり')}
               </span>
               <span className="now-index">{index + 1} / {total}</span>
+              {goal > 0 && (
+                <span className="now-index" style={{ marginLeft: 8 }}>
+                  🎯 目標 {Math.min(index + 1, goal)} / {goal}問
+                </span>
+              )}
             </div>
 
             <div className="now-subject">
@@ -826,12 +934,15 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={resetToStart}>🔁 最初から（リセット）</button>
             )}
 
-            {/* #10 聞きながら自己採点＋キーワード追加 */}
+            {/* #10 聞きながら自己採点＋キーワード追加＋ブックマーク */}
             {current && (
               <div className="selfgrade">
                 <button className="sg-btn ok" onClick={() => gradeCurrent('maru')}>○ できた</button>
                 <button className="sg-btn mid" onClick={() => gradeCurrent('sankaku')}>△ あいまい</button>
                 <button className="sg-btn ng" onClick={() => gradeCurrent('batsu')}>✕ できない</button>
+                <button className={`sg-btn q-bookmark${bookmarks[current.id] ? ' on' : ''}`} onClick={toggleCurrentBookmark}>
+                  {bookmarks[current.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
+                </button>
                 <button className="sg-btn" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
               </div>
             )}
@@ -848,6 +959,28 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               </div>
             )}
           </div>
+
+          {/* 今のセッションの弱点分析（△・✕ をつけた問題から、ジャンル・キーワードの傾向を出す） */}
+          {weaknessSummary && (
+            <div className="card">
+              <div className="section-label" style={{ marginTop: 0 }}>🧭 今のセッションの弱点分析</div>
+              {weaknessSummary.topGenres.length > 0 && (
+                <p style={{ margin: '4px 0' }}>ジャンル：{weaknessSummary.topGenres.map(([g, c]) => `${g}（${c}）`).join('、')}</p>
+              )}
+              {weaknessSummary.topTags.length > 0 && (
+                <p style={{ margin: '4px 0' }}>キーワード：{weaknessSummary.topTags.map(([tg, c]) => `${tg}（${c}）`).join('、')}</p>
+              )}
+              <button
+                className="btn ghost sm"
+                onClick={() => {
+                  cancelSpeech();
+                  speak(weaknessSummaryToText(weaknessSummary), { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
+                }}
+              >
+                🔊 弱点分析を読み上げる
+              </button>
+            </div>
+          )}
 
           {/* 読み上げる面（暗記カード：表＝問題／裏＝答え） */}
           <div className="card">
@@ -940,10 +1073,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                     className={`chip ${sleepMin === m ? 'active' : ''}`}
                     onClick={() => {
                       setSleepMin(m);
-                      if (playingRef.current) {
-                        clearSleepTimer();
-                        if (m > 0) sleepTimerRef.current = setTimeout(() => stopPlayback(), m * 60 * 1000);
-                      }
+                      engine.setSleep(m);
                     }}
                   >
                     {m === 0 ? 'オフ' : `${m}分`}
@@ -951,6 +1081,21 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 ))}
               </div>
               <div className="hint">寝る前の“ながら再生”に。指定時間で自動停止します。</div>
+            </div>
+            <div className="field" style={{ marginTop: 14, marginBottom: 0 }}>
+              <label>今日の目標（問題数）</label>
+              <div className="chip-row" style={{ marginBottom: 0 }}>
+                {goalOptions.map((g) => (
+                  <button
+                    key={g}
+                    className={`chip ${goal === g ? 'active' : ''}`}
+                    onClick={() => { setGoal(g); goalNotifiedRef.current = false; }}
+                  >
+                    {g === 0 ? 'オフ' : `${g}問`}
+                  </button>
+                ))}
+              </div>
+              <div className="hint">タイマーの代わりに「問題数」で今日のゴールを決めたい時に。達成したら知らせます。</div>
             </div>
           </div>
 
@@ -988,7 +1133,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                   <button
                     key={r}
                     className={`chip ${Math.abs(rate - r) < 0.001 ? 'active' : ''}`}
-                    onClick={() => { setRate(r); rateRef.current = r; updateSettings({ speechRate: r }); }}
+                    onClick={() => { setRate(r); updateSettings({ speechRate: r }); }}
                   >
                     {r.toFixed(2)}×
                   </button>
@@ -1000,11 +1145,45 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               <div className="range-row">
                 <input
                   type="range" min="0" max="10" step="1" value={gap}
-                  onChange={(e) => { const v = Number(e.target.value); setGap(v); gapRef.current = v; updateSettings({ gapSeconds: v }); }}
+                  onChange={(e) => { const v = Number(e.target.value); setGap(v); updateSettings({ gapSeconds: v }); }}
                 />
                 <span className="range-val">{gap}秒</span>
               </div>
               <div className="hint">解答を思い出す時間として使えます。</div>
+            </div>
+          </div>
+
+          {/* 読み方の手動補正辞書（TTSが誤読する語を直す） */}
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>🗣️ 読み方の手動補正</div>
+            <div className="hint" style={{ marginBottom: 8 }}>
+              音声合成が読み間違える言葉があれば、正しい読み方（ひらがな・カタカナ）を登録できます。読み上げの時だけ置き換わり、画面の文字は変わりません。
+            </div>
+            {Object.keys(settings.pronunciationFixes || {}).length > 0 && (
+              <ul className="pf-list" style={{ listStyle: 'none', padding: 0, margin: '0 0 10px' }}>
+                {Object.entries(settings.pronunciationFixes || {}).map(([term, reading]) => (
+                  <li key={term} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                    <span>{term} → {reading}</span>
+                    <button className="btn ghost sm" onClick={() => removePronunciationFix(term)}>削除</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="kw-add" style={{ flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={pfTerm}
+                onChange={(e) => setPfTerm(e.target.value)}
+                placeholder="誤読される言葉（例：経穴）"
+              />
+              <input
+                type="text"
+                value={pfReading}
+                onChange={(e) => setPfReading(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addPronunciationFix()}
+                placeholder="正しい読み方（例：けいけつ）"
+              />
+              <button className="btn sm primary" onClick={addPronunciationFix}>追加</button>
             </div>
           </div>
 

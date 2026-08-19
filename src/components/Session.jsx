@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
-import { GRADES, isInReview, isDue } from '../lib/srs.js';
+import { GRADES } from '../lib/srs.js';
 import { getSubjects } from '../lib/stats.js';
 import { subjectMatches, SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { effectiveTags } from '../lib/query.js';
 import { COMPARISONS } from '../data/mindmapData.js';
-import { forgettingRisk } from '../lib/forgetting.js';
+import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/reviewPool.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -60,27 +60,6 @@ function buildNewOnlyOrder(pool, target, srs) {
   const newPool = pool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0);
   return spaceById(shuffle(newPool).map((q) => q.id).slice(0, target));
 }
-// 忘却リスクのしきい値・「念のため確認」の混入上限（InsightsSection.jsx の忘却予測と同じしきい値）。
-const FORGETTING_THRESHOLD = 0.4;
-const SAFETY_CHECK_MIN = 3;
-const SAFETY_CHECK_RATIO = 0.15;
-
-// 復習対象プール：復習期限が来ている問題を優先し、無ければ復習対象全体にフォールバック。
-//   lib/useStore.js の dueReviewQuestions と同じ優先順位に揃える（画面間の食い違いを防ぐ）。
-//   加えて、一度も間違えていない（＝isInReviewの対象外）が保持率が下がってきた問題を
-//   「念のため確認」として少数混ぜる。自信満々の○だけで一度も復習に出ないまま忘れるのを防ぐため。
-function reviewPoolFor(pool, srs) {
-  const inReview = pool.filter((q) => isInReview(srs[q.id]));
-  const due = inReview.filter((q) => isDue(srs[q.id]));
-  const base = due.length > 0 ? due : inReview;
-  const inReviewIds = new Set(inReview.map((q) => q.id));
-  const atRisk = forgettingRisk(pool, srs, { threshold: FORGETTING_THRESHOLD })
-    .map((r) => r.question)
-    .filter((q) => !inReviewIds.has(q.id));
-  if (atRisk.length === 0) return base;
-  const cap = base.length > 0 ? Math.max(SAFETY_CHECK_MIN, Math.round(base.length * SAFETY_CHECK_RATIO)) : Math.min(atRisk.length, 20);
-  return [...base, ...atRisk.slice(0, cap)];
-}
 // 「すべて復習」用：復習対象プールだけを出題順にする（繰り返さない・足りなければそこで終了）。
 function buildReviewOnlyOrder(pool, target, srs) {
   const reviewPool = reviewPoolFor(pool, srs);
@@ -115,44 +94,6 @@ function buildMixedNoRepeatOrder(pool, target, newRatio, srs) {
   const takeNew = shuffle(newPool).map((q) => q.id).slice(0, newCount);
   const takeReview = shuffle(reviewPool).map((q) => q.id).slice(0, reviewCount);
   return spaceById(shuffle([...takeNew, ...takeReview]));
-}
-
-// 「今日のおすすめ」：復習の溜まり具合から新規◯割を自動で決める（迷ったときの初期値提案）。
-function recommendNewPct(newRemaining, reviewRemaining) {
-  if (reviewRemaining === 0) return { pct: 100, reason: '復習対象が無いので、すべて新規にしました。' };
-  if (newRemaining === 0) return { pct: 0, reason: '新規問題が無いので、すべて復習にしました。' };
-  if (reviewRemaining >= 30) return { pct: 30, reason: `復習対象が${reviewRemaining}問溜まっているので、復習多めにしました。` };
-  if (reviewRemaining >= 10) return { pct: 50, reason: `復習対象が${reviewRemaining}問あるので、半々にしました。` };
-  return { pct: 70, reason: `復習対象は${reviewRemaining}問だけなので、新規多めにしました。` };
-}
-
-// 誤答・あいまい（△✕）の問題群から、弱点を文章と関連対比で示す材料を作る。
-//   実際に出た誤答のジャンル・キーワードの頻度だけを根拠にする（憶測での説明は行わない）。
-function buildWeaknessSummary(wrongQs, links) {
-  // 母数が少なすぎると偏った印象を与えるだけなので表示しない
-  if (wrongQs.length < 3) return null;
-  const tagCount = {};
-  for (const q of wrongQs) {
-    for (const tg of effectiveTags(q, links)) tagCount[tg] = (tagCount[tg] || 0) + 1;
-  }
-  const topTags = Object.entries(tagCount)
-    .filter(([, c]) => c >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-  const genreCount = {};
-  for (const q of wrongQs) {
-    const g = q.genre || q.subject || 'その他';
-    genreCount[g] = (genreCount[g] || 0) + 1;
-  }
-  const topGenres = Object.entries(genreCount)
-    .filter(([, c]) => c >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
-  // ジャンル・キーワードとも繰り返しの傾向が無ければ、情報が薄いので表示しない
-  if (topTags.length === 0 && topGenres.length === 0) return null;
-  const tagSet = new Set(Object.keys(tagCount));
-  const relatedComparisons = COMPARISONS.filter((c) => (c.terms || []).some((t) => tagSet.has(t))).slice(0, 3);
-  return { topTags, topGenres, relatedComparisons };
 }
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio }) {
@@ -566,7 +507,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
 
         {/* 今回の弱点分析（誤答・△・✕をまとめて対象に、実際の頻度だけから作成） */}
         {wrongQs.length > 0 && (() => {
-          const summary = buildWeaknessSummary(wrongQs, links);
+          const summary = buildWeaknessSummary(wrongQs, links, COMPARISONS);
           if (!summary) return null;
           return (
             <div className="card">
