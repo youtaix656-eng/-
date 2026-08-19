@@ -12,6 +12,7 @@ import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { riskOf } from '../lib/reviewOrder.js';
+import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import {
   shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder,
 } from '../lib/sessionOrder.js';
@@ -91,10 +92,10 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   const kwSections = useMemo(() => buildKanaIndex(kwOptions), [kwOptions]);
   const afterKw = useMemo(() => (keyword ? afterGenre.filter((q) => effectiveTags(q, links).includes(keyword)) : afterGenre), [afterGenre, keyword, links]);
   const roundOptions = useMemo(
-    () => Array.from(new Set(afterKw.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    () => Array.from(new Set(afterKw.map((q) => roundKey(q.round)).filter((r) => r != null))).sort((a, b) => Number(b) - Number(a)),
     [afterKw]
   );
-  const afterRound = useMemo(() => (round ? afterKw.filter((q) => String(q.round) === String(round)) : afterKw), [afterKw, round]);
+  const afterRound = useMemo(() => (round ? afterKw.filter((q) => isSameRound(q.round, round)) : afterKw), [afterKw, round]);
   const filteredPool = useMemo(() => {
     let pool = afterRound;
     if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
@@ -326,7 +327,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
               <span>回（年度）</span>
               <select value={round} onChange={(e) => setRound(e.target.value)} disabled={roundOptions.length === 0}>
                 <option value="">指定なし</option>
-                {roundOptions.map((r) => (<option key={r} value={r}>第{r}回</option>))}
+                {roundOptions.map((r) => (<option key={r} value={r}>{formatRound(r)}</option>))}
               </select>
             </label>
           </div>

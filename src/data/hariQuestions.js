@@ -14,7 +14,7 @@
 // バッチ(5・最終)は6.鍼治効の基礎のD鍼鎮痛・E血流改善＋7.鍼療法の治効理論A治療的作用＋
 // 8.関連学説B ホメオスタシス・C ストレス学説（p.446〜450）を追加。はり理論
 // （出題基準①〜⑧、p.426〜450）が完結。
-export const HARI_VERSION = 5;
+export const HARI_VERSION = 6;
 
 const OX = ['○（正しい）', '×（誤り）'];
 const S = 'はり理論';
@@ -2270,6 +2270,38 @@ const hariQuestions = [
     choices: OX, answer: 0,
     explanation: '下行性抑制系は、GABA作動性ニューロンの興奮ではなく抑制によって賦活される。',
     tags: ['GABA作動性ニューロン', '下行性抑制系'],
+  },
+  {
+    id: 'hr-chintsuu-7', subject: S, type: 'choice', round: 34, deck: S,
+    genre: '鍼治効の基礎｜鍼鎮痛',
+    question: 'ストレス誘発性鎮痛において、下垂体前葉から放出されるのはどれか。',
+    choices: ['オキシトシン', 'アドレナリン', 'コルチゾール', 'βエンドルフィン'],
+    answer: 3,
+    explanation: '下垂体前葉のACTH産生細胞は、前駆体タンパク質POMC（プロオピオメラノコルチン）からACTHとβエンドルフィンを同時に切り出して分泌する。強いストレス下ではこの経路が働き、内因性オピオイドであるβエンドルフィンが血中に放出されて鎮痛（ストレス誘発性鎮痛）に関与する。オキシトシンは下垂体後葉、アドレナリンは副腎髄質、コルチゾールは副腎皮質から分泌されるもので、いずれも下垂体前葉から放出されるものではない。',
+    tags: ['βエンドルフィン', 'POMC', 'ストレス誘発性鎮痛', '下垂体前葉'],
+  },
+  {
+    id: 'hr-chintsuu-7a', subject: S, type: 'choice', deck: S, genre: '鍼治効の基礎｜鍼鎮痛',
+    question: 'POMC（プロオピオメラノコルチン）から同時に切り出されるホルモンの組合せはどれか。',
+    choices: ['ACTHとβエンドルフィン', 'ACTHとオキシトシン', 'コルチゾールとアドレナリン', 'オキシトシンとバソプレシン'],
+    answer: 0,
+    explanation: '下垂体前葉のPOMC前駆体はACTHとβエンドルフィンに開裂され、同時に分泌される。オキシトシン・バソプレシンは下垂体後葉ホルモン、コルチゾール・アドレナリンは副腎由来でPOMC由来ではない。',
+    tags: ['POMC', 'ACTH', 'βエンドルフィン'],
+  },
+  {
+    id: 'hr-chintsuu-7b', subject: S, type: 'choice', deck: S, genre: '鍼治効の基礎｜鍼鎮痛',
+    question: 'アドレナリンを分泌する部位はどれか。',
+    choices: ['副腎髄質', '下垂体前葉', '下垂体後葉', '副腎皮質'],
+    answer: 0,
+    explanation: 'アドレナリンは副腎髄質のクロム親和性細胞から分泌される。副腎皮質はコルチゾールなどのステロイドホルモンを分泌する。',
+    tags: ['アドレナリン', '副腎髄質'],
+  },
+  {
+    id: 'hr-chintsuu-7c', subject: S, type: 'ox', deck: S, genre: '鍼治効の基礎｜鍼鎮痛',
+    question: 'オキシトシンは下垂体前葉から分泌される。',
+    choices: OX, answer: 1,
+    explanation: 'オキシトシンは視床下部の神経分泌細胞で産生され、下垂体後葉から血中に放出される。下垂体前葉からの分泌ではない。',
+    tags: ['オキシトシン', '下垂体後葉'],
   },
   {
     id: 'hr-chintsuu-3', subject: S, type: 'choice', round: 34, deck: S,

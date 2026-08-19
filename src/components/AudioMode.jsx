@@ -16,6 +16,7 @@ import { riskOf } from '../lib/reviewOrder.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { loadNextTask } from '../lib/nextTask.js';
+import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 
 // 連結モード（検索窓の下に並ぶ10項目）。id=0 は通常（全部順に読む）。
 const MODES = [
@@ -189,7 +190,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     [afterGenre, filterKeyword, links] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const roundOptions = useMemo(
-    () => Array.from(new Set(afterKeyword.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    () => Array.from(new Set(afterKeyword.map((q) => roundKey(q.round)).filter((r) => r != null))).sort((a, b) => Number(b) - Number(a)),
     [afterKeyword]
   );
   const recentWrongIds = useMemo(() => {
@@ -201,7 +202,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     return ids;
   }, [recentOnly, history]);
   const filteredPool = useMemo(() => {
-    let pool = filterRound ? afterKeyword.filter((q) => String(q.round) === String(filterRound)) : afterKeyword;
+    let pool = filterRound ? afterKeyword.filter((q) => isSameRound(q.round, filterRound)) : afterKeyword;
     if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
     if (minWrong > 0) pool = pool.filter((q) => (normalize(srs[q.id]).wrongCount || 0) >= minWrong);
     if (minRisk > 0) pool = pool.filter((q) => Math.round(riskOf(q, srs) * 100) >= minRisk);
@@ -911,7 +912,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
             <span>回（年度）</span>
             <select value={filterRound} onChange={(e) => applyFilter({ round: e.target.value })} disabled={roundOptions.length === 0}>
               <option value="">指定なし</option>
-              {roundOptions.map((r) => (<option key={r} value={r}>第{r}回</option>))}
+              {roundOptions.map((r) => (<option key={r} value={r}>{formatRound(r)}</option>))}
             </select>
           </label>
         </div>

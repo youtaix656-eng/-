@@ -11,6 +11,7 @@ import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
 import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLabel, managerReviewMessage } from '../lib/bufferSession.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
+import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -83,10 +84,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const afterKw = useMemo(() => (keyword ? afterGenre.filter((q) => effectiveTags(q, links).includes(keyword)) : afterGenre), [afterGenre, keyword, links]);
   // 回（第XX回）の選択肢（#5）
   const roundOptions = useMemo(
-    () => Array.from(new Set(afterKw.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    () => Array.from(new Set(afterKw.map((q) => roundKey(q.round)).filter((r) => r != null))).sort((a, b) => Number(b) - Number(a)),
     [afterKw]
   );
-  const afterRound = useMemo(() => (round ? afterKw.filter((q) => String(q.round) === String(round)) : afterKw), [afterKw, round]);
+  const afterRound = useMemo(() => (round ? afterKw.filter((q) => isSameRound(q.round, round)) : afterKw), [afterKw, round]);
   const filteredPool = useMemo(() => {
     let pool = afterRound;
     if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
@@ -240,7 +241,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
               <span>回（年度）</span>
               <select value={round} onChange={(e) => setRound(e.target.value)} disabled={roundOptions.length === 0}>
                 <option value="">指定なし</option>
-                {roundOptions.map((r) => (<option key={r} value={r}>第{r}回</option>))}
+                {roundOptions.map((r) => (<option key={r} value={r}>{formatRound(r)}</option>))}
               </select>
             </label>
           </div>

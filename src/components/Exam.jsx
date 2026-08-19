@@ -10,6 +10,7 @@ import { figureFor } from '../data/figures.jsx';
 import { normalize, isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
 import { buildWeaknessSummary } from '../lib/reviewPool.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
+import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 
 function fmtTime(sec) {
   const m = Math.floor(sec / 60);
@@ -140,7 +141,7 @@ export default function Exam({ store, onNavigate }) {
     return (relatedMapAll.get(filterKeyword) || []).filter((k) => k !== filterKeyword).slice(0, 8);
   }, [filterKeyword, relatedMapAll]);
   const roundOptions = useMemo(
-    () => Array.from(new Set(afterGenre.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    () => Array.from(new Set(afterGenre.map((q) => roundKey(q.round)).filter((r) => r != null))).sort((a, b) => Number(b) - Number(a)),
     [afterGenre]
   );
   const pickPool = useMemo(() => {
@@ -149,7 +150,7 @@ export default function Exam({ store, onNavigate }) {
       const kwSet = new Set([filterKeyword, ...relatedSelected]);
       pool = pool.filter((q) => effectiveTags(q, links).some((t) => kwSet.has(t)));
     }
-    if (filterRound) pool = pool.filter((q) => String(q.round) === String(filterRound));
+    if (filterRound) pool = pool.filter((q) => isSameRound(q.round, filterRound));
     if (pickBookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
     return pool;
   }, [afterGenre, filterKeyword, relatedSelected, links, filterRound, pickBookmarkOnly, bookmarks]);
@@ -543,7 +544,7 @@ export default function Exam({ store, onNavigate }) {
               >
                 <option value="">指定なし</option>
                 {roundOptions.map((r) => (
-                  <option key={r} value={r}>第{r}回</option>
+                  <option key={r} value={r}>{formatRound(r)}</option>
                 ))}
               </select>
             </label>

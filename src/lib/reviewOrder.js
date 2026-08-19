@@ -6,6 +6,7 @@ import { retrievability } from './forgetting.js';
 import { itemDifficulty } from './difficulty.js';
 import { normalize } from './srs.js';
 import { expandQuery } from './synonyms.js';
+import { isSameRound } from './round.js';
 
 // 忘却リスク（0〜1、高いほど忘れそう）。間隔未確定（間違えた直後など）は最優先=1。
 export function riskOf(q, srs, now = Date.now()) {
@@ -50,7 +51,7 @@ export function filterReview(
     if (subjects.length > 0 && !subjects.includes(q.subject)) return false;
     if (tag && !effectiveTags(q, links).includes(tag)) return false;
     if (term && !matchesSearch(q, term, links)) return false;
-    if (round && String(q.round) !== String(round)) return false;
+    if (round && !isSameRound(q.round, round)) return false;
     if (bookmarkOnly && !bookmarks[q.id]) return false;
     if (minWrong > 0 && (normalize(srs[q.id]).wrongCount || 0) < minWrong) return false;
     if (minRisk > 0 && Math.round(riskOf(q, srs, now) * 100) < minRisk) return false;

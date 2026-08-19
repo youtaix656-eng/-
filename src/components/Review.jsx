@@ -19,6 +19,7 @@ import { reviewPoolFor, buildWeaknessSummary } from '../lib/reviewPool.js';
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
+import { roundKey, formatRound } from '../lib/round.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -194,7 +195,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   );
   const kwSections = useMemo(() => buildKanaIndex(kwOptions), [kwOptions]);
   const roundOptions = useMemo(
-    () => Array.from(new Set(extendedReviewPool.map((q) => q.round).filter((r) => r != null))).sort((a, b) => b - a),
+    () => Array.from(new Set(extendedReviewPool.map((q) => roundKey(q.round)).filter((r) => r != null))).sort((a, b) => Number(b) - Number(a)),
     [extendedReviewPool]
   );
 
@@ -621,7 +622,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
             <span>回（年度）</span>
             <select value={round} onChange={(e) => setRound(e.target.value)} disabled={roundOptions.length === 0}>
               <option value="">指定なし</option>
-              {roundOptions.map((r) => (<option key={r} value={r}>第{r}回</option>))}
+              {roundOptions.map((r) => (<option key={r} value={r}>{formatRound(r)}</option>))}
             </select>
           </label>
           <label className="review-order">
