@@ -1,5 +1,19 @@
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
-import { ROADMAP_PHASES } from '../data/roadmapPhases.js';
+import { ROADMAP_PHASES, ROADMAP_MONTHS, phasesInMonth } from '../data/roadmapPhases.js';
+
+const MONTH_LABEL = (year, month) => `${year}年${month + 1}月`;
+const FMT_DAY = (dateStr) => {
+  const [, mo, d] = dateStr.split('-');
+  return `${Number(mo)}/${Number(d)}`;
+};
+// フェーズの日付範囲を、その月の中に収まる範囲だけに切り詰める
+function clampToMonth(p, year, month) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const first = `${year}-${pad(month + 1)}-01`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const last = `${year}-${pad(month + 1)}-${pad(lastDay)}`;
+  return { s: p.start < first ? first : p.start, e: p.end > last ? last : p.end };
+}
 
 // 合格するためのロードマップ（本日→令和9年2月28日 本番）
 // フェーズ・やること/NG・新規→△✕の切替時期・手が使えない時の音声学習を、図つきでまとめる。
@@ -135,6 +149,34 @@ export default function Roadmap({ store, onNavigate }) {
           </div>
         </div>
       ))}
+
+      {/* 月別スケジュール（8月〜2月）。上のフェーズ別カードと同じ内容を、カレンダーの月単位で見られるようにしたもの。 */}
+      <div className="section-label">📅 月別スケジュール（8月〜2月）</div>
+      <p className="inline-note" style={{ marginTop: 0 }}>
+        フェーズ別カード（上）と同じ内容を月ごとにまとめたものです。
+        <button className="rm-link" onClick={() => onNavigate('calendar')} style={{ marginLeft: 6 }}>
+          📅 カレンダーで見る →
+        </button>
+      </p>
+      {ROADMAP_MONTHS.map(({ year, month }) => {
+        const phases = phasesInMonth(year, month);
+        return (
+          <div className="card rm-month" key={`${year}-${month}`}>
+            <div className="rm-month-title">{MONTH_LABEL(year, month)}</div>
+            {phases.map((p) => {
+              const { s, e } = clampToMonth(p, year, month);
+              return (
+                <div className="rm-month-phase" key={p.id}>
+                  <span className="rm-month-dot" style={{ background: p.color }} />
+                  <span className="rm-month-range">{FMT_DAY(s)}{s !== e ? `〜${FMT_DAY(e)}` : ''}</span>
+                  <span className="rm-month-label">{p.label}</span>
+                  <span className="rm-month-mix">{p.mix}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
 
       {/* 全期間 共通の心得 */}
       <div className="section-label">🧭 全期間つらぬく心得</div>

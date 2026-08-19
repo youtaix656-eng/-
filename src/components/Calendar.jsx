@@ -12,6 +12,14 @@ const KINDS = [
 ];
 const kindOf = (id) => KINDS.find((k) => k.id === id) || KINDS[2];
 
+function hexToRgba(hex, alpha) {
+  const h = (hex || '').replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -120,6 +128,24 @@ export default function Calendar({ store, onToast, onNavigate }) {
       <h2 className="view-title">カレンダー</h2>
       <p className="view-desc">勉強や試験の予定を書き込めます。日付をタップして予定を追加。</p>
 
+      {/* 合格ロードマップ：この月のフェーズと色分けの凡例、全期間を見るリンク（画面上部に固定） */}
+      {phasesInMonth(year, month).length > 0 && (
+        <div className="cal-phase-legend">
+          <span className="cal-phase-legend-title">🗺️ この月の合格ロードマップ</span>
+          <span className="cal-phase-legend-hint">日付セルの背景色でフェーズが分かります（同じ色＝同じフェーズ）。</span>
+          {phasesInMonth(year, month).map((p) => (
+            <span className="cal-phase-tag" key={p.id}>
+              <i style={{ background: p.color }} />フェーズ{p.no}・{p.label}
+            </span>
+          ))}
+          {onNavigate && (
+            <button className="btn ghost sm" onClick={() => onNavigate('roadmap')}>
+              全期間のロードマップを見る →
+            </button>
+          )}
+        </div>
+      )}
+
       {nextExam && (
         <div className="exam-countdown">
           <span className="cd-ico">📝</span>
@@ -155,6 +181,7 @@ export default function Calendar({ store, onToast, onNavigate }) {
             <button
               key={key}
               className={`cal-cell ${inMonth ? '' : 'dim'} ${isToday ? 'today' : ''} ${isSel ? 'sel' : ''}`}
+              style={ph ? { backgroundColor: hexToRgba(ph.color, inMonth ? 0.24 : 0.12) } : undefined}
               onClick={() => setSelected(key)}
             >
               {ph && <span className="cal-phase" style={{ background: ph.color }} title={`フェーズ${ph.no} ${ph.label}`} />}
@@ -172,22 +199,6 @@ export default function Calendar({ store, onToast, onNavigate }) {
           );
         })}
       </div>
-
-      {phasesInMonth(year, month).length > 0 && (
-        <div className="cal-phase-legend">
-          <span className="cal-phase-legend-title">🗺️ この月のロードマップ</span>
-          {phasesInMonth(year, month).map((p) => (
-            <span className="cal-phase-tag" key={p.id}>
-              <i style={{ background: p.color }} />フェーズ{p.no}・{p.label}
-            </span>
-          ))}
-          {onNavigate && (
-            <button className="btn ghost sm" onClick={() => onNavigate('roadmap')}>
-              全期間のロードマップを見る →
-            </button>
-          )}
-        </div>
-      )}
 
       <div className="cal-selected">
         <div className="cal-sel-head">

@@ -2191,9 +2191,9 @@ code.block {
   min-height: 40px;
 }
 .cal-cell.dim { opacity: 0.35; }
-.cal-cell.today { background: var(--surface-2); }
-.cal-cell.sel { border-color: var(--navy); }
+.cal-cell.sel { border-color: var(--navy); box-shadow: 0 0 0 1.5px var(--navy) inset; }
 .cal-date { font-size: 14px; font-weight: 600; color: var(--text); }
+.cal-cell.today .cal-date { color: var(--accent); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
 .cal-date.sun { color: var(--wrong); }
 .cal-date.sat { color: var(--accent); }
 .cal-dots { display: flex; gap: 2px; margin-top: 3px; flex-wrap: wrap; justify-content: center; }
@@ -3263,6 +3263,18 @@ code.block {
 .rm-dd ul { margin: 0; padding-left: 16px; }
 .rm-dd li { font-size: 12.5px; line-height: 1.55; color: var(--text-sub); margin: 2px 0; }
 
+/* 月別スケジュール */
+.rm-month-title { font-size: 15px; font-weight: 800; margin-bottom: 8px; }
+.rm-month-phase {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.rm-month-phase:first-of-type { border-top: none; }
+.rm-month-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.rm-month-range { font-size: 12px; font-weight: 700; color: var(--text-mute); white-space: nowrap; }
+.rm-month-label { font-size: 13px; font-weight: 700; flex: 1; min-width: 0; }
+.rm-month-mix { font-size: 11.5px; color: var(--text-sub); white-space: nowrap; }
+
 /* 音声学習 */
 .rm-audio-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .rm-audio-svg { width: 56px; height: 56px; flex: 0 0 auto; }
@@ -3278,15 +3290,20 @@ code.block {
 
 /* ===== カレンダー：フェーズ色分け ===== */
 .cal-cell { position: relative; overflow: hidden; }
-.cal-phase { position: absolute; left: 0; right: 0; top: 0; height: 4px; opacity: 0.9; }
+.cal-phase { position: absolute; left: 0; right: 0; top: 0; height: 5px; opacity: 1; }
 .cal-phase-legend {
   display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 9px 11px; margin: 10px 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 11px 13px; margin: 0 0 12px;
+  box-shadow: var(--shadow);
 }
-.cal-phase-legend-title { font-size: 12px; font-weight: 800; color: var(--accent); width: 100%; }
-.cal-phase-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-sub); }
-.cal-phase-tag i { width: 12px; height: 8px; border-radius: 3px; display: inline-block; }
+.cal-phase-legend-title { font-size: 13px; font-weight: 800; color: var(--accent); width: 100%; }
+.cal-phase-legend-hint { font-size: 11.5px; color: var(--text-sub); width: 100%; margin: -2px 0 2px; }
+.cal-phase-tag {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text);
+  background: var(--surface-2); border-radius: 999px; padding: 4px 10px 4px 8px;
+}
+.cal-phase-tag i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 
 /* ===== ハリオ先生（AIマスコット） ===== */
 .mascot {

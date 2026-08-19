@@ -87,6 +87,18 @@ export const ROADMAP_PHASES = [
   },
 ];
 
+// 月別スケジュール表示（Roadmap.jsx）で使う対象月（2026年8月〜2027年2月、本番まで）。
+// month は Date と同じく 0始まり（7=8月、0=1月、1=2月）。
+export const ROADMAP_MONTHS = [
+  { year: 2026, month: 7 },
+  { year: 2026, month: 8 },
+  { year: 2026, month: 9 },
+  { year: 2026, month: 10 },
+  { year: 2026, month: 11 },
+  { year: 2027, month: 0 },
+  { year: 2027, month: 1 },
+];
+
 // 日付文字列(YYYY-MM-DD)が属するフェーズを返す（なければ null）
 export function phaseForDate(dateStr) {
   return ROADMAP_PHASES.find((p) => dateStr >= p.start && dateStr <= p.end) || null;
