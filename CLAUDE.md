@@ -38,6 +38,9 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 各問に tags（正式名称の重要語）、まぎらわしい対比は `COMPARISONS`、数値は `NUMBER_FACTS`
 （`src/data/mindmapData.js`）へ。過去問は著作物のため公開リポジトリに素の問題文を
 大量常設しない方針（派生・自作解説で保持。医療概論の同梱は個人利用の範囲）。
+語呂合わせサイト等、外部の教材サイトを参考資料として渡された場合も同じ方針：
+経穴名・順序・寸法などの**事実**は正確に引用してよいが、語呂合わせの**文章そのもの**
+（著作権のある創作表現）はコピーしない。事実は保ったまま独自の語呂合わせ文を作る。
 
 ### 標準変換プロンプト（ユーザー指定・これを既定手順とする）
 ユーザーが科目名＋過去問PDFを貼ったら、明示がなくても毎回この手順で教材化する:
@@ -104,7 +107,7 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 | 自己説明ステップ | `QuestionCard.jsx`の`whyPrompt` | 誤答時に「なぜこの答え？」を自動で促す |
 | 知識グラフ・連想 | `KnowledgeGraph.jsx`＋`AssocQuiz.jsx`／`AssocTrainer.jsx`／`RelationAuthor.jsx` | 経路クイズ・束グルーピング・対比識別ドリル・関係の手動オーサリング |
 | 連結学習 | `ConnectedLearning.jsx`＋`lib/connectlab.js` | 今日の1問・キーワード自動提案・表記ゆれ統合・ヒートマップ |
-| 語呂合わせ | `kwMeta`（保存）／`MnemonicNotebook.jsx`（一覧・編集） | 登録・一覧・関連問題数表示 |
+| 語呂合わせ | `kwMeta`（保存）／`MnemonicNotebook.jsx`（一覧・編集） | 登録・一覧・関連問題数表示・**科目でしぼる検索**（`examScope.js`の科目順に1〜14で番号付き）・**ふりがな表示**（`reading`、手入力または`lib/yomi.js`の`TERM_READINGS`のみ。自動生成はしない＝誤読防止）。組み込みの語呂合わせは`src/data/defaultMnemonics.js`＋`DEFAULT_MNEMONICS_VERSION`（他の科目データと同じバッチ増分方式、`useStore.js`で初回のみ`kwMeta`へ追加。削除しても再追加されない） |
 | フラッシュカード | `Flashcards.jsx` | 経穴カード＋全科目対応（問題から自動生成） |
 | 画像・図問題 | `figures.jsx`（オフラインSVG）／`question.image` | `zumondaiQuestions.js`にサンプルあり |
 | 網羅マップ | `CoverageMap.jsx` | 出題基準×収録数の可視化 |

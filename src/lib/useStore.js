@@ -32,6 +32,7 @@ const subjectDataModules = () =>
     import('../data/integratedQuestions.js'),
   ]);
 import DEFAULT_EXAM_CONTENT from '../data/examContentScaffold.js';
+import { DEFAULT_MNEMONICS, DEFAULT_MNEMONICS_VERSION } from '../data/defaultMnemonics.js';
 
 function newNoteId() {
   return `sn-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
@@ -333,7 +334,26 @@ export function useStore() {
       setExamResultsState(er || []);
       setActivityState(Array.isArray(act) ? act : []);
       setNumberOverridesState(numOv && typeof numOv === 'object' ? numOv : {});
-      setKwMeta(km || {});
+      // 同梱の語呂合わせ（バッチ方式・増分）。DEFAULT_MNEMONICS_VERSION が上がるたびに
+      // 未登録のキーワードだけ追加（既存ユーザーが編集・削除したものは上書きしない）。
+      let baseKwMeta = km || {};
+      if ((cfg.mnemonicsVersion || 0) < DEFAULT_MNEMONICS_VERSION) {
+        const merged = { ...baseKwMeta };
+        let added = false;
+        for (const d of DEFAULT_MNEMONICS) {
+          if (!merged[d.keyword] || !merged[d.keyword].mnemonic) {
+            merged[d.keyword] = { mnemonic: d.mnemonic, reading: d.reading, ...(d.subject ? { subject: d.subject } : {}) };
+            added = true;
+          }
+        }
+        if (added) {
+          baseKwMeta = merged;
+          storage.saveKwMeta(baseKwMeta);
+        }
+        cfg.mnemonicsVersion = DEFAULT_MNEMONICS_VERSION;
+        mutated = true;
+      }
+      setKwMeta(baseKwMeta);
       // 【取り消し】用語辞書に登録していた科目名を取り除く
       let dict = (ud || []).filter((t) => !SUBJECT_TAG_NAMES.includes(t));
       if (dict.length !== (ud || []).length) storage.saveUserDict(dict);

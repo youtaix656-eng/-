@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
 import { clustersMap } from '../lib/audioplan.js';
+import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
+import { TERM_READINGS } from '../lib/yomi.js';
 
 // 語呂合わせノート：連結学習・音声学習から登録した語呂合わせ（kwMeta）を一覧で見返し、
 // その場で追加・編集・削除できる。
+//   ふりがな：kwMetaのreading（手入力で確定した読みのみ表示。自動推定は誤読の恐れがあるため行わない）に、
+//   lib/yomi.js の TERM_READINGS（既知の専門用語の読み）をフォールバックとして使う。
 export default function MnemonicNotebook({ store, onToast }) {
   const { kwMeta, setKeywordMeta, questions, links } = store;
   const clusters = useMemo(() => clustersMap(questions, links), [questions, links]);
@@ -10,26 +14,51 @@ export default function MnemonicNotebook({ store, onToast }) {
   const entries = useMemo(() => {
     return Object.entries(kwMeta || {})
       .filter(([, v]) => v && v.mnemonic && v.mnemonic.trim())
-      .map(([keyword, v]) => ({
-        keyword,
-        mnemonic: v.mnemonic,
-        count: (clusters.get(keyword) || []).length,
-      }))
+      .map(([keyword, v]) => {
+        const qs = clusters.get(keyword) || [];
+        const reading = (v.reading && v.reading.trim()) || TERM_READINGS[keyword] || '';
+        // 関連問題の科目に加え、手入力（組み込み含む）で指定された科目があれば合わせる。
+        const subjects = new Set(qs.map((q) => q.subject).filter(Boolean));
+        if (v.subject) subjects.add(v.subject);
+        return {
+          keyword,
+          mnemonic: v.mnemonic,
+          reading,
+          count: qs.length,
+          subjects: [...subjects],
+        };
+      })
       .sort((a, b) => a.keyword.localeCompare(b.keyword, 'ja'));
   }, [kwMeta, clusters]);
 
+  // 科目選択（出題基準の1〜14の順）。「全科目」＋実際に問題が収録されている科目のみ。
+  const [subjectFilter, setSubjectFilter] = useState('all');
+  const subjectOptions = useMemo(() => {
+    const present = new Set(questions.map((q) => q.subject).filter(Boolean));
+    const ordered = SUBJECT_TAG_NAMES.filter((s) => present.has(s));
+    const extra = [...present].filter((s) => !SUBJECT_TAG_NAMES.includes(s)).sort((a, b) => a.localeCompare(b, 'ja'));
+    return [...ordered, ...extra];
+  }, [questions]);
+  const filteredEntries = useMemo(
+    () => (subjectFilter === 'all' ? entries : entries.filter((e) => e.subjects.includes(subjectFilter))),
+    [entries, subjectFilter]
+  );
+
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
+  const [draftReading, setDraftReading] = useState('');
   const [newKw, setNewKw] = useState('');
   const [newMnemonic, setNewMnemonic] = useState('');
+  const [newReading, setNewReading] = useState('');
 
-  const startEdit = (keyword, mnemonic) => {
+  const startEdit = (keyword, mnemonic, reading) => {
     setEditing(keyword);
     setDraft(mnemonic);
+    setDraftReading(reading || '');
   };
   const saveEdit = () => {
     if (!editing) return;
-    setKeywordMeta(editing, { mnemonic: draft });
+    setKeywordMeta(editing, { mnemonic: draft, reading: draftReading.trim() });
     onToast?.('語呂合わせを更新しました');
     setEditing(null);
   };
@@ -41,9 +70,10 @@ export default function MnemonicNotebook({ store, onToast }) {
     const kw = newKw.trim();
     const mn = newMnemonic.trim();
     if (!kw || !mn) return;
-    setKeywordMeta(kw, { mnemonic: mn });
+    setKeywordMeta(kw, { mnemonic: mn, reading: newReading.trim() });
     setNewKw('');
     setNewMnemonic('');
+    setNewReading('');
     onToast?.('語呂合わせを追加しました');
   };
 
@@ -63,6 +93,15 @@ export default function MnemonicNotebook({ store, onToast }) {
             value={newKw}
             onChange={(e) => setNewKw(e.target.value)}
             placeholder="例）合谷"
+          />
+        </div>
+        <div className="field">
+          <label>読み（ふりがな・任意）</label>
+          <input
+            type="text"
+            value={newReading}
+            onChange={(e) => setNewReading(e.target.value)}
+            placeholder="例）ごうこく"
           />
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
@@ -91,38 +130,72 @@ export default function MnemonicNotebook({ store, onToast }) {
         </div>
       ) : (
         <>
-          <div className="section-label">登録済み（{entries.length}件）</div>
-          {entries.map((e) => (
-            <div className="card" key={e.keyword}>
-              <div className="stat-head">
-                <span className="stat-subject">{e.keyword}</span>
-                <span className="stat-pct">
-                  <span className="stat-sub">{e.count}問に関連</span>
-                </span>
-              </div>
-              {editing === e.keyword ? (
-                <>
-                  <textarea
-                    value={draft}
-                    onChange={(ev) => setDraft(ev.target.value)}
-                    style={{ marginTop: 8 }}
-                  />
-                  <div className="btn-row" style={{ marginTop: 8 }}>
-                    <button className="btn" onClick={() => setEditing(null)}>キャンセル</button>
-                    <button className="btn primary" onClick={saveEdit}>保存</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="li-q" style={{ marginTop: 8 }}>{e.mnemonic}</p>
-                  <div className="btn-row" style={{ marginTop: 8 }}>
-                    <button className="btn sm" onClick={() => startEdit(e.keyword, e.mnemonic)}>編集</button>
-                    <button className="btn sm ghost" onClick={() => removeMnemonic(e.keyword)}>削除</button>
-                  </div>
-                </>
-              )}
+          <div className="card">
+            <label className="mini-field">
+              <span>科目でしぼる</span>
+              <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
+                <option value="all">全科目</option>
+                {subjectOptions.map((s, i) => (<option key={s} value={s}>{i + 1}. {s}</option>))}
+              </select>
+            </label>
+          </div>
+
+          <div className="section-label">
+            登録済み（{filteredEntries.length}件{subjectFilter !== 'all' ? ` / 全${entries.length}件` : ''}）
+          </div>
+          {filteredEntries.length === 0 ? (
+            <div className="empty">
+              <div className="ico">🔍</div>
+              <p>この科目に関連する語呂合わせはまだありません。</p>
             </div>
-          ))}
+          ) : (
+            filteredEntries.map((e) => (
+              <div className="card" key={e.keyword}>
+                <div className="stat-head">
+                  <span className="stat-subject">
+                    {e.reading && e.reading !== e.keyword ? (
+                      <ruby>{e.keyword}<rt>{e.reading}</rt></ruby>
+                    ) : (
+                      e.keyword
+                    )}
+                  </span>
+                  <span className="stat-pct">
+                    <span className="stat-sub">{e.count}問に関連</span>
+                  </span>
+                </div>
+                {editing === e.keyword ? (
+                  <>
+                    <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
+                      <label>読み（ふりがな・任意）</label>
+                      <input
+                        type="text"
+                        value={draftReading}
+                        onChange={(ev) => setDraftReading(ev.target.value)}
+                        placeholder="例）ごうこく"
+                      />
+                    </div>
+                    <textarea
+                      value={draft}
+                      onChange={(ev) => setDraft(ev.target.value)}
+                      style={{ marginTop: 8 }}
+                    />
+                    <div className="btn-row" style={{ marginTop: 8 }}>
+                      <button className="btn" onClick={() => setEditing(null)}>キャンセル</button>
+                      <button className="btn primary" onClick={saveEdit}>保存</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="li-q" style={{ marginTop: 8 }}>{e.mnemonic}</p>
+                    <div className="btn-row" style={{ marginTop: 8 }}>
+                      <button className="btn sm" onClick={() => startEdit(e.keyword, e.mnemonic, e.reading)}>編集</button>
+                      <button className="btn sm ghost" onClick={() => removeMnemonic(e.keyword)}>削除</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))
+          )}
         </>
       )}
     </div>
