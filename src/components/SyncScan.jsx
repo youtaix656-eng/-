@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { decodeSync, isSyncExpired, extractSyncCode as extractSync } from '../lib/sync.js';
+import { Reassembler } from '../lib/chunk.js';
+import * as storage from '../lib/storage.js';
+import { syncToBackup } from '../lib/sync.js';
 
 // 受け渡しQRをカメラで読み取って取り込む（サーバー不要）。
 //   ・端末が対応していれば BarcodeDetector（ブラウザ標準）でカメラから読み取り。
 //   ・非対応端末（iPhoneのSafari等）は、URLを貼り付けて取り込む方式にフォールバック。
-//   ・取り込みは既存の「#sync= を開いた時」と同じ経路（確認ダイアログ＋5分期限）に委譲する。
+//   ・大きなデータは複数枚のQR（アニメーションQR）に分割されて届くことがあるため、
+//     Reassembler で読み取った断片を集め、揃ったら取り込む。カメラをかざし続けるだけでよい。
 export default function SyncScan({ onToast }) {
   const [mode, setMode] = useState('idle'); // idle | camera | paste
   const [error, setError] = useState('');
   const [pasted, setPasted] = useState('');
+  const [progress, setProgress] = useState(null); // { received, total } | null
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
   const activeRef = useRef(false);
+  const reassemblerRef = useRef(new Reassembler());
+  const busyRef = useRef(false); // 取り込み処理中の多重実行防止
 
   const hasDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
@@ -30,34 +37,67 @@ export default function SyncScan({ onToast }) {
   // アンマウント時に必ずカメラを止める
   useEffect(() => () => stopCamera(), []);
 
-  // 取り込みを実行（有効性を確認してから、既存のロード時ハンドラに委譲）
-  const applyEncoded = (enc) => {
+  // 揃った符号化文字列を取り込む（確認ダイアログ→インポート→再読み込み）
+  const importAssembled = async (encoded) => {
     let payload;
     try {
-      payload = decodeSync(decodeURIComponent(enc));
+      payload = await decodeSync(encoded);
     } catch (e) {
       onToast?.('このコードは受け渡しデータとして読み取れませんでした');
+      reassemblerRef.current.reset();
+      setProgress(null);
       return false;
     }
     if (isSyncExpired(payload)) {
       onToast?.('発行から5分以上経過しています（期限切れ）。元の端末で再発行してください');
+      reassemblerRef.current.reset();
+      setProgress(null);
       return false;
     }
-    // 有効 → #sync= を付けて再読み込み。確認ダイアログと取り込みは共通処理が行う。
+    const ok = window.confirm(
+      '別端末の学習データ（進捗・設定）を取り込みます。この端末の進捗は上書きされます。よろしいですか？'
+    );
+    if (!ok) {
+      reassemblerRef.current.reset();
+      setProgress(null);
+      return false;
+    }
     stopCamera();
-    window.location.hash = '#sync=' + enc;
+    await storage.importAll(syncToBackup(payload));
     window.location.reload();
     return true;
   };
 
-  // スキャン/貼り付けた文字列を処理
+  // 1つのチャンク（QR1枚ぶん／貼り付け1回ぶん）を処理
+  const handleChunkCode = async (enc) => {
+    if (busyRef.current) return false;
+    const res = reassemblerRef.current.add(enc);
+    if (!res.ok) {
+      onToast?.('これは受け渡し用のQR／URLではありません');
+      return false;
+    }
+    setProgress({ received: res.receivedCount, total: res.total });
+    if (res.total > 1 && res.isNewTransfer && res.receivedCount === 1) {
+      onToast?.(`複数枚のQRに分かれています（1/${res.total}枚を読み取りました）。かざし続けてください`);
+    }
+    if (res.complete) {
+      busyRef.current = true;
+      const encoded = reassemblerRef.current.assemble();
+      const done = await importAssembled(encoded);
+      busyRef.current = false;
+      return done;
+    }
+    return true;
+  };
+
+  // スキャン/貼り付けた文字列（URL）からチャンクを取り出して処理
   const handleText = (text) => {
     const enc = extractSync(text);
     if (!enc) {
       onToast?.('これは受け渡し用のQR／URLではありません');
       return false;
     }
-    return applyEncoded(enc);
+    return handleChunkCode(decodeURIComponent(enc));
   };
 
   // カメラ起動＋読み取りループ
@@ -95,13 +135,13 @@ export default function SyncScan({ onToast }) {
           if (!activeRef.current || !videoRef.current) return;
           try {
             const codes = await detector.detect(videoRef.current);
-            if (codes && codes.length) {
+            if (codes && codes.length && !busyRef.current) {
               const enc = extractSync(codes[0].rawValue);
-              if (enc) { applyEncoded(enc); return; } // 成功時はここで再読み込み
-              // 受け渡し用でないQRは無視して読み取りを続ける
+              if (enc) { await handleChunkCode(decodeURIComponent(enc)); }
+              // 受け渡し用でないQRや、取り込み完了直前は無視して読み取りを続ける
             }
           } catch (e) { /* 一時的な検出エラーは無視して継続 */ }
-          timerRef.current = setTimeout(tick, 250);
+          if (activeRef.current) timerRef.current = setTimeout(tick, 250);
         };
         tick();
       });
@@ -115,12 +155,15 @@ export default function SyncScan({ onToast }) {
     stopCamera();
     setMode('idle');
     setError('');
+    reassemblerRef.current.reset();
+    setProgress(null);
   };
 
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <p className="inline-note" style={{ marginBottom: 10 }}>
         別の端末で発行した<strong>受け渡しQRコードをこの端末のカメラで読み取って</strong>、進捗・設定を取り込みます。
+        データが大きい時は複数枚のQRに分かれて表示されますが、<strong>そのままかざし続ければ</strong>自動で集めて取り込みます。
         <br />🔒 発行から5分以内のQRだけ取り込めます（取り込み前に確認します）。
       </p>
 
@@ -132,6 +175,13 @@ export default function SyncScan({ onToast }) {
       )}
 
       {error && <div className="auth-error" style={{ marginTop: 10 }}>{error}</div>}
+
+      {progress && progress.total > 1 && (
+        <div style={{ marginTop: 10 }}>
+          <div className="progress"><span style={{ width: `${(progress.received / progress.total) * 100}%` }} /></div>
+          <p className="inline-note" style={{ marginTop: 4 }}>{progress.received} / {progress.total} 枚 読み取り済み</p>
+        </div>
+      )}
 
       {mode === 'camera' && (
         <div style={{ marginTop: 10 }}>
@@ -152,7 +202,8 @@ export default function SyncScan({ onToast }) {
             />
           </div>
           <p className="inline-note" style={{ marginTop: 8 }}>
-            相手の端末に表示されたQRコードを枠内に入れてください。自動で読み取ります。
+            相手の端末に表示されたQRコードを枠内に入れてください。自動で読み取ります
+            （複数枚に分かれている場合は、切り替わるQRをそのまま映し続けてください）。
           </p>
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn" onClick={() => { setError(''); stopCamera(); setMode('paste'); }}>URL貼り付けに切替</button>
@@ -166,6 +217,7 @@ export default function SyncScan({ onToast }) {
           {!hasDetector && (
             <p className="inline-note" style={{ marginBottom: 8 }}>
               この端末はアプリ内カメラ読み取りに未対応です。端末の<strong>カメラアプリでQRを読み取り、開いたURL</strong>を下に貼り付けてください。
+              複数枚に分かれている場合は、1枚ずつ貼り付けて「取り込む」を押してください（自動で集まります）。
             </p>
           )}
           <textarea
@@ -176,7 +228,13 @@ export default function SyncScan({ onToast }) {
             style={{ width: '100%' }}
           />
           <div className="btn-row" style={{ marginTop: 8 }}>
-            <button className="btn primary" onClick={() => handleText(pasted)} disabled={!pasted.trim()}>取り込む</button>
+            <button
+              className="btn primary"
+              onClick={() => { handleText(pasted); setPasted(''); }}
+              disabled={!pasted.trim()}
+            >
+              取り込む
+            </button>
             {hasDetector && <button className="btn" onClick={() => { setError(''); startCamera(); }}>📷 カメラに戻る</button>}
             <button className="btn ghost" onClick={close}>閉じる</button>
           </div>

@@ -1,22 +1,10 @@
 // 端末間の進捗の受け渡し（QR／URLハッシュ）。
 // 問題バンク・画像・音声ファイルは含めない（受け取り側で同梱分が再生成されるため軽量に保つ）。
+//
+// 符号化は src/lib/transferCodec.js（圧縮＋効率的なbase64url化）に委譲する。
+// 大きなデータは src/lib/chunk.js で分割し、複数のQR／テキストブロックに分けて送れる。
 
-function b64UrlEncode(str) {
-  const b64 = btoa(
-    encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p) => String.fromCharCode('0x' + p))
-  );
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function b64UrlDecode(str) {
-  let s = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (s.length % 4) s += '=';
-  return decodeURIComponent(
-    atob(s)
-      .split('')
-      .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-      .join('')
-  );
-}
+import { encodeTransferString, decodeTransferString } from './transferCodec.js';
 
 // 受け渡し（QR／URL）の有効期限：発行から5分間だけ使える（安全のため）
 export const SYNC_TTL_MS = 5 * 60 * 1000;
@@ -34,11 +22,11 @@ export function buildSyncPayload(data, { includeHistory = true } = {}) {
   return p;
 }
 
-export function encodeSync(payload) {
-  return b64UrlEncode(JSON.stringify(payload));
+export async function encodeSync(payload) {
+  return encodeTransferString(JSON.stringify(payload));
 }
-export function decodeSync(str) {
-  const obj = JSON.parse(b64UrlDecode(str));
+export async function decodeSync(str) {
+  const obj = JSON.parse(await decodeTransferString(str));
   if (!obj || obj.v !== 1) throw new Error('未対応のデータ形式です');
   return obj;
 }

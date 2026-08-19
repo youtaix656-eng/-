@@ -86,7 +86,7 @@ export function useStore() {
         const hash = window.location.hash || '';
         const mSync = hash.match(/[#&]sync=([^&]+)/);
         if (mSync) {
-          const payload = decodeSync(decodeURIComponent(mSync[1]));
+          const payload = await decodeSync(decodeURIComponent(mSync[1]));
           if (isSyncExpired(payload)) {
             // 発行から5分を過ぎた受け渡しは安全のため取り込まない
             window.alert(

@@ -13,7 +13,7 @@ import {
 
 // 受け渡し（QR/URL）→ 取り込みの往復。QRスキャンはこの経路にエンコード値を渡すだけなので、
 // ここが通れば「読み取り→取り込み」も同じ結果になる。
-test('進捗データを encode → decode で round-trip できる', () => {
+test('進捗データを encode → decode で round-trip できる', async () => {
   const data = {
     srs: { 'q-1': { seen: 3, ease: 2.4 }, 'q-2': { seen: 1 } },
     history: [{ id: 'q-1', correct: true, t: 111 }],
@@ -22,9 +22,9 @@ test('進捗データを encode → decode で round-trip できる', () => {
     examResults: [{ score: 82, total: 100 }],
     settings: { sessionNewRatio: 0.5, examDate: '2027-02-28' },
   };
-  const enc = encodeSync(buildSyncPayload(data, { includeHistory: true }));
+  const enc = await encodeSync(buildSyncPayload(data, { includeHistory: true }));
   assert.ok(!/[+/=]/.test(enc), 'base64url に + / = を含まない');
-  const back = syncToBackup(decodeSync(enc));
+  const back = syncToBackup(await decodeSync(enc));
   assert.deepEqual(back.srs, data.srs);
   assert.deepEqual(back.history, data.history);
   assert.deepEqual(back.memos, data.memos);
@@ -33,15 +33,16 @@ test('進捗データを encode → decode で round-trip できる', () => {
   assert.deepEqual(back.settings, data.settings);
 });
 
-test('解答履歴を含めない指定は history を落とす', () => {
+test('解答履歴を含めない指定は history を落とす', async () => {
   const data = { srs: { a: { seen: 1 } }, history: [{ id: 'a' }] };
-  const back = syncToBackup(decodeSync(encodeSync(buildSyncPayload(data, { includeHistory: false }))));
+  const enc = await encodeSync(buildSyncPayload(data, { includeHistory: false }));
+  const back = syncToBackup(await decodeSync(enc));
   assert.equal(back.history, undefined);
   assert.deepEqual(back.srs, data.srs);
 });
 
-test('extractSyncCode は URL/文字列から #sync= の値を取り出す', () => {
-  const enc = encodeSync(buildSyncPayload({ srs: { a: { seen: 1 } } }));
+test('extractSyncCode は URL/文字列から #sync= の値を取り出す', async () => {
+  const enc = await encodeSync(buildSyncPayload({ srs: { a: { seen: 1 } } }));
   const url = `https://youtaix656-eng.github.io/-/#sync=${enc}`;
   assert.equal(extractSyncCode(url), enc, 'ハッシュ付きURLから抽出');
   assert.equal(extractSyncCode(`app://x/?foo=1&sync=${enc}`), enc, 'クエリ形式からも抽出');
@@ -50,12 +51,12 @@ test('extractSyncCode は URL/文字列から #sync= の値を取り出す', () 
   assert.equal(extractSyncCode(''), '', '空入力は空');
 });
 
-test('抽出した値をそのまま decode でき、往復が一致する', () => {
+test('抽出した値をそのまま decode でき、往復が一致する', async () => {
   const data = { srs: { 'q-9': { seen: 5 } }, memos: { 'q-9': 'かくにん' } };
-  const enc = encodeSync(buildSyncPayload(data));
+  const enc = await encodeSync(buildSyncPayload(data));
   const url = `https://youtaix656-eng.github.io/-/#sync=${enc}`;
   const picked = extractSyncCode(url);
-  const back = syncToBackup(decodeSync(decodeURIComponent(picked)));
+  const back = syncToBackup(await decodeSync(decodeURIComponent(picked)));
   assert.deepEqual(back.srs, data.srs);
   assert.deepEqual(back.memos, data.memos);
 });
@@ -75,7 +76,7 @@ test('t の無い旧データは期限切れにしない', () => {
   assert.equal(isSyncExpired(legacy), false);
 });
 
-test('decodeSync は未対応バージョンを弾く', () => {
-  const badEnc = encodeSync({ v: 2, s: {} });
-  assert.throws(() => decodeSync(badEnc), /未対応/);
+test('decodeSync は未対応バージョンを弾く', async () => {
+  const badEnc = await encodeSync({ v: 2, s: {} });
+  await assert.rejects(() => decodeSync(badEnc), /未対応/);
 });

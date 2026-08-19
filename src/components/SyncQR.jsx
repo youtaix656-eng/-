@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { qrMatrix } from '../lib/qr.js';
 import { buildSyncPayload, encodeSync, syncUrl, SYNC_TTL_MS } from '../lib/sync.js';
+import { splitIntoChunks } from '../lib/chunk.js';
+
+// 1枚のQRに載せるチャンクデータの目安文字数（URLのprefix・チャンクヘッダぶんの余裕を見た値）。
+// QR誤り訂正レベルLの実用上限（約2,953バイト）に対して十分小さく、スキャンもしやすい。
+const CHUNK_DATA_LEN = 900;
 
 // QRのモジュール配列を SVG で描画
 function QRImage({ matrix, size = 260, dim = false }) {
@@ -38,13 +43,22 @@ function fmtRemain(ms) {
   return `${m}:${ss}`;
 }
 
-// 進捗をQRで別端末へ受け渡し（サーバー不要・発行から5分間だけ有効）
+// 進捗をQRで別端末へ受け渡し（サーバー不要・発行から5分間だけ有効）。
+//   ・圧縮＋効率的な符号化（transferCodec）でまず縮める。
+//   ・それでも1枚のQRに収まらない場合は自動でチャンク分割し、複数のQRを
+//     一定間隔で自動的に切り替え表示する「アニメーションQR」にする
+//     （手動での送り／一時停止も可能）。相手はSyncScanでカメラをかざし続けるだけでよい。
 export default function SyncQR({ store, onToast }) {
   const { srs, history, memos, links, examResults, settings } = store;
   const [open, setOpen] = useState(false);
   const [withHistory, setWithHistory] = useState(true);
   const [issuedAt, setIssuedAt] = useState(0); // 発行時刻（再発行で更新）
   const [now, setNow] = useState(Date.now());
+  const [building, setBuilding] = useState(false);
+  const [chunks, setChunks] = useState(null); // string[] | null
+  const [frameIdx, setFrameIdx] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [intervalMs, setIntervalMs] = useState(1200);
 
   // 発行（＝いまの進捗でQR/URLを作り直し、5分の有効期限を張り直す）
   const issue = () => {
@@ -63,23 +77,51 @@ export default function SyncQR({ store, onToast }) {
   const remainMs = issuedAt ? SYNC_TTL_MS - (now - issuedAt) : 0;
   const expired = open && remainMs <= 0;
 
-  const { matrix, url, tooBig, size } = useMemo(() => {
-    if (!open || !issuedAt) return { matrix: null, url: '', tooBig: false, size: 0 };
-    const data = { srs, history, memos, links, examResults, settings };
-    const encoded = encodeSync(buildSyncPayload(data, { includeHistory: withHistory }));
-    const u = syncUrl(encoded);
-    const m = qrMatrix(u);
-    return { matrix: m, url: u, tooBig: !m, size: u.length };
-    // issuedAt を依存に含めることで「再発行」時に時刻を焼き直す
+  // 圧縮・符号化・（必要なら）チャンク分割は非同期なので useEffect で組み立てる
+  useEffect(() => {
+    if (!open || !issuedAt) { setChunks(null); return; }
+    let alive = true;
+    setBuilding(true);
+    setFrameIdx(0);
+    (async () => {
+      const data = { srs, history, memos, links, examResults, settings };
+      const payload = buildSyncPayload(data, { includeHistory: withHistory });
+      const encoded = await encodeSync(payload);
+      if (!alive) return;
+      // 常にチャンク形式（1枚で収まる場合は of=1 の1枚だけ）にして、読み取り側の処理を1本化する。
+      const { parts } = splitIntoChunks(encoded, CHUNK_DATA_LEN);
+      setChunks(parts.map((p) => syncUrl(p)));
+      setBuilding(false);
+    })();
+    return () => { alive = false; };
+    // issuedAt を依存に含めることで「再発行」時に焼き直す
   }, [open, issuedAt, withHistory, srs, history, memos, links, examResults, settings]);
+
+  const multi = chunks && chunks.length > 1;
+  const currentUrl = chunks ? chunks[frameIdx] : '';
+  const matrix = useMemo(() => (currentUrl ? qrMatrix(currentUrl) : null), [currentUrl]);
+  const tooBig = chunks && !matrix; // チャンクしても1枚のQRにすら収まらない極端なケース（通常は起こらない）
+
+  // アニメーション（自動送り）
+  useEffect(() => {
+    if (!multi || !playing || expired || building) return undefined;
+    const iv = setInterval(() => {
+      setFrameIdx((i) => (i + 1) % chunks.length);
+    }, intervalMs);
+    return () => clearInterval(iv);
+  }, [multi, playing, expired, building, chunks, intervalMs]);
 
   const copyUrl = async () => {
     if (expired) {
       onToast?.('有効期限切れです。再発行してください');
       return;
     }
+    if (multi) {
+      onToast?.('複数QRに分割されているためコピーはできません。カメラでの読み取りをご利用ください');
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(currentUrl);
       onToast?.('受け渡しURLをコピーしました（5分間だけ有効）');
     } catch (e) {
       onToast?.('コピーできませんでした');
@@ -90,20 +132,23 @@ export default function SyncQR({ store, onToast }) {
     <div className="card">
       <p className="inline-note" style={{ marginBottom: 10 }}>
         いま端末にある学習の<strong>進捗・設定</strong>をQRコードにして、別の端末へ受け渡せます（サーバー不要）。
-        別端末の<strong>カメラでこのQRを読み取る</strong>か、URLを開くと取り込めます。
+        別端末の<strong>カメラでこのQRを読み取る</strong>か、URLを開くと取り込めます。データが大きい時は自動で
+        圧縮し、それでも収まらなければ<strong>QRを複数枚に分けて自動で連続表示</strong>します（読み取り側はかざし続けるだけでOK）。
         <br />
         🔒 <strong>安全のため、発行から5分を過ぎると使えなくなります</strong>（過ぎたら再発行してください）。
-        <br />※ 問題データ本体や画像・音楽は含みません（容量のため）。多い場合はバックアップファイルをご利用ください。
+        <br />※ 問題データ本体や画像・音楽は含みません（容量のため）。
       </p>
       {!open ? (
         <button className="btn primary" onClick={issue}>📱 QRコード／URLを発行（5分間有効）</button>
       ) : (
         <div>
-          {tooBig ? (
+          {building ? (
+            <p className="inline-note">圧縮・準備中…</p>
+          ) : tooBig ? (
             <div className="auth-error" style={{ marginBottom: 10 }}>
-              データが大きくQRに収まりません（{size.toLocaleString()}文字）。
+              データが大きすぎてQRでの受け渡しができませんでした。
               {withHistory ? '下の「解答履歴を含めない」をオフにするか、' : ''}
-              バックアップファイルでの移行をご利用ください。
+              「共有」ボタンやバックアップファイルでの移行をご利用ください。
             </div>
           ) : (
             <div style={{ textAlign: 'center', marginBottom: 10, position: 'relative' }}>
@@ -124,7 +169,14 @@ export default function SyncQR({ store, onToast }) {
                   <>発行から5分を過ぎました。再発行してください。</>
                 ) : (
                   <>
-                    別端末のカメラで読み取ってください（{size.toLocaleString()}文字）
+                    {multi ? (
+                      <>
+                        <strong>{chunks.length}枚のQRに分割中</strong>（{frameIdx + 1}/{chunks.length}枚目）
+                        <br />相手のカメラをかざし続けると自動で読み取ります
+                      </>
+                    ) : (
+                      <>別端末のカメラで読み取ってください</>
+                    )}
                     <br />
                     <strong style={{ color: remainMs < 60 * 1000 ? 'var(--wrong, #c62828)' : 'inherit' }}>
                       残り有効時間 {fmtRemain(remainMs)}
@@ -132,17 +184,34 @@ export default function SyncQR({ store, onToast }) {
                   </>
                 )}
               </div>
+              {multi && !expired && (
+                <div style={{ marginTop: 8 }}>
+                  <div className="progress"><span style={{ width: `${((frameIdx + 1) / chunks.length) * 100}%` }} /></div>
+                  <div className="btn-row" style={{ marginTop: 8, justifyContent: 'center' }}>
+                    <button className="btn ghost sm" onClick={() => setFrameIdx((i) => (i - 1 + chunks.length) % chunks.length)}>◀ 前へ</button>
+                    <button className="btn ghost sm" onClick={() => setPlaying((v) => !v)}>{playing ? '⏸ 一時停止' : '▶ 自動送りを再開'}</button>
+                    <button className="btn ghost sm" onClick={() => setFrameIdx((i) => (i + 1) % chunks.length)}>次へ ▶</button>
+                  </div>
+                  <div className="btn-row" style={{ marginTop: 4, justifyContent: 'center' }}>
+                    {[800, 1200, 2000].map((ms) => (
+                      <button key={ms} className={`chip ${intervalMs === ms ? 'active' : ''}`} onClick={() => setIntervalMs(ms)}>
+                        {(ms / 1000).toFixed(1)}秒間隔
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <label className="switch-row" style={{ marginTop: 4 }}>
             <input type="checkbox" checked={withHistory} onChange={(e) => setWithHistory(e.target.checked)} />
             <span>
               解答履歴も含める
-              <small>オフにすると容量が減り、QRに収まりやすくなります（弱点分析の履歴は移りません）。</small>
+              <small>オフにすると容量が減り、QRの枚数を減らせます（弱点分析の履歴は移りません）。</small>
             </span>
           </label>
           <div className="btn-row" style={{ marginTop: 10 }}>
-            {!tooBig && !expired && <button className="btn" onClick={copyUrl}>受け渡しURLをコピー</button>}
+            {!multi && !tooBig && !expired && <button className="btn" onClick={copyUrl}>受け渡しURLをコピー</button>}
             <button className="btn" onClick={issue}>🔄 再発行</button>
             <button className="btn ghost" onClick={() => setOpen(false)}>閉じる</button>
           </div>
