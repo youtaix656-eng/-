@@ -17,6 +17,9 @@ export const BACKUP_FILENAME = 'shinkyu_backup.json';
 // 別ファイルにして、形式の違うデータが同じファイルを奪い合わないようにする。
 export const SYNC_FILENAME = 'shinkyu_progress_sync.json';
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+// 通信が固まって画面が「通信中…」のまま戻らなくなるのを防ぐための上限（ミリ秒）
+const FETCH_TIMEOUT_MS = 20_000;
+const TOKEN_TIMEOUT_MS = 20_000;
 
 let gisLoadPromise = null;
 function loadGis() {
@@ -42,9 +45,19 @@ export function hasSession() {
   return !!(cachedToken && cachedToken.expiresAt > Date.now());
 }
 
+// サイレント（再ログイン待ち）失敗であることを呼び出し側が判別できるようにする印。
+// 自動同期がこれを見て「エラー」ではなく「手動で一度ログインし直してください」という
+// 分かりやすい案内に言い換える。
+export function isSilentAuthError(e) {
+  return !!(e && e.silentAuthFailed);
+}
+
 // silent: true の場合、同意画面などのUIを一切出さず、既にログイン・同意済みの場合だけ
 // 静かにトークンを取得する（自動同期用）。ダメなら例外を投げて終わる＝呼び出し側は
 // ユーザーに気づかせず諦めるのが正しい使い方（毎回ログイン画面を出すと迷惑になるため）。
+// スマホのブラウザは、ユーザーの直接操作（タップ）を伴わないログイン画面（ポップアップ）を
+// 自動で閉じてしまうことがあり、その場合はキャッシュ済みトークンが無い限りsilentモードの
+// 再ログインは失敗する（＝手動で一度「保存」または「復元」を押し直す必要がある）。
 export function requestAccessToken(clientId, { silent = false } = {}) {
   return new Promise((resolve, reject) => {
     if (!clientId || !clientId.trim()) {
@@ -55,24 +68,44 @@ export function requestAccessToken(clientId, { silent = false } = {}) {
       resolve(cachedToken.access_token);
       return;
     }
+    let settled = false;
+    const fail = (msg) => {
+      if (settled) return;
+      settled = true;
+      const err = new Error(msg);
+      if (silent) err.silentAuthFailed = true;
+      reject(err);
+    };
+    const succeed = (token) => {
+      if (settled) return;
+      settled = true;
+      resolve(token);
+    };
+    // GISのコールバックが何らかの理由で一度も呼ばれない場合に備え、
+    // 画面が「通信中…」のまま固まらないよう上限時間で打ち切る。
+    const timeoutId = setTimeout(() => fail('Googleへのログインがタイムアウトしました'), TOKEN_TIMEOUT_MS);
     loadGis()
       .then(() => {
         const client = window.google.accounts.oauth2.initTokenClient({
           client_id: clientId.trim(),
           scope: DRIVE_SCOPE,
           callback: (resp) => {
+            clearTimeout(timeoutId);
             if (!resp || resp.error) {
-              reject(new Error(`Googleへのログインに失敗しました（${resp?.error || '不明なエラー'}）`));
+              fail(`Googleへのログインに失敗しました（${resp?.error || '不明なエラー'}）`);
               return;
             }
             cachedToken = { access_token: resp.access_token, expiresAt: Date.now() + (resp.expires_in || 3600) * 1000 };
-            resolve(resp.access_token);
+            succeed(resp.access_token);
           },
-          error_callback: (err) => reject(new Error(`Googleへのログインに失敗しました（${err?.type || '不明なエラー'}）`)),
+          error_callback: (err) => {
+            clearTimeout(timeoutId);
+            fail(`Googleへのログインに失敗しました（${err?.type || '不明なエラー'}）`);
+          },
         });
         client.requestAccessToken(silent ? { prompt: '' } : undefined);
       })
-      .catch(reject);
+      .catch((e) => { clearTimeout(timeoutId); fail(e.message); });
   });
 }
 
@@ -112,8 +145,20 @@ export function buildDownloadUrl(fileId) {
 
 // ===== 以下はfetchを伴う実処理 =====
 
+// 通信が固まって「通信中…」のまま戻らなくなるのを防ぐ共通ラッパー
+async function fetchWithTimeout(url, options) {
+  try {
+    return await fetch(url, { ...options, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  } catch (e) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      throw new Error('通信がタイムアウトしました（電波状況をご確認のうえ、もう一度お試しください）');
+    }
+    throw e;
+  }
+}
+
 async function findFileId(token, filename) {
-  const res = await fetch(buildSearchUrl(filename), { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetchWithTimeout(buildSearchUrl(filename), { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Drive内の検索に失敗しました（HTTP ${res.status}）`);
   const data = await res.json();
   return data.files && data.files[0] ? data.files[0].id : null;
@@ -127,7 +172,7 @@ export async function uploadBackup(token, content, filename = BACKUP_FILENAME) {
   const metadata = existingId ? { name: filename } : { name: filename, parents: ['appDataFolder'] };
   const boundary = `shinkyu-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const body = buildMultipartBody(metadata, content, boundary);
-  const res = await fetch(buildUploadUrl(existingId), {
+  const res = await fetchWithTimeout(buildUploadUrl(existingId), {
     method: existingId ? 'PATCH' : 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
     body,
@@ -140,7 +185,7 @@ export async function uploadBackup(token, content, filename = BACKUP_FILENAME) {
 export async function downloadBackup(token, filename = BACKUP_FILENAME) {
   const fileId = await findFileId(token, filename);
   if (!fileId) return null;
-  const res = await fetch(buildDownloadUrl(fileId), { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetchWithTimeout(buildDownloadUrl(fileId), { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Google Driveからの取得に失敗しました（HTTP ${res.status}）`);
   return res.text();
 }

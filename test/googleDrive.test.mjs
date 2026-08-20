@@ -8,6 +8,7 @@ import {
   BACKUP_FILENAME,
   SYNC_FILENAME,
   DRIVE_SCOPE,
+  isSilentAuthError,
 } from '../src/lib/googleDrive.js';
 
 test('buildSearchUrl: appDataFolder内をファイル名で検索するクエリを組み立てる', () => {
@@ -55,4 +56,13 @@ test('BACKUP_FILENAME と SYNC_FILENAME は別ファイル（手動バックア�
 test('buildSearchUrl: SYNC_FILENAMEでも正しく検索クエリを組み立てられる', () => {
   const url = buildSearchUrl(SYNC_FILENAME);
   assert.ok(url.includes(encodeURIComponent(`name='${SYNC_FILENAME}' and trashed=false`)));
+});
+
+test('isSilentAuthError: silentAuthFailedフラグの有無で判定する', () => {
+  const silentErr = new Error('x');
+  silentErr.silentAuthFailed = true;
+  assert.equal(isSilentAuthError(silentErr), true);
+  assert.equal(isSilentAuthError(new Error('y')), false);
+  assert.equal(isSilentAuthError(null), false);
+  assert.equal(isSilentAuthError(undefined), false);
 });

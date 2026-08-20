@@ -492,7 +492,9 @@ export function useStore() {
         }
         setCloudSyncStatus({ ok: true, at: newUpdatedAt, pulled });
       } catch (e) {
-        setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message });
+        const gd = await import('./googleDrive.js').catch(() => null);
+        const needsRelogin = gd && gd.isSilentAuthError(e);
+        setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message, needsRelogin });
       } finally {
         cloudSyncBusy.current = false;
       }

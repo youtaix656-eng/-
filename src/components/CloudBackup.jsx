@@ -24,6 +24,20 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
     return token;
   };
 
+  // 自動同期がサイレント再ログインに失敗した時、ユーザーが一度だけタップしてログインを
+  // 更新するためのボタン用（保存や復元はせず、ログインだけ済ませる）。
+  const doRelogin = async () => {
+    setBusy(true);
+    try {
+      await ensureToken();
+      onToast?.('ログインし直しました。次の自動同期から反映されます');
+    } catch (e) {
+      onToast?.(e.message || 'ログインに失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const doUpload = async () => {
     if (!clientId.trim()) { onToast?.('先にOAuthクライアントIDを設定してください'); return; }
     setBusy(true);
@@ -146,11 +160,26 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
             </span>
           </label>
           {settings.googleDriveAutoSync && cloudSyncStatus && (
-            <p className="inline-note" style={{ marginTop: 6 }}>
-              {cloudSyncStatus.ok
-                ? `最終自動同期：${new Date(cloudSyncStatus.at).toLocaleString('ja-JP')}${cloudSyncStatus.pulled ? '（他端末の進捗を反映しました）' : ''}`
-                : `自動同期を試みましたが失敗しました（${cloudSyncStatus.error || '不明なエラー'}）。次の機会に再試行します。`}
-            </p>
+            <div style={{ marginTop: 6 }}>
+              {cloudSyncStatus.ok ? (
+                <p className="inline-note">
+                  最終自動同期：{new Date(cloudSyncStatus.at).toLocaleString('ja-JP')}
+                  {cloudSyncStatus.pulled ? '（他端末の進捗を反映しました）' : ''}
+                </p>
+              ) : cloudSyncStatus.needsRelogin ? (
+                <div>
+                  <p className="inline-note">
+                    自動同期には再ログインが必要です（ブラウザがログイン画面を自動で閉じたため）。
+                    下のボタンを一度押すと、以後また自動で同期されるようになります。
+                  </p>
+                  <button className="btn sm" onClick={doRelogin} disabled={busy}>🔑 ログインし直す</button>
+                </div>
+              ) : (
+                <p className="inline-note">
+                  自動同期を試みましたが失敗しました（{cloudSyncStatus.error || '不明なエラー'}）。次の機会に再試行します。
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
