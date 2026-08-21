@@ -6,11 +6,11 @@ import { LOW_BACK_RED_FLAGS } from '../src/data/redFlags.js';
 import { SOURCE_MAP } from '../src/data/sources.js';
 import { readingInfo, OTHER_GROUP } from '../src/lib/yomi.js';
 
-test('疾患カードは100件、指定のグループ構成どおり', () => {
-  assert.equal(DISEASES.length, 100);
+test('疾患カードは129件（初回100＋追加29）、グループ構成どおり', () => {
+  assert.equal(DISEASES.length, 129);
   const counts = Object.fromEntries(diseasesByGroup().map(({ group, items }) => [group.id, items.length]));
   assert.deepEqual(counts, {
-    spine: 20, soft: 15, nerve: 15, visceral: 15, uro: 10, psych: 10, trauma: 10, redflag: 5,
+    spine: 28, soft: 18, nerve: 19, visceral: 19, uro: 12, psych: 12, trauma: 15, redflag: 6,
   });
 });
 
@@ -71,6 +71,9 @@ test('緊急・受診レベルの疾患は施術可（treat）に分類されて
     'pyogenic_spondylitis', 'spinal_tb', 'fracture_dislocation', 'ectopic_pregnancy',
     'ovarian_torsion', 'testicular_torsion', 'acute_pancreatitis', 'gbs',
     'compression_fracture', 'osteoporotic_fracture', 'urolithiasis', 'pyelonephritis',
+    // 追加分
+    'dvt', 'epidural_abscess', 'multiple_myeloma', 'pelvic_fracture', 'renal_infarction',
+    'ovarian_hemorrhage', 'herpes_zoster', 'pmr', 'femoral_head_necrosis', 'coccyx_fracture',
   ];
   for (const id of mustNotTreat) {
     const d = DISEASE_MAP[id];
@@ -79,9 +82,9 @@ test('緊急・受診レベルの疾患は施術可（treat）に分類されて
   }
 });
 
-test('レッドフラッグ5件は緊急または受診レベルで、対応するレッドフラグ定義に紐づく', () => {
+test('レッドフラッグ6件は緊急または受診レベルで、対応するレッドフラグ定義に紐づく', () => {
   const rf = DISEASES.filter((d) => d.group === 'redflag');
-  assert.equal(rf.length, 5);
+  assert.equal(rf.length, 6);
   for (const d of rf) {
     assert.ok(['emergency', 'refer'].includes(d.action), `${d.title}: action が不適切`);
     assert.ok(d.flagId, `${d.title}: flagId がありません`);

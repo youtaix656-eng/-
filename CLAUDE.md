@@ -19,7 +19,7 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 `npm test` からも実行される（新しいテストは `youtsu-navi/test/*.test.mjs` に置く）。
 目次（`src/data/toc.js`＋`src/lib/yomi.js`）は各データから自動生成し、**タイトル重複禁止・
 漢字には `reading` 必須（自動推定しない）・数字は読みで五十音へ振り分け**を `toc.test.mjs` が機械チェックする。
-疾患・原因カード100件は `src/data/diseases.js`（鑑別と受診判断のための参考知識。診断のためではない）。
+疾患・原因カード129件は `src/data/diseases.js`（鑑別と受診判断のための参考知識。診断のためではない）。
 ①②③…のように番号順が意味を持つ項目は `sortKey` で行内の並びだけを上書きする。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）

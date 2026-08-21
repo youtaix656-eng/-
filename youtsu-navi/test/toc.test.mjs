@@ -100,8 +100,8 @@ test('カテゴリの一覧は目次の全項目を覆う', () => {
   for (const e of TOC_ENTRIES) assert.ok(known.has(e.category));
 });
 
-test('疾患カード100件を含めても、目次のタイトルは全147件が一意', () => {
-  assert.equal(TOC_ENTRIES.length, 147);
+test('疾患カード129件を含めても、目次のタイトルは全176件が一意', () => {
+  assert.equal(TOC_ENTRIES.length, 176);
   const titles = TOC_ENTRIES.map((e) => e.title);
   assert.equal(new Set(titles).size, titles.length);
 });
@@ -125,7 +125,7 @@ test('疾患カードも あ〜ん / A〜Z の該当セクションに入る', (
 test('疾患名でも読みでも検索できる', () => {
   assert.ok(filterToc(TOC_ENTRIES, 'ヘルニア').some((e) => e.title === '腰椎椎間板ヘルニア'));
   assert.ok(filterToc(TOC_ENTRIES, 'ばび').some((e) => e.title === '馬尾症候群'));
-  assert.ok(filterToc(TOC_ENTRIES, '', 'disease').length === 100);
+  assert.ok(filterToc(TOC_ENTRIES, '', 'disease').length === 129);
 });
 
 test('レッドフラッグ①〜⑤は番号順に並ぶ（読み順で①⑤③②④にならない）', () => {
@@ -137,5 +137,6 @@ test('レッドフラッグ①〜⑤は番号順に並ぶ（読み順で①⑤�
     'レッドフラッグ③：感染を疑う所見',
     'レッドフラッグ④：骨折を疑う所見',
     'レッドフラッグ⑤：大動脈瘤破裂を疑う所見',
+    'レッドフラッグ⑥：進行する神経症状を疑う所見',
   ]);
 });
