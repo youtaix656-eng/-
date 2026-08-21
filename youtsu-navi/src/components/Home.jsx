@@ -1,6 +1,7 @@
 import React from 'react';
 import { actions } from '../lib/useStore.js';
 import { RESULT_NOTICE } from '../lib/consent.js';
+import { TOC_ENTRIES, TOC_CATEGORIES } from '../data/toc.js';
 
 /** ホーム — 施術中に迷わないよう、入口は「新しく評価する」1つに絞る */
 export default function Home({ state, symptom, go }) {
@@ -50,6 +51,24 @@ export default function Home({ state, symptom, go }) {
         <button type="button" className="btn secondary" onClick={() => go('ref')}>
           レッドフラグ一覧を見る
         </button>
+      </div>
+
+      <div className="card">
+        <h3>📖 目次</h3>
+        <p className="muted small">
+          レッドフラグ・原因パターン・要配慮対象・資格・出典を、読み方の五十音（あ〜ん）と
+          アルファベット（A〜Z）で引けます。項目をタップすると、その内容へ移動します。
+        </p>
+        <button type="button" className="btn secondary" onClick={() => go('toc')}>
+          目次を開く（全{TOC_ENTRIES.length}項目）
+        </button>
+        <div className="toc-preview">
+          {TOC_CATEGORIES.map((c) => (
+            <button key={c.id} type="button" className="chip-btn" onClick={() => go('toc')}>
+              {c.icon} {c.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <p className="notice-inline">{RESULT_NOTICE}</p>

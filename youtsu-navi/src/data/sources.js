@@ -14,6 +14,8 @@ export const REVIEW_STATUS = {
 export const SOURCES = [
   {
     id: 'jpn_lbp_gl2019',
+    tocTitle: '腰痛診療ガイドライン2019',
+    reading: 'ようつうしんりょうがいどらいん',
     title: '腰痛診療ガイドライン2019（改訂第2版）',
     author: '日本整形外科学会・日本腰痛学会 監修',
     publisher: '南江堂',
@@ -24,6 +26,8 @@ export const SOURCES = [
   },
   {
     id: 'nice_ng59',
+    tocTitle: 'NICE NG59（腰痛・坐骨神経痛）',
+    reading: '',
     title: 'Low back pain and sciatica in over 16s: assessment and management (NG59)',
     author: 'NICE（英国国立医療技術評価機構）',
     publisher: 'NICE',
@@ -34,6 +38,8 @@ export const SOURCES = [
   },
   {
     id: 'who_cplbp_2023',
+    tocTitle: 'WHO 慢性腰痛ガイドライン（2023）',
+    reading: '',
     title: 'WHO guideline for non-surgical management of chronic primary low back pain in adults',
     author: '世界保健機関（WHO）',
     publisher: 'WHO',
@@ -44,6 +50,8 @@ export const SOURCES = [
   },
   {
     id: 'downie_bmj2013',
+    tocTitle: 'Downie 2013（レッドフラグの精度）',
+    reading: '',
     title: 'Red flags to screen for malignancy and fracture in patients with low back pain: systematic review',
     author: 'Downie A, et al.',
     publisher: 'BMJ 2013;347:f7095',
@@ -54,6 +62,8 @@ export const SOURCES = [
   },
   {
     id: 'mhlw_lbp2013',
+    tocTitle: '職場における腰痛予防対策指針',
+    reading: 'しょくばにおけるようつうよぼうたいさくししん',
     title: '職場における腰痛予防対策指針',
     author: '厚生労働省',
     publisher: '厚生労働省',
@@ -64,6 +74,8 @@ export const SOURCES = [
   },
   {
     id: 'law_anma217',
+    tocTitle: 'あん摩マツサージ指圧師等に関する法律',
+    reading: 'あんままつさーじしあつしとうにかんするほうりつ',
     title: 'あん摩マツサージ指圧師、はり師、きゆう師等に関する法律（昭和22年法律第217号）',
     author: '—',
     publisher: 'e-Gov 法令検索',
@@ -74,6 +86,8 @@ export const SOURCES = [
   },
   {
     id: 'law_judo19',
+    tocTitle: '柔道整復師法',
+    reading: 'じゅうどうせいふくしほう',
     title: '柔道整復師法（昭和45年法律第19号）',
     author: '—',
     publisher: 'e-Gov 法令検索',
@@ -84,6 +98,8 @@ export const SOURCES = [
   },
   {
     id: 'law_ishi17',
+    tocTitle: '医師法 第17条',
+    reading: 'いしほうだいじゅうななじょう',
     title: '医師法（昭和23年法律第201号）第17条',
     author: '—',
     publisher: 'e-Gov 法令検索',
@@ -94,6 +110,8 @@ export const SOURCES = [
   },
   {
     id: 'textbook_toyo',
+    tocTitle: '教科書（東洋療法学校協会編）',
+    reading: 'きょうかしょ',
     title: '教科書（東洋療法学校協会編 各科目）',
     author: '東洋療法学校協会 編',
     publisher: '医道の日本社 ほか',

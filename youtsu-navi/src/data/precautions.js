@@ -6,6 +6,7 @@
 export const PRECAUTIONS = [
   {
     id: 'pregnancy',
+    reading: 'にんしんちゅうのかた',
     tags: ['special:pregnancy'],
     title: '妊娠中の方',
     tone: 'high',
@@ -25,6 +26,7 @@ export const PRECAUTIONS = [
   },
   {
     id: 'postpartum',
+    reading: 'さんごのかた',
     tags: ['special:postpartum'],
     title: '産後の方',
     tone: 'mid',
@@ -38,6 +40,7 @@ export const PRECAUTIONS = [
   },
   {
     id: 'elderly',
+    reading: 'こうれいのかた',
     tags: ['special:elderly'],
     title: '高齢の方',
     tone: 'mid',
@@ -55,6 +58,7 @@ export const PRECAUTIONS = [
   },
   {
     id: 'osteoporosis',
+    reading: 'こつそしょうしょうすてろいどちょうきしようのかた',
     tags: ['history:osteoporosis', 'history:steroid'],
     title: '骨粗鬆症・ステロイド長期使用の方',
     tone: 'high',
@@ -64,6 +68,7 @@ export const PRECAUTIONS = [
   },
   {
     id: 'anticoagulant',
+    reading: 'じょうみゃくけっせんしょうのきおうがあるかた',
     tags: ['history:dvt'],
     title: '静脈血栓症の既往がある方',
     tone: 'high',
@@ -73,6 +78,7 @@ export const PRECAUTIONS = [
   },
   {
     id: 'diabetes',
+    reading: 'とうにょうびょうのあるかた',
     tags: ['history:diabetes'],
     title: '糖尿病のある方',
     tone: 'mid',
@@ -82,6 +88,7 @@ export const PRECAUTIONS = [
   },
   {
     id: 'minor',
+    reading: 'にじゅっさいみまんのかた',
     tags: ['special:minor'],
     title: '20歳未満の方',
     tone: 'mid',

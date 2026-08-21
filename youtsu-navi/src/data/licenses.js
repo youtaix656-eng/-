@@ -4,20 +4,34 @@
 // ここに書いた法的範囲はあくまで「一般的な整理」であり、実務上の可否は
 // 通知・自治体・保険者の解釈によって異なる。すべて ※要確認 の扱いとする。
 
-/** 施術手段（modality）— 施術方針カードはこのIDで自分の手段を宣言する */
-export const MODALITIES = {
-  manual: '手技（マッサージ・指圧・徒手）',
-  acupuncture: 'はり',
-  moxa: 'きゅう',
-  judo: '整復・固定（応急手当を含む）',
-  exercise: '運動指導・ストレッチ指導',
-  education: '生活指導・セルフケア指導',
-  physical: '温熱・寒冷などの物理的手段',
+/**
+ * 施術手段（modality）— 施術方針カードはこのIDで自分の手段を宣言する。
+ * tocTitle / reading は目次（あ〜ん索引）用。読みは必ず明示する（自動推定はしない）。
+ */
+export const MODALITY_META = {
+  manual: { label: '手技（マッサージ・指圧・徒手）', tocTitle: '手技（マッサージ・指圧・徒手）', reading: 'しゅぎ' },
+  acupuncture: { label: 'はり', tocTitle: 'はり（刺鍼）', reading: 'はり' },
+  moxa: { label: 'きゅう', tocTitle: 'きゅう（施灸）', reading: 'きゅう' },
+  judo: { label: '整復・固定（応急手当を含む）', tocTitle: '整復・固定（応急手当を含む）', reading: 'せいふくこてい' },
+  exercise: { label: '運動指導・ストレッチ指導', tocTitle: '運動指導・ストレッチ指導', reading: 'うんどうしどう' },
+  education: { label: '生活指導・セルフケア指導', tocTitle: '生活指導・セルフケア指導', reading: 'せいかつしどう' },
+  physical: { label: '温熱・寒冷などの物理的手段', tocTitle: '温熱・寒冷などの物理的手段', reading: 'おんねつかんれい' },
 };
+
+/** 表示名だけを引くための索引（既存の呼び出し側はこちらを使う） */
+export const MODALITIES = Object.fromEntries(
+  Object.entries(MODALITY_META).map(([id, m]) => [id, m.label]),
+);
+
+/** その手段を業務範囲に含む資格の一覧（資料画面「施術手段と資格の対応」で使う） */
+export function licensesForModality(id) {
+  return LICENSES.filter((l) => l.allowed.includes(id));
+}
 
 export const LICENSES = [
   {
     id: 'anma',
+    reading: 'あんままっさーじしあつし',
     name: 'あん摩マッサージ指圧師',
     kind: '国家資格',
     allowed: ['manual', 'exercise', 'education', 'physical'],
@@ -31,6 +45,7 @@ export const LICENSES = [
   },
   {
     id: 'shinkyu',
+    reading: 'はりしきゅうし',
     name: 'はり師・きゅう師（鍼灸師）',
     kind: '国家資格',
     allowed: ['acupuncture', 'moxa', 'exercise', 'education', 'physical'],
@@ -44,6 +59,7 @@ export const LICENSES = [
   },
   {
     id: 'judo',
+    reading: 'じゅうどうせいふくし',
     name: '柔道整復師',
     kind: '国家資格',
     allowed: ['judo', 'manual', 'exercise', 'education', 'physical'],
@@ -57,6 +73,7 @@ export const LICENSES = [
   },
   {
     id: 'seitai',
+    reading: 'せいたいしせらぴすと',
     name: '整体師・セラピスト（民間資格・無資格を含む）',
     kind: '民間資格',
     allowed: ['manual', 'exercise', 'education'],

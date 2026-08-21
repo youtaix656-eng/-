@@ -8,12 +8,14 @@ import Home from './components/Home.jsx';
 import Assess from './components/Assess.jsx';
 import Result from './components/Result.jsx';
 import Reference from './components/Reference.jsx';
+import TableOfContents from './components/TableOfContents.jsx';
 import Settings from './components/Settings.jsx';
 
 const NAV = [
   { id: 'home', icon: '🏠', label: 'ホーム' },
   { id: 'assess', icon: '📝', label: '評価' },
   { id: 'result', icon: '🧭', label: '結果' },
+  { id: 'toc', icon: '📖', label: '目次' },
   { id: 'ref', icon: '📚', label: '資料' },
   { id: 'settings', icon: '⚙️', label: '設定' },
 ];
@@ -21,6 +23,8 @@ const NAV = [
 export default function App() {
   const state = useStore();
   const [view, setView] = useState('home');
+  // 目次から資料の該当項目へ飛ぶための指定 { tab, anchor }
+  const [focus, setFocus] = useState(null);
   const symptom = useMemo(() => symptomById(state.settings.symptomId), [state.settings.symptomId]);
   const license = licenseById(state.settings.licenseId);
 
@@ -42,7 +46,10 @@ export default function App() {
     return <Onboarding state={state} onDone={() => setView('home')} />;
   }
 
-  const go = (next) => setView(next);
+  const go = (next, nextFocus = null) => {
+    setFocus(nextFocus);
+    setView(next);
+  };
 
   return (
     <div className="app">
@@ -64,7 +71,8 @@ export default function App() {
         {view === 'home' && <Home state={state} symptom={symptom} go={go} />}
         {view === 'assess' && <Assess state={state} symptom={symptom} go={go} />}
         {view === 'result' && <Result state={state} symptom={symptom} go={go} />}
-        {view === 'ref' && <Reference state={state} symptom={symptom} />}
+        {view === 'toc' && <TableOfContents go={go} />}
+        {view === 'ref' && <Reference state={state} symptom={symptom} focus={focus} />}
         {view === 'settings' && <Settings state={state} />}
       </main>
 

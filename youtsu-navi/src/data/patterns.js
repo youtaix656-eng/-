@@ -16,6 +16,8 @@
 export const LOW_BACK_PATTERNS = [
   {
     id: 'myofascial',
+    tocTitle: '筋・筋膜性腰痛',
+    reading: 'きんきんまくせいようつう',
     name: '筋・筋膜性腰痛（非特異的腰痛）',
     short: '腰背部の筋・筋膜の過緊張',
     description:
@@ -56,6 +58,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'facet',
+    tocTitle: '椎間関節性の腰痛',
+    reading: 'ついかんかんせつせいのようつう',
     name: '椎間関節性の腰痛',
     short: '反らす・ひねる動作で痛む',
     description:
@@ -87,6 +91,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'discogenic',
+    tocTitle: '椎間板性の腰痛',
+    reading: 'ついかんばんせいのようつう',
     name: '椎間板性の腰痛（神経症状なし）',
     short: '前かがみ・座位で悪化',
     description:
@@ -122,6 +128,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'radiculopathy',
+    tocTitle: '神経根症状を伴う腰痛',
+    reading: 'しんけいこんしょうじょうをともなうようつう',
     name: '神経根症状を伴う腰痛（坐骨神経痛・椎間板ヘルニアなど）',
     short: '膝より下への放散痛・しびれ',
     description:
@@ -155,6 +163,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'sij',
+    tocTitle: '仙腸関節性の腰痛',
+    reading: 'せんちょうかんせつせいのようつう',
     name: '仙腸関節性の腰痛',
     short: '腰とお尻の境目がピンポイントで痛む',
     description:
@@ -185,6 +195,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'stenosis',
+    tocTitle: '腰部脊柱管狭窄症の疑い',
+    reading: 'ようぶせきちゅうかんきょうさくしょうのうたがい',
     name: '腰部脊柱管狭窄症の疑い',
     short: '間欠跛行・反ると悪化・前かがみで楽',
     description:
@@ -216,6 +228,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'piriformis',
+    tocTitle: '梨状筋症候群',
+    reading: 'りじょうきんしょうこうぐん',
     name: '梨状筋症候群など殿部由来の下肢症状',
     short: '殿部の圧痛＋座位で悪化',
     description:
@@ -245,6 +259,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'postural',
+    tocTitle: '姿勢・生活習慣由来の腰痛',
+    reading: 'しせいせいかつしゅうかんゆらいのようつう',
     name: '姿勢・生活習慣由来の腰痛',
     short: '徐々に始まり、慢性・反復する',
     description:
@@ -277,6 +293,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'pgp',
+    tocTitle: '妊娠関連骨盤帯痛',
+    reading: 'にんしんかんれんこつばんたいつう',
     name: '妊娠関連骨盤帯痛（妊娠中・産後）',
     short: '妊娠中・産後の骨盤帯の痛み',
     description:
@@ -305,6 +323,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'spondylolysis',
+    tocTitle: '腰椎分離症・すべり症の疑い',
+    reading: 'ようついぶんりしょうすべりしょうのうたがい',
     name: '腰椎分離症・すべり症の疑い（若年・スポーツ）',
     short: '若年＋反らすと痛い＋スポーツ',
     description:
@@ -332,6 +352,8 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'visceral_referred',
+    tocTitle: '内臓由来の関連痛の疑い',
+    reading: 'ないぞうゆらいのかんれんつうのうたがい',
     name: '内臓由来の関連痛の疑い（施術対象外の可能性）',
     short: '姿勢や動作で痛みが変わらない',
     description:

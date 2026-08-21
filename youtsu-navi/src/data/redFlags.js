@@ -17,6 +17,8 @@ export const SEVERITY = {
 export const LOW_BACK_RED_FLAGS = [
   {
     id: 'cauda_equina',
+    tocTitle: '膀胱直腸障害',
+    reading: 'ぼうこうちょくちょうしょうがい',
     category: '膀胱直腸障害',
     severity: 'emergency',
     label: '排尿困難・失禁、会陰部（サドル領域）のしびれ',
@@ -27,6 +29,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'aaa',
+    tocTitle: '拍動性の腹部腫瘤',
+    reading: 'はくどうせいのふくぶしゅりゅう',
     category: '拍動性の腹部腫瘤',
     severity: 'emergency',
     label: '腹部に拍動を触れる／激しい腹痛を伴う腰痛',
@@ -37,6 +41,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'progressive_neuro',
+    tocTitle: '進行性の神経症状',
+    reading: 'しんこうせいのしんけいしょうじょう',
     category: '進行性の神経症状',
     severity: 'urgent',
     label: '下肢の急激な筋力低下、感覚麻痺の悪化',
@@ -47,6 +53,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'rest_night_pain',
+    tocTitle: '安静時痛・夜間痛',
+    reading: 'あんせいじつうやかんつう',
     category: '安静時痛・夜間痛',
     severity: 'urgent',
     label: '姿勢を変えても改善しない／夜間に悪化する痛み',
@@ -57,6 +65,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'systemic',
+    tocTitle: '全身症状（発熱・体重減少）',
+    reading: 'ぜんしんしょうじょう',
     category: '全身症状を伴う',
     severity: 'urgent',
     label: '発熱、原因不明の体重減少、強い倦怠感',
@@ -67,6 +77,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'post_trauma',
+    tocTitle: '外傷後の激痛',
+    reading: 'がいしょうごのげきつう',
     category: '外傷後',
     severity: 'urgent',
     label: '転倒・事故など明確な外傷のあとの激痛',
@@ -77,6 +89,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'history_risk',
+    tocTitle: '既往歴によるリスク',
+    reading: 'きおうれきによるりすく',
     category: '既往歴によるリスク',
     severity: 'urgent',
     label: 'がん既往、長期ステロイド使用、骨粗鬆症、静脈血栓症の既往',
@@ -87,6 +101,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'age_first_episode',
+    tocTitle: '年齢要因（初発の腰痛）',
+    reading: 'ねんれいよういん',
     category: '年齢要因',
     severity: 'caution',
     label: '20歳未満または55歳以上での初発腰痛',
@@ -98,6 +114,8 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'recent_infection',
+    tocTitle: '感染リスク（最近の感染症・手術）',
+    reading: 'かんせんりすく',
     category: '感染リスク',
     severity: 'urgent',
     label: '最近の感染症・尿路感染・手術・注射歴＋腰痛',

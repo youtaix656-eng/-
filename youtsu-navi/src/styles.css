@@ -309,7 +309,7 @@ ul.list.tight li + li { margin-top: 2px; }
   bottom: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   background: var(--bg);
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -359,3 +359,105 @@ details.acc > *:not(summary) { margin-top: 10px; }
 @media (min-width: 620px) {
   .scale-grid { grid-template-columns: repeat(11, 1fr); }
 }
+
+/* ---- 目次（あ〜ん / A〜Z 索引） ---- */
+.search {
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+}
+.search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.chip-btn {
+  font-size: 0.86rem;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+.chip-btn.on { border-color: var(--accent); background: var(--accent-weak); font-weight: 700; }
+
+.toc-preview { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* 五十音ジャンプバー（横スクロール・指で押しやすい大きさ） */
+.jumpbar {
+  position: sticky;
+  top: calc(56px + env(safe-area-inset-top, 0px));
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px;
+  margin: 0 -4px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  -webkit-overflow-scrolling: touch;
+}
+.jumpbar .jump {
+  flex: 0 0 auto;
+  min-width: 48px;
+  min-height: 48px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.jumpbar .jump:disabled { opacity: 0.3; cursor: default; }
+
+/* ジャンプした時に見出しがヘッダー＋ジャンプバーの下に隠れないようにする */
+.toc-section { scroll-margin-top: 132px; }
+.toc-section + .toc-section { margin-top: 18px; }
+.toc-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 4px;
+}
+.toc-head span { font-size: 0.76rem; font-weight: 600; color: var(--text-sub); }
+
+.toc-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* 目次の項目は施術中でも読めるよう大きめ */
+.toc-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.toc-item:active { background: var(--accent-weak); }
+.toc-icon { flex: 0 0 auto; font-size: 1.25rem; }
+.toc-text { flex: 1; min-width: 0; }
+.toc-title { display: block; font-size: 1.16rem; font-weight: 700; line-height: 1.45; }
+.toc-sub { display: block; font-size: 0.8rem; color: var(--text-sub); line-height: 1.5; }
+.toc-arrow { flex: 0 0 auto; font-size: 1.5rem; color: var(--text-sub); }
+
+/* 目次から飛んできた項目の強調 */
+@keyframes flash-highlight {
+  0%, 60% { background: var(--accent-weak); box-shadow: 0 0 0 3px var(--accent); }
+  100% { background: transparent; box-shadow: none; }
+}
+.flash { animation: flash-highlight 2.2s ease-out; border-radius: var(--radius); }
