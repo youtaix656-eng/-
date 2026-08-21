@@ -76,12 +76,27 @@ jobs:
         run: npm run build
         working-directory: youtsu-navi
 
+      # 変革ノート（Vite + React + TypeScript / PWA）を /henkaku-note サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (変革ノート)
+        run: npm ci
+        working-directory: henkaku-note
+
+      - name: Test (変革ノート)
+        run: npm test
+        working-directory: henkaku-note
+
+      - name: Build (変革ノート / /henkaku-note)
+        run: npm run build
+        working-directory: henkaku-note
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
+          cp -r henkaku-note/dist dist/henkaku-note
           touch dist/.nojekyll
 
       - name: Upload artifact

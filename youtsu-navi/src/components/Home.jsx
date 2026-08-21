@@ -4,6 +4,7 @@ import { RESULT_NOTICE } from '../lib/consent.js';
 import { TOC_ENTRIES, TOC_CATEGORIES } from '../data/toc.js';
 import { SYMPTOMS } from '../data/symptoms.js';
 import { summarizeRecords } from '../lib/records.js';
+import { summarizeKnowledge } from '../lib/knowledge.js';
 import { formatDate } from '../lib/exporter.js';
 
 /** ホーム — 施術中に迷わないよう、入口は「新しく評価する」1つに絞る */
@@ -11,6 +12,7 @@ export default function Home({ state, symptom, go }) {
   const hasDraft = Boolean(state.draft && state.draft.symptomId === symptom.id);
   const hasResult = Boolean(state.lastResult);
   const karte = summarizeRecords(state.records || []);
+  const kb = summarizeKnowledge(state.knowledge || [], Date.now());
 
   return (
     <div className="page">
@@ -92,6 +94,24 @@ export default function Home({ state, symptom, go }) {
         )}
         <button type="button" className="btn secondary" onClick={() => go('records')}>
           {karte.total > 0 ? 'カルテを開く' : 'カルテについて見る'}
+        </button>
+      </div>
+
+      <div className="card">
+        <h3>📚 知識ベース</h3>
+        {kb.total > 0 ? (
+          <p className="muted small">
+            全{kb.total}件／✅運用中 {kb.active}件
+            {kb.due > 0 ? `／🧪 第2チェック待ち ${kb.due}件` : ''}
+          </p>
+        ) : (
+          <p className="muted small">
+            動画・書籍・研修で学んだことを、自分の言葉の要約＋出典で貯めます。
+            二段階チェックを通ったメモだけが、関係する結果画面に「参考」として出ます。
+          </p>
+        )}
+        <button type="button" className="btn secondary" onClick={() => go('knowledge')}>
+          {kb.due > 0 ? `見直しが ${kb.due}件あります` : kb.total > 0 ? '知識ベースを開く' : '知識ベースを作る'}
         </button>
       </div>
 

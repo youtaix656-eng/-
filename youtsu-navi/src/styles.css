@@ -515,3 +515,27 @@ details.acc > *:not(summary) { margin-top: 10px; }
   font-size: 0.9rem;
   line-height: 1.7;
 }
+
+/* ---- 知識ベース（Phase 3）---- */
+.stage-badge {
+  display: inline-block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--text-sub);
+  background: var(--card);
+}
+.stage-badge.ok { border-color: var(--ok); color: var(--ok); background: var(--ok-weak); }
+.stage-badge.warn { border-color: var(--warn); color: var(--warn); background: var(--warn-weak); }
+.stage-badge.danger { border-color: var(--danger); color: var(--danger); background: var(--danger-weak); }
+
+.kb-note {
+  border: 2px solid var(--line);
+  border-left-width: 6px;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--card);
+}
+.kb-note h4 { margin: 0; font-size: 1rem; }

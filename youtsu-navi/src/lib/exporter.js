@@ -191,3 +191,10 @@ export function backupFileName(at) {
   const p = (n) => String(n).padStart(2, '0');
   return `youtsu-navi-karte-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`;
 }
+
+/** 知識ベース（Phase 3）のファイル名。カルテとは別ファイルにして混ざらないようにする */
+export function knowledgeFileName(at) {
+  const d = new Date(at);
+  const p = (n) => String(n).padStart(2, '0');
+  return `youtsu-navi-knowledge-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`;
+}

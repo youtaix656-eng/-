@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { load, save, clear } from './storage.js';
 import { CONSENT_VERSION, makeConsentRecord } from './consent.js';
 import { makeRecord, upsertRecord, removeRecord, normalizeLabel } from './records.js';
+import { makeNote, upsertNote, removeNote } from './knowledge.js';
 
 export const DEFAULT_STATE = {
   settings: {
@@ -21,6 +22,7 @@ export const DEFAULT_STATE = {
   lastResult: null, // { at, symptomId, answers, tags }
   draft: null, // 入力途中の内容
   records: [], // カルテ（Phase 2）。端末内のみ・個人情報は持たない
+  knowledge: [], // 知識ベース（Phase 3）。二段階チェックを通ったものだけが提案に出る
 };
 
 let state = load(DEFAULT_STATE);
@@ -117,6 +119,40 @@ export const actions = {
   },
   clearRecords() {
     set((s) => ({ ...s, records: [] }));
+  },
+
+  // ── 知識ベース（Phase 3）───────────────────────
+  /** 取り込み（必ず下書きから始まる。二段階チェックを飛ばせない） */
+  addNote(input, extra = {}) {
+    const note = makeNote(input, { at: Date.now(), ...extra });
+    set((s) => ({ ...s, knowledge: upsertNote(s.knowledge || [], note) }));
+    return note;
+  },
+  /** 差し替え（チェック結果・編集の反映。knowledge.js が作ったオブジェクトをそのまま渡す） */
+  putNote(note) {
+    set((s) => ({ ...s, knowledge: upsertNote(s.knowledge || [], note) }));
+    return note;
+  },
+  deleteNote(id) {
+    set((s) => ({ ...s, knowledge: removeNote(s.knowledge || [], id) }));
+  },
+  /** バックアップの取り込み（同じidは新しい方を残す） */
+  importNotes(incoming = []) {
+    let added = 0;
+    set((s) => {
+      let list = s.knowledge || [];
+      for (const n of incoming) {
+        const exists = list.find((x) => x.id === n.id);
+        if (exists && (exists.updatedAt || 0) >= (n.updatedAt || 0)) continue;
+        list = upsertNote(list, n);
+        added += 1;
+      }
+      return { ...s, knowledge: list };
+    });
+    return added;
+  },
+  clearNotes() {
+    set((s) => ({ ...s, knowledge: [] }));
   },
   resetAll() {
     clear();

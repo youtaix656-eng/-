@@ -3,10 +3,11 @@ import { actions } from '../lib/useStore.js';
 import { LICENSES, licenseById } from '../data/licenses.js';
 import { CONSENT_TEXT, CONSENT_VERSION } from '../lib/consent.js';
 import { storageSize } from '../lib/storage.js';
-import { recordsToJson, parseRecordsJson, backupFileName } from '../lib/exporter.js';
+import { recordsToJson, parseRecordsJson, backupFileName, knowledgeFileName } from '../lib/exporter.js';
 import { downloadText, pickTextFile } from '../lib/share.js';
 import { summarizeRecords } from '../lib/records.js';
 import { isVoiceInputAvailable, VOICE_PRIVACY_NOTE } from '../lib/voice.js';
+import { notesToJson, parseNotesJson, summarizeKnowledge } from '../lib/knowledge.js';
 
 const FONT_SCALES = [
   { id: 'm', label: '標準' },
@@ -23,9 +24,12 @@ function formatAt(at) {
 export default function Settings({ state }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmKarte, setConfirmKarte] = useState(false);
+  const [confirmKb, setConfirmKb] = useState(false);
   const [ioStatus, setIoStatus] = useState('');
   const records = state.records || [];
   const karte = summarizeRecords(records);
+  const notes = state.knowledge || [];
+  const kb = summarizeKnowledge(notes, Date.now());
 
   const flash = (msg) => {
     setIoStatus(msg);
@@ -42,6 +46,17 @@ export default function Settings({ state }) {
     }
     const added = actions.importRecords(parsed.records);
     flash(`${added}件を取り込みました（同じ記録は新しい方を残しました）。${parsed.error || ''}`);
+  };
+  const restoreNotes = async () => {
+    const picked = await pickTextFile();
+    if (!picked) return;
+    const parsed = parseNotesJson(picked.text);
+    if (!parsed.ok) {
+      flash(`復元できませんでした：${parsed.error}`);
+      return;
+    }
+    const added = actions.importNotes(parsed.notes);
+    flash(`${added}件を取り込みました（同じメモは新しい方を残しました）。${parsed.error || ''}`);
   };
   const license = licenseById(state.settings.licenseId);
   const voiceAvailable = isVoiceInputAvailable(typeof window === 'undefined' ? null : window);
@@ -215,6 +230,51 @@ export default function Settings({ state }) {
                   type="button"
                   className="btn danger"
                   onClick={() => { actions.clearRecords(); setConfirmKarte(false); flash('カルテを削除しました。'); }}
+                >
+                  はい、削除する
+                </button>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="card">
+        <h2>知識ベースのバックアップ</h2>
+        <p className="muted small">
+          知識ベース{kb.total}件（運用中 {kb.active}件）を、カルテとは<strong>別のファイル</strong>として保存・復元できます。
+          取り込んだメモの段階（下書き／第1チェック済み／運用中／見送り）もそのまま引き継ぎます。
+        </p>
+        <div className="row" style={{ gap: 8 }}>
+          <button
+            type="button"
+            className="btn slim"
+            disabled={notes.length === 0}
+            onClick={() => {
+              downloadText(knowledgeFileName(Date.now()), notesToJson(notes), 'application/json');
+              flash('知識ベースを保存しました。');
+            }}
+          >
+            💾 知識ベースを保存
+          </button>
+          <button type="button" className="btn slim secondary" onClick={restoreNotes}>
+            📂 ファイルから復元
+          </button>
+        </div>
+        {notes.length > 0 && (
+          !confirmKb ? (
+            <button type="button" className="btn danger slim" onClick={() => setConfirmKb(true)}>
+              知識ベースだけをすべて削除
+            </button>
+          ) : (
+            <div className="stack">
+              <p className="small">メモ{notes.length}件を削除します。元に戻せません（カルテ・設定は残ります）。</p>
+              <div className="row" style={{ flexWrap: 'nowrap' }}>
+                <button type="button" className="btn secondary" onClick={() => setConfirmKb(false)}>いいえ</button>
+                <button
+                  type="button"
+                  className="btn danger"
+                  onClick={() => { actions.clearNotes(); setConfirmKb(false); flash('知識ベースを削除しました。'); }}
                 >
                   はい、削除する
                 </button>
