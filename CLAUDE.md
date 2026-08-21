@@ -12,6 +12,7 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 | `rirakuru-app/` | `/rirakuru` | るるくる セラピスト業務マニュアル（Next.js） |
 | `sleep-tracker/` | `/sleep-tracker` | 分割睡眠トラッカー（Vite + TS） |
 | `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向けアセスメント支援。腰痛／肩こり・頸部痛／膝痛。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
+| `henkaku-note/` | `/henkaku-note` | 変革ノート（自己改革カレンダー。ゴーストモード7ステップの習慣トラッカー。Vite + React + TypeScript・PWA・端末内保存のみ）。詳細は `henkaku-note/README.md` |
 
 腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
 医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、
@@ -32,6 +33,18 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 カルテ（`src/lib/records.js`）は**表示名のみで管理し氏名・連絡先を持たない**。保存するのは入力（タグ）
 なので判定ロジックを直しても過去の記録を読み直せる。書き出し（`src/lib/exporter.js`）はお客様向けと
 施術者の控えを作り分け、**お客様向けは既定で推定パターン名を含めない**（診断と受け取られないため）。
+
+変革ノートの要点だけ再掲：ゴーストモード7ステップが習慣の初期値（`src/lib/habits.ts`、編集可）。
+**ステップ⑤だけは原典の「夜11時就寝」ではなくシフト対応版**（`src/lib/shift.ts`。勤務日＝終業＋90分、
+休日＝固定時刻。夜勤で守れない目標を並べると続かないため）。週次振り返りは**管理者視点→実行者視点**の順で、
+文言は3分の2バッファ法と同じ「悪いのは実行役ではなく無理な計画を立てたマネージャー」の前提
+（責める表現が入っていないことをテストが機械チェックする）。**連続日数を煽らない**——主役は
+「期間の◯日目/全◯日」と通算の実践日数で、期間（既定30日）の終わりに続けるかを本人が決める。
+`src/lib/storage.ts` はネットワークに触れない。達成率の分母は「その日に有効だった習慣」なので
+あとから習慣を足しても過去は下がらない。習慣は削除より休止（`archivedAt`）を既定にする。
+テストは `henkaku-note/tests/*.spec.ts`（TypeScript）。CIがNode 20のため `tsc` で
+`.test-build/` へ出してから `node --test` する（`npm test` はアプリ側で実行。ルートの再帰探索には
+拾われない名前にしてある）。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）
 一覧／目次／索引を作る時は、どのアプリでも次を守る。
