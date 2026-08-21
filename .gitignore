@@ -10,3 +10,9 @@ yarn-error.log*
 
 # ビルド成果物の配布用zip（リポジトリには含めない）
 *.zip
+
+# 動作確認用のスクラッチスクリプト・スクリーンショット（Playwright検証用、使い捨て）
+/test_*.mjs
+/qa_*.mjs
+/qa_*.json
+/scratch_*.png
