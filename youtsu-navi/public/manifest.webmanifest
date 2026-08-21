@@ -1,0 +1,19 @@
+{
+  "name": "腰痛ナビ",
+  "short_name": "腰痛ナビ",
+  "description": "有資格者向け 腰痛アセスメント支援アプリ（端末内保存のみ）",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

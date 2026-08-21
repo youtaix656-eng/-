@@ -4,6 +4,42 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 （`src/lib/storage.js`、localStorage フォールバック）。ブラウザのみで動作。
 公開先：https://youtaix656-eng.github.io/-/
 
+## このリポジトリに同梱されている他アプリ（鍼灸アプリ本体とは独立）
+main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物にまとめて配置する。
+それぞれ独立した package.json / ビルドを持つので、**鍼灸アプリ側の作業では触らない**。
+| ディレクトリ | 公開パス | 内容 |
+|---|---|---|
+| `rirakuru-app/` | `/rirakuru` | るるくる セラピスト業務マニュアル（Next.js） |
+| `sleep-tracker/` | `/sleep-tracker` | 分割睡眠トラッカー（Vite + TS） |
+| `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向けアセスメント支援。腰痛／肩こり・頸部痛／膝痛。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
+
+腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
+医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、
+同意文を変えたら `CONSENT_VERSION` を上げる。テストは `node --test` の再帰探索でルートの
+`npm test` からも実行される（新しいテストは `youtsu-navi/test/*.test.mjs` に置く）。
+目次（`src/data/toc.js`＋`src/lib/yomi.js`）は各データから自動生成し、**タイトル重複禁止・
+漢字には `reading` 必須（自動推定しない）・数字は読みで五十音へ振り分け**を `toc.test.mjs` が機械チェックする。
+疾患・原因カード129件は `src/data/diseases.js`（鑑別と受診判断のための参考知識。診断のためではない）。
+①②③…のように番号順が意味を持つ項目は `sortKey` で行内の並びだけを上書きする。
+音声メモ入力（`src/lib/voice.js`＋`components/VoiceMemo.jsx`）は**既定オフのオプトイン**
+（`settings.voiceInput`）。ブラウザの音声認識は音声を提供元のサーバへ送る場合があるため、
+端末内保存方針の**明示的な例外**として設定画面で説明したうえで選んでもらう。
+カルテ（`src/lib/records.js`）は**表示名のみで管理し氏名・連絡先を持たない**。保存するのは入力（タグ）
+なので判定ロジックを直しても過去の記録を読み直せる。書き出し（`src/lib/exporter.js`）はお客様向けと
+施術者の控えを作り分け、**お客様向けは既定で推定パターン名を含めない**（診断と受け取られないため）。
+
+## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）
+一覧／目次／索引を作る時は、どのアプリでも次を守る。
+1. **並びは「あ〜ん」→「A〜Z」** の順。読み（ひらがな）で並べ替える。
+2. **数字も読み方で振り分ける** — 見た目の数字順で先頭に固めない
+   （例「20歳未満」→ にじゅう…→ **な行**、「361穴」→ さんびゃく…→ **さ行**）。
+   鍼灸アプリは `src/lib/yomi.js` の `numberToKana`/`readingInfo`、腰痛ナビは
+   `youtsu-navi/src/lib/yomi.js` の `autoReading` が担当する。
+3. **読みは明示、自動推定しない** — 漢字を含む項目は必ず読みをデータに持たせる（誤読防止）。
+4. **タイトルは重複させない・誤りを残さない** — 機械チェックできる形（テスト）で担保する。
+5. **目次の文字は大きめ**、タップで該当箇所へ飛べるようにする（飛び先はスクロール位置を
+   固定ヘッダーの下に出し、一時的にハイライトする）。
+
 ## デプロイ
 - `.github/workflows/deploy.yml` は **main への push** でビルド＆GitHub Pages 公開。
 - 作業は `claude/acupuncture-exam-app-7p4zdh` で行い、コミット後に

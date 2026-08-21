@@ -1,0 +1,150 @@
+// 安全トリアージ｜レッドフラグ一覧 — 企画書 第6部
+//
+// 判定は triage.js が行う。ここは「定義」だけを持つ（表示にもそのまま使う）。
+//
+//   severity: 'emergency' 施術は行わず、直ちに医療機関へ（救急を含む）
+//             'urgent'    施術を見合わせ、受診をすすめる
+//             'caution'   施術は可能だが、内容・強度を制限し経過観察
+//   tags:     いずれか1つでも該当すれば発火（any-of）
+//   withTags: 併せて必要な条件（any-of）。省略時は無条件。
+
+export const SEVERITY = {
+  emergency: { label: '緊急', order: 3, color: '#b3261e', action: '施術を中止し、直ちに医療機関の受診（状況により救急要請）をすすめてください。' },
+  urgent: { label: '受診推奨', order: 2, color: '#a15c00', action: '今回の施術は見合わせ、医療機関の受診をすすめてください。' },
+  caution: { label: '要注意', order: 1, color: '#1a5fb4', action: '施術は可能ですが、強度・体位・時間を制限し、変化があれば中止してください。' },
+};
+
+/**
+ * 症状によらず共通のレッドフラグ（腰痛・頸部痛・膝痛で共有する）。
+ * 判定はタグだけを見るので、部位が変わってもそのまま使える。
+ */
+export const COMMON_RED_FLAGS = [
+  {
+    id: 'progressive_neuro',
+    tocTitle: '進行性の神経症状',
+    reading: 'しんこうせいのしんけいしょうじょう',
+    category: '進行性の神経症状',
+    severity: 'urgent',
+    label: '下肢の急激な筋力低下、感覚麻痺の悪化',
+    suspect: '神経根の重度圧迫',
+    detail: '「つまずく」「スリッパが脱げる」など日常での脱力の訴えも手がかりになります。',
+    tags: ['sys:progressive_weakness', 'neuro:weakness'],
+    sourceIds: ['jpn_lbp_gl2019', 'nice_ng59'],
+  },
+  {
+    id: 'rest_night_pain',
+    tocTitle: '安静時痛・夜間痛',
+    reading: 'あんせいじつうやかんつう',
+    category: '安静時痛・夜間痛',
+    severity: 'urgent',
+    label: '姿勢を変えても改善しない／夜間に悪化する痛み',
+    suspect: '腫瘍、感染、炎症性疾患',
+    detail: '「動かすと痛い」ではなく「何をしても痛い」は機械的腰痛らしくないサインです。',
+    tags: ['sys:night_pain', 'sys:rest_pain'],
+    sourceIds: ['downie_bmj2013', 'jpn_lbp_gl2019'],
+  },
+  {
+    id: 'systemic',
+    tocTitle: '全身症状（発熱・体重減少）',
+    reading: 'ぜんしんしょうじょう',
+    category: '全身症状を伴う',
+    severity: 'urgent',
+    label: '発熱、原因不明の体重減少、強い倦怠感',
+    suspect: '感染症、悪性腫瘍',
+    detail: '複数の全身症状が重なるほど疑いは強くなります。',
+    tags: ['sys:fever', 'sys:weight_loss', 'sys:malaise'],
+    sourceIds: ['downie_bmj2013'],
+  },
+  {
+    id: 'post_trauma',
+    tocTitle: '外傷後の激痛',
+    reading: 'がいしょうごのげきつう',
+    category: '外傷後',
+    severity: 'urgent',
+    label: '転倒・事故など明確な外傷のあとの激痛',
+    suspect: '骨折、脱臼',
+    detail: '柔道整復師は応急手当の範囲で対応し、それ以外の資格では患部への施術を行わないでください（※要確認）。',
+    tags: ['onset:after_trauma'],
+    sourceIds: ['downie_bmj2013', 'law_judo19'],
+  },
+  {
+    id: 'history_risk',
+    tocTitle: '既往歴によるリスク',
+    reading: 'きおうれきによるりすく',
+    category: '既往歴によるリスク',
+    severity: 'urgent',
+    label: 'がん既往、長期ステロイド使用、骨粗鬆症、静脈血栓症の既往',
+    suspect: '病的骨折、圧迫骨折、血栓症',
+    detail: '骨粗鬆症・ステロイド使用では、軽微な外力でも椎体骨折が起こり得ます。',
+    tags: ['history:cancer', 'history:steroid', 'history:osteoporosis', 'history:dvt', 'meds:steroid', 'meds:anticoagulant'],
+    sourceIds: ['downie_bmj2013', 'jpn_lbp_gl2019'],
+  },
+  {
+    id: 'age_first_episode',
+    tocTitle: '年齢要因（初発の痛み）',
+    reading: 'ねんれいよういん',
+    category: '年齢要因',
+    severity: 'caution',
+    label: '20歳未満または55歳以上での初発の痛み',
+    suspect: '器質的疾患の可能性が相対的に上がる',
+    detail: '単独では受診の決め手になりませんが、他のレッドフラグと重なる時は受診をすすめてください。',
+    tags: ['special:minor', 'special:elderly'],
+    withTags: ['onset:first_episode'],
+    sourceIds: ['downie_bmj2013', 'jpn_lbp_gl2019'],
+  },
+  {
+    id: 'recent_infection',
+    tocTitle: '感染リスク（最近の感染症・手術）',
+    reading: 'かんせんりすく',
+    category: '感染リスク',
+    severity: 'urgent',
+    label: '最近の感染症・尿路感染・手術・注射歴＋腰痛',
+    suspect: '化膿性脊椎炎・硬膜外膿瘍',
+    detail: '発熱を伴う場合は特に注意してください。',
+    tags: ['history:infection_recent'],
+    sourceIds: ['downie_bmj2013'],
+  },
+  {
+    id: 'no_improvement',
+    tocTitle: '保存療法で改善しない',
+    reading: 'ほぞんりょうほうでかいぜんしない',
+    category: '経過',
+    severity: 'caution',
+    label: '鎮痛薬や1か月の保存療法で改善しない',
+    suspect: '器質的疾患の見落とし（腫瘍・感染・炎症性疾患など）',
+    detail: '単独では判断の決め手になりませんが、経過が変わらない場合は医療機関での再評価をすすめてください。',
+    tags: ['meds:analgesic_ineffective'],
+    sourceIds: ['downie_bmj2013', 'jpn_lbp_gl2019'],
+  },
+];
+
+/** 腰痛に固有のレッドフラグ */
+export const LOW_BACK_ONLY_RED_FLAGS = [
+  {
+    id: 'cauda_equina',
+    tocTitle: '膀胱直腸障害',
+    reading: 'ぼうこうちょくちょうしょうがい',
+    category: '膀胱直腸障害',
+    severity: 'emergency',
+    label: '排尿困難・失禁、会陰部（サドル領域）のしびれ',
+    suspect: '馬尾症候群（緊急性が高い）',
+    detail: '発症からの時間が予後に影響するとされ、疑った時点で施術は行わず受診をすすめます。',
+    tags: ['sys:bladder_bowel', 'sys:saddle_anesthesia'],
+    sourceIds: ['jpn_lbp_gl2019', 'nice_ng59'],
+  },
+  {
+    id: 'aaa',
+    tocTitle: '拍動性の腹部腫瘤',
+    reading: 'はくどうせいのふくぶしゅりゅう',
+    category: '拍動性の腹部腫瘤',
+    severity: 'emergency',
+    label: '腹部に拍動を触れる／激しい腹痛を伴う腰痛',
+    suspect: '腹部大動脈瘤（緊急性が高い）',
+    detail: '腹臥位・圧迫を伴う施術は行わないでください。',
+    tags: ['sys:abdominal_pulsatile'],
+    sourceIds: ['jpn_lbp_gl2019'],
+  },
+];
+
+/** 腰痛モジュールが使うレッドフラグ（固有→共通の順） */
+export const LOW_BACK_RED_FLAGS = [...LOW_BACK_ONLY_RED_FLAGS, ...COMMON_RED_FLAGS];

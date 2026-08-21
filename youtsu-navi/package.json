@@ -1,0 +1,21 @@
+{
+  "name": "youtsu-navi",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "腰痛ナビ — 有資格者向け 腰痛アセスメント支援アプリ（ローカル保存のみ）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
