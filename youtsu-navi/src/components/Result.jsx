@@ -14,6 +14,7 @@ import { CLIENT_LABEL_MAX } from '../lib/records.js';
 import { homecareText, recordText, formatDate } from '../lib/exporter.js';
 import ShareBox from './ShareBox.jsx';
 import VoiceMemo from './VoiceMemo.jsx';
+import { activeNotesFor, SOURCE_KIND_MAP } from '../lib/knowledge.js';
 
 function Approach({ a }) {
   const out = a.scope.status === 'out';
@@ -140,6 +141,45 @@ function Candidate({ item, rank, licenseId, defaultOpen }) {
   );
 }
 
+
+/**
+ * 知識ベース（Phase 3）からの参考メモ。
+ * **アプリが最初から持っている根拠とは別枠**で出す（施術者自身が集めた情報であることを明示）。
+ * 出るのは二段階チェックを通った（stage:'active'）メモだけ。
+ */
+function KnowledgeNotes({ notes, patternIds, tags, symptomId, go }) {
+  const hits = activeNotesFor(notes, { patternIds, tags, symptomId });
+  if (hits.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>📚 あなたの知識ベースから（参考）</h3>
+      <p className="muted small">
+        ご自身で取り込み、二段階チェックを通したメモです。アプリの根拠（ガイドライン等）とは別のものとして扱ってください。
+      </p>
+      <div className="stack">
+        {hits.map(({ note }) => {
+          const kind = SOURCE_KIND_MAP[note.source.kind] || SOURCE_KIND_MAP.other;
+          return (
+            <div className="kb-note" key={note.id}>
+              <h4>
+                {note.title}
+                {note.caution && <span className="pain-badge">※要確認</span>}
+              </h4>
+              <p style={{ margin: '4px 0', whiteSpace: 'pre-wrap' }}>{note.summary}</p>
+              {note.practice && <p className="small" style={{ margin: '4px 0' }}>使いどころ：{note.practice}</p>}
+              <p className="small muted" style={{ margin: 0 }}>
+                {kind.icon} {note.source.title}
+                {note.source.author ? `／${note.source.author}` : ''}
+                {note.source.locator ? `／${note.source.locator}` : ''}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+      <button type="button" className="btn slim secondary" onClick={() => go('knowledge')}>知識ベースを開く</button>
+    </div>
+  );
+}
 
 /** 結果をカルテに保存する（Phase 2）。個人情報は入れない前提の表示名だけを持つ */
 function SaveToKarte({ result, tri, candidates, savedId, onSaved, settings, go }) {
@@ -385,6 +425,14 @@ export default function Result({ state, go }) {
           ))}
         </dl>
       </details>
+
+      <KnowledgeNotes
+        notes={state.knowledge || []}
+        patternIds={candidates.map((c) => c.pattern.id)}
+        tags={tags}
+        symptomId={result.symptomId}
+        go={go}
+      />
 
       <SaveToKarte
         result={result}

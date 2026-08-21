@@ -10,6 +10,7 @@ import Result from './components/Result.jsx';
 import Reference from './components/Reference.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
 import Records from './components/Records.jsx';
+import Knowledge from './components/Knowledge.jsx';
 import Settings from './components/Settings.jsx';
 
 const NAV = [
@@ -74,6 +75,7 @@ export default function App() {
         {view === 'result' && <Result state={state} go={go} />}
         {view === 'toc' && <TableOfContents go={go} />}
         {view === 'records' && <Records state={state} go={go} />}
+        {view === 'knowledge' && <Knowledge state={state} go={go} />}
         {view === 'ref' && <Reference state={state} symptom={symptom} focus={focus} />}
         {view === 'settings' && <Settings state={state} />}
       </main>
