@@ -13,6 +13,7 @@ import { symptomById } from '../data/symptoms.js';
 import { CLIENT_LABEL_MAX } from '../lib/records.js';
 import { homecareText, recordText, formatDate } from '../lib/exporter.js';
 import ShareBox from './ShareBox.jsx';
+import VoiceMemo from './VoiceMemo.jsx';
 
 function Approach({ a }) {
   const out = a.scope.status === 'out';
@@ -141,8 +142,9 @@ function Candidate({ item, rank, licenseId, defaultOpen }) {
 
 
 /** 結果をカルテに保存する（Phase 2）。個人情報は入れない前提の表示名だけを持つ */
-function SaveToKarte({ result, tri, candidates, savedId, onSaved, go }) {
+function SaveToKarte({ result, tri, candidates, savedId, onSaved, settings, go }) {
   const [label, setLabel] = useState('');
+  const [memo, setMemo] = useState('');
   const top = candidates[0];
 
   if (savedId) {
@@ -171,6 +173,15 @@ function SaveToKarte({ result, tri, candidates, savedId, onSaved, go }) {
           onChange={(e) => setLabel(e.target.value)}
         />
       </label>
+      <VoiceMemo
+        label="施術内容・所見（任意）"
+        value={memo}
+        onChange={setMemo}
+        rows={3}
+        placeholder="どこに何をしたか、反応はどうだったか"
+        settings={settings}
+        hint="手が離せない時は、設定から音声メモ入力をオンにできます。"
+      />
       <button
         type="button"
         className="btn"
@@ -184,6 +195,7 @@ function SaveToKarte({ result, tri, candidates, savedId, onSaved, go }) {
             pain: typeof result.answers?.pain === 'number' ? result.answers.pain : null,
             seed: Math.floor(performance.now()),
           });
+          if (memo.trim()) actions.updateRecord(rec.id, { memo });
           onSaved(rec.id);
         }}
       >
@@ -380,6 +392,7 @@ export default function Result({ state, go }) {
         candidates={candidates}
         savedId={savedId}
         onSaved={setSavedId}
+        settings={state.settings}
         go={go}
       />
 

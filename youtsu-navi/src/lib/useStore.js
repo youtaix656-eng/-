@@ -12,6 +12,9 @@ export const DEFAULT_STATE = {
     licenseId: null,
     symptomId: 'lowback',
     showOutOfScope: false, // 業務範囲外の提案も表示するか
+    // 音声メモ入力（Phase 2）。既定はオフ＝明示的なオプトイン。
+    // 音声認識はブラウザ提供元のサーバへ音声を送る場合があるため（lib/voice.js の注意書き）。
+    voiceInput: false,
   },
   consent: null, // { agreedAt, version, licenseId }
   consentLog: [], // 同意履歴（企画書 改善策 #7）

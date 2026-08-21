@@ -500,3 +500,18 @@ details.acc > *:not(summary) { margin-top: 10px; }
 .trend-line { stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--accent); }
 .trend-label { fill: var(--text-sub); font-size: 10px; }
+
+/* ---- 音声メモ入力（Phase 2）---- */
+.voice-memo + .voice-memo { margin-top: 10px; }
+.voice-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.voice-live { font-size: 0.82rem; font-weight: 700; color: var(--danger); }
+.voice-interim {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text-sub);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}

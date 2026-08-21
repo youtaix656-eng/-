@@ -6,6 +6,7 @@ import { storageSize } from '../lib/storage.js';
 import { recordsToJson, parseRecordsJson, backupFileName } from '../lib/exporter.js';
 import { downloadText, pickTextFile } from '../lib/share.js';
 import { summarizeRecords } from '../lib/records.js';
+import { isVoiceInputAvailable, VOICE_PRIVACY_NOTE } from '../lib/voice.js';
 
 const FONT_SCALES = [
   { id: 'm', label: '標準' },
@@ -43,6 +44,7 @@ export default function Settings({ state }) {
     flash(`${added}件を取り込みました（同じ記録は新しい方を残しました）。${parsed.error || ''}`);
   };
   const license = licenseById(state.settings.licenseId);
+  const voiceAvailable = isVoiceInputAvailable(typeof window === 'undefined' ? null : window);
   const logs = state.consentLog || [];
 
   return (
@@ -83,6 +85,37 @@ export default function Settings({ state }) {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <h2>🎤 音声メモ入力</h2>
+        <p className="muted small">
+          カルテの「施術内容・所見」「次回へ」を、話してそのまま入力できます（施術中で手が離せない時のため）。
+          <strong>既定はオフです。</strong>
+        </p>
+        <div className="options">
+          <button
+            type="button"
+            className="option"
+            aria-pressed={Boolean(state.settings.voiceInput)}
+            disabled={!voiceAvailable}
+            onClick={() => actions.setSettings({ voiceInput: !state.settings.voiceInput })}
+          >
+            <span className="mark" aria-hidden="true">{state.settings.voiceInput ? '✓' : ''}</span>
+            <span>
+              <strong>音声でメモを入力する</strong>
+              <span className="muted small" style={{ display: 'block' }}>
+                オンにすると、メモ欄に「🎤 音声で入力」ボタンが出ます。
+              </span>
+            </span>
+          </button>
+        </div>
+        {!voiceAvailable && (
+          <p className="notice-inline">
+            このブラウザは音声認識に対応していないため、オンにできません（Chrome・Safari などでお試しください）。
+          </p>
+        )}
+        <p className="notice-inline">{VOICE_PRIVACY_NOTE}</p>
       </div>
 
       <div className="card">

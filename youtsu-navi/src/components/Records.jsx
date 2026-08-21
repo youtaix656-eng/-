@@ -8,6 +8,7 @@ import { LEVELS } from '../lib/triage.js';
 import { licenseById } from '../data/licenses.js';
 import { downloadText } from '../lib/share.js';
 import ShareBox from './ShareBox.jsx';
+import VoiceMemo from './VoiceMemo.jsx';
 
 const LEVEL_FILTERS = [
   { id: 'all', label: 'すべて' },
@@ -45,7 +46,7 @@ function PainTrend({ points }) {
   );
 }
 
-function RecordDetail({ record, records, licenseName, onBack }) {
+function RecordDetail({ record, records, licenseName, settings, onBack }) {
   const [label, setLabel] = useState(record.clientLabel || '');
   const [memo, setMemo] = useState(record.memo || '');
   const [followUp, setFollowUp] = useState(record.followUp || '');
@@ -119,14 +120,22 @@ function RecordDetail({ record, records, licenseName, onBack }) {
         <p className="small muted" style={{ margin: 0 }}>
           お名前そのものや連絡先は入力しないでください。同じ表示名の記録は経過としてまとまります。
         </p>
-        <label className="field">
-          <span className="field-label">施術内容・所見</span>
-          <textarea className="share-text" rows={4} value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="どこに何をしたか、反応はどうだったか" />
-        </label>
-        <label className="field">
-          <span className="field-label">次回へ</span>
-          <textarea className="share-text" rows={3} value={followUp} onChange={(e) => setFollowUp(e.target.value)} placeholder="次回に確認したいこと、宿題" />
-        </label>
+        <VoiceMemo
+          label="施術内容・所見"
+          value={memo}
+          onChange={setMemo}
+          rows={4}
+          placeholder="どこに何をしたか、反応はどうだったか"
+          settings={settings}
+        />
+        <VoiceMemo
+          label="次回へ"
+          value={followUp}
+          onChange={setFollowUp}
+          rows={3}
+          placeholder="次回に確認したいこと、宿題"
+          settings={settings}
+        />
         <button
           type="button"
           className="btn"
@@ -224,7 +233,7 @@ export default function Records({ state, go }) {
   if (current) {
     return (
       <div className="page">
-        <RecordDetail record={current} records={records} licenseName={licenseName} onBack={() => setOpenId(null)} />
+        <RecordDetail record={current} records={records} licenseName={licenseName} settings={state.settings} onBack={() => setOpenId(null)} />
       </div>
     );
   }
