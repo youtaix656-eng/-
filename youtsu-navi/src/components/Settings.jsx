@@ -3,6 +3,9 @@ import { actions } from '../lib/useStore.js';
 import { LICENSES, licenseById } from '../data/licenses.js';
 import { CONSENT_TEXT, CONSENT_VERSION } from '../lib/consent.js';
 import { storageSize } from '../lib/storage.js';
+import { recordsToJson, parseRecordsJson, backupFileName } from '../lib/exporter.js';
+import { downloadText, pickTextFile } from '../lib/share.js';
+import { summarizeRecords } from '../lib/records.js';
 
 const FONT_SCALES = [
   { id: 'm', label: '標準' },
@@ -18,6 +21,27 @@ function formatAt(at) {
 
 export default function Settings({ state }) {
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmKarte, setConfirmKarte] = useState(false);
+  const [ioStatus, setIoStatus] = useState('');
+  const records = state.records || [];
+  const karte = summarizeRecords(records);
+
+  const flash = (msg) => {
+    setIoStatus(msg);
+    setTimeout(() => setIoStatus(''), 4000);
+  };
+
+  const restore = async () => {
+    const picked = await pickTextFile();
+    if (!picked) return;
+    const parsed = parseRecordsJson(picked.text);
+    if (!parsed.ok) {
+      flash(`復元できませんでした：${parsed.error}`);
+      return;
+    }
+    const added = actions.importRecords(parsed.records);
+    flash(`${added}件を取り込みました（同じ記録は新しい方を残しました）。${parsed.error || ''}`);
+  };
   const license = licenseById(state.settings.licenseId);
   const logs = state.consentLog || [];
 
@@ -122,12 +146,58 @@ export default function Settings({ state }) {
       </div>
 
       <div className="card">
+        <h2>カルテのバックアップ</h2>
+        <p className="muted small">
+          カルテ{karte.total}件を1つのファイルとして保存・復元できます。ファイルの保存先は端末の中です
+          （アプリが外部へ送ることはありません）。機種変更の時はこのファイルを新しい端末で読み込んでください。
+        </p>
+        <div className="row" style={{ gap: 8 }}>
+          <button
+            type="button"
+            className="btn slim"
+            disabled={records.length === 0}
+            onClick={() => {
+              downloadText(backupFileName(Date.now()), recordsToJson(records), 'application/json');
+              flash('バックアップを保存しました。');
+            }}
+          >
+            💾 バックアップを保存
+          </button>
+          <button type="button" className="btn slim secondary" onClick={restore}>
+            📂 バックアップから復元
+          </button>
+        </div>
+        {ioStatus && <p className="small" style={{ margin: 0 }}>{ioStatus}</p>}
+        {records.length > 0 && (
+          !confirmKarte ? (
+            <button type="button" className="btn danger slim" onClick={() => setConfirmKarte(true)}>
+              カルテだけをすべて削除
+            </button>
+          ) : (
+            <div className="stack">
+              <p className="small">カルテ{records.length}件を削除します。元に戻せません（設定・同意履歴は残ります）。</p>
+              <div className="row" style={{ flexWrap: 'nowrap' }}>
+                <button type="button" className="btn secondary" onClick={() => setConfirmKarte(false)}>いいえ</button>
+                <button
+                  type="button"
+                  className="btn danger"
+                  onClick={() => { actions.clearRecords(); setConfirmKarte(false); flash('カルテを削除しました。'); }}
+                >
+                  はい、削除する
+                </button>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="card">
         <h2>データ</h2>
         <p className="muted small">
           入力内容・設定・同意履歴はこの端末の中にのみ保存されます（外部送信は行いません）。保存量：約 {storageSize()} バイト。
         </p>
         <p className="muted small">
-          お客様の氏名など個人情報は入力しない設計です。カルテ・履歴管理はPhase 2、クラウド同期は将来のオプション機能として分離しています。
+          お客様の氏名など個人情報は入力しない設計です（カルテは表示名のみ）。クラウド同期は将来のオプション機能として分離しています。
         </p>
         {!confirmReset ? (
           <button type="button" className="btn danger" onClick={() => setConfirmReset(true)}>

@@ -462,3 +462,41 @@ details.acc > *:not(summary) { margin-top: 10px; }
   100% { background: transparent; box-shadow: none; }
 }
 .flash { animation: flash-highlight 2.2s ease-out; border-radius: var(--radius); }
+
+/* ---- カルテ・書き出し ---- */
+.field { display: block; }
+.field + .field { margin-top: 10px; }
+.field-label { display: block; font-size: 0.82rem; font-weight: 700; color: var(--text-sub); margin-bottom: 4px; }
+
+.share-text {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  font-family: inherit;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  resize: vertical;
+}
+.share-text:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.pain-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--text-sub);
+  vertical-align: middle;
+}
+
+/* ペインスケールの推移（外部ライブラリを使わない簡易グラフ） */
+.trend { width: 100%; height: auto; max-height: 120px; }
+.trend-axis { stroke: var(--line); stroke-width: 1; }
+.trend-line { stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.trend-dot { fill: var(--accent); }
+.trend-label { fill: var(--text-sub); font-size: 10px; }

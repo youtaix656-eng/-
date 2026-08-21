@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import { load, save, clear } from './storage.js';
 import { CONSENT_VERSION, makeConsentRecord } from './consent.js';
+import { makeRecord, upsertRecord, removeRecord, normalizeLabel } from './records.js';
 
 export const DEFAULT_STATE = {
   settings: {
@@ -16,6 +17,7 @@ export const DEFAULT_STATE = {
   consentLog: [], // 同意履歴（企画書 改善策 #7）
   lastResult: null, // { at, symptomId, answers, tags }
   draft: null, // 入力途中の内容
+  records: [], // カルテ（Phase 2）。端末内のみ・個人情報は持たない
 };
 
 let state = load(DEFAULT_STATE);
@@ -73,6 +75,45 @@ export const actions = {
   },
   clearResult() {
     set((s) => ({ ...s, lastResult: null }));
+  },
+
+  // ── カルテ（Phase 2）─────────────────────────────
+  /** 評価結果をカルテに保存し、作成した記録を返す */
+  saveRecord(result, extra = {}) {
+    const record = makeRecord(result, extra);
+    set((s) => ({ ...s, records: upsertRecord(s.records || [], record) }));
+    return record;
+  },
+  updateRecord(id, patch) {
+    set((s) => ({
+      ...s,
+      records: (s.records || []).map((r) =>
+        r.id === id
+          ? { ...r, ...patch, clientLabel: patch.clientLabel !== undefined ? normalizeLabel(patch.clientLabel) : r.clientLabel, updatedAt: Date.now() }
+          : r,
+      ),
+    }));
+  },
+  deleteRecord(id) {
+    set((s) => ({ ...s, records: removeRecord(s.records || [], id) }));
+  },
+  /** バックアップの取り込み（同じidは新しい方を残す） */
+  importRecords(incoming = []) {
+    let added = 0;
+    set((s) => {
+      let list = s.records || [];
+      for (const r of incoming) {
+        const exists = list.find((x) => x.id === r.id);
+        if (exists && (exists.updatedAt || 0) >= (r.updatedAt || 0)) continue;
+        list = upsertRecord(list, r);
+        added += 1;
+      }
+      return { ...s, records: list };
+    });
+    return added;
+  },
+  clearRecords() {
+    set((s) => ({ ...s, records: [] }));
   },
   resetAll() {
     clear();

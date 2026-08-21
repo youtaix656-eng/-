@@ -8,6 +8,9 @@ import { precautionsFor } from '../data/precautions.js';
 import { sourcesFor, REVIEW_STATUS } from '../data/sources.js';
 import { licenseById } from '../data/licenses.js';
 import { RESULT_NOTICE } from '../lib/consent.js';
+import { CLIENT_LABEL_MAX } from '../lib/records.js';
+import { homecareText, recordText, formatDate } from '../lib/exporter.js';
+import ShareBox from './ShareBox.jsx';
 
 function Approach({ a }) {
   const out = a.scope.status === 'out';
@@ -134,9 +137,66 @@ function Candidate({ item, rank, licenseId, defaultOpen }) {
   );
 }
 
+
+/** 結果をカルテに保存する（Phase 2）。個人情報は入れない前提の表示名だけを持つ */
+function SaveToKarte({ result, tri, candidates, savedId, onSaved, go }) {
+  const [label, setLabel] = useState('');
+  const top = candidates[0];
+
+  if (savedId) {
+    return (
+      <div className="card">
+        <h3>🗂 カルテに保存しました</h3>
+        <p className="muted small">施術内容のメモや次回への申し送りは、カルテ画面で追記できます。</p>
+        <button type="button" className="btn secondary" onClick={() => go('records')}>カルテを開く</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <h3>🗂 カルテに保存</h3>
+      <p className="muted small">
+        この端末の中にだけ保存されます。<strong>お名前・連絡先は入力しないでください</strong>（表示名だけで管理します）。
+      </p>
+      <label className="field">
+        <span className="field-label">表示名（任意・{CLIENT_LABEL_MAX}文字まで）</span>
+        <input
+          className="search"
+          value={label}
+          maxLength={CLIENT_LABEL_MAX}
+          placeholder="例：A様、田中T"
+          onChange={(e) => setLabel(e.target.value)}
+        />
+      </label>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => {
+          const rec = actions.saveRecord(result, {
+            clientLabel: label,
+            triageLevel: tri.level,
+            topPatternId: top ? top.pattern.id : null,
+            topPatternName: top ? top.pattern.name : '',
+            topPercent: top ? top.percent : null,
+            pain: typeof result.answers?.pain === 'number' ? result.answers.pain : null,
+            seed: Math.floor(performance.now()),
+          });
+          onSaved(rec.id);
+        }}
+      >
+        カルテに保存する
+      </button>
+    </div>
+  );
+}
+
 /** 結果画面 — 安全トリアージ → 推定パターン → 施術方針／ホームケア の順に出す */
 export default function Result({ state, symptom, go }) {
   const result = state.lastResult;
+  const [savedId, setSavedId] = useState(null);
+  const [sheet, setSheet] = useState(null); // 'client' | 'record'
+  const [includePatterns, setIncludePatterns] = useState(false);
   const licenseId = state.settings.licenseId;
   const license = licenseById(licenseId);
 
@@ -284,6 +344,54 @@ export default function Result({ state, symptom, go }) {
           ))}
         </dl>
       </details>
+
+      <SaveToKarte
+        result={result}
+        tri={tri}
+        candidates={candidates}
+        savedId={savedId}
+        onSaved={setSavedId}
+        go={go}
+      />
+
+      <div className="card">
+        <h3>📤 書き出し・共有</h3>
+        <div className="row" style={{ gap: 8 }}>
+          <button type="button" className={`btn slim${sheet === 'client' ? '' : ' secondary'}`} onClick={() => setSheet(sheet === 'client' ? null : 'client')}>
+            🧑 お客様へ渡す
+          </button>
+          <button type="button" className={`btn slim${sheet === 'record' ? '' : ' secondary'}`} onClick={() => setSheet(sheet === 'record' ? null : 'record')}>
+            📝 施術者の控え
+          </button>
+        </div>
+        {sheet === 'client' && (
+          <div className="stack">
+            <button type="button" className="option" aria-pressed={includePatterns} onClick={() => setIncludePatterns((v) => !v)}>
+              <span className="mark" aria-hidden="true">{includePatterns ? '✓' : ''}</span>
+              <span>
+                推定パターン名も含める
+                <span className="muted small" style={{ display: 'block' }}>
+                  既定では含めません（お客様に診断と受け取られるのを避けるため）
+                </span>
+              </span>
+            </button>
+            <ShareBox
+              title="セルフケアのメモ"
+              text={homecareText({ ...result, clientLabel: '', memo: '', followUp: '' }, { includePatterns })}
+              filename={`selfcare-${formatDate(result.at).replace(/\//g, '')}.txt`}
+              note="お客様にお渡しする内容です。渡す前に必ず目を通してください。"
+            />
+          </div>
+        )}
+        {sheet === 'record' && (
+          <ShareBox
+            title="施術記録"
+            text={recordText({ ...result, clientLabel: '', memo: '', followUp: '' }, { licenseName: license ? license.name : '' })}
+            filename={`karte-${formatDate(result.at).replace(/\//g, '')}.txt`}
+            note="施術者用の控えです。入力内容・トリアージ・候補まで含みます。"
+          />
+        )}
+      </div>
 
       <div className="card">
         <p className="small muted" style={{ margin: 0 }}>

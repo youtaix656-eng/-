@@ -2,11 +2,14 @@ import React from 'react';
 import { actions } from '../lib/useStore.js';
 import { RESULT_NOTICE } from '../lib/consent.js';
 import { TOC_ENTRIES, TOC_CATEGORIES } from '../data/toc.js';
+import { summarizeRecords } from '../lib/records.js';
+import { formatDate } from '../lib/exporter.js';
 
 /** ホーム — 施術中に迷わないよう、入口は「新しく評価する」1つに絞る */
 export default function Home({ state, symptom, go }) {
   const hasDraft = Boolean(state.draft && state.draft.symptomId === symptom.id);
   const hasResult = Boolean(state.lastResult);
+  const karte = summarizeRecords(state.records || []);
 
   return (
     <div className="page">
@@ -50,6 +53,24 @@ export default function Home({ state, symptom, go }) {
         </ul>
         <button type="button" className="btn secondary" onClick={() => go('ref')}>
           レッドフラグ一覧を見る
+        </button>
+      </div>
+
+      <div className="card">
+        <h3>🗂 カルテ（施術記録）</h3>
+        {karte.total > 0 ? (
+          <p className="muted small">
+            {karte.total}件の記録／表示名 {karte.clients}人
+            {karte.lastAt ? `／最終 ${formatDate(karte.lastAt)}` : ''}
+          </p>
+        ) : (
+          <p className="muted small">
+            評価の結果を端末内に保存し、次回の施術で前回との比較（ペインスケールの推移など）ができます。
+            お名前・連絡先は入力しない設計です。
+          </p>
+        )}
+        <button type="button" className="btn secondary" onClick={() => go('records')}>
+          {karte.total > 0 ? 'カルテを開く' : 'カルテについて見る'}
         </button>
       </div>
 
