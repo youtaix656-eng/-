@@ -59,7 +59,7 @@ export const PRECAUTIONS = [
   {
     id: 'osteoporosis',
     reading: 'こつそしょうしょうすてろいどちょうきしようのかた',
-    tags: ['history:osteoporosis', 'history:steroid'],
+    tags: ['history:osteoporosis', 'history:steroid', 'meds:steroid'],
     title: '骨粗鬆症・ステロイド長期使用の方',
     tone: 'high',
     contraindications: ['椎体・肋骨への圧迫、体幹の強い回旋・伸展を加えない。', '軽微な外力でも骨折が起こり得るため、矯正操作は行わない。'],
@@ -69,8 +69,8 @@ export const PRECAUTIONS = [
   {
     id: 'anticoagulant',
     reading: 'じょうみゃくけっせんしょうのきおうがあるかた',
-    tags: ['history:dvt'],
-    title: '静脈血栓症の既往がある方',
+    tags: ['history:dvt', 'meds:anticoagulant'],
+    title: '静脈血栓症の既往・抗凝固薬を使用中の方',
     tone: 'high',
     contraindications: ['下肢への強い圧迫・揉捏は行わない。', '片側の下腿の腫脹・熱感・疼痛がある場合は施術を行わず受診をすすめる。'],
     recommended: ['服薬状況（抗凝固薬）を確認する。内出血しやすい点に留意する。'],
@@ -95,6 +95,22 @@ export const PRECAUTIONS = [
     contraindications: ['成長期の腰痛は分離症など器質的疾患の割合が上がる。2週間以上続く運動時痛は受診をすすめる。'],
     recommended: ['保護者への説明と同意を得る。', '練習量・競技動作の聞き取りを行う。'],
     stopSigns: ['安静時痛', '夜間痛', '進行する神経症状'],
+  },
+  {
+    id: 'diagnosed',
+    reading: 'しんだんをうけているかた',
+    tags: ['care:diagnosed', 'care:post_surgery'],
+    title: '医療機関で診断を受けている方',
+    tone: 'mid',
+    contraindications: [
+      '医師の診断・指示と異なる説明をしない（診断名の否定・言い換えは行わない）。',
+      '手術部位への直接の強い刺激は避ける。',
+    ],
+    recommended: [
+      '診断名と、医師から受けている指示（運動の可否・禁止事項）を確認してから方針を決める。',
+      '施術で変化がない場合は、自己判断で続けず主治医への相談をすすめる。',
+    ],
+    stopSigns: ['医師から止められている動作・部位', '診断時より症状が悪化している'],
   },
 ];
 

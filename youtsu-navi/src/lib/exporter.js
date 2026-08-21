@@ -11,6 +11,7 @@ import { triage } from './triage.js';
 import { inferPatterns } from './inference.js';
 import { summarize } from './tags.js';
 import { precautionsFor } from '../data/precautions.js';
+import { chronicityRisk, riskSummaryText } from './yellowFlags.js';
 import { symptomById } from '../data/symptoms.js';
 
 export const BACKUP_VERSION = 1;
@@ -36,6 +37,7 @@ export function analyze(record) {
     triage: triage(tags, symptom.redFlags),
     inference: inferPatterns(tags, symptom.patterns),
     precautions: precautionsFor(tags),
+    risk: chronicityRisk(tags),
     rows: summarize(symptom, record.answers || {}),
   };
 }
@@ -100,7 +102,7 @@ export function homecareText(record, options = {}) {
 /** 施術者の控え（カルテの書き出し） */
 export function recordText(record, options = {}) {
   const { licenseName = '' } = options;
-  const { triage: tri, inference, precautions, rows } = analyze(record);
+  const { triage: tri, inference, precautions, rows, risk } = analyze(record);
   const lines = [];
   lines.push('【腰痛ナビ 施術記録】');
   lines.push(`日時：${formatDateTime(record.at)}`);
@@ -123,6 +125,12 @@ export function recordText(record, options = {}) {
     lines.push('・絞り込めませんでした');
   }
   lines.push('');
+
+  if (risk.hits.length) {
+    lines.push(`■ 慢性化のリスク：${risk.info.label}`);
+    lines.push(riskSummaryText(risk));
+    lines.push('');
+  }
 
   if (precautions.length) {
     lines.push('■ 要配慮');

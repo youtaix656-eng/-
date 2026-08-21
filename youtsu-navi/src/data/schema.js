@@ -37,6 +37,10 @@ export const TAG_GROUPS = {
   special: '要配慮対象',
   sys: '全身症状',
   work: '生活・仕事',
+  care: '受診・検査の状況',
+  meds: '服薬',
+  impact: '生活への支障',
+  yellow: '慢性化のリスク（イエローフラッグ）',
 };
 
 /** 使用してよいタグの一覧（タイプミス検出用。validateSymptom が参照する） */
@@ -52,7 +56,11 @@ export const TAG_VOCABULARY = {
   history: ['cancer', 'steroid', 'osteoporosis', 'dvt', 'spine_surgery', 'disc_herniation', 'fracture', 'diabetes', 'infection_recent', 'none'],
   special: ['pregnancy', 'postpartum', 'elderly', 'minor', 'athlete', 'none'],
   sys: ['fever', 'weight_loss', 'night_pain', 'rest_pain', 'bladder_bowel', 'saddle_anesthesia', 'abdominal_pulsatile', 'malaise', 'progressive_weakness', 'none'],
-  work: ['desk', 'standing_work', 'heavy_labor', 'driving_long', 'childcare', 'none'],
+  work: ['desk', 'standing_work', 'heavy_labor', 'driving_long', 'childcare', 'smartphone', 'squatting', 'sports', 'none'],
+  care: ['none', 'seen_no_image', 'imaged', 'diagnosed', 'post_surgery', 'other_clinic'],
+  meds: ['analgesic_effective', 'analgesic_ineffective', 'anticoagulant', 'steroid', 'osteoporosis_med', 'none'],
+  impact: ['off_work', 'restricted_work', 'daily_limited', 'sleep_disturbed', 'none'],
+  yellow: ['fear_avoidance', 'catastrophizing', 'work_dissatisfaction', 'rest_seeking', 'low_mood', 'none'],
 };
 
 export const FIELD_TYPES = ['single', 'multi', 'scale', 'bool'];

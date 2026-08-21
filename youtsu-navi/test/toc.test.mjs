@@ -100,8 +100,8 @@ test('カテゴリの一覧は目次の全項目を覆う', () => {
   for (const e of TOC_ENTRIES) assert.ok(known.has(e.category));
 });
 
-test('疾患カード129件を含めても、目次のタイトルは全176件が一意', () => {
-  assert.equal(TOC_ENTRIES.length, 176);
+test('疾患カード129件を含めても、目次のタイトルは全178件が一意', () => {
+  assert.equal(TOC_ENTRIES.length, 178);
   const titles = TOC_ENTRIES.map((e) => e.title);
   assert.equal(new Set(titles).size, titles.length);
 });

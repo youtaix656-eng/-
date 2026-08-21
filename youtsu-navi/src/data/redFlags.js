@@ -96,7 +96,7 @@ export const LOW_BACK_RED_FLAGS = [
     label: 'がん既往、長期ステロイド使用、骨粗鬆症、静脈血栓症の既往',
     suspect: '病的骨折、圧迫骨折、血栓症',
     detail: '骨粗鬆症・ステロイド使用では、軽微な外力でも椎体骨折が起こり得ます。',
-    tags: ['history:cancer', 'history:steroid', 'history:osteoporosis', 'history:dvt'],
+    tags: ['history:cancer', 'history:steroid', 'history:osteoporosis', 'history:dvt', 'meds:steroid', 'meds:anticoagulant'],
     sourceIds: ['downie_bmj2013', 'jpn_lbp_gl2019'],
   },
   {
@@ -123,5 +123,17 @@ export const LOW_BACK_RED_FLAGS = [
     detail: '発熱を伴う場合は特に注意してください。',
     tags: ['history:infection_recent'],
     sourceIds: ['downie_bmj2013'],
+  },
+  {
+    id: 'no_improvement',
+    tocTitle: '保存療法で改善しない',
+    reading: 'ほぞんりょうほうでかいぜんしない',
+    category: '経過',
+    severity: 'caution',
+    label: '鎮痛薬や1か月の保存療法で改善しない',
+    suspect: '器質的疾患の見落とし（腫瘍・感染・炎症性疾患など）',
+    detail: '単独では判断の決め手になりませんが、経過が変わらない場合は医療機関での再評価をすすめてください。',
+    tags: ['meds:analgesic_ineffective'],
+    sourceIds: ['downie_bmj2013', 'jpn_lbp_gl2019'],
   },
 ];

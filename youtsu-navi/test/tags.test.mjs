@@ -8,6 +8,8 @@ const answers = {
   history: ['none'],
   special: ['none'],
   episode: 'first',
+  care: 'none',
+  meds: ['none'],
   region: ['center', 'side'],
   quality: ['dull'],
   onset: 'sudden',
@@ -17,6 +19,8 @@ const answers = {
   relief: ['rest', 'heat'],
   neuro: ['none'],
   work: ['heavy'],
+  impact: ['none'],
+  yellow: ['none'],
   pain: 6,
 };
 

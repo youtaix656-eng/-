@@ -5,6 +5,7 @@ import { inferPatterns, CONFIDENCE_LABEL } from '../lib/inference.js';
 import { splitByScope } from '../lib/scope.js';
 import { summarize } from '../lib/tags.js';
 import { precautionsFor } from '../data/precautions.js';
+import { chronicityRisk, riskSummaryText } from '../lib/yellowFlags.js';
 import { sourcesFor, REVIEW_STATUS } from '../data/sources.js';
 import { licenseById } from '../data/licenses.js';
 import { RESULT_NOTICE } from '../lib/consent.js';
@@ -227,6 +228,7 @@ export default function Result({ state, symptom, go }) {
   const treatable = canTreat(tri.level);
   const { candidates, others, confidence, confidenceNote } = inferPatterns(tags, symptom.patterns);
   const cares = precautionsFor(tags);
+  const risk = chronicityRisk(tags);
   const rows = summarize(symptom, result.answers || {});
 
   return (
@@ -301,7 +303,31 @@ export default function Result({ state, symptom, go }) {
         </div>
       )}
 
-      {/* 3. 推定パターン */}
+      {/* 3. 慢性化リスク（イエローフラッグ）— 該当がある時だけ出す */}
+      {risk.hits.length > 0 && (
+        <div className="card">
+          <h3>🟡 慢性化のリスク：{risk.info.label}</h3>
+          <p className="muted small" style={{ margin: 0 }}>
+            レッドフラグ（受診の判断）とは別に、施術だけでは改善しにくいことを示す手がかりです。
+            お客様を責めるためではなく、伝え方と生活の組み立てを選ぶために使ってください。
+          </p>
+          <p className="notice-inline">{riskSummaryText(risk)}</p>
+          <div className="stack">
+            {risk.hits.map((h) => (
+              <details className="acc" key={h.id}>
+                <summary>{h.title}</summary>
+                <p className="small" style={{ margin: 0 }}>{h.detail}</p>
+                <div>
+                  <p className="section-title">関わり方</p>
+                  <p className="small" style={{ margin: 0 }}>{h.advice}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. 推定パターン */}
       <div className="card">
         <h3>推定される原因パターン</h3>
         <p className="muted small">
@@ -332,7 +358,7 @@ export default function Result({ state, symptom, go }) {
         )}
       </div>
 
-      {/* 4. 入力内容の確認 */}
+      {/* 5. 入力内容の確認 */}
       <details className="acc">
         <summary>入力内容を確認する</summary>
         <dl className="kv">

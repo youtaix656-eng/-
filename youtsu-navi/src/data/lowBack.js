@@ -3,6 +3,7 @@
 // 他症状（肩こり・膝痛など）を追加する時は、このファイルと同じ形で
 // src/data/<症状>.js を作り symptoms.js に登録する。ロジック（inference / triage）は共通。
 
+import { COMMON_SAFETY_FIELDS, COMMON_LIFE_FIELDS } from './commonFields.js';
 import { LOW_BACK_PATTERNS } from './patterns.js';
 import { LOW_BACK_RED_FLAGS } from './redFlags.js';
 
@@ -85,6 +86,7 @@ const FIELDS = [
       { value: 'repeat', label: '以前にも同じような腰痛がある', tags: ['duration:recurrent'] },
     ],
   },
+  ...COMMON_SAFETY_FIELDS,
   {
     id: 'region',
     step: 'where',
@@ -229,6 +231,7 @@ const FIELDS = [
       { value: 'none', label: '特になし', tags: ['work:none'], exclusive: true },
     ],
   },
+  ...COMMON_LIFE_FIELDS,
   {
     id: 'pain',
     step: 'pain',
