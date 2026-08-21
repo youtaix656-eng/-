@@ -212,6 +212,63 @@ export default function Roadmap({ store, onNavigate }) {
         </div>
       </details>
 
+      <div className="section-label">🎓 レベル別：問題演習の進め方</div>
+      <details className="card">
+        <summary style={{ fontWeight: 700, cursor: 'pointer' }}>
+          初級者・中級者・上級者で、使う機能をどう変えるか
+        </summary>
+        <div style={{ marginTop: 12 }}>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            レベルが上がるほど「広く浅く」から「狭く深く」に絞っていくのが基本です。
+          </p>
+
+          <div style={{ marginTop: 14 }}>
+            <b>🔰 初級者（まだ全体像がない・正答率が低い時期）</b>
+            <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：広く浅く「知ってる/知らない」を仕分ける</div>
+            <ul style={{ marginTop: 4 }}>
+              <li><button className="rm-link" onClick={() => onNavigate('quiz')}>一問一答</button>：科目・ジャンル絞り込みなし「すべて」から手当たり次第に</li>
+              <li><button className="rm-link" onClick={() => onNavigate('audio')}>⚡高速回転モード</button>（音声学習内）：3秒想起→答え、をサクサク周回</li>
+              <li><button className="rm-link" onClick={() => onNavigate('toc')}>目次</button>／<button className="rm-link" onClick={() => onNavigate('mindmap')}>マインドマップ</button>：知らない科目だけ10分ほど眺めて地図を掴む</li>
+              <li><button className="rm-link" onClick={() => onNavigate('flashcards')}>フラッシュカード</button>：経穴など視覚的に覚えやすいものから</li>
+              <li><button className="rm-link" onClick={() => onNavigate('coverage')}>網羅マップ</button>：手つかずの科目を把握するだけでOK（今埋めようとしなくていい）</li>
+              <li>誤答理由の分析やリーチ管理はまだ気にしなくていい。間違いだらけで当然の時期</li>
+            </ul>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <b>📘 中級者（正答率が上がり、間違いパターンが見えてきた時期）</b>
+            <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：弱点を可視化して、そこだけ繰り返す</div>
+            <ul style={{ marginTop: 4 }}>
+              <li><button className="rm-link" onClick={() => onNavigate('review')}>復習</button>が主戦場に。SRSが出す問題を優先的に解く</li>
+              <li>誤答理由（勘違い／知識不足／ケアレス）を記録し始める → 弱点パターンが見えてくる</li>
+              <li>リーチ（8回誤答）バッジの付いた問題を意識的に潰す</li>
+              <li><button className="rm-link" onClick={() => onNavigate('dashboard')}>弱点分析</button>／<button className="rm-link" onClick={() => onNavigate('analytics')}>分析</button>：弱点クラスタ・忘却予測でテーマを把握</li>
+              <li><button className="rm-link" onClick={() => onNavigate('mindmap')}>まぎらわしい対比</button>で紛らわしい選択肢を集中的に潰す</li>
+              <li><button className="rm-link" onClick={() => onNavigate('choicequiz')}>4択問題</button>で本番形式（選択肢を選ぶ）に慣れる</li>
+              <li><button className="rm-link" onClick={() => onNavigate('connect')}>連結学習</button>で知識を「点」から「線」につなぐ</li>
+              <li>「今日のおすすめ」バナーに従い、新規:復習の比率を自動調整に任せる</li>
+              <li><button className="rm-link" onClick={() => onNavigate('session')}>学習（3分の2バッファ術）</button>で時間を計画的に配分（基礎2:バッファ1）</li>
+            </ul>
+          </div>
+
+          <div style={{ marginTop: 14, marginBottom: 0 }}>
+            <b>🎯 上級者（合格前提・直前期）</b>
+            <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：本番シミュレーションと穴の最終確認</div>
+            <ul style={{ marginTop: 4, marginBottom: 0 }}>
+              <li><button className="rm-link" onClick={() => onNavigate('exam')}>模試（午前/午後）</button>：本番同形式・時間制限ありを週1で</li>
+              <li><button className="rm-link" onClick={() => onNavigate('exam')}>模試「苦手な問題」</button>：正答率データから自動抽出された弱点だけに演習</li>
+              <li><button className="rm-link" onClick={() => onNavigate('exam')}>模試「選択式」</button>：科目・ジャンル・キーワードでピンポイント演習</li>
+              <li><button className="rm-link" onClick={() => onNavigate('analytics')}>分析・攻略率・合格診断</button>：合格ラインまでの距離を定期チェック</li>
+              <li>復習は<button className="rm-link" onClick={() => onNavigate('review')}>△✕（間違えた問題）</button>だけに絞る（新規はストップ）</li>
+              <li><button className="rm-link" onClick={() => onNavigate('pasttrends')}>鍼灸過去問題の傾向と対策</button>：頻出テーマ・キーワードの最終チェック</li>
+              <li><button className="rm-link" onClick={() => onNavigate('numbers')}>数値の棚卸し</button>：毎年変わる統計数値の最終確認</li>
+              <li><button className="rm-link" onClick={() => onNavigate('coverage')}>網羅マップ</button>：手薄科目が残っていないか最終確認</li>
+              <li><button className="rm-link" onClick={() => onNavigate('audio')}>音声学習「今日の連結」「弱点読み」</button>：スキマ時間も総仕上げに</li>
+            </ul>
+          </div>
+        </div>
+      </details>
+
       <div className="section-label">🧭 全期間つらぬく心得</div>
       <div className="rm-dd card">
         <div className="rm-do">
