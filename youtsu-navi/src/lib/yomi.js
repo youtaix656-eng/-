@@ -121,15 +121,23 @@ export function buildKanaIndex(items = []) {
   const buckets = new Map();
   for (const item of items) {
     const info = readingInfo(item.title, item.reading);
-    const list = buckets.get(info.group) || [];
-    list.push({ ...item, ...info });
-    buckets.set(info.group, list);
+    // sortKey は「①②③…」のように表示順が意味を持つ項目のための並べ替え用の上書き。
+    // 行（あ〜ん / A〜Z）の振り分けは常に reading で決まる。
+    const key = item.sortKey || info.key;
+    list_push(buckets, info.group, { ...item, ...info, key });
+  }
+
+  function list_push(map, group, value) {
+    const list = map.get(group) || [];
+    list.push(value);
+    map.set(group, list);
   }
   const sections = [];
   for (const group of GROUP_ORDER) {
     const list = buckets.get(group);
     if (!list || list.length === 0) continue;
     list.sort((a, b) => a.key.localeCompare(b.key, 'ja') || a.title.localeCompare(b.title, 'ja'));
+    // 何行に入るかは読みで決まるが、行の中では sortKey が優先される
     sections.push({ group, items: list });
   }
   return sections;

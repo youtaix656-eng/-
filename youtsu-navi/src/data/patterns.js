@@ -228,8 +228,9 @@ export const LOW_BACK_PATTERNS = [
   },
   {
     id: 'piriformis',
-    tocTitle: '梨状筋症候群',
-    reading: 'りじょうきんしょうこうぐん',
+    // 疾患カード「梨状筋症候群」と目次で重複しないよう、パターン側は範囲の広い正式名を使う
+    tocTitle: '殿部由来の下肢症状（梨状筋症候群）',
+    reading: 'でんぶゆらいのかししょうじょう',
     name: '梨状筋症候群など殿部由来の下肢症状',
     short: '殿部の圧痛＋座位で悪化',
     description:

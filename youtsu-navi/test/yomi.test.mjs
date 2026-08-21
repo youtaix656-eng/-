@@ -82,3 +82,15 @@ test('buildKanaIndex: あ〜わ → A〜Z の順に並び、空のセクショ�
 test('buildKanaIndex: 空配列でも落ちない', () => {
   assert.deepEqual(buildKanaIndex([]), []);
 });
+
+test('sortKey を与えると、行の中の並び順だけを上書きできる（振り分けは読みのまま）', () => {
+  const items = [
+    { title: '項目③', reading: 'れっどふらっぐさん', sortKey: 'れっどふらっぐ03' },
+    { title: '項目①', reading: 'れっどふらっぐいち', sortKey: 'れっどふらっぐ01' },
+    { title: '項目②', reading: 'れっどふらっぐに', sortKey: 'れっどふらっぐ02' },
+  ];
+  const sections = buildKanaIndex(items);
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].group, 'ら'); // 振り分けは reading（れ→ら行）のまま
+  assert.deepEqual(sections[0].items.map((i) => i.title), ['項目①', '項目②', '項目③']);
+});

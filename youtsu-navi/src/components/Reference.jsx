@@ -5,8 +5,11 @@ import { LICENSES, MODALITY_META, MODALITIES, licensesForModality } from '../dat
 import { SOURCES, REVIEW_STATUS, reviewProgress } from '../data/sources.js';
 import { PLANNED_SYMPTOMS } from '../data/symptoms.js';
 import { splitByScope } from '../lib/scope.js';
+import { DISEASES, DISEASE_GROUPS, DISEASE_ACTIONS, diseasesByGroup } from '../data/diseases.js';
+import { sourcesFor } from '../data/sources.js';
 
 const TABS = [
+  { id: 'disease', label: '疾患・原因' },
   { id: 'flags', label: 'レッドフラグ' },
   { id: 'patterns', label: '原因パターン' },
   { id: 'care', label: '要配慮対象' },
@@ -46,6 +49,12 @@ export default function Reference({ state, symptom, focus }) {
     return () => clearTimeout(timer);
   }, [tab, focus]);
 
+  // 疾患カードから、対応する推定パターン・レッドフラグへ飛ぶ
+  const jump = (nextTab, anchor) => {
+    pending.current = anchor;
+    setTab(nextTab);
+  };
+
   return (
     <div className="page">
       <div className="row" role="tablist" style={{ gap: 8 }}>
@@ -62,6 +71,94 @@ export default function Reference({ state, symptom, focus }) {
           </button>
         ))}
       </div>
+
+
+      {tab === 'disease' && (
+        <div className="stack">
+          <div className="card">
+            <h2>腰痛の疾患・原因（全{DISEASES.length}項目）</h2>
+            <p className="muted small">
+              鑑別と受診判断のための参考知識です。<strong>施術者は診断を行いません</strong>（医師法第17条）。
+              お客様に病名を伝えるためではなく、「この特徴があれば受診をすすめる」を判断するために使ってください。
+            </p>
+            <div className="chips">
+              {DISEASE_GROUPS.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  className="chip-btn"
+                  onClick={() => {
+                    const el = document.getElementById(`disease-group-${g.id}`);
+                    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' });
+                  }}
+                >
+                  {g.icon} {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {diseasesByGroup().map(({ group, items }) => (
+            <div className="stack" key={group.id} id={`disease-group-${group.id}`} style={{ scrollMarginTop: 88 }}>
+              <h3 className="toc-head">
+                {group.icon} {group.label}
+                <span>{items.length}件</span>
+              </h3>
+              {items.map((d) => {
+                const act = DISEASE_ACTIONS[d.action];
+                const pattern = d.patternId ? symptom.patterns.find((p) => p.id === d.patternId) : null;
+                const flag = d.flagId ? symptom.redFlags.find((f) => f.id === d.flagId) : null;
+                const refs = sourcesFor(d.sourceIds || []);
+                return (
+                  <details className="acc" key={d.id} id={`toc-disease-${d.id}`}>
+                    <summary>
+                      <span className={`sev-tag ${d.action === 'treat' ? 'ok' : d.action === 'caution' ? 'caution' : d.action === 'refer' ? 'urgent' : 'emergency'}`}>
+                        {act.short}
+                      </span>
+                      {d.title}
+                    </summary>
+                    <p style={{ margin: 0 }}>{d.summary}</p>
+                    <div>
+                      <p className="section-title">見分けるポイント</p>
+                      <ul className="list tight">
+                        {d.signs.map((sgn) => (
+                          <li key={sgn}>{sgn}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className={`alert ${act.tone}`}>
+                      <strong>{act.label}</strong>
+                      <p className="alert-body small" style={{ margin: '4px 0 0' }}>{d.actionNote}</p>
+                    </div>
+                    {(pattern || flag) && (
+                      <div>
+                        <p className="section-title">関連</p>
+                        <div className="chips">
+                          {pattern && (
+                            <button type="button" className="chip-btn" onClick={() => jump('patterns', `toc-pattern-${pattern.id}`)}>
+                              🧭 推定パターン「{pattern.tocTitle || pattern.name}」
+                            </button>
+                          )}
+                          {flag && (
+                            <button type="button" className="chip-btn" onClick={() => jump('flags', `toc-flag-${flag.id}`)}>
+                              🚩 レッドフラグ「{flag.tocTitle || flag.category}」
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {refs.length > 0 && (
+                      <p className="small muted" style={{ margin: 0 }}>
+                        参考：{refs.map((r) => r.tocTitle || r.title).join('／')}
+                      </p>
+                    )}
+                  </details>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
 
       {tab === 'flags' && (
         <div className="stack">

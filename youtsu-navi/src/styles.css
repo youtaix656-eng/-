@@ -237,6 +237,7 @@ body {
 .sev-tag.emergency { color: var(--danger); }
 .sev-tag.urgent { color: var(--warn); }
 .sev-tag.caution { color: var(--accent); }
+.sev-tag.ok { color: var(--ok); }
 
 /* ---- 候補パターン ---- */
 .candidate { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); overflow: hidden; }

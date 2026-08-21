@@ -13,10 +13,12 @@ import { LOW_BACK_PATTERNS } from './patterns.js';
 import { PRECAUTIONS } from './precautions.js';
 import { LICENSES, MODALITY_META, licensesForModality } from './licenses.js';
 import { SOURCES } from './sources.js';
+import { DISEASES } from './diseases.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 
 /** 目次のカテゴリ（表示順・色分けに使う） */
 export const TOC_CATEGORIES = [
+  { id: 'disease', label: '疾患・原因', icon: '🩻', tab: 'disease' },
   { id: 'flag', label: 'レッドフラグ', icon: '🚩', tab: 'flags' },
   { id: 'pattern', label: '原因パターン', icon: '🧭', tab: 'patterns' },
   { id: 'care', label: '要配慮対象', icon: '🤲', tab: 'care' },
@@ -27,9 +29,31 @@ export const TOC_CATEGORIES = [
 
 export const TOC_CATEGORY_MAP = Object.fromEntries(TOC_CATEGORIES.map((c) => [c.id, c]));
 
+/** 疾患カードの一言（施術可否の目安）*/
+const DISEASE_ACTION_SUB = {
+  emergency: '⛔ 施術せず直ちに受診',
+  refer: '🚑 施術を見合わせ受診',
+  caution: '⚠ 注意して施術',
+  treat: '✅ 施術の対象になり得る',
+};
+
 /** 目次に載せる全項目 */
 export function buildTocEntries() {
   const entries = [];
+
+  // 疾患・原因カード（鑑別の参考知識）
+  for (const d of DISEASES) {
+    entries.push({
+      id: `disease-${d.id}`,
+      category: 'disease',
+      title: d.title,
+      reading: d.reading || '',
+      sortKey: d.sortKey || '',
+      sub: DISEASE_ACTION_SUB[d.action] || '',
+      action: d.action,
+      anchor: `toc-disease-${d.id}`,
+    });
+  }
 
   for (const f of LOW_BACK_RED_FLAGS) {
     entries.push({
