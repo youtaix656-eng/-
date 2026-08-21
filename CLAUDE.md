@@ -4,6 +4,20 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 （`src/lib/storage.js`、localStorage フォールバック）。ブラウザのみで動作。
 公開先：https://youtaix656-eng.github.io/-/
 
+## このリポジトリに同梱されている他アプリ（鍼灸アプリ本体とは独立）
+main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物にまとめて配置する。
+それぞれ独立した package.json / ビルドを持つので、**鍼灸アプリ側の作業では触らない**。
+| ディレクトリ | 公開パス | 内容 |
+|---|---|---|
+| `rirakuru-app/` | `/rirakuru` | るるくる セラピスト業務マニュアル（Next.js） |
+| `sleep-tracker/` | `/sleep-tracker` | 分割睡眠トラッカー（Vite + TS） |
+| `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向け腰痛アセスメント支援。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
+
+腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
+医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、
+同意文を変えたら `CONSENT_VERSION` を上げる。テストは `node --test` の再帰探索でルートの
+`npm test` からも実行される（新しいテストは `youtsu-navi/test/*.test.mjs` に置く）。
+
 ## デプロイ
 - `.github/workflows/deploy.yml` は **main への push** でビルド＆GitHub Pages 公開。
 - 作業は `claude/acupuncture-exam-app-7p4zdh` で行い、コミット後に

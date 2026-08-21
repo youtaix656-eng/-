@@ -62,11 +62,26 @@ jobs:
         run: npm run build
         working-directory: sleep-tracker
 
+      # 腰痛ナビ（Vite + React）を /youtsu-navi サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (腰痛ナビ)
+        run: npm ci
+        working-directory: youtsu-navi
+
+      - name: Test (腰痛ナビ)
+        run: npm test
+        working-directory: youtsu-navi
+
+      - name: Build (腰痛ナビ / /youtsu-navi)
+        run: npm run build
+        working-directory: youtsu-navi
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
+          cp -r youtsu-navi/dist dist/youtsu-navi
           touch dist/.nojekyll
 
       - name: Upload artifact
