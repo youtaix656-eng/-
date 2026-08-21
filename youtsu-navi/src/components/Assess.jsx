@@ -126,7 +126,7 @@ export default function Assess({ state, symptom, go }) {
       </div>
       <div>
         <p className="section-title">
-          ステップ {stepIndex + 1} / {steps.length}
+          {symptom.icon} {symptom.name}／ステップ {stepIndex + 1} / {steps.length}
         </p>
         <h2 style={{ margin: '4px 0 6px' }}>{step.title}</h2>
         <p className="muted small">{step.lead}</p>

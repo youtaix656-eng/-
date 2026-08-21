@@ -2,6 +2,7 @@ import React from 'react';
 import { actions } from '../lib/useStore.js';
 import { RESULT_NOTICE } from '../lib/consent.js';
 import { TOC_ENTRIES, TOC_CATEGORIES } from '../data/toc.js';
+import { SYMPTOMS } from '../data/symptoms.js';
 import { summarizeRecords } from '../lib/records.js';
 import { formatDate } from '../lib/exporter.js';
 
@@ -14,10 +15,30 @@ export default function Home({ state, symptom, go }) {
   return (
     <div className="page">
       <div className="card">
-        <h2>{symptom.name}の評価</h2>
+        <h2>{symptom.icon} {symptom.name}の評価</h2>
         <p className="muted">
           お客様の状態を選んでいくと、安全トリアージ（レッドフラグ）と、考えられる原因パターン・施術方針の候補を表示します。
         </p>
+        <div>
+          <p className="section-title">評価する症状</p>
+          <div className="chips">
+            {SYMPTOMS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`chip-btn${s.id === symptom.id ? ' on' : ''}`}
+                aria-pressed={s.id === symptom.id}
+                onClick={() => {
+                  if (s.id === symptom.id) return;
+                  actions.setSettings({ symptomId: s.id });
+                  actions.clearDraft();
+                }}
+              >
+                {s.icon} {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           type="button"
           className="btn"

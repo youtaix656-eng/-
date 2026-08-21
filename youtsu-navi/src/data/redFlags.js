@@ -14,31 +14,11 @@ export const SEVERITY = {
   caution: { label: '要注意', order: 1, color: '#1a5fb4', action: '施術は可能ですが、強度・体位・時間を制限し、変化があれば中止してください。' },
 };
 
-export const LOW_BACK_RED_FLAGS = [
-  {
-    id: 'cauda_equina',
-    tocTitle: '膀胱直腸障害',
-    reading: 'ぼうこうちょくちょうしょうがい',
-    category: '膀胱直腸障害',
-    severity: 'emergency',
-    label: '排尿困難・失禁、会陰部（サドル領域）のしびれ',
-    suspect: '馬尾症候群（緊急性が高い）',
-    detail: '発症からの時間が予後に影響するとされ、疑った時点で施術は行わず受診をすすめます。',
-    tags: ['sys:bladder_bowel', 'sys:saddle_anesthesia'],
-    sourceIds: ['jpn_lbp_gl2019', 'nice_ng59'],
-  },
-  {
-    id: 'aaa',
-    tocTitle: '拍動性の腹部腫瘤',
-    reading: 'はくどうせいのふくぶしゅりゅう',
-    category: '拍動性の腹部腫瘤',
-    severity: 'emergency',
-    label: '腹部に拍動を触れる／激しい腹痛を伴う腰痛',
-    suspect: '腹部大動脈瘤（緊急性が高い）',
-    detail: '腹臥位・圧迫を伴う施術は行わないでください。',
-    tags: ['sys:abdominal_pulsatile'],
-    sourceIds: ['jpn_lbp_gl2019'],
-  },
+/**
+ * 症状によらず共通のレッドフラグ（腰痛・頸部痛・膝痛で共有する）。
+ * 判定はタグだけを見るので、部位が変わってもそのまま使える。
+ */
+export const COMMON_RED_FLAGS = [
   {
     id: 'progressive_neuro',
     tocTitle: '進行性の神経症状',
@@ -101,11 +81,11 @@ export const LOW_BACK_RED_FLAGS = [
   },
   {
     id: 'age_first_episode',
-    tocTitle: '年齢要因（初発の腰痛）',
+    tocTitle: '年齢要因（初発の痛み）',
     reading: 'ねんれいよういん',
     category: '年齢要因',
     severity: 'caution',
-    label: '20歳未満または55歳以上での初発腰痛',
+    label: '20歳未満または55歳以上での初発の痛み',
     suspect: '器質的疾患の可能性が相対的に上がる',
     detail: '単独では受診の決め手になりませんが、他のレッドフラグと重なる時は受診をすすめてください。',
     tags: ['special:minor', 'special:elderly'],
@@ -137,3 +117,34 @@ export const LOW_BACK_RED_FLAGS = [
     sourceIds: ['downie_bmj2013', 'jpn_lbp_gl2019'],
   },
 ];
+
+/** 腰痛に固有のレッドフラグ */
+export const LOW_BACK_ONLY_RED_FLAGS = [
+  {
+    id: 'cauda_equina',
+    tocTitle: '膀胱直腸障害',
+    reading: 'ぼうこうちょくちょうしょうがい',
+    category: '膀胱直腸障害',
+    severity: 'emergency',
+    label: '排尿困難・失禁、会陰部（サドル領域）のしびれ',
+    suspect: '馬尾症候群（緊急性が高い）',
+    detail: '発症からの時間が予後に影響するとされ、疑った時点で施術は行わず受診をすすめます。',
+    tags: ['sys:bladder_bowel', 'sys:saddle_anesthesia'],
+    sourceIds: ['jpn_lbp_gl2019', 'nice_ng59'],
+  },
+  {
+    id: 'aaa',
+    tocTitle: '拍動性の腹部腫瘤',
+    reading: 'はくどうせいのふくぶしゅりゅう',
+    category: '拍動性の腹部腫瘤',
+    severity: 'emergency',
+    label: '腹部に拍動を触れる／激しい腹痛を伴う腰痛',
+    suspect: '腹部大動脈瘤（緊急性が高い）',
+    detail: '腹臥位・圧迫を伴う施術は行わないでください。',
+    tags: ['sys:abdominal_pulsatile'],
+    sourceIds: ['jpn_lbp_gl2019'],
+  },
+];
+
+/** 腰痛モジュールが使うレッドフラグ（固有→共通の順） */
+export const LOW_BACK_RED_FLAGS = [...LOW_BACK_ONLY_RED_FLAGS, ...COMMON_RED_FLAGS];

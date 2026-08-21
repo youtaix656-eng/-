@@ -2,8 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TOC_ENTRIES, TOC_CATEGORIES, TOC_CATEGORY_MAP, tocSections, filterToc, duplicateTitles } from '../src/data/toc.js';
 import { readingInfo, OTHER_GROUP } from '../src/lib/yomi.js';
-import { LOW_BACK_RED_FLAGS } from '../src/data/redFlags.js';
-import { LOW_BACK_PATTERNS } from '../src/data/patterns.js';
+import { allRedFlags, allPatterns } from '../src/data/toc.js';
 import { PRECAUTIONS } from '../src/data/precautions.js';
 import { LICENSES, MODALITY_META } from '../src/data/licenses.js';
 import { SOURCES } from '../src/data/sources.js';
@@ -52,15 +51,15 @@ test('カテゴリはすべて定義済みで、飛び先のタブを持つ', ()
 test('目次はすべてのデータ（疾患・レッドフラグ・パターン・要配慮・資格・手段・出典）を漏れなく載せる', () => {
   const count = (id) => TOC_ENTRIES.filter((e) => e.category === id).length;
   assert.equal(count('disease'), DISEASES.length);
-  assert.equal(count('flag'), LOW_BACK_RED_FLAGS.length);
-  assert.equal(count('pattern'), LOW_BACK_PATTERNS.length);
+  assert.equal(count('flag'), allRedFlags().length);
+  assert.equal(count('pattern'), allPatterns().length);
   assert.equal(count('care'), PRECAUTIONS.length);
   assert.equal(count('license'), LICENSES.length);
   assert.equal(count('modality'), Object.keys(MODALITY_META).length);
   assert.equal(count('source'), SOURCES.length);
   assert.equal(
     TOC_ENTRIES.length,
-    DISEASES.length + LOW_BACK_RED_FLAGS.length + LOW_BACK_PATTERNS.length + PRECAUTIONS.length + LICENSES.length + Object.keys(MODALITY_META).length + SOURCES.length,
+    DISEASES.length + allRedFlags().length + allPatterns().length + PRECAUTIONS.length + LICENSES.length + Object.keys(MODALITY_META).length + SOURCES.length,
   );
 });
 
@@ -89,7 +88,7 @@ test('セクション内は読み順に並ぶ', () => {
 
 test('filterToc: キーワード・カテゴリで絞り込める', () => {
   assert.ok(filterToc(TOC_ENTRIES, '妊娠').length >= 2);
-  assert.equal(filterToc(TOC_ENTRIES, '', 'flag').length, LOW_BACK_RED_FLAGS.length);
+  assert.equal(filterToc(TOC_ENTRIES, '', 'flag').length, allRedFlags().length);
   assert.equal(filterToc(TOC_ENTRIES, 'ぜったいに存在しない語').length, 0);
   // 読みでも引ける（漢字が読めない時のため）
   assert.ok(filterToc(TOC_ENTRIES, 'ぼうこう').some((e) => e.title === '膀胱直腸障害'));
@@ -100,8 +99,8 @@ test('カテゴリの一覧は目次の全項目を覆う', () => {
   for (const e of TOC_ENTRIES) assert.ok(known.has(e.category));
 });
 
-test('疾患カード129件を含めても、目次のタイトルは全178件が一意', () => {
-  assert.equal(TOC_ENTRIES.length, 178);
+test('疾患カード129件を含めても、目次のタイトルは全207件が一意', () => {
+  assert.equal(TOC_ENTRIES.length, 207);
   const titles = TOC_ENTRIES.map((e) => e.title);
   assert.equal(new Set(titles).size, titles.length);
 });

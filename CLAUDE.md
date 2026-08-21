@@ -11,7 +11,7 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 |---|---|---|
 | `rirakuru-app/` | `/rirakuru` | るるくる セラピスト業務マニュアル（Next.js） |
 | `sleep-tracker/` | `/sleep-tracker` | 分割睡眠トラッカー（Vite + TS） |
-| `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向け腰痛アセスメント支援。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
+| `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向けアセスメント支援。腰痛／肩こり・頸部痛／膝痛。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
 
 腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
 医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、

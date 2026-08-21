@@ -45,17 +45,30 @@ export const TAG_GROUPS = {
 
 /** 使用してよいタグの一覧（タイプミス検出用。validateSymptom が参照する） */
 export const TAG_VOCABULARY = {
-  region: ['lumbar_center', 'lumbar_side', 'lumbosacral', 'sacroiliac', 'buttock', 'groin', 'thigh_post', 'leg_lateral', 'lower_leg', 'foot', 'flank'],
-  quality: ['dull', 'sharp', 'burning', 'numb', 'heavy', 'throbbing', 'cramp', 'stiff'],
+  region: [
+    // 腰痛
+    'lumbar_center', 'lumbar_side', 'lumbosacral', 'sacroiliac', 'buttock', 'groin', 'thigh_post', 'leg_lateral', 'lower_leg', 'foot', 'flank',
+    // 頸部・肩
+    'occiput', 'neck_post', 'neck_side', 'shoulder_top', 'interscapular', 'scapula', 'shoulder', 'upper_arm', 'forearm', 'hand',
+    // 膝
+    'knee_ant', 'knee_med', 'knee_lat', 'knee_post', 'patellar_tendon', 'tibial_tuberosity', 'thigh_lat', 'knee_whole',
+  ],
+  quality: ['dull', 'sharp', 'burning', 'numb', 'heavy', 'throbbing', 'cramp', 'stiff', 'hot', 'catching', 'unstable'],
   onset: ['sudden', 'gradual', 'after_trauma', 'unknown', 'first_episode'],
   duration: ['acute', 'subacute', 'chronic', 'recurrent'],
-  trigger: ['lifting', 'twisting', 'sitting_long', 'standing_long', 'sports', 'childcare', 'desk_work', 'driving', 'unknown'],
-  aggr: ['flexion', 'extension', 'rotation', 'sitting', 'standing', 'walking', 'transition', 'morning', 'evening', 'cough', 'none'],
-  relief: ['rest', 'flexion', 'walking', 'heat', 'position_change', 'none'],
-  neuro: ['radiating_below_knee', 'radiating_above_knee', 'numbness', 'weakness', 'claudication', 'none'],
-  history: ['cancer', 'steroid', 'osteoporosis', 'dvt', 'spine_surgery', 'disc_herniation', 'fracture', 'diabetes', 'infection_recent', 'none'],
-  special: ['pregnancy', 'postpartum', 'elderly', 'minor', 'athlete', 'none'],
-  sys: ['fever', 'weight_loss', 'night_pain', 'rest_pain', 'bladder_bowel', 'saddle_anesthesia', 'abdominal_pulsatile', 'malaise', 'progressive_weakness', 'none'],
+  trigger: ['lifting', 'twisting', 'sitting_long', 'standing_long', 'sports', 'childcare', 'desk_work', 'driving', 'unknown', 'smartphone', 'pillow', 'running', 'stairs', 'weight_gain', 'kneeling'],
+  aggr: ['flexion', 'extension', 'rotation', 'sitting', 'standing', 'walking', 'transition', 'morning', 'evening', 'cough', 'none', 'arm_elevation', 'stairs_up', 'stairs_down', 'squat', 'start_walking'],
+  relief: ['rest', 'flexion', 'walking', 'heat', 'position_change', 'none', 'arm_abduction', 'cold', 'brace'],
+  neuro: ['radiating_below_knee', 'radiating_above_knee', 'numbness', 'weakness', 'claudication', 'none', 'radiating_arm', 'both_hands', 'clumsy', 'gait_disturbance'],
+  history: ['cancer', 'steroid', 'osteoporosis', 'dvt', 'spine_surgery', 'disc_herniation', 'fracture', 'diabetes', 'infection_recent', 'none', 'ra', 'gout', 'knee_surgery', 'knee_injury'],
+  special: ['pregnancy', 'postpartum', 'elderly', 'minor', 'athlete', 'none', 'overweight', 'growth_period'],
+  sys: [
+    'fever', 'weight_loss', 'night_pain', 'rest_pain', 'bladder_bowel', 'saddle_anesthesia', 'abdominal_pulsatile', 'malaise', 'progressive_weakness', 'none',
+    // 頸部
+    'dizziness', 'five_d', 'thunderclap', 'neck_stiffness',
+    // 膝
+    'joint_swelling', 'locking', 'giving_way', 'unable_weight_bearing',
+  ],
   work: ['desk', 'standing_work', 'heavy_labor', 'driving_long', 'childcare', 'smartphone', 'squatting', 'sports', 'none'],
   care: ['none', 'seen_no_image', 'imaged', 'diagnosed', 'post_surgery', 'other_clinic'],
   meds: ['analgesic_effective', 'analgesic_ineffective', 'anticoagulant', 'steroid', 'osteoporosis_med', 'none'],

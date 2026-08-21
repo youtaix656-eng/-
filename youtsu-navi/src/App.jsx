@@ -71,7 +71,7 @@ export default function App() {
       <main>
         {view === 'home' && <Home state={state} symptom={symptom} go={go} />}
         {view === 'assess' && <Assess state={state} symptom={symptom} go={go} />}
-        {view === 'result' && <Result state={state} symptom={symptom} go={go} />}
+        {view === 'result' && <Result state={state} go={go} />}
         {view === 'toc' && <TableOfContents go={go} />}
         {view === 'records' && <Records state={state} go={go} />}
         {view === 'ref' && <Reference state={state} symptom={symptom} focus={focus} />}

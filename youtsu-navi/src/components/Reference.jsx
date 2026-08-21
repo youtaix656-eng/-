@@ -5,6 +5,7 @@ import { LICENSES, MODALITY_META, MODALITIES, licensesForModality } from '../dat
 import { SOURCES, REVIEW_STATUS, reviewProgress } from '../data/sources.js';
 import { PLANNED_SYMPTOMS } from '../data/symptoms.js';
 import { splitByScope } from '../lib/scope.js';
+import { allRedFlags, allPatterns } from '../data/toc.js';
 import { DISEASES, DISEASE_GROUPS, DISEASE_ACTIONS, diseasesByGroup } from '../data/diseases.js';
 import { sourcesFor } from '../data/sources.js';
 
@@ -16,6 +17,17 @@ const TABS = [
   { id: 'scope', label: '資格の範囲' },
   { id: 'source', label: '根拠・出典' },
 ];
+
+/** 症状ごとにまとめる（共通のレッドフラグは最初に出た症状の枠に入る） */
+function bySymptom(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const label = item.symptomName || 'その他';
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(item);
+  }
+  return [...groups.entries()].map(([label, list]) => ({ label, items: list }));
+}
 
 /**
  * 資料 — 評価をしていない時でも、その場で引ける形で常備する。
@@ -106,8 +118,8 @@ export default function Reference({ state, symptom, focus }) {
               </h3>
               {items.map((d) => {
                 const act = DISEASE_ACTIONS[d.action];
-                const pattern = d.patternId ? symptom.patterns.find((p) => p.id === d.patternId) : null;
-                const flag = d.flagId ? symptom.redFlags.find((f) => f.id === d.flagId) : null;
+                const pattern = d.patternId ? allPatterns().find((p) => p.id === d.patternId) : null;
+                const flag = d.flagId ? allRedFlags().find((f) => f.id === d.flagId) : null;
                 const refs = sourcesFor(d.sourceIds || []);
                 return (
                   <details className="acc" key={d.id} id={`toc-disease-${d.id}`}>
@@ -168,17 +180,22 @@ export default function Reference({ state, symptom, focus }) {
               施術者の安全な判断を補助するための一覧です。医療行為の代替ではありません。単独の項目だけで判断せず、重なりと経過で判断してください。
             </p>
           </div>
-          {symptom.redFlags.map((f) => (
-            <div key={f.id} id={`toc-flag-${f.id}`} className={`flag ${f.severity}`}>
-              <h4>
-                <span className={`sev-tag ${f.severity}`}>{SEVERITY[f.severity].label}</span>
-                {f.tocTitle || f.category}
-              </h4>
-              <p style={{ margin: '2px 0' }}>{f.label}</p>
-              <p className="small muted" style={{ margin: 0 }}>
-                疑われる病態：{f.suspect}
-              </p>
-              <p className="small" style={{ margin: '4px 0 0' }}>{SEVERITY[f.severity].action}</p>
+          {bySymptom(allRedFlags()).map(({ label, items }) => (
+            <div className="stack" key={label}>
+              <h3 className="toc-head">{label}<span>{items.length}件</span></h3>
+              {items.map((f) => (
+                <div key={f.id} id={`toc-flag-${f.id}`} className={`flag ${f.severity}`}>
+                  <h4>
+                    <span className={`sev-tag ${f.severity}`}>{SEVERITY[f.severity].label}</span>
+                    {f.tocTitle || f.category}
+                  </h4>
+                  <p style={{ margin: '2px 0' }}>{f.label}</p>
+                  <p className="small muted" style={{ margin: 0 }}>
+                    疑われる病態：{f.suspect}
+                  </p>
+                  <p className="small" style={{ margin: '4px 0 0' }}>{SEVERITY[f.severity].action}</p>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -187,12 +204,15 @@ export default function Reference({ state, symptom, focus }) {
       {tab === 'patterns' && (
         <div className="stack">
           <div className="card">
-            <h2>推定される原因パターン</h2>
+            <h2>推定される原因パターン（全症状）</h2>
             <p className="muted small">
               評価の結果として提示される候補の一覧です。どの所見で加点・減点されるかもここで確認できます（％は診断確率ではありません）。
             </p>
           </div>
-          {symptom.patterns.map((p) => {
+          {bySymptom(allPatterns()).map(({ label, items }) => (
+            <div className="stack" key={label}>
+              <h3 className="toc-head">{label}<span>{items.length}件</span></h3>
+              {items.map((p) => {
             const { inScope, outOfScope } = splitByScope(p.approaches || [], state.settings.licenseId);
             return (
               <details className="acc" key={p.id} id={`toc-pattern-${p.id}`}>
@@ -259,7 +279,9 @@ export default function Reference({ state, symptom, focus }) {
                 )}
               </details>
             );
-          })}
+              })}
+            </div>
+          ))}
         </div>
       )}
 

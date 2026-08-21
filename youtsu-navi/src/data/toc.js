@@ -8,8 +8,7 @@
 //   - 漢字を含むなら reading（ひらがな）を必ずデータ側に書く。数字は自動で読みに変換される。
 //   - 飛び先（view / tab / anchor）は実在すること。これもテストで検査する。
 
-import { LOW_BACK_RED_FLAGS } from './redFlags.js';
-import { LOW_BACK_PATTERNS } from './patterns.js';
+import { SYMPTOMS } from './symptoms.js';
 import { PRECAUTIONS } from './precautions.js';
 import { LICENSES, MODALITY_META, licensesForModality } from './licenses.js';
 import { SOURCES } from './sources.js';
@@ -37,6 +36,34 @@ const DISEASE_ACTION_SUB = {
   treat: '✅ 施術の対象になり得る',
 };
 
+/** 全症状のレッドフラグ（共通のものは1度だけ） */
+export function allRedFlags() {
+  const seen = new Set();
+  const out = [];
+  for (const symptom of SYMPTOMS) {
+    for (const f of symptom.redFlags) {
+      if (seen.has(f.id)) continue;
+      seen.add(f.id);
+      out.push({ ...f, symptomId: symptom.id, symptomName: symptom.name });
+    }
+  }
+  return out;
+}
+
+/** 全症状の推定パターン */
+export function allPatterns() {
+  const seen = new Set();
+  const out = [];
+  for (const symptom of SYMPTOMS) {
+    for (const p of symptom.patterns) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      out.push({ ...p, symptomId: symptom.id, symptomName: symptom.name });
+    }
+  }
+  return out;
+}
+
 /** 目次に載せる全項目 */
 export function buildTocEntries() {
   const entries = [];
@@ -55,25 +82,25 @@ export function buildTocEntries() {
     });
   }
 
-  for (const f of LOW_BACK_RED_FLAGS) {
+  for (const f of allRedFlags()) {
     entries.push({
       id: `flag-${f.id}`,
       category: 'flag',
       title: f.tocTitle || f.category,
       reading: f.reading || '',
-      sub: f.suspect,
+      sub: `${f.symptomName}／${f.suspect}`,
       severity: f.severity,
       anchor: `toc-flag-${f.id}`,
     });
   }
 
-  for (const p of LOW_BACK_PATTERNS) {
+  for (const p of allPatterns()) {
     entries.push({
       id: `pattern-${p.id}`,
       category: 'pattern',
       title: p.tocTitle || p.name,
       reading: p.reading || '',
-      sub: p.short,
+      sub: `${p.symptomName}／${p.short}`,
       anchor: `toc-pattern-${p.id}`,
     });
   }

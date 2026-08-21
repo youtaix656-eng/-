@@ -9,6 +9,7 @@ import { chronicityRisk, riskSummaryText } from '../lib/yellowFlags.js';
 import { sourcesFor, REVIEW_STATUS } from '../data/sources.js';
 import { licenseById } from '../data/licenses.js';
 import { RESULT_NOTICE } from '../lib/consent.js';
+import { symptomById } from '../data/symptoms.js';
 import { CLIENT_LABEL_MAX } from '../lib/records.js';
 import { homecareText, recordText, formatDate } from '../lib/exporter.js';
 import ShareBox from './ShareBox.jsx';
@@ -193,8 +194,10 @@ function SaveToKarte({ result, tri, candidates, savedId, onSaved, go }) {
 }
 
 /** 結果画面 — 安全トリアージ → 推定パターン → 施術方針／ホームケア の順に出す */
-export default function Result({ state, symptom, go }) {
+export default function Result({ state, go }) {
   const result = state.lastResult;
+  // 結果は保存時の症状で判定する（あとで別の症状に切り替えても過去の結果が崩れない）
+  const symptom = symptomById(result ? result.symptomId : null);
   const [savedId, setSavedId] = useState(null);
   const [sheet, setSheet] = useState(null); // 'client' | 'record'
   const [includePatterns, setIncludePatterns] = useState(false);

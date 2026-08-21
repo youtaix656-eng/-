@@ -247,6 +247,8 @@ const FIELDS = [
 export const LOW_BACK = {
   id: 'lowback',
   name: '腰痛',
+  reading: 'ようつう',
+  icon: '🦴',
   version: 1,
   steps: STEPS,
   fields: FIELDS,
