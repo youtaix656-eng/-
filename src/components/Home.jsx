@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { overallStats, studyStreak } from '../lib/stats.js';
+import { estimateLevel } from '../lib/learnerLevel.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress, clearQuizProgress } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
@@ -43,9 +44,10 @@ function useLongPress(onLongPress, onTap) {
 }
 
 // ホーム画面：学習状況の概要と各モードへの入り口
-export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall }) {
-  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings } = store;
+export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel }) {
+  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs } = store;
   const overall = overallStats(history);
+  const level = estimateLevel({ srs, history });
   const reviewCount = reviewQuestions.length;
   const dueCount = (dueReviewQuestions || []).length;
   const unreadCount = (unread || []).length;
@@ -127,6 +129,24 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="install-cta">追加</span>
         </button>
       )}
+
+      <button
+        className="level-badge"
+        onClick={() => onJumpToRoadmapLevel?.(level.id)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+          textAlign: 'left', marginBottom: 10, padding: '10px 14px',
+          borderRadius: 12, border: '1px solid var(--border, #333)', background: 'var(--surface-2, transparent)',
+        }}
+      >
+        <span style={{ fontSize: 22 }}>{level.icon}</span>
+        <span style={{ flex: 1 }}>
+          <span style={{ fontWeight: 700 }}>今のレベル：{level.label}</span>
+          <span className="inline-note" style={{ display: 'block' }}>
+            レベル別の使い方を見る →
+          </span>
+        </span>
+      </button>
 
       {/* ハリオ先生（AIマスコット） */}
       <Mascot store={store} onNavigate={onNavigate} />

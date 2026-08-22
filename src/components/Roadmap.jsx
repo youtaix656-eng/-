@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { ROADMAP_PHASES, ROADMAP_MONTHS, phasesInMonth } from '../data/roadmapPhases.js';
 
@@ -84,9 +85,24 @@ function HeadphoneSVG() {
   );
 }
 
-export default function Roadmap({ store, onNavigate }) {
+export default function Roadmap({ store, onNavigate, focusLevel, onConsumeFocusLevel }) {
   const examDate = store.settings.examDate;
   const left = daysUntil(examDate);
+  const levelDetailsRef = useRef(null);
+
+  // Homeのレベルバッジから遷移してきた時、レベル別ガイドを自動で開いて該当箇所へスクロールする
+  useEffect(() => {
+    if (!focusLevel) return;
+    const el = levelDetailsRef.current;
+    if (!el) return;
+    el.open = true;
+    const timer = setTimeout(() => {
+      const target = el.querySelector(`#level-${focusLevel}`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      onConsumeFocusLevel?.();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [focusLevel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="view rm">
@@ -213,7 +229,7 @@ export default function Roadmap({ store, onNavigate }) {
       </details>
 
       <div className="section-label">🎓 レベル別：問題演習の進め方</div>
-      <details className="card">
+      <details className="card" ref={levelDetailsRef}>
         <summary style={{ fontWeight: 700, cursor: 'pointer' }}>
           初級者・中級者・上級者で、使う機能をどう変えるか
         </summary>
@@ -222,7 +238,7 @@ export default function Roadmap({ store, onNavigate }) {
             レベルが上がるほど「広く浅く」から「狭く深く」に絞っていくのが基本です。
           </p>
 
-          <div style={{ marginTop: 14 }}>
+          <div id="level-beginner" style={{ marginTop: 14 }}>
             <b>🔰 初級者（まだ全体像がない・正答率が低い時期）</b>
             <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：広く浅く「知ってる/知らない」を仕分ける</div>
             <ul style={{ marginTop: 4 }}>
@@ -235,7 +251,7 @@ export default function Roadmap({ store, onNavigate }) {
             </ul>
           </div>
 
-          <div style={{ marginTop: 14 }}>
+          <div id="level-intermediate" style={{ marginTop: 14 }}>
             <b>📘 中級者（正答率が上がり、間違いパターンが見えてきた時期）</b>
             <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：弱点を可視化して、そこだけ繰り返す</div>
             <ul style={{ marginTop: 4 }}>
@@ -251,7 +267,7 @@ export default function Roadmap({ store, onNavigate }) {
             </ul>
           </div>
 
-          <div style={{ marginTop: 14, marginBottom: 0 }}>
+          <div id="level-advanced" style={{ marginTop: 14, marginBottom: 0 }}>
             <b>🎯 上級者（合格前提・直前期）</b>
             <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：本番シミュレーションと穴の最終確認</div>
             <ul style={{ marginTop: 4, marginBottom: 0 }}>

@@ -132,6 +132,7 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
+  const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
@@ -309,6 +310,10 @@ export default function App() {
     setFocusKeyword(kw);
     setView('connect');
   };
+  const jumpToRoadmapLevel = (levelId) => {
+    setFocusRoadmapLevel(levelId);
+    setView('roadmap');
+  };
   const startCustomQuiz = (questionsList) => {
     setQuizQuestions(questionsList);
     setView('quiz');
@@ -402,6 +407,7 @@ export default function App() {
             }}
             installPrompt={installPrompt}
             onInstall={installApp}
+            onJumpToRoadmapLevel={jumpToRoadmapLevel}
           />
         );
       case 'quiz':
@@ -480,7 +486,14 @@ export default function App() {
           if (qs.length) startCustomQuiz(qs);
         }} />;
       case 'roadmap':
-        return <Roadmap store={store} onNavigate={setView} />;
+        return (
+          <Roadmap
+            store={store}
+            onNavigate={setView}
+            focusLevel={focusRoadmapLevel}
+            onConsumeFocusLevel={() => setFocusRoadmapLevel(null)}
+          />
+        );
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
@@ -551,7 +564,7 @@ export default function App() {
           />
         );
       default:
-        return <Home store={store} onNavigate={setView} />;
+        return <Home store={store} onNavigate={setView} onJumpToRoadmapLevel={jumpToRoadmapLevel} />;
     }
   };
 
