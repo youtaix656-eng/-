@@ -498,6 +498,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">試験概要・出題基準・持ち物などを貼り付けて管理。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('examday')}>
+          <span className="ico">✅</span>
+          <span className="title">試験当日チェックリスト</span>
+          <span className="desc">持ち物・当日の流れを「前日まで／朝／会場到着後」で時系列に確認。</span>
+        </button>
+
         <button className="menu-item wide" onClick={() => onNavigate('experiences')}>
           <span className="ico">🗣️</span>
           <span className="title">体験談ノート（自分・他人・合格・不合格）</span>

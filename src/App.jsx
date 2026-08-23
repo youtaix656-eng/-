@@ -49,6 +49,7 @@ const Flashcards = lazy(() => import('./components/Flashcards.jsx'));
 const MigrationGuide = lazy(() => import('./components/MigrationGuide.jsx'));
 const WeeklyJournal = lazy(() => import('./components/WeeklyJournal.jsx'));
 const ExplainNotes = lazy(() => import('./components/ExplainNotes.jsx'));
+const ExamDayChecklist = lazy(() => import('./components/ExamDayChecklist.jsx'));
 
 function ViewLoading() {
   return (
@@ -538,6 +539,8 @@ export default function App() {
         return <Venues store={store} onToast={showToast} />;
       case 'examcontent':
         return <ExamContent store={store} onToast={showToast} />;
+      case 'examday':
+        return <ExamDayChecklist store={store} onNavigate={setView} />;
       case 'experiences':
         return <Experiences store={store} onToast={showToast} />;
       case 'mindmap':
