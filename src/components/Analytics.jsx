@@ -281,6 +281,7 @@ export default function Analytics({ store, onNavigate }) {
       </div>
 
       <div className="ana-jump">
+        <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('journal')}>📓 週次の弱点ジャーナル</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('review')}>🔁 間違えた問題へ</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('scope')}>🗂️ 試験範囲へ</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('session')}>📚 学習へ</button>

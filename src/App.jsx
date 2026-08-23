@@ -47,6 +47,7 @@ const CoverageMap = lazy(() => import('./components/CoverageMap.jsx'));
 const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph.jsx'));
 const Flashcards = lazy(() => import('./components/Flashcards.jsx'));
 const MigrationGuide = lazy(() => import('./components/MigrationGuide.jsx'));
+const WeeklyJournal = lazy(() => import('./components/WeeklyJournal.jsx'));
 
 function ViewLoading() {
   return (
@@ -468,6 +469,8 @@ export default function App() {
         return <Dashboard store={store} />;
       case 'analytics':
         return <Analytics store={store} onNavigate={setView} />;
+      case 'journal':
+        return <WeeklyJournal store={store} onNavigate={setView} />;
       case 'unread':
         return <UnreadPages store={store} onToast={showToast} onOpenImport={() => setView('import')} />;
       case 'mistakes':
