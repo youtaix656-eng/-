@@ -14,6 +14,7 @@ const featureRegistry = [
   { id: 'connect', title: '連結学習（今日の1問）', icon: '🔗', category: '学習・演習', view: 'connect', desc: '過去問を一生モノの知識に。1日1問を深掘りし、キーワードでつなげて知識の地図を育てる。', tags: ['連結学習', 'キーワード'] },
   { id: 'quiz', title: '一問一答', icon: '✏️', category: '学習・演習', view: 'quiz', desc: '科目別に問題演習。○×・四択に対応。', tags: ['一問一答'] },
   { id: 'quiz-why', title: '自己説明ステップ（なぜこの答え？）', icon: '🤔', category: '学習・演習', view: 'quiz', sub: true, desc: '誤答時に「なぜこの答え？」を自分の言葉で一言書くよう自動で促す（一問一答・復習画面）。', tags: ['自己説明', '誤答', 'whyPrompt'] },
+  { id: 'explainnotes', title: '説明ノート（人に教えるつもりで書く）', icon: '🗣️', category: '学習・演習', view: 'explain', desc: 'マスター済みの問題から日替わりで1問を出し、自分の言葉で説明を書いて蓄積する（ファインマン式）。誤答時のwhyPromptとは対象が別（こちらは「定着したはず」の確認）。', tags: ['アウトプット', 'ファインマン', '説明ノート'] },
   { id: 'choicequiz', title: '4択問題', icon: '4️⃣', category: '学習・演習', view: 'choicequiz', desc: '過去問／模試／その他から選び、科目別に四択だけを演習。', tags: ['4択', 'ファイル分け'] },
   { id: 'builder', title: '出題を作る', icon: '🎛️', category: '学習・演習', view: 'builder', desc: '科目・回次・ジャンル・問題数を指定して出題。検索も。', tags: ['カスタム出題'] },
   { id: 'toc', title: '目次', icon: '📖', category: '学習・演習', view: 'toc', desc: '取り込んだ問題を科目・キーワードで一覧。範囲を選んで演習。', tags: ['目次', '一覧'] },

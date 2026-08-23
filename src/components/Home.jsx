@@ -409,6 +409,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           {reviewCount > 0 && <span className="count-pill">{reviewCount}問</span>}
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('explain')}>
+          <span className="ico">🗣️</span>
+          <span className="title">説明ノート</span>
+          <span className="desc">マスター済みの問題を人に説明するつもりで書いて定着を確認。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('exam')}>
           <span className="ico">📝</span>
           <span className="title">模擬試験</span>
