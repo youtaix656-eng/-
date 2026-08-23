@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { buildExperienceDraft } from '../lib/experienceDraft.js';
+import { estimateLevel } from '../lib/learnerLevel.js';
 
 // 体験談ノート（端末内のみ・非公開）
 //   4つのカテゴリで体験談を記録できる：
@@ -19,7 +21,7 @@ function newId() {
 }
 
 export default function Experiences({ store, onToast }) {
-  const { selfNotes, setSelfNotes } = store;
+  const { selfNotes, setSelfNotes, history, examResults, srs } = store;
   const [tab, setTab] = useState('all'); // 'all' | カテゴリID
   const [q, setQ] = useState(''); // 検索キーワード
   const [editing, setEditing] = useState(null); // {id?, category, title, body}
@@ -50,6 +52,14 @@ export default function Experiences({ store, onToast }) {
   const startNew = () =>
     setEditing({ id: null, category: tab === 'all' ? 'self' : tab, title: '', body: '' });
   const startEdit = (n) => setEditing({ ...n });
+
+  // 合格体験記の下書き自動生成（任意・遊び要素）：学習ログから下書きを作り、
+  // 「合格体験談」カテゴリの新規エントリとして編集画面を開く。保存は通常の体験談と同じ流れ。
+  const startExperienceDraft = () => {
+    const level = estimateLevel({ srs, history });
+    const body = buildExperienceDraft({ history, examResults, level });
+    setEditing({ id: null, category: 'pass', title: '合格体験記（下書き）', body });
+  };
 
   const save = () => {
     if (!editing.title.trim() && !editing.body.trim()) {
@@ -133,6 +143,10 @@ export default function Experiences({ store, onToast }) {
           ))}
         </div>
       )}
+
+      <button className="btn ghost block" onClick={startExperienceDraft} style={{ marginBottom: 8 }}>
+        🪄 学習ログから合格体験記の下書きを作る
+      </button>
 
       <button className="btn primary block" onClick={startNew}>
         ＋ 体験談を追加
