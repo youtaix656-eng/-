@@ -11,6 +11,7 @@ import { normalize, isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
 import { buildWeaknessSummary } from '../lib/reviewPool.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
+import { expectedProgress, isBehindPace, rankSlowQuestions } from '../lib/examPace.js';
 
 function fmtTime(sec) {
   const m = Math.floor(sec / 60);
@@ -53,6 +54,36 @@ export default function Exam({ store, onNavigate }) {
   const timerRef = useRef(null);
   const remainRef = useRef(0);
   useEffect(() => { remainRef.current = remain; }, [remain]);
+
+  // ---- ペース管理（①）：本番形式(am/pm)の各問にかけた時間を計測し、
+  //   リアルタイムの目安表示と、終了後の「時間を使いすぎた問題」ランキングに使う ----
+  const timeSpentRef = useRef([]); // 秒、order[i] に対応
+  const idxAtRef = useRef({ idx: 0, at: 0 });
+  const [slowQuestions, setSlowQuestions] = useState([]); // 結果画面用（終了時にスナップショット）
+  useEffect(() => {
+    timeSpentRef.current = new Array(order.length).fill(0);
+    idxAtRef.current = { idx: 0, at: Date.now() };
+  }, [order]);
+  useEffect(() => {
+    if (stage !== 'running') return;
+    const now = Date.now();
+    const prev = idxAtRef.current;
+    if (prev && timeSpentRef.current[prev.idx] != null) {
+      timeSpentRef.current[prev.idx] += (now - prev.at) / 1000;
+    }
+    idxAtRef.current = { idx, at: now };
+  }, [idx, stage]);
+  const totalSecondsForMode = (mid) => {
+    const bp = mid === 'am' ? EXAM_BLUEPRINT_AM : mid === 'pm' ? EXAM_BLUEPRINT_PM : null;
+    return bp ? bp.minutes * 60 : null;
+  };
+  const totalSeconds = timed ? totalSecondsForMode(modeId) : null;
+  const paceInfo = useMemo(() => {
+    if (!timed || !totalSeconds || order.length === 0) return null;
+    const elapsed = Math.max(0, totalSeconds - remain);
+    const expectedIdx = expectedProgress(elapsed, totalSeconds, order.length);
+    return { expectedIdx, behind: isBehindPace(idx, expectedIdx) };
+  }, [timed, totalSeconds, remain, order.length, idx]);
 
   // ---- 得意／苦手モード：正答率から自動提案 ----
   const genreRanked = useMemo(() => genreAccuracy(questions, history), [questions, history]);
@@ -295,6 +326,13 @@ export default function Exam({ store, onNavigate }) {
   const finish = () => {
     clearInterval(timerRef.current);
     storage.clearExamProgress(); // 採点したら途中経過は破棄
+    // 最後に表示していた問題の経過時間を確定してから、時間を使いすぎた問題ランキングを作る
+    const now = Date.now();
+    const prev = idxAtRef.current;
+    if (prev && timeSpentRef.current[prev.idx] != null) {
+      timeSpentRef.current[prev.idx] += (now - prev.at) / 1000;
+    }
+    setSlowQuestions(timed ? rankSlowQuestions(order, timeSpentRef.current, 5) : []);
     setStage('result');
   };
 
@@ -658,6 +696,26 @@ export default function Exam({ store, onNavigate }) {
           </p>
         )}
 
+        {slowQuestions.length > 0 && (
+          <>
+            <div className="section-label" style={{ marginTop: 0 }}>⏱ 時間を使いすぎた問題</div>
+            <div className="card">
+              <p className="inline-note" style={{ margin: '0 0 8px' }}>
+                本番はここで足が止まりやすいポイントです。分からない問題は一旦飛ばす練習をしましょう。
+              </p>
+              {slowQuestions.map((r, i) => (
+                <div className="stat-row" key={r.q.id}>
+                  <div className="stat-head">
+                    <span className="stat-subject">{i + 1}. {r.q.subject}</span>
+                    <span className="stat-pct">{Math.round(r.sec)}秒</span>
+                  </div>
+                  <p className="inline-note" style={{ margin: '2px 0 0' }}>{r.q.question}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         <div className="section-label" style={{ marginTop: 0 }}>
           科目別の内訳
         </div>
@@ -805,6 +863,12 @@ export default function Exam({ store, onNavigate }) {
       <div className="progress">
         <span style={{ width: `${((idx + 1) / order.length) * 100}%` }} />
       </div>
+      {paceInfo && (
+        <div className={`inline-note ${paceInfo.behind ? 'exam-pace-warn' : ''}`} style={{ margin: '4px 0 8px' }}>
+          ⏱ 目安：今ごろ{paceInfo.expectedIdx}問目くらい（今 {idx + 1}問目）
+          {paceInfo.behind && '　ペースが遅れています。わからない問題は後回しに'}
+        </div>
+      )}
 
       {paused ? (
         <div className="empty">

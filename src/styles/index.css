@@ -952,6 +952,10 @@ textarea {
   color: var(--text-sub);
   font-weight: 600;
 }
+.exam-pace-warn {
+  color: var(--wrong);
+  font-weight: 700;
+}
 
 /* ---- 模試結果 ---- */
 .result-hero {
