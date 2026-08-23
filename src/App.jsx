@@ -408,6 +408,7 @@ export default function App() {
             installPrompt={installPrompt}
             onInstall={installApp}
             onJumpToRoadmapLevel={jumpToRoadmapLevel}
+            onStartSubjectQuiz={startSubjectQuiz}
           />
         );
       case 'quiz':
@@ -564,7 +565,7 @@ export default function App() {
           />
         );
       default:
-        return <Home store={store} onNavigate={setView} onJumpToRoadmapLevel={jumpToRoadmapLevel} />;
+        return <Home store={store} onNavigate={setView} onJumpToRoadmapLevel={jumpToRoadmapLevel} onStartSubjectQuiz={startSubjectQuiz} />;
     }
   };
 

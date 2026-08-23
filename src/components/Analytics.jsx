@@ -9,6 +9,7 @@ import {
   masteryStats,
   styleDiagnosis,
   formatPercent,
+  subjectBalanceWarning,
 } from '../lib/stats.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { isInReview, MATURE_INTERVAL } from '../lib/srs.js';
@@ -43,6 +44,7 @@ export default function Analytics({ store, onNavigate }) {
     () => styleDiagnosis(history, questions, srs, isInReview, MATURE_INTERVAL),
     [history, questions, srs]
   );
+  const balance = useMemo(() => subjectBalanceWarning(history, questions), [history, questions]);
 
   if (history.length === 0) {
     return (
@@ -103,6 +105,28 @@ export default function Analytics({ store, onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* ===== 科目バランス警告 ===== */}
+      {balance.hasWarning && (
+        <div className="card" style={{ borderLeft: '4px solid var(--wrong)' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚖️ 科目バランスの偏りに注意</div>
+          <p className="inline-note" style={{ margin: '0 0 6px' }}>
+            他の科目は平均{formatPercent(balance.avgAccuracy)}前後で解けているのに、次の科目だけ極端に低いままです。
+            このまま模試だけ繰り返すと苦手科目が手つかずになりやすいので、優先的に取り組みましょう。
+          </p>
+          {balance.weakSubjects.map((s) => (
+            <div className="stat-row" key={s.subject}>
+              <div className="stat-head">
+                <span className="stat-subject">{s.subject}</span>
+                <span className="stat-pct">{formatPercent(s.accuracy)}<span className="stat-sub">（{s.total}問）</span></span>
+              </div>
+              <div className="bar ana-bar-mastery">
+                <span style={{ width: `${s.accuracy * 100}%`, background: 'var(--wrong)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ===== ⑱ 出題範囲カバー率・攻略率 ===== */}
       <div className="section-label">🗂️ 出題範囲カバー率・攻略率</div>

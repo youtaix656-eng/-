@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { overallStats, studyStreak } from '../lib/stats.js';
 import { estimateLevel } from '../lib/learnerLevel.js';
+import { todayFocusSubjects } from '../lib/todayFocus.js';
+import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress, clearQuizProgress } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
@@ -44,10 +46,14 @@ function useLongPress(onLongPress, onTap) {
 }
 
 // ホーム画面：学習状況の概要と各モードへの入り口
-export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel }) {
+export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz }) {
   const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs } = store;
   const overall = overallStats(history);
   const level = estimateLevel({ srs, history });
+  const focusSubjects = useMemo(() => {
+    const scope = scopeCoverage(questions, history);
+    return todayFocusSubjects(scope, daysUntil(settings.examDate));
+  }, [questions, history, settings.examDate]);
   const reviewCount = reviewQuestions.length;
   const dueCount = (dueReviewQuestions || []).length;
   const unreadCount = (unread || []).length;
@@ -158,6 +164,25 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <p style={{ margin: '4px 0 10px', fontSize: 16 }}>{nextTask.text}</p>
           <div className="btn-row">
             <button className="btn ghost sm" onClick={doneNextTask}>やった・消す</button>
+          </div>
+        </div>
+      )}
+
+      {/* 今日集中すべき科目：残り日数×手薄度×直近正答率から自動レコメンド。次のタスクが決まっている日は出さない */}
+      {!nextTask && focusSubjects.length > 0 && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>🎯 今日集中すべき科目</div>
+          <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+            {focusSubjects.map((f) => (
+              <button
+                key={f.subject.id}
+                className="chip"
+                onClick={() => onStartSubjectQuiz?.(f.subject.name)}
+              >
+                {f.subject.name}
+                <span className="inline-note" style={{ marginLeft: 4 }}>（{f.reason}）</span>
+              </button>
+            ))}
           </div>
         </div>
       )}
