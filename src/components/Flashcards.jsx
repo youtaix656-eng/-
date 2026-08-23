@@ -16,7 +16,7 @@ const KEIKETSU_MODE = '__keiketsu__';
 
 // フラッシュカード：経穴専用カード（既存）＋ 全科目対応（一問一答の問題から自動生成）。
 // 表＝問題文／裏＝正解＋解説。タップで裏返し、前後で移動。
-export default function Flashcards({ store }) {
+export default function Flashcards({ store, onNavigate }) {
   const questions = store?.questions || [];
   const [mode, setMode] = useState(KEIKETSU_MODE);
   const [idx, setIdx] = useState(0);
@@ -49,6 +49,12 @@ export default function Flashcards({ store }) {
       <p className="view-desc">
         表を見て思い出し、タップで答えを確認します。科目を選べば、一問一答の問題からその場でカードを作ります。
       </p>
+
+      {isKeiketsu && (
+        <button className="btn ghost block" onClick={() => onNavigate && onNavigate('acupointtap')} style={{ marginBottom: 10 }}>
+          🗺️ 体表イラストでタップして覚える
+        </button>
+      )}
 
       <div className="field" style={{ marginBottom: 14 }}>
         <label>科目</label>

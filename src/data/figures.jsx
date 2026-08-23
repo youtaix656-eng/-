@@ -87,11 +87,39 @@ function LegSanri() {
   );
 }
 
+// 経穴の印を付けない版（体表イラスト学習「名前→位置」のタップ問題用）。
+// シルエットはHandGoukoku/LegSanriと同じ（印だけ省く）。座標はlib/acupointTap.jsで
+// 単一のソースとして管理し、ここでは形の描画だけを担う。
+function HandGoukokuBlank() {
+  return (
+    <Frame title="手背（手の甲）" viewBox="0 0 240 200">
+      <path d="M70 180 L70 90 Q70 70 90 70 L150 70 Q170 70 170 90 L170 180 Z" fill="#fde9d9" stroke="#334155" strokeWidth="1.5" />
+      <rect x="55" y="72" width="16" height="48" rx="7" fill="#fde9d9" stroke="#334155" strokeWidth="1.3" transform="rotate(-28 63 96)" />
+      <rect x="80" y="24" width="14" height="52" rx="7" fill="#fde9d9" stroke="#334155" strokeWidth="1.3" />
+      <rect x="100" y="18" width="14" height="58" rx="7" fill="#fde9d9" stroke="#334155" strokeWidth="1.3" />
+      <rect x="120" y="24" width="14" height="52" rx="7" fill="#fde9d9" stroke="#334155" strokeWidth="1.3" />
+      <rect x="140" y="34" width="13" height="44" rx="7" fill="#fde9d9" stroke="#334155" strokeWidth="1.3" />
+    </Frame>
+  );
+}
+function LegSanriBlank() {
+  return (
+    <Frame title="下腿の前面（右脚）" viewBox="0 0 240 210">
+      <rect x="95" y="20" width="46" height="46" rx="12" fill="#fde9d9" stroke="#334155" strokeWidth="1.5" />
+      <ellipse cx="118" cy="72" rx="20" ry="14" fill="#fef3c7" stroke="#334155" strokeWidth="1.3" />
+      <path d="M100 84 L138 84 L132 190 L106 190 Z" fill="#fde9d9" stroke="#334155" strokeWidth="1.5" />
+      <line x1="119" y1="90" x2="119" y2="188" stroke="#94a3b8" strokeDasharray="3 3" />
+    </Frame>
+  );
+}
+
 export const FIGURES = {
   spine: Spine,
   heart: Heart,
   'hand-goukoku': HandGoukoku,
   'leg-sanri': LegSanri,
+  'hand-goukoku-blank': HandGoukokuBlank,
+  'leg-sanri-blank': LegSanriBlank,
 };
 
 // キーから図コンポーネントを返す（無ければ null）

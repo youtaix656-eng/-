@@ -50,6 +50,7 @@ const MigrationGuide = lazy(() => import('./components/MigrationGuide.jsx'));
 const WeeklyJournal = lazy(() => import('./components/WeeklyJournal.jsx'));
 const ExplainNotes = lazy(() => import('./components/ExplainNotes.jsx'));
 const ExamDayChecklist = lazy(() => import('./components/ExamDayChecklist.jsx'));
+const AcupointTap = lazy(() => import('./components/AcupointTap.jsx'));
 
 function ViewLoading() {
   return (
@@ -546,7 +547,9 @@ export default function App() {
       case 'mindmap':
         return <MindMap store={store} onOpenKeyword={openKeyword} />;
       case 'flashcards':
-        return <Flashcards store={store} />;
+        return <Flashcards store={store} onNavigate={setView} />;
+      case 'acupointtap':
+        return <AcupointTap onNavigate={setView} />;
       case 'mnemonics':
         return <MnemonicNotebook store={store} onToast={showToast} />;
       case 'features':
