@@ -33,7 +33,7 @@ const featureRegistry = [
   { id: 'mistakes', title: '間違いノート', icon: '📓', category: '復習・弱点対策', view: 'mistakes', desc: '間違えた問題＋メモをPDF/テキスト出力。移動中の見返しに。', tags: ['間違いノート', '出力'] },
   { id: 'misstypes', title: '誤答理由の分類・型別の集中特訓', icon: '🏷️', category: '復習・弱点対策', view: 'review', sub: true, desc: '勘違い／知識不足／ケアレスをワンタップ記録し、型別に解説の出し方を変える。復習画面の絞り込みチップから型を指定すれば、その型だけを集中的に出題できる。', tags: ['誤答理由', 'missTypes', '集中特訓'] },
   { id: 'dashboard', title: '弱点分析', icon: '📊', category: '復習・弱点対策', view: 'dashboard', desc: '科目別の正答率をグラフで確認。', tags: ['正答率'] },
-  { id: 'analytics', title: '分析・攻略率・合格診断', icon: '📈', category: '復習・弱点対策', view: 'analytics', desc: '合格ラインまであと何%・出題範囲の攻略率・合格者スタイルを診断。', tags: ['分析', '合格診断'] },
+  { id: 'analytics', title: '分析・攻略率・合格診断', icon: '📈', category: '復習・弱点対策', view: 'analytics', desc: '合格ラインまであと何%・出題範囲の攻略率・合格者スタイルを診断。「進捗サマリーを書き出す」から通算問題数・正答率・攻略率・バッジなどを1枚にまとめてPDF/印刷で書き出せる（既存の間違いノートと同じ印刷方式）。', tags: ['分析', '合格診断', '進捗レポート'] },
   { id: 'forgetting', title: '忘却予測', icon: '🧠', category: '復習・弱点対策', view: 'analytics', sub: true, desc: '保持率をエビングハウス的な指数減衰で推定し、忘れそうな問題を先読み表示（分析画面内）。', tags: ['忘却曲線', 'forgetting.js'] },
   { id: 'weakclusters', title: '弱点クラスタ', icon: '🧩', category: '復習・弱点対策', view: 'analytics', sub: true, desc: 'タグの共起から弱点テーマを自動抽出（分析画面内）。', tags: ['弱点クラスタ', 'weakClusters.js'] },
   { id: 'difficulty', title: '難易度推定', icon: '🎚️', category: '復習・弱点対策', view: 'analytics', sub: true, desc: '正答率から難問を抽出（分析画面内）。', tags: ['難易度'] },

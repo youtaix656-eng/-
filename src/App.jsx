@@ -470,7 +470,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard store={store} />;
       case 'analytics':
-        return <Analytics store={store} onNavigate={setView} />;
+        return <Analytics store={store} onNavigate={setView} onToast={showToast} />;
       case 'journal':
         return <WeeklyJournal store={store} onNavigate={setView} />;
       case 'explain':

@@ -14,16 +14,30 @@ import {
 import { scopeCoverage } from '../data/examScope.js';
 import { isInReview, MATURE_INTERVAL } from '../lib/srs.js';
 import { computeBadges } from '../lib/gamify.js';
+import { buildProgressSummary, buildProgressReportHtml } from '../lib/progressReport.js';
 import InsightsSection from './InsightsSection.jsx';
 
 // 分析・攻略率・合格者診断（⑯⑱㉑㉒）
 // 学習分析グラフ・出題範囲カバー率・合格ラインまで何%・合格者スタイル診断を1画面に。
-export default function Analytics({ store, onNavigate }) {
+export default function Analytics({ store, onNavigate, onToast }) {
   const { history, questions, srs, examResults } = store;
   const badges = useMemo(
     () => computeBadges(history, srs, questions, examResults, isInReview, MATURE_INTERVAL),
     [history, srs, questions, examResults]
   );
+
+  const printProgressReport = () => {
+    const summary = buildProgressSummary({ history, questions, srs, examResults });
+    const html = buildProgressReportHtml(summary);
+    const w = window.open('', '_blank');
+    if (!w) {
+      onToast?.('ポップアップがブロックされました。ブラウザの設定をご確認ください。');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
 
   const overall = overallStats(history);
   const scope = useMemo(() => scopeCoverage(questions, history), [questions, history]);
@@ -281,6 +295,7 @@ export default function Analytics({ store, onNavigate }) {
       </div>
 
       <div className="ana-jump">
+        <button className="btn ghost sm" onClick={printProgressReport}>🏆 進捗サマリーを書き出す</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('journal')}>📓 週次の弱点ジャーナル</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('review')}>🔁 間違えた問題へ</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('scope')}>🗂️ 試験範囲へ</button>
