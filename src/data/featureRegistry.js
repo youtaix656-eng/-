@@ -18,7 +18,7 @@ const featureRegistry = [
   { id: 'choicequiz', title: '4択問題', icon: '4️⃣', category: '学習・演習', view: 'choicequiz', desc: '過去問／模試／その他から選び、科目別に四択だけを演習。', tags: ['4択', 'ファイル分け'] },
   { id: 'builder', title: '出題を作る', icon: '🎛️', category: '学習・演習', view: 'builder', desc: '科目・回次・ジャンル・問題数を指定して出題。検索も。', tags: ['カスタム出題'] },
   { id: 'toc', title: '目次', icon: '📖', category: '学習・演習', view: 'toc', desc: '取り込んだ問題を科目・キーワードで一覧。範囲を選んで演習。', tags: ['目次', '一覧'] },
-  { id: 'flashcards', title: 'フラッシュカード', icon: '🃏', category: '学習・演習', view: 'flashcards', desc: '経穴カード＋全科目対応。問題からその場でカードを作って反復。', tags: ['フラッシュカード', '経穴'] },
+  { id: 'flashcards', title: 'フラッシュカード', icon: '🃏', category: '学習・演習', view: 'flashcards', desc: '経穴カード＋全科目対応。問題からその場でカードを作って反復。経穴カードは「覚えた/まだ」を記録するSRSに対応し、苦手なカードだけに絞って出題できる。', tags: ['フラッシュカード', '経穴', 'SRS'] },
   { id: 'acupointtap', title: '経穴の体表イラスト学習', icon: '🗺️', category: '学習・演習', view: 'acupointtap', desc: '位置→名前（4択）／名前→位置（タップ）の2方向で経穴の位置を練習できる。座標が確認できている経穴（既存の図問題と同じデータ）だけを対象にした現状サンプル（拡充予定）。フラッシュカード画面（経穴カードモード）から遷移。', tags: ['経穴', '体表イラスト', 'タップ'] },
   { id: 'mnemonics', title: '語呂合わせノート', icon: '💡', category: '学習・演習', view: 'mnemonics', desc: '登録した語呂合わせを一覧で見返す。その場で追加・編集も。', tags: ['語呂合わせ'] },
   { id: 'audio', title: '音声学習', icon: '🎧', category: '学習・演習', view: 'audio', desc: '検索フィルタ＋連結学習モード1〜10（よく使う順）。今日のおすすめ・弱点分析・問題数の目標・ブックマーク・読み方の手動補正辞書つき。', tags: ['音声学習', 'ながら学習', '弱点分析', 'ブックマーク'] },

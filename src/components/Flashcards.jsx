@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { KEIKETSU_CARDS, YOUKETSU_TABLE } from '../data/keiketsuCards.js';
 import { figureFor } from '../data/figures.jsx';
 import { CHOICE_QUIZ_SUBJECTS, subjectMatches } from '../data/examScope.js';
+import { loadFlashcardSrs, gradeFlashcard, weakCardIds, cardMastered, cardWrongCount } from '../lib/flashcardSrs.js';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -22,25 +23,48 @@ export default function Flashcards({ store, onNavigate }) {
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
 
+  // 経穴カードのSRS（③）：「覚えた/まだ」を記録し、苦手だけに絞れる。
+  //   一問一答の本体SRSとは別データ（経穴カードはquestionsに属さないため）。
+  const [cardSrs, setCardSrs] = useState({});
+  const [weakOnly, setWeakOnly] = useState(false);
+  useEffect(() => { loadFlashcardSrs().then(setCardSrs); }, []);
+
   const genericCards = useMemo(() => {
     if (mode === KEIKETSU_MODE) return [];
     return shuffle(questions.filter((q) => subjectMatches(q.subject, { name: mode })));
   }, [mode, questions]);
 
+  const keiketsuCards = useMemo(() => {
+    if (!weakOnly) return KEIKETSU_CARDS;
+    const weakIds = new Set(weakCardIds(cardSrs, KEIKETSU_CARDS.map((c) => c.id)));
+    const filtered = KEIKETSU_CARDS.filter((c) => weakIds.has(c.id));
+    return filtered.length > 0 ? filtered : KEIKETSU_CARDS;
+  }, [weakOnly, cardSrs]);
+
   useEffect(() => {
     setIdx(0);
     setFlipped(false);
-  }, [mode]);
+  }, [mode, weakOnly]);
 
   const isKeiketsu = mode === KEIKETSU_MODE;
-  const cards = isKeiketsu ? KEIKETSU_CARDS : genericCards;
-  const card = cards[idx];
+  const cards = isKeiketsu ? keiketsuCards : genericCards;
+  // cards配列がidx変更より先に切り替わる描画（フィルタ切替直後など）でも範囲外参照にならないよう、
+  // 表示に使うindexはその場でクランプする（idx自体のリセットはuseEffect側で行う）。
+  const safeIdx = Math.min(idx, Math.max(0, cards.length - 1));
+  const card = cards[safeIdx];
   const Fig = isKeiketsu && card?.figure ? figureFor(card.figure) : null;
 
   const go = (d) => {
     if (cards.length === 0) return;
     setFlipped(false);
     setIdx((i) => (i + d + cards.length) % cards.length);
+  };
+
+  const gradeCurrent = async (correct) => {
+    if (!card) return;
+    const next = await gradeFlashcard(card.id, correct);
+    setCardSrs(next);
+    go(1);
   };
 
   return (
@@ -66,6 +90,13 @@ export default function Flashcards({ store, onNavigate }) {
         </select>
       </div>
 
+      {isKeiketsu && (
+        <label className="switch-row" style={{ marginBottom: 10 }}>
+          <input type="checkbox" checked={weakOnly} onChange={(e) => setWeakOnly(e.target.checked)} />
+          <span>苦手なカードだけ出す（「まだ」を選んだカード）</span>
+        </label>
+      )}
+
       {cards.length === 0 ? (
         <div className="empty">
           <div className="ico">🃏</div>
@@ -73,7 +104,7 @@ export default function Flashcards({ store, onNavigate }) {
         </div>
       ) : (
         <>
-          <div className="fc-counter">{idx + 1} / {cards.length}</div>
+          <div className="fc-counter">{safeIdx + 1} / {cards.length}</div>
 
           <button className={`fc-card${flipped ? ' flipped' : ''}`} onClick={() => setFlipped((f) => !f)}>
             {isKeiketsu ? (
@@ -115,6 +146,18 @@ export default function Flashcards({ store, onNavigate }) {
               </div>
             )}
           </button>
+
+          {isKeiketsu && flipped && (
+            <div className="btn-row" style={{ marginTop: 10 }}>
+              <button className="btn block" onClick={() => gradeCurrent(false)}>😵 まだ</button>
+              <button className="btn primary block" onClick={() => gradeCurrent(true)}>😄 覚えた</button>
+            </div>
+          )}
+          {isKeiketsu && cardWrongCount(cardSrs, card.id) > 0 && (
+            <p className="inline-note" style={{ textAlign: 'center', marginTop: 6 }}>
+              {cardMastered(cardSrs, card.id) ? '✅ マスター済み' : `これまで「まだ」${cardWrongCount(cardSrs, card.id)}回`}
+            </p>
+          )}
 
           <div className="btn-row" style={{ marginTop: 12 }}>
             <button className="btn block" onClick={() => go(-1)}>← 前へ</button>
