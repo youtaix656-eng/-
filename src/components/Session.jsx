@@ -10,6 +10,7 @@ import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/rev
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
 import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLabel, managerReviewMessage } from '../lib/bufferSession.js';
+import { loadTodayMood, moodToConditionScore } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 
@@ -67,12 +68,22 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const [newPct, setNewPct] = useState(Math.round((settings.sessionNewRatio ?? 1) * 100));
 
   // 3分の2バッファ術：学習予定時間（分）→ 基礎タスク/バッファの自動計算（#A・#B）。
-  //   シフト連携・睡眠アプリ連携は未実装のため、常に設定画面の標準比率（既定2:1）で動作する。
+  //   シフト連携（勤務シフト）は未実装だが、体調連携は「今日の調子」（Home/Mascotで記録、
+  //   音声学習・復習のノルマ調整と同じ値）をconditionScoreとしてそのまま渡している。
   const [planMinutes, setPlanMinutes] = useState(60);
+  const [mood, setMood] = useState(null);
+  useEffect(() => { loadTodayMood().then(setMood); }, []);
   const standardBaseRatio = (settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100)) / 100;
   const bufferPlan = useMemo(
-    () => planStudySession({ totalMinutes: planMinutes, subject, history, standardRatio: standardBaseRatio }),
-    [planMinutes, subject, history, standardBaseRatio]
+    () =>
+      planStudySession({
+        totalMinutes: planMinutes,
+        subject,
+        history,
+        standardRatio: standardBaseRatio,
+        conditionScore: moodToConditionScore(mood),
+      }),
+    [planMinutes, subject, history, standardBaseRatio, mood]
   );
 
   // 検索（科目→ジャンル→キーワード の段階しぼり＋フリーワード）

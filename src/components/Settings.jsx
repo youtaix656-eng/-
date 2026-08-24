@@ -149,7 +149,8 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           </div>
           <div className="hint">
             学習（10・60・300・900）の「時間で計画する」で使う配分です。既定は2:1（基礎67%）。
-            シフト連携なしの時は常にこの比率で動作します。
+            「今日の調子」がしんどい日はこの比率を少しゆるめに、元気な日は少しきつめに自動調整します
+            （±5%の範囲）。勤務シフト連携は未対応のため、この比率が基準になります。
           </div>
         </div>
         <label className="switch-row" style={{ marginTop: 6 }}>

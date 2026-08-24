@@ -264,11 +264,13 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
   から変更できる。基礎タスクの問題数は過去の解答間隔（`history`のタイムスタンプ差の中央値、
   休憩とみなす間隔は除外）から逆算し（`averageAnswerSeconds`）、履歴が少ない初回はジャンル別
   デフォルト解答時間（`DEFAULT_ANSWER_SECONDS`）にフォールバックする（`estimatedAnswerSeconds`）。
-- **シフト連動・体調連携は未実装（将来拡張用の関数のみ用意）**：`baseRatioFor`は
-  `shiftContext`（'work_day'|'off_day'）や`conditionScore`（0-100）を渡せる設計だが、
-  実際に呼ぶ`Session.jsx`/`Calendar.jsx`はどちらも未指定のまま呼んでおり、常に標準比率
-  （Settings値、既定2:1）で動作する。将来、勤務シフト・睡眠アプリ連携を追加する時は
-  `planStudySession`の呼び出し側に`shiftContext`/`conditionScore`を渡すだけで良い設計。
+- **体調連携は実装済み・シフト連動は未実装**（2026-08-24更新）：`baseRatioFor`は
+  `shiftContext`（'work_day'|'off_day'）や`conditionScore`（0-100）を渡せる設計。
+  `conditionScore`は`Session.jsx`が`lib/mood.js`の`moodToConditionScore(loadTodayMood())`
+  （今日の調子＝元気80/普通50/しんどい20、音声学習・復習のノルマ調整と同じ値）をそのまま渡すため、
+  「今日の調子」を記録している日は±5%の範囲で比率が自動調整される。`shiftContext`は
+  `Session.jsx`/`Calendar.jsx`のどちらも未指定のままで、勤務シフト連携はまだ無い。将来、
+  勤務シフト連携を追加する時は`planStudySession`の呼び出し側に`shiftContext`を渡すだけで良い設計。
 - **Session.jsx への統合**：学習画面の開始前に「⏱ 時間で計画する」カードがあり、
   分数を選ぶと基礎タスク／バッファの問題数・時間が即座に計算される。「この計画で基礎タスクを
   始める」を押すと通常の学習セッションと同じ仕組みで開始し、`session.buffer`にプラン
