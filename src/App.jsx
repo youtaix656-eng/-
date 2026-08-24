@@ -51,6 +51,7 @@ const WeeklyJournal = lazy(() => import('./components/WeeklyJournal.jsx'));
 const ExplainNotes = lazy(() => import('./components/ExplainNotes.jsx'));
 const ExamDayChecklist = lazy(() => import('./components/ExamDayChecklist.jsx'));
 const AcupointTap = lazy(() => import('./components/AcupointTap.jsx'));
+const MnemonicQuiz = lazy(() => import('./components/MnemonicQuiz.jsx'));
 
 function ViewLoading() {
   return (
@@ -551,7 +552,9 @@ export default function App() {
       case 'acupointtap':
         return <AcupointTap onNavigate={setView} />;
       case 'mnemonics':
-        return <MnemonicNotebook store={store} onToast={showToast} />;
+        return <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} />;
+      case 'mnemonicquiz':
+        return <MnemonicQuiz store={store} onNavigate={setView} />;
       case 'features':
         return <FeatureIndex onNavigate={setView} />;
       case 'toc':
