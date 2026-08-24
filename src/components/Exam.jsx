@@ -12,6 +12,7 @@ import { buildWeaknessSummary } from '../lib/reviewPool.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import { expectedProgress, isBehindPace, rankSlowQuestions } from '../lib/examPace.js';
+import { halfSplitAccuracy } from '../lib/examHalfSplit.js';
 
 function fmtTime(sec) {
   const m = Math.floor(sec / 60);
@@ -640,6 +641,7 @@ export default function Exam({ store, onNavigate }) {
     const rate = order.length > 0 ? correctCount / order.length : 0;
     const passed = rate >= PASS_RATE;
     const showPassLine = modeId === 'am' || modeId === 'pm';
+    const halfSplit = halfSplitAccuracy(order, answers);
     // 科目別の内訳
     const perSubject = {};
     order.forEach((q, i) => {
@@ -712,6 +714,33 @@ export default function Exam({ store, onNavigate }) {
                   <p className="inline-note" style={{ margin: '2px 0 0' }}>{r.q.question}</p>
                 </div>
               ))}
+            </div>
+          </>
+        )}
+
+        {halfSplit && order.length >= 4 && (
+          <>
+            <div className="section-label" style={{ marginTop: 0 }}>🔋 前半・後半の正答率</div>
+            <div className="card">
+              <div className="tiles">
+                <div className="tile">
+                  <div className="num">{halfSplit.first.accuracy != null ? Math.round(halfSplit.first.accuracy * 100) : '—'}<span style={{ fontSize: 14 }}>%</span></div>
+                  <div className="lbl">前半（{halfSplit.first.total}問）</div>
+                </div>
+                <div className="tile">
+                  <div className="num">{halfSplit.second.accuracy != null ? Math.round(halfSplit.second.accuracy * 100) : '—'}<span style={{ fontSize: 14 }}>%</span></div>
+                  <div className="lbl">後半（{halfSplit.second.total}問）</div>
+                </div>
+              </div>
+              <p className="inline-note" style={{ marginTop: 8 }}>
+                {halfSplit.dropPt == null
+                  ? '前半・後半どちらも解答が必要です。'
+                  : halfSplit.dropPt >= 10
+                  ? `後半で正答率が${halfSplit.dropPt}ポイント下がっています。集中力が切れやすいタイミングかもしれません。`
+                  : halfSplit.dropPt <= -10
+                  ? `後半の方が正答率が${Math.abs(halfSplit.dropPt)}ポイント高くなっています。ペースが掴めてきたようです。`
+                  : '前半・後半で大きな差はなく、集中力を保てています。'}
+              </p>
             </div>
           </>
         )}
