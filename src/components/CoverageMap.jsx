@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { coverageBySubject, coverageLevel, coverageSummary, EXAM_SESSIONS } from '../lib/coverage.js';
+import { integratedCoverage } from '../lib/integratedCoverage.js';
+import { EXAM_BLUEPRINTS } from '../data/examBlueprint.js';
 
 const LEVEL_LABEL = { none: '未収録', thin: '手薄', ok: '収録あり', rich: '充実' };
 
@@ -9,6 +11,7 @@ export default function CoverageMap({ store, onStartSubject }) {
   const { questions, history } = store;
   const rows = useMemo(() => coverageBySubject(questions, history), [questions, history]);
   const summary = useMemo(() => coverageSummary(rows), [rows]);
+  const integrated = useMemo(() => integratedCoverage(questions, EXAM_BLUEPRINTS), [questions]);
   const [openId, setOpenId] = useState(null);
 
   const bySession = (sid) => rows.filter((r) => r.session === sid);
@@ -55,6 +58,31 @@ export default function CoverageMap({ store, onStartSubject }) {
           )}
         </div>
       )}
+
+      {/* ===== 総合問題（連問）専用のカバー状況（⑩） ===== */}
+      <div className="section-label">🧩 総合問題（連問）のカバー状況</div>
+      <div className="card">
+        <div className="tiles">
+          <div className="tile">
+            <div className="num">{integrated.totalCollected}<span style={{ fontSize: 14 }}>/{integrated.totalTarget}</span></div>
+            <div className="lbl">収録数（目安）</div>
+          </div>
+        </div>
+        {integrated.bySession.map((b) => (
+          <div className="stat-row" key={b.session}>
+            <div className="stat-head">
+              <span className="stat-subject">{b.label}・{b.note}</span>
+              <span className="stat-pct">{b.collectedCount}/{b.targetCount}問（{b.caseCount}事例）</span>
+            </div>
+            <div className="bar ana-bar-mastery">
+              <span style={{ width: `${b.targetCount > 0 ? Math.min(100, (b.collectedCount / b.targetCount) * 100) : 0}%` }} />
+            </div>
+          </div>
+        ))}
+        <p className="inline-note" style={{ marginTop: 8 }}>
+          目安は本番形式の模試（午前/午後）で使う出題数です。過去問を投げていただき次第、実データへ追加します。
+        </p>
+      </div>
 
       <div className="cov-legend">
         {['rich', 'ok', 'thin', 'none'].map((lv) => (
