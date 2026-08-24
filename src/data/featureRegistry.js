@@ -40,6 +40,7 @@ const featureRegistry = [
   { id: 'forgetting', title: '忘却予測', icon: '🧠', category: '復習・弱点対策', view: 'analytics', sub: true, desc: '保持率をエビングハウス的な指数減衰で推定し、忘れそうな問題を先読み表示（分析画面内）。', tags: ['忘却曲線', 'forgetting.js'] },
   { id: 'weakclusters', title: '弱点クラスタ', icon: '🧩', category: '復習・弱点対策', view: 'analytics', sub: true, desc: 'タグの共起から弱点テーマを自動抽出（分析画面内）。', tags: ['弱点クラスタ', 'weakClusters.js'] },
   { id: 'difficulty', title: '難易度推定', icon: '🎚️', category: '復習・弱点対策', view: 'analytics', sub: true, desc: '正答率から難問を抽出（分析画面内）。', tags: ['難易度'] },
+  { id: 'timeofday', title: '時間帯別パフォーマンス分析', icon: '🕐', category: '復習・弱点対策', view: 'analytics', sub: true, desc: '朝/昼/夕方・夜/深夜のどの時間帯に正答率が高いかを集計し、自分に合った学習時間帯を可視化する（分析画面内、10問以上解いた時間帯のみ比較対象）。', tags: ['時間帯', 'パフォーマンス分析'] },
   { id: 'subjectbalance', title: '科目バランス警告', icon: '⚖️', category: '復習・弱点対策', view: 'analytics', sub: true, desc: '他の科目は解けているのに特定の科目だけ極端に正答率が低いまま学習が進んでいないかを検知して知らせる（分析画面内、十分な解答数がある科目のみ対象）。', tags: ['科目バランス', '偏り警告'] },
   { id: 'coverage', title: '網羅マップ', icon: '🗺️', category: '復習・弱点対策', view: 'coverage', desc: '出題基準×収録数を色で俯瞰。手薄・未収録の科目が一目で分かる。', tags: ['網羅マップ'] },
   { id: 'weeklyjournal', title: '週次の弱点ジャーナル', icon: '📓', category: '復習・弱点対策', view: 'journal', desc: '直近7日間の解答から誤答理由・弱点テーマの週報を自動生成し、来週の方針を一言書き込める。3分の2バッファ術のマネージャービューと同じく「悪いのは実行役ではなく計画の立て方」という前向きな前提でまとめる。分析画面から遷移。', tags: ['週報', '振り返り', 'ジャーナル'] },

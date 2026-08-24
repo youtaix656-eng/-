@@ -15,6 +15,7 @@ import { scopeCoverage } from '../data/examScope.js';
 import { isInReview, MATURE_INTERVAL } from '../lib/srs.js';
 import { computeBadges } from '../lib/gamify.js';
 import { buildProgressSummary, buildProgressReportHtml } from '../lib/progressReport.js';
+import { hourlyPerformance } from '../lib/timeOfDay.js';
 import InsightsSection from './InsightsSection.jsx';
 
 // 分析・攻略率・合格者診断（⑯⑱㉑㉒）
@@ -59,6 +60,7 @@ export default function Analytics({ store, onNavigate, onToast }) {
     [history, questions, srs]
   );
   const balance = useMemo(() => subjectBalanceWarning(history, questions), [history, questions]);
+  const timeOfDay = useMemo(() => hourlyPerformance(history), [history]);
 
   if (history.length === 0) {
     return (
@@ -245,6 +247,37 @@ export default function Analytics({ store, onNavigate, onToast }) {
           のべ{history.length}問・{activeDays}日学習・通算正答率{formatPercent(overall.accuracy)}
         </div>
       </div>
+
+      {/* ===== 時間帯別パフォーマンス分析 ===== */}
+      {timeOfDay.buckets.some((b) => b.total > 0) && (
+        <>
+          <div className="section-label">🕐 時間帯別の正答率</div>
+          <div className="card">
+            {timeOfDay.best && (
+              <p className="inline-note" style={{ margin: '0 0 8px' }}>
+                あなたは<strong>{timeOfDay.best.label}</strong>の正答率が高い傾向です（{formatPercent(timeOfDay.best.accuracy)}）。
+              </p>
+            )}
+            {timeOfDay.buckets.map((b) => (
+              <div className="stat-row" key={b.id}>
+                <div className="stat-head">
+                  <span className="stat-subject">{b.label}</span>
+                  <span className="stat-pct">
+                    {b.accuracy != null ? formatPercent(b.accuracy) : '—'}
+                    <span className="stat-sub"> （{b.total}問）</span>
+                  </span>
+                </div>
+                {b.accuracy != null && (
+                  <div className="bar ana-bar-mastery">
+                    <span style={{ width: `${b.accuracy * 100}%` }} />
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="inline-note" style={{ marginTop: 6 }}>10問以上解いた時間帯だけを比較対象にしています。</div>
+          </div>
+        </>
+      )}
 
       {/* ===== ㉒ 合格者スタイル診断 ===== */}
       <div className="section-label">🧭 合格者スタイル診断</div>
