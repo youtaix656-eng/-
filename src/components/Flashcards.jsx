@@ -75,9 +75,14 @@ export default function Flashcards({ store, onNavigate }) {
       </p>
 
       {isKeiketsu && (
-        <button className="btn ghost block" onClick={() => onNavigate && onNavigate('acupointtap')} style={{ marginBottom: 10 }}>
-          🗺️ 体表イラストでタップして覚える
-        </button>
+        <div className="btn-row" style={{ marginBottom: 10 }}>
+          <button className="btn ghost block" onClick={() => onNavigate && onNavigate('acupointtap')}>
+            🗺️ 体表イラストでタップして覚える
+          </button>
+          <button className="btn ghost block" onClick={() => onNavigate && onNavigate('keiketsureverse')}>
+            🩺 症状から経穴を当てる
+          </button>
+        </div>
       )}
 
       <div className="field" style={{ marginBottom: 14 }}>
