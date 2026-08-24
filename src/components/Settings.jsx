@@ -18,11 +18,14 @@ import Diagnostics from './Diagnostics.jsx';
 import SnapshotsCard from './SnapshotsCard.jsx';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
+import { downloadFile } from '../lib/download.js';
+import { exportHistoryCsv } from '../lib/historyExport.js';
 
 // 設定・問題データ管理画面
 export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText, onNavigate }) {
   const {
     questions,
+    history,
     settings,
     updateSettings,
     replaceQuestions,
@@ -378,19 +381,33 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         <div className="btn-row">
           <button
             className="btn"
-            onClick={() => download(exportCsv(questions), 'shinkyu_questions.csv', 'text/csv')}
+            onClick={() => downloadFile(exportCsv(questions), 'shinkyu_questions.csv', 'text/csv')}
           >
             CSVで保存
           </button>
           <button
             className="btn"
             onClick={() =>
-              download(exportJson(questions), 'shinkyu_questions.json', 'application/json')
+              downloadFile(exportJson(questions), 'shinkyu_questions.json', 'application/json')
             }
           >
             JSONで保存
           </button>
         </div>
+      </div>
+
+      {/* ===== 学習ログのエクスポート（②） ===== */}
+      <div className="section-label">学習ログの書き出し</div>
+      <div className="card">
+        <p className="inline-note" style={{ marginBottom: 10 }}>
+          自分の解答履歴（{history.length}件）をCSVで書き出せます。表計算ソフトでの独自分析に。
+        </p>
+        <button
+          className="btn"
+          onClick={() => downloadFile(exportHistoryCsv(history, questions), 'shinkyu_history.csv', 'text/csv')}
+        >
+          解答履歴をCSVで保存
+        </button>
       </div>
 
       {/* ===== 音声設定 ===== */}
