@@ -1,7 +1,7 @@
 // AI社員を雇う。プリセットから雇う／完全オリジナルを作る、の2通り。
 
 import { useEffect, useMemo, useState } from 'react';
-import { Card, Field, SectionTitle, Row } from './ui.jsx';
+import { Card, Field, SectionTitle, Row, Action } from './ui.jsx';
 import { ROLES, roleById, DEPARTMENTS } from '../data/roles.js';
 import { presetEmployee, archetypeFor } from '../data/employees.js';
 import { loadCharacterDetails } from '../data/characters.js';
@@ -168,9 +168,10 @@ export default function Hire({ store, initialRoleId, go }) {
               </p>
               {preset.genreHint && <p className="muted">分野の指示：{preset.genreHint}</p>}
               <p className="muted">読み：{preset.reading}</p>
-              <button type="button" className="btn primary block" onClick={hirePreset} disabled={full}>
+              {/* 二度押しで同じ席に2人できるのを防ぐ（新項目26。雇用は非同期になった） */}
+              <Action className="btn primary block" onClick={hirePreset} disabled={full} busyLabel="雇っています…">
                 {preset.name} を雇う
-              </button>
+              </Action>
             </Card>
           )}
         </>
@@ -302,9 +303,9 @@ export default function Hire({ store, initialRoleId, go }) {
               })}
             </div>
           </Field>
-          <button type="button" className="btn primary block" onClick={hireCustom} disabled={full || !custom.name}>
+          <Action className="btn primary block" onClick={hireCustom} disabled={full || !custom.name} busyLabel="雇っています…">
             この社員を雇う
-          </button>
+          </Action>
         </Card>
       )}
     </div>

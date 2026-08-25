@@ -153,8 +153,17 @@ export function applyStepResult(task, stepId, result) {
         .filter((s) => s.output)
         .map((s) => (sameGroup.length > 1 ? `## ${s.employeeName || s.roleId}\n\n${s.output}` : s.output))
         .join('\n\n---\n\n');
-      for (let i = 0; i < steps.length; i += 1) {
-        if (groupOf(steps[i], steps) === g + 1) steps[i] = { ...steps[i], input: handoff };
+      // **「g + 1」で探さないこと。** 未雇用の役職を計画から外すと group の番号が
+      // 飛ぶ（例：0, 2）ので、+1 では次の手順が見つからず引き継ぎが空になる。
+      // 実際に残っている番号の中から「g より大きい最小」を探す。
+      const nextG = steps
+        .map((x) => groupOf(x, steps))
+        .filter((n) => n > g)
+        .sort((a, b) => a - b)[0];
+      if (nextG !== undefined) {
+        for (let i = 0; i < steps.length; i += 1) {
+          if (groupOf(steps[i], steps) === nextG) steps[i] = { ...steps[i], input: handoff };
+        }
       }
     }
   }

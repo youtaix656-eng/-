@@ -195,7 +195,11 @@ export default function Characters({ store, go, toast, highlight = null }) {
                           <p className="muted" style={{ margin: '6px 0 4px', color: 'var(--ink-2)' }}>
                             {detailsReady ? characterDetail(c.roleId, c.seat)?.persona : '　'}
                           </p>
-                          <p className="muted" style={{ margin: 0 }}>書き方：{c.style}</p>
+                          {detailsReady && (
+                            <p className="muted" style={{ margin: 0 }}>
+                              書き方：{characterDetail(c.roleId, c.seat)?.style}
+                            </p>
+                          )}
                           <div className="btn-row" style={{ marginTop: 8 }}>
                             {emp ? (
                               <>

@@ -10,13 +10,17 @@ export default function AuditView({ store }) {
   const [filter, setFilter] = useState('all');
   // 新項目09：起動時は新しいぶんだけ読んでいる。古いぶんはここで読み足す。
   const [loadingAll, setLoadingAll] = useState(false);
-  const [partial, setPartial] = useState(store.auditPartial);
+  // **その場の値を useState の初期値にしないこと。** 操作履歴は起動から1.5秒ほど
+  // 遅れて読み込まれるので、早く開くと「全部読んだ」と思い込んで
+  // 「すべて読み込む」が出なくなる。毎回 store を見て、読み終えた時だけ手元で覆す。
+  const [readAllDone, setReadAllDone] = useState(false);
+  const partial = store.auditPartial && !readAllDone;
 
   const readAll = async () => {
     setLoadingAll(true);
     try {
       await store.loadAllAudit();
-      setPartial(false);
+      setReadAllDone(true);
     } finally {
       setLoadingAll(false);
     }
@@ -77,12 +81,16 @@ export default function AuditView({ store }) {
 
 // 一覧をこの件数より多く出す時だけ、窓表示に切り替える
 const WINDOW_FROM = 200;
-const ROW_H = 62; // 窓表示の1行の高さ（px）。CSS の .log-row と必ずそろえる
+// 窓表示の1行の高さ（px）。**余白まで含めた値**にすること。
+// 中身の高さだけにすると、行が増えるほど実際の位置とずれて空白が出る。
+// CSS の .log-row（height + margin-bottom）と必ずそろえる。
+const ROW_H = 68; // = 62px + 余白6px
 
 function LogRow({ e, store, fixed = false }) {
   const emp = store.employees.find((x) => x.id === e.actor);
   return (
-    <div className={`card tight ${fixed ? 'log-row' : ''}`} style={{ marginBottom: 6 }}>
+    // 窓表示の時は余白も CSS 側で持つ（高さの計算を1か所にするため）
+    <div className={`card tight ${fixed ? 'log-row' : ''}`} style={fixed ? undefined : { marginBottom: 6 }}>
       <div style={{ fontSize: 13.5 }} className={fixed ? 'clip1' : ''}>
         <span className="dim">{emp ? emp.shortName : 'あなた'}</span>
         {' が '}

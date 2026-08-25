@@ -98,7 +98,9 @@ export default function TaskDetail({ store, taskId, go }) {
                     {live.employeeName} が書いています…
                   </div>
                   {live.text ? (
-                    <Doc text={live.text} />
+                    // 流れている最中は折り畳まない（新項目18）。
+                    // 途中で「続きを読む」が出ると、書き続けているのに止まって見える。
+                    <Doc text={live.text} fold={0} />
                   ) : (
                     <div className="muted">受け取りを待っています</div>
                   )}

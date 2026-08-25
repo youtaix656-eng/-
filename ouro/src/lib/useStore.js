@@ -49,6 +49,10 @@ const FIRST_KEYS = [
 // 「すべて読み込む」を押した時と、畳む時だけ全件を読む。
 export const AUDIT_PAGE = 400;
 
+// 古い記録を畳む間隔（新項目08）。畳む対象は30日より古い記録なので、
+// 起動のたびに確かめる必要はない。
+const FOLD_EVERY_MS = 24 * 60 * 60 * 1000;
+
 // 開くまで見えないもの（操作履歴は最大2000件あるので、必ず後回しにする）
 const REST_KEYS = [
   KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit, KEYS.connections,
@@ -227,8 +231,13 @@ export function useStore() {
 
       // 新項目08：手が空いたら、古い記録を日ごとに1件へ畳む。
       // 畳むには全件が要るので、ここでだけ全部読む（起動の速さには影響しない）。
-      // 1回の起動につき1度だけ、たまっている時だけ走る。
-      if (!foldedRef.current && isPartial(KEYS.audit)) {
+      //
+      // **毎回の起動では走らせない。** 走らせると、せっかく新しい400件だけ読んだのに
+      // 数秒後に全件を読み直すことになり、ページングの意味が無くなる。
+      // 1日に1度で十分（畳む対象は30日より古い記録なので、急ぐ理由が無い）。
+      const lastFold = Number(stateRef.current.settings?.lastAuditFold) || 0;
+      const dueForFold = Date.now() - lastFold > FOLD_EVERY_MS;
+      if (!foldedRef.current && dueForFold && isPartial(KEYS.audit)) {
         foldedRef.current = true;
         await whenIdle(6000);
         if (!alive) return;
@@ -250,6 +259,11 @@ export function useStore() {
           stateRef.current = withAudit;
           setState(withAudit);
           if (folded > 0) save(KEYS.audit, list, 'low');
+          // 次に畳むのは1日後
+          const settings = { ...stateRef.current.settings, lastAuditFold: Date.now() };
+          stateRef.current = { ...stateRef.current, settings };
+          setState(stateRef.current);
+          save(KEYS.settings, settings, 'low');
         } catch {
           /* 畳めなくても動作には支障がないので黙って諦める */
         }

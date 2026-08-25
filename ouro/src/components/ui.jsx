@@ -209,12 +209,14 @@ export const Spark = memo(function Spark({ series = [], field = 'total' }) {
 export function Action({ onClick, children, busyLabel = '', className = 'btn', ...rest }) {
   const [busy, setBusy] = useState(false);
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // **付け直しのたびに true へ戻すこと。** 開発時の二重マウント（StrictMode）では
+    // 1回目の後片付けで false になり、そのままだと押しても永久に回り続ける。
+    alive.current = true;
+    return () => {
       alive.current = false;
-    },
-    []
-  );
+    };
+  }, []);
 
   const handle = async (e) => {
     if (busy) return;
@@ -228,7 +230,9 @@ export function Action({ onClick, children, busyLabel = '', className = 'btn', .
   };
 
   return (
-    <button type="button" className={className} onClick={handle} disabled={busy || rest.disabled} {...rest}>
+    // **disabled は {...rest} の後に置くこと。** 先に置くと rest.disabled（多くは
+    // undefined）に上書きされて、実行中でも押せてしまう。
+    <button type="button" className={className} {...rest} onClick={handle} disabled={busy || rest.disabled}>
       {busy ? (
         <>
           <span className="spinner" /> {busyLabel || children}

@@ -1336,6 +1336,7 @@ select {
    数値は components/AuditView.jsx の ROW_H と必ずそろえること。 */
 .log-row {
   height: 62px;
+  margin-bottom: 6px; /* 合計68px＝AuditView.jsx の ROW_H とそろえる */
   overflow: hidden;
   box-sizing: border-box;
 }

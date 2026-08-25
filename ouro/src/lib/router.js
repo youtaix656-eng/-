@@ -90,7 +90,14 @@ export function route({ employee = {}, secrets = {}, request = '', mode = 'auto'
   // 全部外れてしまう時は、外さない（投げ先が無くなるより、混んでいても投げる）。
   const free = poolAll.filter((p) => !isBusy(p.id));
   const pool = free.length ? free : poolAll;
-  const avoided = free.length < poolAll.length;
+  // 「混んでいたので別へ回した」と言ってよいのは、**実際に希望が外れた時だけ**。
+  // どれか1つでも冷ましているだけで理由に書くと、希望どおり動いた時にも
+  // 「混んでいた」と記録されてしまう。
+  const avoided = Boolean(
+    employee.providerPref &&
+      poolAll.some((p) => p.id === employee.providerPref) &&
+      !pool.some((p) => p.id === employee.providerPref)
+  );
 
   // 社員の希望が使えるなら尊重する
   const preferred = pool.find((p) => p.id === employee.providerPref);

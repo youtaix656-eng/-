@@ -95,3 +95,35 @@ test('同梱の仕事の流れは、入れ子があっても実在する役職�
     assert.equal(new Set(flat).size, flat.length, `${wf.name} に同じ役職が2回入っている`);
   }
 });
+
+// ───────── 見つかった不具合の再発防止 ─────────
+
+test('未雇用で手順が抜けて group の番号が飛んでも、引き継ぎが途切れない', () => {
+  // mkt_publish は 企画 → 確認 → 配信。確認役だけを雇っていない状態を作る。
+  // 番号が 0, 2 のように飛ぶので、「次は g+1」で探すと引き継ぎが空になる。
+  const hired = new Set(['mkt_content', 'mkt_ops']);
+  const t = createTask({
+    request: 'キャンペーンの告知を出したい',
+    forceRoles: ['mkt_content', 'mkt_governance', 'mkt_ops'],
+    assign: (roleId) => (hired.has(roleId) ? { id: `e_${roleId}`, name: roleId, roleId } : null),
+  });
+
+  const roles = t.steps.map((s) => s.roleId);
+  assert.deepEqual(roles, ['mkt_content', 'mkt_ops'], '未雇用の確認役が外れていない');
+  const groups = t.steps.map((s) => s.group);
+  assert.notEqual(groups[1], groups[0] + 1, 'この試験の前提（番号が飛ぶ）が崩れている');
+
+  const g1 = nextGroup(t);
+  const after = applyStepResult(t, g1[0].id, { text: '企画の中身' });
+  const ops = after.steps.find((s) => s.roleId === 'mkt_ops');
+  assert.equal(ops.input, '企画の中身', '番号が飛ぶと引き継ぎが空になっている');
+});
+
+test('外れた確認役は missingApprovers に残る（黙って落とさない）', () => {
+  const t = createTask({
+    request: 'キャンペーンの告知を出したい',
+    forceRoles: ['mkt_content', 'mkt_governance', 'mkt_ops'],
+    assign: (roleId) => (roleId === 'mkt_governance' ? null : { id: roleId, name: roleId, roleId }),
+  });
+  assert.ok(t.missingApprovers.includes('mkt_governance'));
+});
