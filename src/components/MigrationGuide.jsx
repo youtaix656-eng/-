@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { exportAll } from '../lib/storage.js';
 import { buildSyncPayload, encodeSync } from '../lib/sync.js';
 import { recommendMigrationMethod, MIGRATION_METHODS } from '../lib/migrationAdvice.js';
+import { checkDeviceCapabilities } from '../lib/deviceCapabilities.js';
 import FileBackupCard from './FileBackupCard.jsx';
 import SyncQR from './SyncQR.jsx';
 import SyncScan from './SyncScan.jsx';
@@ -22,6 +23,7 @@ export default function MigrationGuide({ store, onToast }) {
   const { srs, history, memos, links, examResults, settings, updateSettings, markBackedUp, importBackup } = store;
   const [sizes, setSizes] = useState({ syncPayloadBytes: null, fullBackupBytes: null });
   const hasShareApi = typeof navigator !== 'undefined' && !!navigator.share;
+  const capabilities = useMemo(() => checkDeviceCapabilities(), []);
 
   useEffect(() => {
     let alive = true;
@@ -38,7 +40,14 @@ export default function MigrationGuide({ store, onToast }) {
     // srs/history等の変化のたびに再計算（サイズが変わるため）
   }, [srs, history, memos, links, examResults, settings]);
 
-  const recommendation = recommendMigrationMethod({ ...sizes, hasShareApi });
+  const recommendation = recommendMigrationMethod({ ...sizes, hasShareApi, capabilities });
+
+  const CAP_ROWS = [
+    { key: 'camera', label: 'カメラでQRを直接読み取り', used: '①QRコード・④WebRTC' },
+    { key: 'shareApi', label: '共有ボタン（AirDrop・LINE等）', used: '②バックアップファイル' },
+    { key: 'webrtc', label: 'WebRTCで端末同士を直接接続', used: '④WebRTCで直接転送' },
+    { key: 'clipboard', label: 'コピー＆ペースト', used: '①・④の貼り付け方式' },
+  ];
 
   return (
     <div className="view">
@@ -54,6 +63,25 @@ export default function MigrationGuide({ store, onToast }) {
         <p className="inline-note" style={{ marginTop: 0 }}>{recommendation.reason}</p>
         <p className="inline-note" style={{ marginTop: 8, opacity: 0.8 }}>
           目安：進捗・設定 {fmtBytes(sizes.syncPayloadBytes)}／問題データ込みの全体 {fmtBytes(sizes.fullBackupBytes)}
+        </p>
+      </div>
+
+      <div className="section-label">📶 この端末の対応状況</div>
+      <div className="card">
+        <p className="inline-note" style={{ marginTop: 0, marginBottom: 8 }}>
+          下の各方法を試す前に、この端末（ブラウザ）が対応しているかを確認できます。
+          ✕の方法は、この端末では別の方法に自動で切り替わります。
+        </p>
+        {CAP_ROWS.map((r) => (
+          <div className="stat-row" key={r.key}>
+            <div className="stat-head">
+              <span className="stat-subject">{capabilities[r.key] ? '✅' : '❌'} {r.label}</span>
+              <span className="stat-sub">{r.used}</span>
+            </div>
+          </div>
+        ))}
+        <p className="inline-note" style={{ marginTop: 8 }}>
+          ※「バックアップファイル」の保存・復元は、これらに対応していない端末でも常に使えます。
         </p>
       </div>
 
