@@ -17,6 +17,9 @@ const BUFFERED_AMOUNT_LOW = 256 * 1024;
 // データ本体と混同しない（JSON.stringifyの出力に生の制御文字は含まれない）。
 const META_PREFIX = 'META:';
 const DONE_MARKER = 'DONE';
+const ACK_MARKER = 'ACK';
+// 受信側からのACKを待つ上限（DONE送出後、確認が来ない不安定な回線に備える）
+const ACK_TIMEOUT_MS = 15000;
 
 export function createPeerConnection() {
   return new RTCPeerConnection({ iceServers: STUN_SERVERS });
@@ -70,10 +73,18 @@ export async function decodeSdp(str) {
   return obj;
 }
 
-// DataChannel経由でテキストを送る（大きい場合は内部で分割し、bufferedAmountで速度調整する）
-export function sendOverChannel(dc, text, onProgress) {
+// DataChannel経由でテキストを送る（大きい場合は内部で分割し、bufferedAmountで速度調整する）。
+// dc.send()はキューへの投入に過ぎず、相手に届いた保証はしない。そのためDONE送信後もresolveしず、
+// 受信側からのACK（全部受け取った確認）を待って初めて成功とする（実測で、送信側が「完了」
+// と表示された後も受信側が94%で永久に止まる事例を確認したため）。
+export function sendOverChannel(dc, text, onProgress, { ackTimeoutMs = ACK_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
     const total = text.length;
+    let ackTimer = null;
+    const cleanupAckWait = () => {
+      if (ackTimer) { clearTimeout(ackTimer); ackTimer = null; }
+      dc.onmessage = null;
+    };
     try {
       dc.send(META_PREFIX + JSON.stringify({ total }));
     } catch (e) {
@@ -97,9 +108,21 @@ export function sendOverChannel(dc, text, onProgress) {
           offset += piece.length;
           onProgress?.(offset, total);
         }
+        // ACK待ち受けはDONE送信より先に登録する（同じイベントループ内でACKが
+        // 返ってくる環境でも取りこぼさないため）。
+        dc.onmessage = (ev) => {
+          if (ev.data === ACK_MARKER) {
+            cleanupAckWait();
+            resolve();
+          }
+        };
+        ackTimer = setTimeout(() => {
+          cleanupAckWait();
+          reject(new Error('受信側からの受信確認が取れませんでした。ネットワークが不安定な可能性があります。もう一度お試しいただくか、他の移行方法をご利用ください。'));
+        }, ackTimeoutMs);
         dc.send(DONE_MARKER);
-        resolve();
       } catch (e) {
+        cleanupAckWait();
         reject(e);
       }
     };
@@ -107,25 +130,47 @@ export function sendOverChannel(dc, text, onProgress) {
   });
 }
 
-// 受信側：DataChannelでの受信を組み立てる。完了したら onComplete(fullText) が呼ばれる
-export function receiveOverChannel(dc, { onProgress, onComplete, onError } = {}) {
+// 受信側：DataChannelでの受信を組み立てる。完了したら onComplete(fullText) が呼ばれる。
+// 途中でデータが止まったまま（ネットワーク不安定等）にならないよう、一定時間進捗がなければ
+// onErrorで知らせる（以前は完了まで進捗があれば永久に待ち続けてしまっていた）。
+const STALL_TIMEOUT_MS = 15000;
+export function receiveOverChannel(dc, { onProgress, onComplete, onError, stallTimeoutMs = STALL_TIMEOUT_MS } = {}) {
   let total = 0;
   let received = '';
+  let done = false;
+  let stallTimer = null;
+  const armStallTimer = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        onError?.(new Error('受信が途中で止まりました。ネットワークが不安定な可能性があります。もう一度お試しいただくか、他の移行方法をご利用ください。'));
+      }
+    }, stallTimeoutMs);
+  };
   dc.onmessage = (ev) => {
+    if (done) return;
     try {
       const data = ev.data;
       if (typeof data !== 'string') return;
       if (data.startsWith(META_PREFIX)) {
         total = JSON.parse(data.slice(META_PREFIX.length)).total || 0;
+        armStallTimer();
         return;
       }
       if (data === DONE_MARKER) {
+        done = true;
+        if (stallTimer) clearTimeout(stallTimer);
+        try { dc.send(ACK_MARKER); } catch (e) { /* 送信側がすでに閉じていても受信自体は成功しているので無視 */ }
         onComplete?.(received);
         return;
       }
       received += data;
+      armStallTimer();
       onProgress?.(received.length, total);
     } catch (e) {
+      done = true;
+      if (stallTimer) clearTimeout(stallTimer);
       onError?.(e);
     }
   };

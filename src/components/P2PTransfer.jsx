@@ -217,8 +217,17 @@ export default function P2PTransfer({ store, onToast }) {
   const [answerChunks, setAnswerChunks] = useState(null);
   const pcRef = useRef(null);
   const dcRef = useRef(null);
+  const connectTimeoutRef = useRef(null);
+
+  const clearConnectTimeout = () => {
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+  };
 
   const cleanup = () => {
+    clearConnectTimeout();
     try { dcRef.current?.close(); } catch (e) { /* noop */ }
     try { pcRef.current?.close(); } catch (e) { /* noop */ }
     pcRef.current = null;
@@ -239,11 +248,28 @@ export default function P2PTransfer({ store, onToast }) {
 
   const watchConnectionFailure = (pc) => {
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      if (pc.connectionState === 'connected') {
+        clearConnectTimeout();
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        clearConnectTimeout();
         setErrorMsg('接続できませんでした。同じWi-Fiに接続してから試すか、他の移行方法（QR分割・共有・Googleドライブ）をご利用ください。');
         setPhase('error');
       }
     };
+  };
+
+  // 対称NAT等でICE接続が失敗にも成功にも至らず「接続を待っています…」のまま
+  // いつまでも進まないことがある（実測で65秒待っても状態が変化しないケースを確認）。
+  // ブラウザ側のconnectionState変化を待つだけでなく、一定時間で見切りを付けて
+  // 他の移行方法へ誘導する（ユーザーが無反応な画面で待たされ続けないようにする）。
+  const armConnectTimeout = (ms = 20000) => {
+    clearConnectTimeout();
+    connectTimeoutRef.current = setTimeout(() => {
+      if (pcRef.current && pcRef.current.connectionState !== 'connected') {
+        setErrorMsg('接続に時間がかかりすぎています。同じWi-Fiに接続しているか確認するか、他の移行方法（QR分割・共有・Googleドライブ）をご利用ください。');
+        setPhase('error');
+      }
+    }, ms);
   };
 
   // ===== 送る側 =====
@@ -263,6 +289,7 @@ export default function P2PTransfer({ store, onToast }) {
       setPhase('waiting-answer');
 
       dc.onopen = async () => {
+        clearConnectTimeout();
         setPhase('sending');
         try {
           const data = await exportAll();
@@ -286,6 +313,7 @@ export default function P2PTransfer({ store, onToast }) {
       const sdp = await decodeSdp(encoded);
       await acceptAnswer(pcRef.current, sdp);
       setPhase('connecting');
+      armConnectTimeout();
       onToast?.('応答コードを取り込みました。接続を待っています…');
     } catch (e) {
       onToast?.(e.message || '応答コードの取り込みに失敗しました');
@@ -307,6 +335,7 @@ export default function P2PTransfer({ store, onToast }) {
         receiveOverChannel(ev.channel, {
           onProgress: (received, total) => setProgress({ received, total }),
           onComplete: async (text) => {
+            clearConnectTimeout();
             try {
               const data = JSON.parse(text);
               if (!confirm('別端末の学習データ（問題・進捗・設定など）を取り込みます。この端末のデータは上書きされます。よろしいですか？')) {
@@ -321,8 +350,9 @@ export default function P2PTransfer({ store, onToast }) {
               setPhase('error');
             }
           },
-          onError: () => {
-            setErrorMsg('受信中にエラーが発生しました');
+          onError: (e) => {
+            clearConnectTimeout();
+            setErrorMsg(e?.message || '受信中にエラーが発生しました');
             setPhase('error');
           },
         });
@@ -332,6 +362,7 @@ export default function P2PTransfer({ store, onToast }) {
       const { parts } = splitIntoChunks(encodedAnswer, CODE_CHUNK_LEN);
       setAnswerChunks(parts);
       setPhase('waiting-connection');
+      armConnectTimeout();
     } catch (e) {
       setErrorMsg(e.message || 'アンサーの作成に失敗しました');
       setPhase('error');
