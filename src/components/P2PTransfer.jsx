@@ -47,7 +47,7 @@ function CodeOutputPanel({ chunks, onToast, label }) {
       )}
       {multi && (
         <p className="inline-note" style={{ marginTop: 6 }}>
-          <strong>{chunks.length}個に分割中</strong>（{idx + 1}/{chunks.length}個目）
+          <strong>{Math.round(((idx + 1) / chunks.length) * 100)}%</strong>（{chunks.length}個に分割中・{idx + 1}/{chunks.length}個目）
         </p>
       )}
       <div className="btn-row" style={{ marginTop: 8, justifyContent: 'center' }}>
@@ -156,7 +156,9 @@ function CodeInputPanel({ onComplete, onToast, label }) {
   return (
     <div style={{ marginTop: 10 }}>
       {progress && progress.total > 1 && (
-        <p className="inline-note">{progress.received} / {progress.total} 個 取り込み済み</p>
+        <p className="inline-note">
+          {Math.round((progress.received / progress.total) * 100)}%（{progress.received} / {progress.total} 個 取り込み済み）
+        </p>
       )}
 
       {hasDetector && !scanning && (
@@ -403,8 +405,13 @@ export default function P2PTransfer({ store, onToast }) {
           )}
 
           {role === 'receive' && progress && phase === 'waiting-connection' && (
-            <div className="progress" style={{ marginTop: 8 }}>
-              <span style={{ width: `${Math.min(100, (progress.received / Math.max(1, progress.total)) * 100)}%` }} />
+            <div style={{ marginTop: 8 }}>
+              <p className="inline-note">
+                受信中… {Math.round(Math.min(100, (progress.received / Math.max(1, progress.total)) * 100))}%
+              </p>
+              <div className="progress">
+                <span style={{ width: `${Math.min(100, (progress.received / Math.max(1, progress.total)) * 100)}%` }} />
+              </div>
             </div>
           )}
 

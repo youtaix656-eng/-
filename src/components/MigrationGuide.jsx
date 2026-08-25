@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { exportAll } from '../lib/storage.js';
+import { exportAll, loadResumeState } from '../lib/storage.js';
 import { buildSyncPayload, encodeSync } from '../lib/sync.js';
 import { recommendMigrationMethod, MIGRATION_METHODS } from '../lib/migrationAdvice.js';
 import { checkDeviceCapabilities } from '../lib/deviceCapabilities.js';
@@ -20,7 +20,7 @@ function fmtBytes(n) {
 // 実際にその方法をこの画面から一気通貫で操作できる（各方法はSettings画面と同じ
 // コンポーネントを再利用しているため、ロジックの二重管理にはならない）。
 export default function MigrationGuide({ store, onToast }) {
-  const { srs, history, memos, links, examResults, settings, updateSettings, markBackedUp, importBackup } = store;
+  const { srs, history, memos, links, examResults, settings, bookmarks, session, updateSettings, markBackedUp, importBackup } = store;
   const [sizes, setSizes] = useState({ syncPayloadBytes: null, fullBackupBytes: null });
   const hasShareApi = typeof navigator !== 'undefined' && !!navigator.share;
   const capabilities = useMemo(() => checkDeviceCapabilities(), []);
@@ -28,7 +28,8 @@ export default function MigrationGuide({ store, onToast }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const data = { srs, history, memos, links, examResults, settings };
+      const resumeState = await loadResumeState();
+      const data = { srs, history, memos, links, examResults, settings, bookmarks, session, ...resumeState };
       const payload = buildSyncPayload(data, { includeHistory: true });
       const encoded = await encodeSync(payload);
       const full = await exportAll();
@@ -38,7 +39,7 @@ export default function MigrationGuide({ store, onToast }) {
     })();
     return () => { alive = false; };
     // srs/history等の変化のたびに再計算（サイズが変わるため）
-  }, [srs, history, memos, links, examResults, settings]);
+  }, [srs, history, memos, links, examResults, settings, bookmarks, session]);
 
   const recommendation = recommendMigrationMethod({ ...sizes, hasShareApi, capabilities });
 

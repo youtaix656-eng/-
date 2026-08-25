@@ -310,6 +310,13 @@ export async function exportAll() {
     auth: await loadAuth(),
     examResults: await loadExamResults(),
     settings: await read(KEYS.settings, {}),
+    bookmarks: await loadBookmarks(),
+    // 「前回の続きから」（一問一答・復習・模試・音声・学習セッション）も別端末へ引き継ぐ
+    quizProgress: await loadQuizProgress(),
+    reviewProgress: await loadReviewProgress(),
+    examProgress: await loadExamProgress(),
+    audioProgress: await loadAudioProgress(),
+    session: await loadSession(),
   };
 }
 
@@ -330,4 +337,22 @@ export async function importAll(data) {
   if (data.auth && typeof data.auth === 'object') await saveAuth(data.auth);
   if (Array.isArray(data.examResults)) await saveExamResults(data.examResults);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
+  if (data.bookmarks && typeof data.bookmarks === 'object') await saveBookmarks(data.bookmarks);
+  if (data.quizProgress && typeof data.quizProgress === 'object') await saveQuizProgress(data.quizProgress);
+  if (data.reviewProgress && typeof data.reviewProgress === 'object') await saveReviewProgress(data.reviewProgress);
+  if (data.examProgress && typeof data.examProgress === 'object') await saveExamProgress(data.examProgress);
+  if (data.audioProgress && typeof data.audioProgress === 'object') await saveAudioProgress(data.audioProgress);
+  if (data.session && typeof data.session === 'object') await saveSession(data.session);
+}
+
+// ---- 「前回の続きから」（一問一答・復習・模試・音声）のまとめ読み込み ----
+// QR受け渡し（sync.js）は store の React state に無いこれらの値を個別に取得する必要があるため、
+// SyncQR.jsx / MigrationGuide.jsx から共用する。
+export async function loadResumeState() {
+  return {
+    quizProgress: await loadQuizProgress(),
+    reviewProgress: await loadReviewProgress(),
+    examProgress: await loadExamProgress(),
+    audioProgress: await loadAudioProgress(),
+  };
 }
