@@ -1,10 +1,12 @@
-// 画面の切り替え。モバイルファースト・下部ナビ5つ。
+// 画面の切り替え。モバイルファースト・下部ナビ6つ。
 //
-// 新しい画面を追加するときは基本 lazy import にする
-// （下部ナビ相当の頻繁に使う画面だけ即時 import）。
+// 起動を速くするため、**最初に見えるホーム以外はすべて後から読む**。
+// タブの画面も lazy にしたうえで、ホームを描いた後の空き時間に先読みするので、
+// タブを押した時の待ちは実質ゼロになる（項目07・08）。
 
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { useStore } from './lib/useStore.js';
+import * as perf from './lib/perf.js';
 import { useToast } from './components/ui.jsx';
 import Splash from './components/Splash.jsx';
 import Home from './components/Home.jsx';
@@ -12,9 +14,8 @@ import Employees from './components/Employees.jsx';
 import Compose from './components/Compose.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
 import Company from './components/Company.jsx';
-// カレンダーと目次は下部ナビ相当で頻繁に使うため即時 import（lazy に戻さない）
-import Calendar from './components/Calendar.jsx';
-import Toc from './components/Toc.jsx';
+// 肖像の額縁は全員で1つを使い回すので、その定義だけ即時に読む
+import { PortraitSprite } from './components/Portrait.jsx';
 
 const TaskDetail = lazy(() => import('./components/TaskDetail.jsx'));
 const EmployeeDetail = lazy(() => import('./components/EmployeeDetail.jsx'));
@@ -33,6 +34,9 @@ const Connect = lazy(() => import('./components/Connect.jsx'));
 const Approvals = lazy(() => import('./components/Approvals.jsx'));
 const AuditView = lazy(() => import('./components/AuditView.jsx'));
 const Settings = lazy(() => import('./components/Settings.jsx'));
+// 項目07：下部ナビにあるが起動直後には要らないので、後から読む
+const Calendar = lazy(() => import('./components/Calendar.jsx'));
+const Toc = lazy(() => import('./components/Toc.jsx'));
 const GenreEditor = lazy(() => import('./components/GenreEditor.jsx'));
 const Characters = lazy(() => import('./components/Characters.jsx'));
 
@@ -79,6 +83,7 @@ export default function App() {
 
   const go = useCallback(
     (next, nextArg = null) => {
+      perf.mark(`view:${next}`);
       setStack((s) => [...s, { view, arg }].slice(-20));
       setView(next);
       setArg(nextArg);
@@ -103,11 +108,39 @@ export default function App() {
   }, []);
 
   const navTo = (id) => {
+    perf.mark(`view:${id}`);
     setStack([]);
     setView(id);
     setArg(null);
     window.scrollTo(0, 0);
   };
+
+  // 描き終わったところで、切り替えにかかった時間を記録する
+  useEffect(() => {
+    const id = requestAnimationFrame(() => perf.measure(`view:${view}`, 'view'));
+    return () => cancelAnimationFrame(id);
+  }, [view]);
+
+  // 項目08：ホームを描いたあとの空き時間に、次に開きそうな画面を取っておく。
+  // タブを押した瞬間の待ち時間が消える。通信が細い端末では邪魔しないよう
+  // requestIdleCallback を使い、無ければ何もしない。
+  useEffect(() => {
+    if (!store.ready) return undefined;
+    const idle = typeof requestIdleCallback === 'function' ? requestIdleCallback : null;
+    if (!idle) return undefined;
+    const id = idle(
+      () => {
+        import('./components/Toc.jsx');
+        import('./components/Calendar.jsx');
+        import('./components/TaskDetail.jsx');
+        import('./components/EmployeeDetail.jsx');
+      },
+      { timeout: 4000 }
+    );
+    return () => {
+      if (typeof cancelIdleCallback === 'function') cancelIdleCallback(id);
+    };
+  }, [store.ready]);
 
   // ブラウザの戻るで1つ前の画面へ
   useEffect(() => {
@@ -132,6 +165,9 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* 肖像の額縁と切り抜きは、この1つだけを全員で使い回す */}
+      <PortraitSprite />
+
       {!isTab && (
         <header className="topbar">
           <button type="button" className="back" onClick={back} aria-label="戻る">

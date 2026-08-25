@@ -104,6 +104,22 @@ Ouro の要点だけ再掲：**AI社員（人格・役割・記憶）とAIエン
 ※ Olivia/Ethan/Sofia/Lucas は既存キャラクター（Olivia Bennett・Ethan Clarke・Sofia Marchetti・
 Dr. Lukas Weber）と名前が近い。ユーザー指定の名前をそのまま使っているため、画面では
 チーム名と役職を併記して取り違えを防いでいる。
+**速さの仕組みは `ouro/docs/PERFORMANCE.md` が単一の正**（30項目・2026-08-25）。要点だけ：
+①画面は原則 lazy（下部ナビ6画面と常設バーのみ即時）。②`vite.config.js` の `manualChunks` で
+`react` と `roster`（characters.js＋roles.js）を分ける。③紋章は `components/Seal.jsx` の
+SVGで描く（画像ファイルを持たない）。④`useStore.js` は二段階起動で、`FIRST_KEYS` を読んでから
+`REST_KEYS`（部署・出典・会議・操作履歴・接続）を読む。**読み込みが済むまで REST_KEYS を保存しない**
+（`hydratedRef`／`preAuditRef`。空配列のまま保存すると操作履歴が全部消えるバグが実際に出た）。
+⑤`storage.js` は デバウンス＋重複排除＋アイドル書き込み＋離脱時フラッシュ。
+`RECORD_COLLECTIONS` に登録したキーは**変わった1件だけ**を書く（目録＝manifestで順序を持つ。
+`ids` 方式と、操作履歴だけ時刻順キーの `sorted` 方式）。`flushNow()` は実行中の書き込みも待つ。
+⑥`content-visibility: auto` は**`::before` で線・点を描いている要素に付けない**
+（`.step` のタイムラインの点が切り落とされる）。⑦目次は先頭120件の段階表示だが、
+**五十音バーは絞り込み結果の全体から作る**（枠外へ飛ぶ時は先に枠を伸ばす）。
+⑧カレンダーは `schedule.js` の `buildDayIndex()` で「日付→予定」の Map を1回だけ作る。
+⑨AIは3社とも `lib/providers/stream.js` の `readSse()` で流し受けし、`throttleDelta()`（90ms）で
+描き直しを間引く。会議の意見・反論は `Promise.all`。⑩`lib/perf.js` が画面切替・保存・AI実行の
+所要時間を**端末内だけ**に記録し、会社画面「速さの記録」で中央値と最悪値を見る（送信しない）。
 テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）

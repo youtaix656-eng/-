@@ -8,6 +8,7 @@ import { usd, relTime } from '../lib/format.js';
 import { planById, connectionLimit } from '../data/plans.js';
 import { availableProviders } from '../lib/providers/index.js';
 import { ROLES } from '../data/roles.js';
+import * as perf from '../lib/perf.js';
 
 export default function Company({ store, go }) {
   const { company, tasks, knowledge, activeEmployees, audit, approvals, connections, deals } = store;
@@ -98,6 +99,28 @@ export default function Company({ store, go }) {
             </div>
           );
         })}
+      </Card>
+
+      <SectionTitle>速さの記録</SectionTitle>
+      <Card className="tight">
+        <p className="muted" style={{ marginTop: 0 }}>
+          この端末での実測です。遅くなった時に気づけるように残しています（外へは送りません）。
+        </p>
+        {perf.summary().length ? (
+          perf.summary().map((s) => (
+            <div
+              key={s.category}
+              style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 13.5, padding: '3px 0' }}
+            >
+              <span style={{ flex: 1 }}>{perf.CATEGORY_LABEL[s.category] || s.category}</span>
+              <span className="mono-num dim">中央 {s.median}ms</span>
+              <span className="mono-num dim">最悪 {s.worst}ms</span>
+              <span className="muted" style={{ fontSize: 11 }}>{s.count}回</span>
+            </div>
+          ))
+        ) : (
+          <div className="muted">まだ記録がありません。画面を切り替えると溜まります。</div>
+        )}
       </Card>
 
       <SectionTitle>最近の動き</SectionTitle>

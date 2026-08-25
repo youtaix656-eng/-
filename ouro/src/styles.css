@@ -416,14 +416,10 @@ select {
   background: linear-gradient(90deg, transparent, var(--line), transparent);
 }
 
-.seal {
+.seal-svg {
   display: block;
   margin: 0 auto;
-  filter: grayscale(1) contrast(1.25);
-  mix-blend-mode: screen;
-  /* 元画像が正方形なので、縁を黒へなじませて額縁に見えないようにする */
-  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 62%, transparent 78%);
-  mask-image: radial-gradient(circle at 50% 50%, #000 62%, transparent 78%);
+  filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.16));
 }
 
 /* ── スプラッシュ ── */
@@ -1300,4 +1296,37 @@ select {
 
 .step.vacant::before {
   border-style: dashed;
+}
+
+
+/* ── 項目17：画面の外にある行は描かない ──
+   ブラウザに「見えていない間は中身の描画を省いてよい」と伝える。
+   contain-intrinsic-size を添えないと、スクロールバーの長さが跳ねる。 */
+.row,
+.toc-row,
+.card.tight,
+.genre-block {
+  content-visibility: auto;
+}
+
+/* .step には付けないこと。content-visibility は塗りを要素の内側に閉じ込めるため、
+   left:-20px にある時系列のドット（.step::before）が消える。 */
+
+.row,
+.toc-row {
+  contain-intrinsic-size: auto 62px;
+}
+
+.card.tight {
+  contain-intrinsic-size: auto 90px;
+}
+
+.genre-block {
+  contain-intrinsic-size: auto 220px;
+}
+
+/* 実行中に流れてくる文字（項目26・27） */
+.live-out {
+  border-color: var(--line-2);
+  background: rgba(255, 255, 255, 0.05);
 }

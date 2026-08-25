@@ -4,7 +4,7 @@
 //   あ〜ん → A〜Z の順／数字は読みで振り分け／読みは明示（推定しない）／
 //   タイトルは重複させない／文字は大きめ・タップで飛ぶ。
 
-import { useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Empty } from './ui.jsx';
 import { buildToc, filterToc, tocSections, kindCounts, TOC_KINDS } from '../data/toc.js';
 import { BUCKETS, UNKNOWN_BUCKET } from '../lib/yomi.js';
@@ -15,7 +15,11 @@ import Portrait from './Portrait.jsx';
 
 export default function Toc({ store, go }) {
   const [query, setQuery] = useState('');
+  // 項目15：1文字ごとに全件を絞り込むと入力が引っかかる（実測80ms）。
+  // 入力そのものは即座に反映し、絞り込みは1拍遅らせる。
+  const deferredQuery = useDeferredValue(query);
   const [kind, setKind] = useState(null);
+  const [limit, setLimit] = useState(120); // 項目19：多い時は段階的に出す
   const [view, setView] = useState('org'); // 'org' = 役職×ジャンルの一覧 / 'kana' = 読み引き
   const sectionRefs = useRef({});
 
@@ -23,12 +27,33 @@ export default function Toc({ store, go }) {
     () => buildToc({ employees: store.employees, customGenres: store.genres }),
     [store.employees, store.genres]
   );
-  const filtered = useMemo(() => filterToc(entries, { query, kind }), [entries, query, kind]);
-  const sections = useMemo(() => tocSections(filtered), [filtered]);
+  const filtered = useMemo(
+    () => filterToc(entries, { query: deferredQuery, kind }),
+    [entries, deferredQuery, kind]
+  );
+  // 項目19：件数が多いときは先頭だけ描き、「もっと見る」で足す
+  const shown = useMemo(() => filtered.slice(0, limit), [filtered, limit]);
+  const sections = useMemo(() => tocSections(shown), [shown]);
+  // **五十音バーは「絞り込み後の全件」で判定する。**
+  // 表示中のぶんだけで判定すると、上限より後ろの行（な行・や行など）が
+  // 押せなくなり、そこへ辿り着く手段が無くなる。
+  const allSections = useMemo(() => tocSections(filtered), [filtered]);
   const counts = useMemo(() => kindCounts(entries), [entries]);
-  const present = new Set(sections.map((s) => s.bucket));
+  const present = new Set(allSections.map((s) => s.bucket));
+  const rendered = new Set(sections.map((s) => s.bucket));
+
+  // 絞り込みを変えたら表示件数を最初に戻す
+  useEffect(() => {
+    setLimit(120);
+  }, [deferredQuery, kind]);
 
   const jump = (bucket) => {
+    // まだ描いていない枠へ飛ぶときは、先に全部出してから移動する
+    if (!rendered.has(bucket)) {
+      setLimit(filtered.length);
+      setTimeout(() => jump(bucket), 60);
+      return;
+    }
     const el = sectionRefs.current[bucket];
     if (!el) return;
     // 固定ヘッダーの下に見出しが出るようにずらす
@@ -94,6 +119,7 @@ export default function Toc({ store, go }) {
 
           <div className="muted" style={{ margin: '10px 0' }}>
             {filtered.length}件（読みの「あ〜ん」→「A〜Z」の順）
+            {filtered.length > shown.length && ` — うち${shown.length}件を表示中`}
           </div>
 
           {sections.length ? (
@@ -134,6 +160,17 @@ export default function Toc({ store, go }) {
             ))
           ) : (
             <Empty>該当する項目がありません。</Empty>
+          )}
+
+          {filtered.length > shown.length && (
+            <button
+              type="button"
+              className="btn block"
+              onClick={() => setLimit((n) => n + 200)}
+              style={{ marginTop: 10 }}
+            >
+              もっと見る（残り{filtered.length - shown.length}件）
+            </button>
           )}
         </>
       )}

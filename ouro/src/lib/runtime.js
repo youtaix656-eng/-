@@ -56,6 +56,7 @@ export async function runStep({
   secrets = {},
   settings = {},
   signal,
+  onDelta,
 }) {
   const needs = (step.needs || []).filter((n) => (employee.toolIds || []).includes(n));
   const decision = route({
@@ -94,6 +95,7 @@ export async function runStep({
     tools,
     maxTokens: settings.maxTokens || 8000,
     signal,
+    onDelta,
     meta: {
       roleId: employee.roleId,
       employeeName: employee.name,

@@ -1,6 +1,6 @@
 // 画面をまたいで使う小さな部品。
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { toBlocks } from '../lib/format.js';
 
 /**
@@ -47,7 +47,8 @@ export function SectionTitle({ children }) {
   return <div className="section-title">{children}</div>;
 }
 
-export function Row({ glyph, title, sub, onClick, right, avatar = null }) {
+// 項目18：中身が同じ行は描き直さない。件数が増えたときに効く。
+export const Row = memo(function Row({ glyph, title, sub, onClick, right, avatar = null }) {
   return (
     <button type="button" className="row" onClick={onClick}>
       {avatar}
@@ -59,7 +60,7 @@ export function Row({ glyph, title, sub, onClick, right, avatar = null }) {
       <span className="arrow">{right ?? '›'}</span>
     </button>
   );
-}
+});
 
 export function Empty({ children }) {
   return <div className="empty">{children}</div>;

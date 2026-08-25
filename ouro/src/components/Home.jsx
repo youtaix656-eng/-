@@ -11,6 +11,7 @@ import { revenueSummary, formatMoney } from '../lib/revenue.js';
 import { roleById } from '../data/roles.js';
 import { availableProviders } from '../lib/providers/index.js';
 import { upcoming } from '../lib/schedule.js';
+import Seal from './Seal.jsx';
 
 export default function Home({ store, go }) {
   const {
@@ -46,7 +47,7 @@ export default function Home({ store, go }) {
     <div className="screen fade-in">
       {/* 会社の名札 */}
       <div style={{ textAlign: 'center', margin: '4px 0 18px' }}>
-        <img src="./ouro-seal.jpg" alt="" className="seal" style={{ width: 108, opacity: 0.9 }} />
+        <Seal size={104} />
         <div className="serif" style={{ fontSize: 26, letterSpacing: '0.24em', marginTop: -4 }}>
           Ouro
         </div>

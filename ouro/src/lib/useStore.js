@@ -3,7 +3,8 @@
 // 画面（components/*.jsx）は保存キーを直接触らない。必ずこのフック経由。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KEYS, load, save, exportAll, importAll } from './storage.js';
+import { KEYS, load, loadMany, save, exportAll, importAll, flushNow } from './storage.js';
+import * as perf from './perf.js';
 import { seedAll, makeEmployee, makeSettings, presetForNextSeat } from './seed.js';
 import { createTask, applyStepResult, nextStep, assembleResult } from './workflow.js';
 import { runStep, distill, extractUrls } from './runtime.js';
@@ -18,6 +19,18 @@ import { providerById } from './providers/index.js';
 import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { presetEmployee } from '../data/employees.js';
 import { makeEvent } from './schedule.js';
+
+// 最初の画面（ホーム）を描くのに要るもの
+const FIRST_KEYS = [
+  KEYS.company, KEYS.settings, KEYS.employees, KEYS.tasks, KEYS.knowledge,
+  KEYS.deals, KEYS.events, KEYS.genres, KEYS.approvals, KEYS.secrets,
+];
+// 開くまで見えないもの（操作履歴は最大2000件あるので、必ず後回しにする）
+const REST_KEYS = [
+  KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit, KEYS.connections,
+];
+const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
+const REST_FALLBACKS = Object.fromEntries(REST_KEYS.map((k) => [k, []]));
 
 const EMPTY = {
   company: null,
@@ -41,6 +54,9 @@ export function useStore() {
   const [state, setState] = useState(EMPTY);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(null); // { taskId } | { meetingId }
+  // 項目26・27：実行中の担当と、いま流れてきている途中の文字。
+  // 保存はしない（1文字ごとに書くと保存が跳ねる）。画面表示だけに使う。
+  const [live, setLive] = useState(null); // { taskId, stepId, employeeName, text }
   // 実行系（runTask など）は setState の反映を待たずに続きを読む必要があるため、
   // 最新の状態を ref にも同期で持つ。**更新は必ず put/log を通すこと**
   // （直接 setState すると ref が古いままになり、作った直後の仕事が
@@ -48,46 +64,133 @@ export function useStore() {
   const stateRef = useRef(state);
 
   // ---- 読み込み・設立 ----
+  //
+  // 起動を速くするため2段階に分ける（項目03・05）。
+  //   ① ホームに要るものだけ読んで、すぐ描く
+  //   ② 残り（操作履歴・出典など、開くまで見えないもの）を後から追いつかせる
+  // ②の最中にユーザーが触ったキーは touchedRef に入るので、上書きしない。
+
+  const touchedRef = useRef(new Set());
+  // 2段階読み込みの「まだ読めていない」時間帯を表す。
+  // この間に REST_KEYS を保存すると、まだ空の配列でディスクを上書きしてしまい、
+  // 保存済みの操作履歴などが丸ごと消える。読み終わるまで保存を止める。
+  const hydratedRef = useRef(false);
+  // その時間帯に積まれた操作履歴（追記しかしないので、あとから足せる）
+  const preAuditRef = useRef([]);
+
   useEffect(() => {
     let alive = true;
+    perf.mark('boot');
+
+    const asArray = (v) => (Array.isArray(v) ? v : []);
+
     (async () => {
       const seeded = await load(KEYS.seeded, false);
+
+      // ── 初回：storage を往復せず、その場で会社を作って即描画する ──
+      // 以前は「保存してから読み直す」形だったため、18人の生成と13キーの
+      // 書き込みが1フレームに集中して414ms固まっていた。
       if (!seeded) {
         const fresh = seedAll();
-        await save(KEYS.company, fresh.company);
-        await save(KEYS.departments, fresh.departments);
-        await save(KEYS.employees, fresh.employees);
-        await save(KEYS.settings, fresh.settings);
-        await save(KEYS.seeded, true);
-      }
-      // 保存データが壊れていても画面が真っ白にならないよう、配列は必ず配列にする
-      const arr = async (key) => {
-        const v = await load(key, []);
-        return Array.isArray(v) ? v : [];
-      };
-      const next = {
-        company: await load(KEYS.company, null),
-        departments: await arr(KEYS.departments),
-        employees: await arr(KEYS.employees),
-        tasks: await arr(KEYS.tasks),
-        meetings: await arr(KEYS.meetings),
-        knowledge: await arr(KEYS.knowledge),
-        sources: await arr(KEYS.sources),
-        deals: await arr(KEYS.deals),
-        approvals: await arr(KEYS.approvals),
-        audit: await arr(KEYS.audit),
-        connections: await arr(KEYS.connections),
-        genres: await arr(KEYS.genres),
-        events: await arr(KEYS.events),
-        settings: { ...makeSettings(), ...(await load(KEYS.settings, {})) },
-        secrets: (await load(KEYS.secrets, {})) || {},
-      };
-      if (alive) {
+        const next = {
+          ...EMPTY,
+          company: fresh.company,
+          departments: fresh.departments,
+          employees: fresh.employees,
+          settings: fresh.settings,
+        };
+        if (!alive) return;
+        // 初回はディスクに何も無いので、読み込み待ちの状態は無い
+        hydratedRef.current = true;
         stateRef.current = next;
         setState(next);
         setReady(true);
+        perf.measure('boot', 'boot');
+        // 保存は描画のあと、空き時間に回す（storage.js がまとめて書く）
+        save(KEYS.company, fresh.company);
+        save(KEYS.departments, fresh.departments);
+        save(KEYS.employees, fresh.employees);
+        save(KEYS.settings, fresh.settings);
+        save(KEYS.seeded, true);
+        return;
+      }
+
+      // ── 2回目以降：まず最初の画面に要るものだけ ──
+      const first = await loadMany(FIRST_KEYS, FIRST_FALLBACKS);
+      if (!alive) return;
+      const next = {
+        ...EMPTY,
+        company: first[KEYS.company] || null,
+        employees: asArray(first[KEYS.employees]),
+        tasks: asArray(first[KEYS.tasks]),
+        knowledge: asArray(first[KEYS.knowledge]),
+        deals: asArray(first[KEYS.deals]),
+        events: asArray(first[KEYS.events]),
+        genres: asArray(first[KEYS.genres]),
+        approvals: asArray(first[KEYS.approvals]),
+        settings: { ...makeSettings(), ...(first[KEYS.settings] || {}) },
+        secrets: first[KEYS.secrets] || {},
+      };
+      stateRef.current = next;
+      setState(next);
+      setReady(true);
+      perf.measure('boot', 'boot');
+
+      // 項目28：前回、実行中のまま閉じられた仕事は「待機」に戻す。
+      // running のままだと、戻ってきても永遠に回り続けているように見える。
+      const revived = next.tasks.map((t) =>
+        (t.steps || []).some((x) => x.status === 'running')
+          ? {
+              ...t,
+              status: 'queued',
+              steps: t.steps.map((x) =>
+                x.status === 'running' ? { ...x, status: 'pending', startedAt: null } : x
+              ),
+            }
+          : t
+      );
+      if (revived.some((t, i) => t !== next.tasks[i])) {
+        // **新しいオブジェクトを作ること。** 同じ参照のまま setState すると
+        // React が「変化なし」と判断して描き直さず、実行中の表示が残る。
+        const fixed = { ...stateRef.current, tasks: revived };
+        stateRef.current = fixed;
+        setState(fixed);
+        save(KEYS.tasks, revived);
+      }
+
+      // ── 残りを追いつかせる ──
+      const rest = await loadMany(REST_KEYS, REST_FALLBACKS);
+      if (!alive) return;
+      const merged = { ...stateRef.current };
+      for (const key of REST_KEYS) {
+        if (key === KEYS.audit) {
+          // 履歴は追記しかしないので、読み込んだぶんに「待っていたぶん」を足す。
+          // 単純に上書きすると、この間の操作が記録から消える。
+          let audit = asArray(rest[key]);
+          for (const e of preAuditRef.current) audit = appendAudit(audit, e);
+          merged.audit = audit;
+          continue;
+        }
+        // ②の最中に触られたキーは、読み込んだ古い値で上書きしない
+        if (touchedRef.current.has(key)) continue;
+        merged[keyName(key)] = asArray(rest[key]);
+      }
+      hydratedRef.current = true;
+      stateRef.current = merged;
+      setState(merged);
+
+      // 待たせていたぶんをここで保存する
+      if (preAuditRef.current.length) {
+        save(KEYS.audit, merged.audit);
+        preAuditRef.current = [];
+      }
+      for (const key of REST_KEYS) {
+        if (key !== KEYS.audit && touchedRef.current.has(key)) {
+          save(key, stateRef.current[keyName(key)]);
+        }
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -97,15 +200,26 @@ export function useStore() {
   // ref を先に更新してから setState することで、同じ処理の中で続けて
   // stateRef.current を読んでも最新が返る。
   const put = useCallback((key, value) => {
+    touchedRef.current.add(key);
     stateRef.current = { ...stateRef.current, [keyName(key)]: value };
     setState(stateRef.current);
+    // まだ読み込めていないキーは保存しない（空の配列で上書きしないため）
+    if (!hydratedRef.current && REST_KEYS.includes(key)) return;
     save(key, value);
   }, []);
 
   const log = useCallback((entry) => {
-    const next = appendAudit(stateRef.current.audit, makeEntry(entry));
+    touchedRef.current.add(KEYS.audit);
+    const made = makeEntry(entry);
+    const next = appendAudit(stateRef.current.audit, made);
     stateRef.current = { ...stateRef.current, audit: next };
     setState(stateRef.current);
+    // 読み込みが終わる前は保存を待つ。ここで書くと、まだ空の履歴で
+    // 保存済みの履歴を消してしまう。読み終わってから足す。
+    if (!hydratedRef.current) {
+      preAuditRef.current.push(made);
+      return;
+    }
     save(KEYS.audit, next);
   }, []);
 
@@ -325,6 +439,8 @@ export function useStore() {
         steps: task.steps.map((x) => (x.id === step.id ? { ...x, status: 'running', startedAt: Date.now() } : x)),
       });
       setBusy({ taskId });
+      setLive({ taskId, stepId: step.id, employeeName: employee.name, text: '' });
+      perf.mark(`run:${step.id}`);
 
       let result;
       try {
@@ -337,11 +453,18 @@ export function useStore() {
           inherited: step.input,
           secrets: s.secrets,
           settings: s.settings,
+          // 受け取った先から画面へ出す。ここでは保存しない。
+          onDelta: (piece) =>
+            setLive((cur) =>
+              cur && cur.stepId === step.id ? { ...cur, text: cur.text + piece } : cur
+            ),
         });
       } catch (e) {
         result = { error: e.message || String(e) };
       }
+      perf.measure(`run:${step.id}`, 'run');
       setBusy(null);
+      setLive(null);
 
       const current = stateRef.current.tasks.find((t) => t.id === taskId) || task;
       const updated = applyStepResult(current, step.id, result);
@@ -602,24 +725,34 @@ export function useStore() {
         }
       };
 
-      // ① 意見
+      // ① 意見 — 全員が独立して考えるので**同時に**走らせる（項目29）。
+      // 1人ずつ順番に呼ぶと、5人なら5倍待つことになる。
       mtg = { ...mtg, status: 'running', phase: 'opinion' };
-      for (const emp of parts) {
-        // eslint-disable-next-line no-await-in-loop
-        const r = await ask(emp, opinionPrompt(mtg.topic, mtg.interventions));
+      patchMeeting(mtg);
+      const opinions = await Promise.all(
+        parts.map((emp) =>
+          ask(emp, opinionPrompt(mtg.topic, mtg.interventions)).then((r) => ({ emp, r }))
+        )
+      );
+      for (const { emp, r } of opinions) {
         mtg = addRound(mtg, { phase: 'opinion', employeeId: emp.id, employeeName: emp.name, ...r });
-        patchMeeting(mtg);
       }
+      patchMeeting(mtg);
 
-      // ② 反論
+      // ② 反論 — 各自が「自分以外の意見」を読むだけなので、これも同時でよい。
       mtg = { ...mtg, phase: 'rebuttal' };
-      for (const emp of parts) {
-        const others = mtg.rounds.filter((r) => r.phase === 'opinion' && r.employeeId !== emp.id);
-        // eslint-disable-next-line no-await-in-loop
-        const r = await ask(emp, rebuttalPrompt(mtg.topic, others));
+      patchMeeting(mtg);
+      const opinionRounds = mtg.rounds.filter((r) => r.phase === 'opinion');
+      const rebuttals = await Promise.all(
+        parts.map((emp) =>
+          ask(emp, rebuttalPrompt(mtg.topic, opinionRounds.filter((r) => r.employeeId !== emp.id)))
+            .then((r) => ({ emp, r }))
+        )
+      );
+      for (const { emp, r } of rebuttals) {
         mtg = addRound(mtg, { phase: 'rebuttal', employeeId: emp.id, employeeName: emp.name, ...r });
-        patchMeeting(mtg);
       }
+      patchMeeting(mtg);
 
       // ③ 統合（議長）
       mtg = { ...mtg, phase: 'synthesis' };
@@ -679,20 +812,21 @@ export function useStore() {
     [put]
   );
 
-  const exportData = useCallback(() => exportAll(), []);
-  const importData = useCallback(
-    async (payload) => {
-      const n = await importAll(payload);
-      window.location.reload();
-      return n;
-    },
-    []
-  );
+  const exportData = useCallback(async () => {
+    await flushNow(); // 書き残しをバックアップに含めるため
+    return exportAll();
+  }, []);
+  const importData = useCallback(async (payload) => {
+    const n = await importAll(payload);
+    window.location.reload();
+    return n;
+  }, []);
 
   return {
     ...state,
     ready,
     busy,
+    live,
     activeEmployees,
     // 社員
     hireEmployee,

@@ -32,7 +32,16 @@ export default function Approvals({ store, go }) {
               <p style={{ fontSize: 14.5 }}>{a.label}</p>
               {emp && <p className="muted">依頼者：{emp.name}</p>}
               <div className="btn-row">
-                <button type="button" className="btn primary" onClick={() => store.decideApproval(a.id, true)}>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => {
+                    // 承認したら仕事の画面へ移る。ここに留まると、実行が
+                    // 始まっているのに何も起きていないように見える（項目27）。
+                    if (a.taskId) go('task', a.taskId);
+                    store.decideApproval(a.id, true);
+                  }}
+                >
                   承認して実行
                 </button>
                 <button type="button" className="btn" onClick={() => store.decideApproval(a.id, false)}>

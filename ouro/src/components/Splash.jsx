@@ -1,9 +1,12 @@
 // 起動画面。ウロボロスの印章。初回だけ出す。
+// 印章は画像ではなく線で描く（Seal.jsx）。393KBの読み込みが消える。
+
+import Seal from './Seal.jsx';
 
 export default function Splash({ onStart }) {
   return (
     <div className="splash fade-in">
-      <img src="./ouro-seal.jpg" alt="" className="seal" />
+      <Seal size={260} />
       <h1>Ouro</h1>
       <p className="tagline">知識をつなぎ、未来をつくる。</p>
 

@@ -4,6 +4,8 @@
 // キーはユーザー自身のものを端末内（ouro:secrets）に置く BYOK 方式。
 // サーバーを持たないので運用費はゼロ。
 
+import { readSse, throttleDelta } from './stream.js';
+
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
 
@@ -25,7 +27,7 @@ export const anthropicProvider = {
   },
   supportsPdf: true,
 
-  async run({ apiKey, model, system, messages, tools = [], maxTokens = 8000, signal }) {
+  async run({ apiKey, model, system, messages, tools = [], maxTokens = 8000, signal, onDelta }) {
     if (!apiKey) throw new Error('Claude の APIキーが設定されていません');
 
     const body = {
@@ -35,6 +37,8 @@ export const anthropicProvider = {
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     };
     if (tools.length) body.tools = tools;
+    // 受け取った先から画面へ出す（項目26）
+    if (onDelta) body.stream = true;
 
     const res = await fetch(ENDPOINT, {
       method: 'POST',
@@ -52,6 +56,8 @@ export const anthropicProvider = {
       const detail = await res.text().catch(() => '');
       throw new Error(`Claude 呼び出しに失敗しました（${res.status}）: ${detail.slice(0, 300)}`);
     }
+
+    if (onDelta) return runStreaming(res, onDelta);
 
     const json = await res.json();
     const text = (json.content || [])
@@ -81,5 +87,45 @@ export const anthropicProvider = {
     };
   },
 };
+
+/** 流しながら受け取る。出典（検索結果のURL）も途中で拾う。 */
+async function runStreaming(res, onDelta) {
+  const out = { text: '', citations: [], usage: { input: 0, output: 0 }, refused: false };
+  const sink = throttleDelta(onDelta);
+
+  await readSse(res, (data) => {
+    if (data === '[DONE]') return;
+    let ev;
+    try {
+      ev = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+      out.text += ev.delta.text;
+      sink.push(ev.delta.text);
+    } else if (ev.type === 'content_block_start' && ev.content_block?.type === 'text') {
+      // 文章のかたまりが分かれて届くことがある（検索結果を挟んだ時など）。
+      // まとめ受けは join('\n') しているので、流し受けでも同じように改行を入れる。
+      if (out.text) {
+        out.text += '\n';
+        sink.push('\n');
+      }
+    } else if (ev.type === 'content_block_start' && ev.content_block?.type === 'web_search_tool_result') {
+      for (const r of ev.content_block.content || []) {
+        if (r && r.url) out.citations.push({ url: r.url, title: r.title || r.url });
+      }
+    } else if (ev.type === 'message_start' && ev.message?.usage) {
+      out.usage.input = ev.message.usage.input_tokens || 0;
+    } else if (ev.type === 'message_delta') {
+      if (ev.usage?.output_tokens) out.usage.output = ev.usage.output_tokens;
+      if (ev.delta?.stop_reason === 'refusal') out.refused = true;
+    }
+  });
+
+  sink.flush();
+  out.text = out.text.trim();
+  return out;
+}
 
 export default anthropicProvider;

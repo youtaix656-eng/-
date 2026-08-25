@@ -1,5 +1,7 @@
 // ChatGPT（OpenAI Chat Completions）。BYOK・ブラウザ直叩き。
 
+import { readSse, throttleDelta } from './stream.js';
+
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 export const openaiProvider = {
@@ -15,7 +17,7 @@ export const openaiProvider = {
   serverTools: {},
   supportsPdf: false,
 
-  async run({ apiKey, model, system, messages, maxTokens = 4000, signal }) {
+  async run({ apiKey, model, system, messages, maxTokens = 4000, signal, onDelta }) {
     if (!apiKey) throw new Error('ChatGPT の APIキーが設定されていません');
 
     const res = await fetch(ENDPOINT, {
@@ -24,6 +26,7 @@ export const openaiProvider = {
       body: JSON.stringify({
         model: model || 'gpt-4o-mini',
         max_tokens: maxTokens,
+        ...(onDelta ? { stream: true, stream_options: { include_usage: true } } : {}),
         messages: [
           ...(system ? [{ role: 'system', content: system }] : []),
           ...messages.map((m) => ({
@@ -38,6 +41,32 @@ export const openaiProvider = {
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       throw new Error(`ChatGPT 呼び出しに失敗しました（${res.status}）: ${detail.slice(0, 300)}`);
+    }
+
+    if (onDelta) {
+      const out = { text: '', citations: [], usage: { input: 0, output: 0 } };
+      const sink = throttleDelta(onDelta);
+      await readSse(res, (data) => {
+        if (data === '[DONE]') return;
+        let ev;
+        try {
+          ev = JSON.parse(data);
+        } catch {
+          return;
+        }
+        const piece = ev.choices?.[0]?.delta?.content;
+        if (piece) {
+          out.text += piece;
+          sink.push(piece);
+        }
+        if (ev.usage) {
+          out.usage.input = ev.usage.prompt_tokens || 0;
+          out.usage.output = ev.usage.completion_tokens || 0;
+        }
+      });
+      sink.flush();
+      out.text = out.text.trim();
+      return out;
     }
 
     const json = await res.json();

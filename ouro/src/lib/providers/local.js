@@ -86,7 +86,7 @@ export const localProvider = {
   keyHelpUrl: null,
   desc: 'APIキーが無くても動く。AIではなく、仕事の型（チェックリスト）を組み立てる。',
 
-  async run({ messages, meta = {} }) {
+  async run({ messages, meta = {}, onDelta }) {
     // meta が無い経路（テスト等）ではメッセージ本文から依頼を拾う
     const last = [...(messages || [])].reverse().find((m) => m.role === 'user');
     const request = meta.request || (last && typeof last.content === 'string' ? last.content : '') || '';
@@ -108,6 +108,12 @@ export const localProvider = {
     ]
       .filter((l) => l !== '')
       .join('\n');
+
+    // AI未接続でも見え方をそろえる（一気に出さず数回に分けて渡す）
+    if (typeof onDelta === 'function') {
+      const chunks = text.match(/[\s\S]{1,120}/g) || [text];
+      for (const c of chunks) onDelta(c);
+    }
 
     return {
       text,

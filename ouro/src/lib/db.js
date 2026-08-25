@@ -65,3 +65,73 @@ export function idbSet(key, value) {
 export function idbDelete(key) {
   return tx('readwrite', (store) => store.delete(key));
 }
+
+/**
+ * 複数のキーを **1回のトランザクション** でまとめて読む。
+ * 起動時にキーごとに開くと、その回数だけ往復が増えて起動が遅くなる。
+ * @returns {Promise<Map<string, any>>} 未保存のキーは Map に入らない
+ */
+export function idbGetMany(keys = []) {
+  if (!keys.length) return Promise.resolve(new Map());
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const t = db.transaction(STORE, 'readonly');
+        const store = t.objectStore(STORE);
+        const out = new Map();
+        for (const key of keys) {
+          const req = store.get(key);
+          req.onsuccess = () => {
+            if (req.result !== undefined) out.set(key, req.result);
+          };
+        }
+        t.oncomplete = () => resolve(out);
+        t.onerror = () => reject(t.error);
+        t.onabort = () => reject(t.error);
+      })
+  );
+}
+
+/** 複数の書き込み・削除を1回のトランザクションでまとめて行う。 */
+export function idbWriteMany(entries = [], deleteKeys = []) {
+  if (!entries.length && !deleteKeys.length) return Promise.resolve();
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const t = db.transaction(STORE, 'readwrite');
+        const store = t.objectStore(STORE);
+        for (const [key, value] of entries) store.put(value, key);
+        for (const key of deleteKeys) store.delete(key);
+        t.oncomplete = () => resolve();
+        t.onerror = () => reject(t.error);
+        t.onabort = () => reject(t.error);
+      })
+  );
+}
+
+/**
+ * 接頭辞で始まるキーをまとめて読む（1件ずつ保存したレコードの読み出しに使う）。
+ * @returns {Promise<Map<string, any>>}
+ */
+export function idbGetPrefix(prefix) {
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const t = db.transaction(STORE, 'readonly');
+        const store = t.objectStore(STORE);
+        const out = new Map();
+        // prefix 〜 prefix+末尾文字 の範囲を走査する
+        const range = IDBKeyRange.bound(prefix, `${prefix}￿`, false, false);
+        const req = store.openCursor(range);
+        req.onsuccess = () => {
+          const cur = req.result;
+          if (!cur) return;
+          out.set(String(cur.key), cur.value);
+          cur.continue();
+        };
+        t.oncomplete = () => resolve(out);
+        t.onerror = () => reject(t.error);
+        t.onabort = () => reject(t.error);
+      })
+  );
+}

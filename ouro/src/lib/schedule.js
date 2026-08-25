@@ -110,12 +110,55 @@ export function dayDetail(ts, { tasks = [], knowledge = [], meetings = [], deals
   };
 }
 
-/** 月のマスに出す小さな印だけを、まとめて計算する（1日ずつ dayDetail を呼ばない）。 */
-export function monthMarks(weeks, data) {
+/**
+ * 日付でひける索引を1回だけ作る（項目14）。
+ *
+ * 以前は 42マス × 全データ を毎回走査していたため、予定が増えるほど
+ * 月送りが重くなっていた（実測 117ms）。データ側を1周して日付ごとに
+ * 振り分けておけば、マスは引くだけで済む。
+ */
+export function buildDayIndex({ tasks = [], knowledge = [], meetings = [], deals = [], events = [] } = {}) {
+  const index = new Map();
+  const bucket = (ts) => {
+    const day = startOfDay(ts);
+    let b = index.get(day);
+    if (!b) {
+      b = { tasks: [], knowledge: [], meetings: [], deadlines: [], events: [] };
+      index.set(day, b);
+    }
+    return b;
+  };
+
+  for (const t of tasks) if (t.status === 'done' && t.finishedAt) bucket(t.finishedAt).tasks.push(t);
+  for (const k of knowledge) if (k.createdAt) bucket(k.createdAt).knowledge.push(k);
+  for (const m of meetings) if (m.createdAt) bucket(m.createdAt).meetings.push(m);
+  for (const d of deals) {
+    if (d.dueAt && !['paid', 'lost'].includes(d.status)) bucket(d.dueAt).deadlines.push(d);
+  }
+  for (const e of events) if (e.at) bucket(e.at).events.push(e);
+  return index;
+}
+
+const EMPTY_DAY = { tasks: [], knowledge: [], meetings: [], deadlines: [], events: [] };
+
+/** 索引から1日ぶんを引く。 */
+export function dayFromIndex(index, ts) {
+  const day = startOfDay(ts);
+  const b = index.get(day) || EMPTY_DAY;
+  return {
+    ts: day,
+    ...b,
+    total: b.tasks.length + b.knowledge.length + b.meetings.length + b.deadlines.length + b.events.length,
+  };
+}
+
+/** 月のマスに出す小さな印。索引を渡せばマスを引くだけで済む。 */
+export function monthMarks(weeks, dataOrIndex) {
+  const index = dataOrIndex instanceof Map ? dataOrIndex : buildDayIndex(dataOrIndex);
   const marks = new Map();
   for (const week of weeks) {
     for (const cell of week) {
-      const d = dayDetail(cell.ts, data);
+      const d = dayFromIndex(index, cell.ts);
       if (d.total > 0) {
         marks.set(cell.ts, {
           tasks: d.tasks.length,

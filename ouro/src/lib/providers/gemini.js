@@ -1,5 +1,7 @@
 // Gemini（Google Generative Language API）。BYOK・ブラウザ直叩き。
 
+import { readSse, throttleDelta } from './stream.js';
+
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export const geminiProvider = {
@@ -15,11 +17,12 @@ export const geminiProvider = {
   serverTools: {},
   supportsPdf: false,
 
-  async run({ apiKey, model, system, messages, maxTokens = 4000, signal }) {
+  async run({ apiKey, model, system, messages, maxTokens = 4000, signal, onDelta }) {
     if (!apiKey) throw new Error('Gemini の APIキーが設定されていません');
     const id = model || 'gemini-2.0-flash';
+    const method = onDelta ? 'streamGenerateContent?alt=sse' : 'generateContent';
 
-    const res = await fetch(`${BASE}/${encodeURIComponent(id)}:generateContent`, {
+    const res = await fetch(`${BASE}/${encodeURIComponent(id)}:${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
@@ -36,6 +39,32 @@ export const geminiProvider = {
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       throw new Error(`Gemini 呼び出しに失敗しました（${res.status}）: ${detail.slice(0, 300)}`);
+    }
+
+    if (onDelta) {
+      const out = { text: '', citations: [], usage: { input: 0, output: 0 } };
+      const sink = throttleDelta(onDelta);
+      await readSse(res, (data) => {
+        let ev;
+        try {
+          ev = JSON.parse(data);
+        } catch {
+          return;
+        }
+        for (const part of ev.candidates?.[0]?.content?.parts || []) {
+          if (part.text) {
+            out.text += part.text;
+            sink.push(part.text);
+          }
+        }
+        if (ev.usageMetadata) {
+          out.usage.input = ev.usageMetadata.promptTokenCount || 0;
+          out.usage.output = ev.usageMetadata.candidatesTokenCount || 0;
+        }
+      });
+      sink.flush();
+      out.text = out.text.trim();
+      return out;
     }
 
     const json = await res.json();

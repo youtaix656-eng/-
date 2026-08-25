@@ -9,7 +9,8 @@ import {
   monthMatrix,
   monthMarks,
   monthSummary,
-  dayDetail,
+  buildDayIndex,
+  dayFromIndex,
   upcoming,
   suggestStart,
   startOfDay,
@@ -39,9 +40,14 @@ export default function Calendar({ store, go, toast }) {
   };
 
   const weeks = useMemo(() => monthMatrix(cursor.year, cursor.month), [cursor]);
-  const marks = useMemo(() => monthMarks(weeks, data), [weeks, store.tasks, store.knowledge, store.meetings, store.deals, store.events]);
+  // 日付の索引はデータが変わった時だけ作り直す。月送りでは作り直さない（項目14）
+  const dayIndex = useMemo(
+    () => buildDayIndex(data),
+    [store.tasks, store.knowledge, store.meetings, store.deals, store.events]
+  );
+  const marks = useMemo(() => monthMarks(weeks, dayIndex), [weeks, dayIndex]);
   const summary = useMemo(() => monthSummary(cursor.year, cursor.month, data), [cursor, store.tasks, store.knowledge, store.deals]);
-  const detail = useMemo(() => dayDetail(selected, data), [selected, store.tasks, store.knowledge, store.meetings, store.deals, store.events]);
+  const detail = useMemo(() => dayFromIndex(dayIndex, selected), [selected, dayIndex]);
   const soon = useMemo(() => upcoming({ events: store.events, deals: store.deals }), [store.events, store.deals]);
 
   const move = (delta) => {

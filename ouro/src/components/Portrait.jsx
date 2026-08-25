@@ -9,38 +9,20 @@
 // 髪は「頭の輪郭より一回り大きい三日月」を黒で塗って描く。こうしないと
 // 顔の輪郭線と重なって、髪ではなくベールのように見えてしまう。
 
+import { memo } from 'react';
 import { portraitFor } from '../data/portraits.js';
 
-const FACE =
-  'M60,30 C74,30 82,39 82,53 C82,69 72,81 60,81 C48,81 38,69 38,53 C38,39 46,30 60,30 Z';
-
-// 髪の外側の輪郭（頭より一回り大きい）
-const HAIR_OUTER = 'M34,56 C31,27 43,19 60,19 C77,19 89,27 86,56';
-
-// 前髪の生え際（外側の輪郭と閉じて三日月になる）
-const FRINGES = {
-  straight: 'C86,43 77,37 60,37 C43,37 34,43 34,56 Z',
-  side: 'C86,41 74,32 55,34 C45,35 36,45 34,56 Z',
-  angular: 'L81,35 L60,31 L39,35 L34,56 Z',
-  wavy: 'C86,43 80,38 73,43 C67,47 60,37 52,42 C46,46 38,41 34,56 Z',
-  high: 'C86,47 77,43 60,43 C43,43 34,47 34,56 Z',
-  round: 'C86,45 78,34 60,34 C42,34 34,45 34,56 Z',
-};
-
-export default function Portrait({ employee, glyph, size = 72, frame = true, className = '' }) {
-  const p = portraitFor(employee || {});
-
+// 額縁（外周の円環と24本の目盛り）は全員で同じもの。人数ぶん複製すると
+// 1人あたり26要素×人数になるので、1つだけ定義して <use> で参照する。
+// 切り抜き（clipPath）も、以前は同じ id が肖像の数だけDOMにあった（不正）。
+export function PortraitSprite() {
   return (
-    <svg
-      className={`portrait ${className}`}
-      width={size}
-      height={size}
-      viewBox="0 0 120 120"
-      role="img"
-      aria-label={employee?.name ? `${employee.name} の肖像` : '社員の肖像'}
-    >
-      {frame && (
-        <g stroke="rgba(255,255,255,0.24)" fill="none" strokeWidth="0.8">
+    <svg width="0" height="0" aria-hidden="true" style={{ position: 'absolute' }}>
+      <defs>
+        <clipPath id="ouro-portrait-clip">
+          <circle cx="60" cy="60" r="50" />
+        </clipPath>
+        <g id="ouro-portrait-frame" fill="none" stroke="rgba(255,255,255,0.24)" strokeWidth="0.8">
           <circle cx="60" cy="60" r="58.5" />
           <circle cx="60" cy="60" r="55" strokeWidth="0.5" />
           {Array.from({ length: 24 }).map((_, i) => {
@@ -58,33 +40,68 @@ export default function Portrait({ employee, glyph, size = 72, frame = true, cla
             );
           })}
         </g>
-      )}
+      </defs>
+    </svg>
+  );
+}
+
+const FACE =
+  'M60,30 C74,30 82,39 82,53 C82,69 72,81 60,81 C48,81 38,69 38,53 C38,39 46,30 60,30 Z';
+
+// 髪の外側の輪郭（頭より一回り大きい）
+const HAIR_OUTER = 'M34,56 C31,27 43,19 60,19 C77,19 89,27 86,56';
+
+// 前髪の生え際（外側の輪郭と閉じて三日月になる）
+const FRINGES = {
+  straight: 'C86,43 77,37 60,37 C43,37 34,43 34,56 Z',
+  side: 'C86,41 74,32 55,34 C45,35 36,45 34,56 Z',
+  angular: 'L81,35 L60,31 L39,35 L34,56 Z',
+  wavy: 'C86,43 80,38 73,43 C67,47 60,37 52,42 C46,46 38,41 34,56 Z',
+  high: 'C86,47 77,43 60,43 C43,43 34,47 34,56 Z',
+  round: 'C86,45 78,34 60,34 C42,34 34,45 34,56 Z',
+};
+
+/**
+ * 肖像。
+ * @param {boolean} frame  外周の額縁を出すか
+ * @param {boolean} compact 一覧向けの簡略版（耳・後ろ髪・瞳を省く。項目12）
+ *
+ * 親が再描画されても社員が変わっていなければ描き直さないよう memo で包む（項目13）。
+ */
+function PortraitBase({ employee, glyph, size = 72, frame = true, compact = false, className = '' }) {
+  const p = portraitFor(employee || {});
+  const small = compact || size <= 48;
+
+  return (
+    <svg
+      className={`portrait ${className}`}
+      width={size}
+      height={size}
+      viewBox="0 0 120 120"
+      role="img"
+      aria-label={employee?.name ? `${employee.name} の肖像` : '社員の肖像'}
+    >
+      {frame && <use href="#ouro-portrait-frame" />}
 
       {/* 内側を黒で塗り、線画が浮くようにする */}
       <circle cx="60" cy="60" r="50" fill="#000" />
 
-      <g clipPath="url(#pf)">
+      <g clipPath="url(#ouro-portrait-clip)">
         <g stroke="#fff" fill="none" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-          <HairBack style={p.hair} />
+          {!small && <HairBack style={p.hair} />}
           <Shoulders collar={p.collar} />
           {/* 首（肩より先に描いて、肩の線で下が隠れるようにする） */}
           <path d="M52,77 L52,89 M68,77 L68,89" />
           {/* 顔 */}
           <path d={FACE} fill="#000" />
-          <path d="M38,51 C34,51 34,59 38,59" />
-          <path d="M82,51 C86,51 86,59 82,59" />
-          <Features />
+          {!small && <path d="M38,51 C34,51 34,59 38,59" />}
+          {!small && <path d="M82,51 C86,51 86,59 82,59" />}
+          <Features small={small} />
           <HairFront style={p.hair} />
-          {p.glasses && <Glasses kind={p.glasses} />}
-          {p.extra && <Extra kind={p.extra} />}
+          {p.glasses && !small && <Glasses kind={p.glasses} />}
+          {p.extra && !small && <Extra kind={p.extra} />}
         </g>
       </g>
-
-      <defs>
-        <clipPath id="pf">
-          <circle cx="60" cy="60" r="50" />
-        </clipPath>
-      </defs>
 
       {glyph && (
         <text
@@ -102,7 +119,17 @@ export default function Portrait({ employee, glyph, size = 72, frame = true, cla
   );
 }
 
-function Features() {
+function Features({ small = false }) {
+  // 44px の行では眉・鼻・瞳はほとんど見えない。要素を減らして輪郭だけ残す。
+  if (small) {
+    return (
+      <>
+        <circle cx="50.5" cy="56" r="1.8" fill="#fff" stroke="none" />
+        <circle cx="69.5" cy="56" r="1.8" fill="#fff" stroke="none" />
+        <path d="M54,70 C57,72.5 63,72.5 66,70" />
+      </>
+    );
+  }
   return (
     <>
       <path d="M45,48 C48,46 53,46 56,47" />
@@ -116,6 +143,20 @@ function Features() {
     </>
   );
 }
+
+const Portrait = memo(PortraitBase, (a, b) => {
+  // 社員（と描き方の指定）が同じなら描き直さない
+  return (
+    a.employee === b.employee &&
+    a.size === b.size &&
+    a.frame === b.frame &&
+    a.compact === b.compact &&
+    a.glyph === b.glyph &&
+    a.className === b.className
+  );
+});
+
+export default Portrait;
 
 function Shoulders({ collar }) {
   return (

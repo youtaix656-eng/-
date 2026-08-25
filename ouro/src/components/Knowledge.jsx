@@ -1,6 +1,6 @@
 // 知識ベース。会社の資産の一覧・検索。
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, SectionTitle, Empty, Stat } from './ui.jsx';
 import { searchKnowledge, CATEGORIES, tagCounts, verifiedRate, ORIGINS } from '../lib/knowledge.js';
 import { relTime } from '../lib/format.js';
@@ -11,12 +11,18 @@ export default function KnowledgeView({ store, go }) {
   const [tag, setTag] = useState(null);
   const [origin, setOrigin] = useState(null);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [limit, setLimit] = useState(80); // 項目19：頭打ちではなく段階的に増やす
 
   const list = useMemo(
     () => searchKnowledge(store.knowledge, q, { category, tag, origin, verifiedOnly }),
     [store.knowledge, q, category, tag, origin, verifiedOnly]
   );
   const tags = useMemo(() => tagCounts(store.knowledge).slice(0, 14), [store.knowledge]);
+
+  // 絞り込みを変えたら表示件数を最初に戻す
+  useEffect(() => {
+    setLimit(80);
+  }, [q, category, tag, origin, verifiedOnly]);
 
   return (
     <div className="screen fade-in">
@@ -93,9 +99,11 @@ export default function KnowledgeView({ store, go }) {
         ⇩ 情報を追加する（Web・YouTube・PDF・メモ）
       </button>
 
-      <SectionTitle>{list.length}件</SectionTitle>
+      <SectionTitle>
+        {list.length}件{list.length > limit ? `（うち${limit}件を表示中）` : ''}
+      </SectionTitle>
       {list.length ? (
-        list.slice(0, 80).map((k) => (
+        list.slice(0, limit).map((k) => (
           <Row
             key={k.id}
             glyph={k.verifiedAt ? '✓' : originGlyph(k.origin)}
@@ -112,6 +120,12 @@ export default function KnowledgeView({ store, go }) {
           <br />
           仕事を1つ終えるか、情報を取り込むと増えます。
         </Empty>
+      )}
+
+      {list.length > limit && (
+        <button type="button" className="btn block" onClick={() => setLimit((n) => n + 120)}>
+          もっと見る（残り{list.length - limit}件）
+        </button>
       )}
 
       {store.knowledge.length === 0 && (

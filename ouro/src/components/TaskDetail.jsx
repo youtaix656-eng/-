@@ -14,6 +14,7 @@ export default function TaskDetail({ store, taskId, go }) {
   if (!task) return <div className="screen"><Empty>仕事が見つかりません。</Empty></div>;
 
   const busy = store.busy && store.busy.taskId === task.id;
+  const live = store.live && store.live.taskId === task.id ? store.live : null;
   const pending = nextStep(task);
   const knowledge = store.knowledge.filter((k) => k.taskId === task.id);
 
@@ -89,6 +90,20 @@ export default function TaskDetail({ store, taskId, go }) {
                 </div>
               )}
               {s.error && <div className="what" style={{ color: '#fff' }}>⚠ {s.error}</div>}
+              {/* 項目26・27：完了を待たず、届いた文字から出す */}
+              {live && live.stepId === s.id && (
+                <div className="card tight live-out" style={{ marginTop: 6 }}>
+                  <div className="muted" style={{ marginBottom: 4 }}>
+                    <span className="spinner" style={{ marginRight: 6 }} />
+                    {live.employeeName} が書いています…
+                  </div>
+                  {live.text ? (
+                    <Doc text={live.text} />
+                  ) : (
+                    <div className="muted">受け取りを待っています</div>
+                  )}
+                </div>
+              )}
               {s.output && (
                 <>
                   <button

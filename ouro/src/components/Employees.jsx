@@ -153,10 +153,13 @@ export default function Employees({ store, go, preset = {} }) {
               主要6人とサブメンバー、知識の流れをまとめた図です。
             </p>
             <img
-              src="./ouro-team.png"
+              src="./ouro-team.jpg"
               alt="Ouro のAI社員チーム全体図"
               loading="lazy"
-              style={{ width: '100%', borderRadius: 10, marginTop: 6 }}
+              decoding="async"
+              width="1200"
+              height="800"
+              style={{ width: '100%', height: 'auto', borderRadius: 10, marginTop: 6 }}
             />
           </details>
         </>
