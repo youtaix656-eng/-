@@ -14,7 +14,11 @@ import {
 } from '../lib/webrtcTransfer.js';
 import QRImage from './QRImage.jsx';
 
-const CODE_CHUNK_LEN = 700;
+// SDP（オファー/アンサー）は圧縮後もICE候補等でそれなりの長さになるため、
+// 1個あたりの文字数を抑えてQRの版（モジュール数）を下げ、カメラでの読み取りやすさを
+// 優先する（版が上がるほど1モジュールが小さくなり、画面越しの撮影では読み取りにくくなる）。
+const CODE_CHUNK_LEN = 300;
+const QR_SIZE = 280;
 
 // 交換用コード（オファー／アンサー）をQR＋テキストで表示するだけの静止パネル
 // （自動送りはしない。SDPの手動交換は1回きりの操作なので、SyncQR.jsxのような
@@ -37,7 +41,7 @@ function CodeOutputPanel({ chunks, onToast, label }) {
   return (
     <div style={{ textAlign: 'center', marginTop: 10 }}>
       {matrix ? (
-        <QRImage matrix={matrix} size={220} />
+        <QRImage matrix={matrix} size={QR_SIZE} />
       ) : (
         <p className="inline-note">（このブロックはQRとしては大きすぎます。コピーで送ってください）</p>
       )}
