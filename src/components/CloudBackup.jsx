@@ -87,8 +87,15 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
     if (!syncCloudNow) return;
     setBusy(true);
     try {
-      await syncCloudNow();
-      onToast?.('今すぐ同期しました');
+      const result = await syncCloudNow();
+      if (result?.skipped) {
+        // 他の自動トリガー（タブ復帰・定期同期等）とちょうど重なって今回は何もしていない。
+        // 「同期しました」と誤表示すると、実は最新化されていないのに安心してしまうため、
+        // 実際に何が起きたかをそのまま伝える。
+        onToast?.('ちょうど別の同期が進行中でした（少し待ってからもう一度お試しください）');
+      } else {
+        onToast?.('今すぐ同期しました');
+      }
     } catch (e) {
       onToast?.(e.message || '同期に失敗しました');
     } finally {

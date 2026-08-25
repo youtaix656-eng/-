@@ -445,10 +445,15 @@ export function useStore() {
   // 実際の同期処理本体（自動同期のデバウンス後・手動の「今すぐ同期」ボタンの両方から呼ぶ）。
   // silent=trueは自動同期用（同意画面を出さず、失敗しても静かに諦める）。
   // silent=falseは手動トリガー用（初回は同意画面が出てよい）。
+  // 戻り値は { skipped: true } （busy中・クライアントID未設定で何もしなかった）か
+  // 完了時はundefined。呼び出し側（手動「今すぐ同期」ボタン）はskippedを見て、
+  // 「進行中の別の同期と重なって今回は何もしなかった」のを「同期に成功した」と
+  // 誤表示しないようにする（バックグラウンドの自動トリガーが増えたことで、手動ボタンを
+  // 押した瞬間に別の同期が進行中というケースが実際に起こりうるようになったため）。
   const runCloudSync = useCallback(async (silent) => {
-    if (cloudSyncBusy.current) return;
+    if (cloudSyncBusy.current) return { skipped: true, reason: 'busy' };
     const clientId = settings.googleDriveClientId;
-    if (!clientId) return;
+    if (!clientId) return { skipped: true, reason: 'no-client-id' };
     cloudSyncBusy.current = true;
     try {
       const [gd, pm, meta] = await Promise.all([
