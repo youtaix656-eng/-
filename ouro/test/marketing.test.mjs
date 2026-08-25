@@ -15,7 +15,7 @@ import { buildSystemPrompt } from '../src/lib/runtime.js';
 
 // 人物像は別ファイル（新項目03）。先に読み込んでおく。
 await loadCharacterDetails();
-import { WORKFLOWS } from '../src/data/workflows.js';
+import { WORKFLOWS, flatSteps } from '../src/data/workflows.js';
 import { buildToc } from '../src/data/toc.js';
 import { normalizePortrait } from '../src/data/portraits.js';
 import { readingInfo, UNKNOWN_BUCKET } from '../src/lib/yomi.js';
@@ -264,7 +264,7 @@ test('マーケのワークフローは確認を含む', () => {
   const invest = WORKFLOWS.find((w) => w.id === 'mkt_invest');
   assert.equal(invest.steps[0], 'mkt_forecast', '数値の裏づけから始める');
   for (const w of WORKFLOWS) {
-    for (const s of w.steps) assert.ok(roleById(s), `${w.name} が知らない役職 ${s} を指す`);
+    for (const s of flatSteps(w)) assert.ok(roleById(s), `${w.name} が知らない役職 ${s} を指す`);
   }
 });
 

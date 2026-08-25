@@ -51,7 +51,18 @@ export function planSteps(request = '', options = {}) {
   const text = String(request).trim();
 
   if (Array.isArray(forceRoles) && forceRoles.length) {
-    return toSteps(withApprovers(forceRoles.slice(0, maxSteps)), text);
+    // 新項目22：仕事の流れは「同時に走らせてよい手順」を入れ子の配列で書ける。
+    //   ['researcher', ['analyzer', 'reviewer'], 'strategist']
+    // ＝ 調べたあと、整理と検証は同時。どちらも「調べた結果」だけを見るので、
+    //    互いの結果は要らない。
+    // 入れ子は**手順の数として1つ**と数える（maxSteps の意味を変えないため）。
+    const limited = forceRoles.slice(0, maxSteps);
+    const groups = limited.map((x) => (Array.isArray(x) ? x : [x]));
+    const flat = groups.flat();
+    const approved = withApprovers(flat);
+    // 承認役は必ず最後に、単独で走らせる（同時にすると確認前の成果物を見てしまう）
+    const extra = approved.slice(flat.length).map((r) => [r]);
+    return toGroupedSteps([...groups, ...extra], text);
   }
 
   const scored = scoreRoles(text).filter((s) => s.score > 0);
@@ -70,7 +81,22 @@ export function planSteps(request = '', options = {}) {
     ordered.splice(Math.min(2, ordered.length), 0, 'reviewer');
   }
 
+  // 自動で組む計画は前の結果を受け取って進む形なので、同時には走らせない
   return toSteps(withApprovers(ordered.slice(0, maxSteps)), text);
+}
+
+/**
+ * 入れ子の並び（group の配列）から手順を作る（新項目22）。
+ * 同じ group の手順は同時に走り、互いの結果を受け取らない。
+ */
+function toGroupedSteps(groups, text) {
+  const out = [];
+  groups.forEach((roles, gi) => {
+    for (const roleId of roles) {
+      out.push({ roleId, instruction: instructionFor(roleId, text, out.length === 0), group: gi });
+    }
+  });
+  return out;
 }
 
 /**

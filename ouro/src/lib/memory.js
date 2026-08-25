@@ -84,6 +84,24 @@ function hasContentChar(text) {
  * 実行時に社員へ渡す文脈をまとめる（4層 → 1つの文字列）。
  * 渡した層は returned.layers に残すので、監査ログで「何を見たか」を追える。
  */
+// 新項目23：渡す材料の上限。
+//
+// 入力が長いほど待ち時間も料金も増える。**古い方から削る**——引き継ぎは
+// 直前の担当の結論がいちばん効くので、先頭（古い部分）を落として末尾を残す。
+// 削った時は必ずその旨を書き込む（黙って切ると、社員が「無かった」と誤解する）。
+export const CONTEXT_LIMITS = {
+  knowledge: 1600, // 会社の知識（要約の集まり）
+  inherited: 6000, // 前の担当からの引き継ぎ
+  taskContext: 2000, // この仕事の補足
+};
+
+/** 末尾を残して切り詰める。切ったことが分かる印を頭に付ける。 */
+export function trimTail(text, limit) {
+  const t = String(text || '');
+  if (t.length <= limit) return t;
+  return `（前半は省略しています。以下は末尾 ${limit} 文字）\n…${t.slice(t.length - limit)}`;
+}
+
 export function buildContext({ employee, task, knowledgeList = [], inherited = '' }) {
   const layers = [];
   const parts = [];
@@ -92,7 +110,10 @@ export function buildContext({ employee, task, knowledgeList = [], inherited = '
   if (rel.length) {
     layers.push({ layer: 'knowledge', count: rel.length });
     parts.push(
-      ['## 会社の知識（読める範囲）', ...rel.map((k) => `- 【${k.title}】${k.summary}`)].join('\n')
+      trimTail(
+        ['## 会社の知識（読める範囲）', ...rel.map((k) => `- 【${k.title}】${k.summary}`)].join('\n'),
+        CONTEXT_LIMITS.knowledge
+      )
     );
   }
 
@@ -104,12 +125,12 @@ export function buildContext({ employee, task, knowledgeList = [], inherited = '
 
   if (inherited) {
     layers.push({ layer: 'handoff', count: 1 });
-    parts.push(`## 前の担当からの引き継ぎ\n${inherited}`);
+    parts.push(`## 前の担当からの引き継ぎ\n${trimTail(inherited, CONTEXT_LIMITS.inherited)}`);
   }
 
   if (task.context) {
     layers.push({ layer: 'task', count: 1 });
-    parts.push(`## この仕事の補足\n${task.context}`);
+    parts.push(`## この仕事の補足\n${trimTail(task.context, CONTEXT_LIMITS.taskContext)}`);
   }
 
   return { text: parts.join('\n\n'), layers, knowledgeIds: rel.map((k) => k.id) };

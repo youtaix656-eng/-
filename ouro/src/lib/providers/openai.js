@@ -1,6 +1,6 @@
 // ChatGPT（OpenAI Chat Completions）。BYOK・ブラウザ直叩き。
 
-import { readSse, throttleDelta } from './stream.js';
+import { readSse, throttleDelta, httpError } from './stream.js';
 
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
@@ -40,7 +40,8 @@ export const openaiProvider = {
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new Error(`ChatGPT 呼び出しに失敗しました（${res.status}）: ${detail.slice(0, 300)}`);
+      // 状態番号を残す（混んでいるだけなら runtime.js が1度だけやり直す／新項目24）
+      throw httpError('ChatGPT', res, detail);
     }
 
     if (onDelta) {

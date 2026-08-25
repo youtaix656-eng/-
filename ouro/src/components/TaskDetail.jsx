@@ -153,6 +153,19 @@ export default function TaskDetail({ store, taskId, go }) {
         </button>
       )}
 
+      {/* 新項目20：実行を途中でやめられるようにする。
+          止めれば、そこから先のAIの利用料はかからない。 */}
+      {busy && (
+        <button
+          type="button"
+          className="btn ghost block"
+          onClick={() => store.cancelRun()}
+          style={{ marginBottom: 12 }}
+        >
+          やめる（ここまでの結果は残ります）
+        </button>
+      )}
+
       {task.status === 'done' && (
         <>
           <SectionTitle>会社としての提出物</SectionTitle>

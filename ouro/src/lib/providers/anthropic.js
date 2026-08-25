@@ -4,7 +4,7 @@
 // キーはユーザー自身のものを端末内（ouro:secrets）に置く BYOK 方式。
 // サーバーを持たないので運用費はゼロ。
 
-import { readSse, throttleDelta } from './stream.js';
+import { readSse, throttleDelta, httpError } from './stream.js';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
@@ -54,7 +54,8 @@ export const anthropicProvider = {
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new Error(`Claude 呼び出しに失敗しました（${res.status}）: ${detail.slice(0, 300)}`);
+      // 状態番号を残す（混んでいるだけなら runtime.js が1度だけやり直す／新項目24）
+      throw httpError('Claude', res, detail);
     }
 
     if (onDelta) return runStreaming(res, onDelta);

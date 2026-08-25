@@ -5,9 +5,44 @@
 // **エンジン名で分岐しない**（providers/index.js の登録内容だけで動く）。
 
 import { providerById, estimateCost } from './providers/index.js';
-import { route } from './router.js';
+import { route, markBusy } from './router.js';
+import { isBusyError } from './providers/stream.js';
 import { buildContext } from './memory.js';
 import { roleById, groupById } from '../data/roles.js';
+
+// ── 新項目21：同じ問いの答えを使い回す ──
+//
+// 同じ社員に同じことを頼み直した時、もう一度AIに投げるのは待ち時間も料金も無駄。
+// **端末のメモリにだけ**持ち（保存しない）、アプリを閉じれば消える。
+// 道具（Web検索）を使う手順は結果が変わりうるので、対象にしない。
+const ANSWER_CACHE_MAX = 20;
+const answerCache = new Map(); // key → { res, at }
+
+function cacheKey(providerId, model, system, userContent) {
+  return `${providerId}|${model}|${system.length}|${userContent.length}|${system}\u0000${userContent}`;
+}
+
+function readCache(key) {
+  const hit = answerCache.get(key);
+  if (!hit) return null;
+  // 使ったものを新しい方へ寄せる（あふれた時に、よく使うものから消さない）
+  answerCache.delete(key);
+  answerCache.set(key, hit);
+  return hit.res;
+}
+
+function writeCache(key, res) {
+  answerCache.set(key, { res, at: Date.now() });
+  while (answerCache.size > ANSWER_CACHE_MAX) {
+    const oldest = answerCache.keys().next().value;
+    answerCache.delete(oldest);
+  }
+}
+
+/** テスト用・設定画面用：覚えている答えを捨てる。 */
+export function clearAnswerCache() {
+  answerCache.clear();
+}
 
 /** 社員の人格をシステムプロンプトに起こす。 */
 export function buildSystemPrompt({ employee, company, contextText }) {
@@ -87,7 +122,22 @@ export async function runStep({
     if (t) tools.push({ ...t, max_uses: 5 });
   }
 
-  const res = await provider.run({
+  // 道具を使わない手順に限り、同じ問いなら前の答えを返す（新項目21）
+  const key = tools.length ? null : cacheKey(provider.id, decision.model, system, userContent);
+  const cached = key ? readCache(key) : null;
+  if (cached) {
+    // 途中経過を出す約束になっているので、覚えている本文を1回で流す
+    if (onDelta) onDelta(cached.text || '');
+    return {
+      ...cached,
+      cached: true,
+      // 実際には投げていないので、費用は二重に数えない
+      usage: { input: 0, output: 0 },
+      cost: 0,
+    };
+  }
+
+  const res = await callWithRetry(provider, {
     apiKey: secrets[provider.id],
     model: decision.model,
     system,
@@ -107,7 +157,7 @@ export async function runStep({
     },
   });
 
-  return {
+  const out = {
     text: res.text || '',
     providerId: provider.id,
     providerName: provider.name,
@@ -120,6 +170,34 @@ export async function runStep({
     usedKnowledgeIds: context.knowledgeIds,
     layers: context.layers,
   };
+  // 空の答えは覚えない（次も空を返してしまうため）
+  if (key && out.text.trim()) writeCache(key, out);
+  return out;
+}
+
+/**
+ * 混んでいる時だけ1度だけやり直す（新項目24）。
+ *
+ * **繰り返してよいのは「混んでいるだけ」の時に限る。**
+ * キーが違う・内容が不正、といった失敗は何度投げても同じで、
+ * そのぶん待たせて料金だけがかかる。
+ * やり直す時は、そのエンジンを混雑中として記録し（新項目25）、
+ * 次の手順から別のエンジンへ回るようにする。
+ */
+async function callWithRetry(provider, args) {
+  try {
+    return await provider.run(args);
+  } catch (e) {
+    if (!isBusyError(e)) throw e;
+    markBusy(provider.id, e.retryAfterMs);
+    // 中止されているならやり直さない
+    if (args.signal && args.signal.aborted) throw e;
+    const wait = Math.min(e.retryAfterMs || 1500, 20000);
+    await new Promise((r) => setTimeout(r, wait));
+    if (args.signal && args.signal.aborted) throw e;
+    // やり直しは1度だけ。ここで失敗したら、そのまま失敗として返す。
+    return provider.run(args);
+  }
 }
 
 /**

@@ -56,3 +56,30 @@ export function throttleDelta(onDelta, ms = 90) {
     },
   };
 }
+
+// ── 混雑・失敗の見分け（新項目24・25）──
+//
+// エンジンごとに文言は違っても、HTTP の状態番号は共通なので、ここで1回だけ扱う。
+// **エンジン名で分岐しない**方針を守るため、判定はこの2つの関数だけに集める。
+
+/** 応答から、状態番号つきのエラーを作る。 */
+export function httpError(name, res, detail = '') {
+  const e = new Error(`${name} 呼び出しに失敗しました（${res.status}）: ${String(detail).slice(0, 300)}`);
+  e.status = res.status;
+  const after = res.headers && typeof res.headers.get === 'function' ? res.headers.get('retry-after') : null;
+  const sec = Number(after);
+  if (Number.isFinite(sec) && sec > 0) e.retryAfterMs = Math.min(sec * 1000, 20000);
+  return e;
+}
+
+/**
+ * 「混んでいるだけ」か。
+ *   429 …… 呼びすぎ
+ *   503 …… 一時的に受けられない
+ *   529 …… 過負荷（Anthropic）
+ * これ以外（400・401 など）は、待っても直らないので繰り返さない。
+ */
+export function isBusyError(e) {
+  const s = e && e.status;
+  return s === 429 || s === 503 || s === 529;
+}

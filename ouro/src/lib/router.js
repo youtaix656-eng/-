@@ -8,6 +8,37 @@
 
 import { PROVIDERS, providerById, availableProviders } from './providers/index.js';
 
+// ── 新項目25：詰まっているエンジンをしばらく避ける ──
+//
+// 混雑（429など）を返したエンジンは、続けて投げてもまた断られる。
+// **エンジン名で分岐しない**方針は保ったまま、「直前に混んでいた id」を
+// 覚えておき、他に選べるものがあるときだけ避ける。
+// 他に無ければ避けない——避けた結果どこにも投げられない、では意味が無い。
+const COOLDOWN_MS = 60_000;
+const busyUntil = new Map();
+
+/** 混んでいたエンジンを記録する（runtime.js から呼ぶ）。 */
+export function markBusy(providerId, ms = COOLDOWN_MS) {
+  if (!providerId) return;
+  busyUntil.set(providerId, Date.now() + Math.max(1000, ms));
+}
+
+/** いま避けたほうがよいか。 */
+export function isBusy(providerId, now = Date.now()) {
+  const until = busyUntil.get(providerId);
+  if (!until) return false;
+  if (until <= now) {
+    busyUntil.delete(providerId);
+    return false;
+  }
+  return true;
+}
+
+/** テスト用：記録を消す。 */
+export function clearBusy() {
+  busyUntil.clear();
+}
+
 // タスクの重さ。重いほど上位モデルへ。
 export const WEIGHTS = { light: 1, normal: 2, heavy: 3 };
 
@@ -53,7 +84,13 @@ export function route({ employee = {}, secrets = {}, request = '', mode = 'auto'
 
   // 必要な能力を満たすエンジンに絞る（例：Web検索が要るなら検索できるものだけ）
   const capable = usable.filter((p) => needs.every((n) => hasCapability(p, n)));
-  const pool = capable.length ? capable : usable;
+  const poolAll = capable.length ? capable : usable;
+
+  // 新項目25：直前に混んでいたエンジンを外す。
+  // 全部外れてしまう時は、外さない（投げ先が無くなるより、混んでいても投げる）。
+  const free = poolAll.filter((p) => !isBusy(p.id));
+  const pool = free.length ? free : poolAll;
+  const avoided = free.length < poolAll.length;
 
   // 社員の希望が使えるなら尊重する
   const preferred = pool.find((p) => p.id === employee.providerPref);
@@ -69,7 +106,7 @@ export function route({ employee = {}, secrets = {}, request = '', mode = 'auto'
   return {
     providerId: chosen.id,
     model: pickModel(chosen, employee, weight),
-    reason: reasonFor({ preferred, needs, capable, chosen, weight }),
+    reason: reasonFor({ preferred, needs, capable, chosen, weight, avoided }),
     offline: chosen.id === 'local',
   };
 }
@@ -93,8 +130,9 @@ function pickModel(provider, employee, weight) {
   return sorted[Math.min(1, sorted.length - 1)].id;
 }
 
-function reasonFor({ preferred, needs, capable, chosen, weight }) {
+function reasonFor({ preferred, needs, capable, chosen, weight, avoided = false }) {
   if (chosen.id === 'local') return 'AIエンジン未接続のためローカル社員が対応';
+  if (avoided) return '希望のエンジンが混んでいたため別のエンジンへ';
   if (needs.length && capable.length) return `${needs.join('・')}が必要なため`;
   if (preferred) return '社員の希望';
   return weight >= WEIGHTS.heavy ? '重い仕事のため上位モデル' : '標準';

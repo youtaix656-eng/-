@@ -37,6 +37,8 @@ export default function Compose({ store, preset = {}, go }) {
     const forceRoles = wf && wf.steps.length ? wf.steps : null;
     return planSteps(request, { forceRoles }).map((s) => ({
       roleId: s.roleId,
+      // 新項目22：同じ group の手順は同時に走る（画面でもそう見せる）
+      group: s.group,
       employee: store.assignFor(s.roleId, genreId),
     }));
   }, [request, workflowId, employeeId, chosenEmployee, genreId, store]);
@@ -145,10 +147,13 @@ export default function Compose({ store, preset = {}, go }) {
           <div className="steps">
             {plan.map((p, i) => {
               const role = roleById(p.roleId);
+              // 直前の手順と同じ group なら「同時に進む」と分かるように印を出す
+              const together = i > 0 && p.group != null && p.group === plan[i - 1].group;
               // 未雇用の役職は実際には担当から外れる。ここでも同じように見せる。
               const vacant = !p.employee;
               return (
                 <div key={p.stepId || `${p.roleId}-${i}`} className={`step ${vacant ? 'vacant' : 'done'}`}>
+                  {together && <div className="muted" style={{ fontSize: 11 }}>↑ と同時に進みます</div>}
                   <div className="who">
                     {role?.glyph} {p.employee ? p.employee.name : role?.name}
                     {p.employee?.strength ? (

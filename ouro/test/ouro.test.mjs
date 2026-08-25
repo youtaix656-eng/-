@@ -10,7 +10,7 @@ import { initialPresets, presetEmployee, SEAT_ARCHETYPES, archetypeFor } from '.
 import { PLANS, connectionLimit, employeeLimit, planById } from '../src/data/plans.js';
 import { TOOLS, countableTools } from '../src/data/tools.js';
 import { JOB_TEMPLATES, easiestFirst } from '../src/data/jobTemplates.js';
-import { WORKFLOWS } from '../src/data/workflows.js';
+import { WORKFLOWS, flatSteps } from '../src/data/workflows.js';
 import { pickRole, planSteps, scoreRoles, detectNeeds, titleFor } from '../src/lib/dispatcher.js';
 import { route, weighTask, WEIGHTS } from '../src/lib/router.js';
 import { PROVIDERS, providerById, availableProviders, estimateCost } from '../src/lib/providers/index.js';
@@ -456,7 +456,8 @@ test('最初のステップだけが道具を使う（毎回検索してコス�
 
 test('ワークフローの定義はすべて実在する役職を指す', () => {
   for (const wf of WORKFLOWS) {
-    for (const roleId of wf.steps) {
+    // steps には「同時に走らせてよい手順」の入れ子が混ざる（新項目22）
+    for (const roleId of flatSteps(wf)) {
       assert.ok(roleById(roleId), `${wf.name} が知らない役職 ${roleId} を指している`);
     }
   }

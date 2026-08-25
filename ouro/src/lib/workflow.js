@@ -52,6 +52,8 @@ export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = 
     return {
       id: newId('step'),
       order: i,
+      // 新項目22：同じ group の手順は同時に走る。指定が無ければ1手順=1group（＝順番どおり）。
+      group: Number.isInteger(p.group) ? p.group : i,
       roleId: p.roleId,
       employeeId: employee ? employee.id : null,
       employeeName: employee ? employee.name : null,
@@ -96,6 +98,26 @@ export function nextStep(task) {
   return (task.steps || []).find((s) => s.status === 'pending') || null;
 }
 
+/**
+ * 次に実行すべき手順の**かたまり**（新項目22）。
+ * 同じ group の待機中の手順をまとめて返す。前の group が終わるまで先へ進まない。
+ * 指定が無い仕事では、必ず1件だけの配列になる（従来と同じ動き）。
+ */
+export function nextGroup(task) {
+  const steps = task.steps || [];
+  const first = steps.find((s) => s.status === 'pending');
+  if (!first) return [];
+  const g = groupOf(first, steps);
+  // 前の group にまだ終わっていない手順があるなら、そこが先
+  const earlier = steps.filter((s) => groupOf(s, steps) < g);
+  if (earlier.some((s) => s.status === 'pending' || s.status === 'running')) return [];
+  return steps.filter((s) => s.status === 'pending' && groupOf(s, steps) === g);
+}
+
+function groupOf(step, steps) {
+  return Number.isInteger(step.group) ? step.group : steps.indexOf(step);
+}
+
 /** ステップの結果を書き戻し、次のステップへ引き継ぐ。 */
 export function applyStepResult(task, stepId, result) {
   const steps = task.steps.map((s) => {
@@ -118,10 +140,23 @@ export function applyStepResult(task, stepId, result) {
     };
   });
 
-  // 次のステップへ引き継ぐ
+  // 次のステップへ引き継ぐ。
+  // 新項目22：同時に走る手順があるので、**その group が全部終わってから**
+  // 次の group へ渡す。1つ終わるたびに渡すと、片方の結果しか届かない。
   const idx = steps.findIndex((s) => s.id === stepId);
-  if (idx >= 0 && idx + 1 < steps.length && !result.error) {
-    steps[idx + 1] = { ...steps[idx + 1], input: result.text || '' };
+  if (idx >= 0 && !result.error) {
+    const g = groupOf(steps[idx], steps);
+    const sameGroup = steps.filter((s) => groupOf(s, steps) === g);
+    const groupDone = sameGroup.every((s) => s.status === 'done' || s.status === 'skipped');
+    if (groupDone) {
+      const handoff = sameGroup
+        .filter((s) => s.output)
+        .map((s) => (sameGroup.length > 1 ? `## ${s.employeeName || s.roleId}\n\n${s.output}` : s.output))
+        .join('\n\n---\n\n');
+      for (let i = 0; i < steps.length; i += 1) {
+        if (groupOf(steps[i], steps) === g + 1) steps[i] = { ...steps[i], input: handoff };
+      }
+    }
   }
 
   const failed = steps.some((s) => s.status === 'failed');

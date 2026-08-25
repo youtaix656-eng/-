@@ -9,7 +9,7 @@ import {
 import * as perf from './perf.js';
 import { afterPaint, whenIdle } from './idle.js';
 import { makeSettings } from './defaults.js';
-import { createTask, applyStepResult, nextStep, assembleResult } from './workflow.js';
+import { createTask, applyStepResult, nextGroup, assembleResult } from './workflow.js';
 import { runStep, distill, extractUrls } from './runtime.js';
 import { createKnowledge, makeSource, markUsed, markVerified } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit } from './audit.js';
@@ -103,6 +103,8 @@ export function useStore() {
   const preAuditRef = useRef([]);
   // 古い記録を畳む処理（新項目08）は1回の起動につき1度だけ
   const foldedRef = useRef(false);
+  // いま走っているAI実行の中止スイッチ（新項目20）
+  const abortRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -507,30 +509,41 @@ export function useStore() {
     [put]
   );
 
-  /** 1ステップ実行する。承認が要るときは approvals に積んで止まる。 */
+  /**
+   * 次の「かたまり」を実行する（新項目22）。
+   *
+   * 同じ group の手順は互いの結果を要らないので、同時に走らせる。
+   * 指定の無い仕事では必ず1件だけなので、これまでと同じ動きになる。
+   * 承認が要るときは approvals に積んで止まる。
+   */
   const runNextStep = useCallback(
     async (taskId) => {
       const s = stateRef.current;
       const task = s.tasks.find((t) => t.id === taskId);
       if (!task) return null;
-      const step = nextStep(task);
-      if (!step) return null;
+      const group = nextGroup(task);
+      if (!group.length) return null;
 
-      const employee =
-        s.employees.find((e) => e.id === step.employeeId) ||
-        s.employees.find((e) => e.roleId === step.roleId && !e.archivedAt);
-      if (!employee) {
-        return patchTask(
-          applyStepResult(task, step.id, { error: `${step.roleId} の担当社員がいません` })
-        );
+      // 担当を先に全員そろえる。1人でも欠けていたら、その手順を失敗として返す。
+      const assigned = [];
+      for (const step of group) {
+        const employee =
+          s.employees.find((e) => e.id === step.employeeId) ||
+          s.employees.find((e) => e.roleId === step.roleId && !e.archivedAt);
+        if (!employee) {
+          return patchTask(
+            applyStepResult(task, step.id, { error: `${step.roleId} の担当社員がいません` })
+          );
+        }
+        assigned.push({ step, employee });
       }
 
-      // 課金の発生する実行は既定で承認を通す
-      const provider = providerById(employee.providerPref) || null;
+      // 課金の発生する実行は既定で承認を通す（かたまりの中で1人でも要れば止まる）
       const willCost = Object.keys(s.secrets).length > 0;
-      if (willCost) {
-        const check = checkAction({ employee, action: 'costly', settings: s.settings });
-        if (check.needsApproval && !task.costApproved) {
+      if (willCost && !task.costApproved) {
+        for (const { step, employee } of assigned) {
+          const check = checkAction({ employee, action: 'costly', settings: s.settings });
+          if (!check.needsApproval) continue;
           const approval = {
             id: newId('apv'),
             taskId: task.id,
@@ -548,81 +561,116 @@ export function useStore() {
       }
 
       // 実行中に印をつける
+      const runningIds = new Set(group.map((x) => x.id));
       patchTask({
         ...task,
         status: 'running',
         startedAt: task.startedAt || Date.now(),
-        steps: task.steps.map((x) => (x.id === step.id ? { ...x, status: 'running', startedAt: Date.now() } : x)),
+        steps: task.steps.map((x) =>
+          runningIds.has(x.id) ? { ...x, status: 'running', startedAt: Date.now() } : x
+        ),
       });
       setBusy({ taskId });
-      setLive({ taskId, stepId: step.id, employeeName: employee.name, text: '' });
-      perf.mark(`run:${step.id}`);
+      // 途中の文字は「いま1人だけ」を出す。同時に走っている時は先頭の担当を映す。
+      setLive({ taskId, stepId: group[0].id, employeeName: assigned[0].employee.name, text: '' });
 
-      let result;
-      try {
-        result = await runStep({
-          employee,
-          company: s.company,
-          task,
-          step,
-          knowledgeList: s.knowledge,
-          inherited: step.input,
-          secrets: s.secrets,
-          settings: s.settings,
-          // 受け取った先から画面へ出す。ここでは保存しない。
-          onDelta: (piece) =>
-            setLive((cur) =>
-              cur && cur.stepId === step.id ? { ...cur, text: cur.text + piece } : cur
-            ),
-        });
-      } catch (e) {
-        result = { error: e.message || String(e) };
-      }
-      perf.measure(`run:${step.id}`, 'run');
+      // 新項目20：中止できるようにする。画面を離れた・やめた時に実際に止める。
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      abortRef.current = controller;
+
+      const results = await Promise.all(
+        assigned.map(async ({ step, employee }) => {
+          perf.mark(`run:${step.id}`);
+          try {
+            const r = await runStep({
+              employee,
+              company: s.company,
+              task,
+              step,
+              knowledgeList: s.knowledge,
+              inherited: step.input,
+              secrets: s.secrets,
+              settings: s.settings,
+              signal: controller ? controller.signal : undefined,
+              // 受け取った先から画面へ出す。ここでは保存しない。
+              onDelta: (piece) =>
+                setLive((cur) =>
+                  cur && cur.stepId === step.id ? { ...cur, text: cur.text + piece } : cur
+                ),
+            });
+            perf.measure(`run:${step.id}`, 'run');
+            return { step, employee, result: r };
+          } catch (e) {
+            perf.measure(`run:${step.id}`, 'run');
+            const aborted = e && (e.name === 'AbortError' || (controller && controller.signal.aborted));
+            return {
+              step,
+              employee,
+              result: { error: aborted ? '中止しました' : e.message || String(e), aborted },
+            };
+          }
+        })
+      );
+
+      abortRef.current = null;
       setBusy(null);
       setLive(null);
 
-      const current = stateRef.current.tasks.find((t) => t.id === taskId) || task;
-      const updated = applyStepResult(current, step.id, result);
-      patchTask(updated);
+      let updated = stateRef.current.tasks.find((t) => t.id === taskId) || task;
+      for (const { step, employee, result } of results) {
+        updated = applyStepResult(updated, step.id, result);
+        log({
+          actor: employee.id,
+          action: result.error ? 'stepFailed' : 'stepRun',
+          target: task.title,
+          detail:
+            result.error ||
+            `${result.providerName || 'ローカル'} / ${result.model || '—'}${result.cached ? '（前回と同じ内容）' : ''}`,
+          cost: result.cost || 0,
+        });
 
-      log({
-        actor: employee.id,
-        action: result.error ? 'stepFailed' : 'stepRun',
-        target: task.title,
-        detail: result.error || `${result.providerName || 'ローカル'} / ${result.model || '—'}`,
-        cost: result.cost || 0,
-      });
+        // 社員の実績を更新
+        updateEmployee(employee.id, {
+          stats: {
+            ...(employee.stats || {}),
+            tasks: (employee.stats?.tasks || 0) + 1,
+            tokens:
+              (employee.stats?.tokens || 0) + ((result.usage?.input || 0) + (result.usage?.output || 0)),
+            costUsd: (employee.stats?.costUsd || 0) + (result.cost || 0),
+            lastActiveAt: Date.now(),
+          },
+        });
 
-      // 社員の実績を更新
-      updateEmployee(employee.id, {
-        stats: {
-          ...(employee.stats || {}),
-          tasks: (employee.stats?.tasks || 0) + 1,
-          tokens: (employee.stats?.tokens || 0) + ((result.usage?.input || 0) + (result.usage?.output || 0)),
-          costUsd: (employee.stats?.costUsd || 0) + (result.cost || 0),
-          lastActiveAt: Date.now(),
-        },
-      });
-
-      // 使った知識に「使われた」印をつける（循環を数えるため）
-      if (result.usedKnowledgeIds?.length) {
-        const used = new Set(result.usedKnowledgeIds);
-        put(
-          KEYS.knowledge,
-          stateRef.current.knowledge.map((k) => (used.has(k.id) ? markUsed(k) : k))
-        );
+        // 使った知識に「使われた」印をつける（循環を数えるため）
+        if (result.usedKnowledgeIds?.length) {
+          const used = new Set(result.usedKnowledgeIds);
+          put(
+            KEYS.knowledge,
+            stateRef.current.knowledge.map((k) => (used.has(k.id) ? markUsed(k) : k))
+          );
+        }
       }
+      patchTask(updated);
 
       // 完了したら成果を知識にする（＝ウロボロスの循環）
       if (updated.status === 'done') {
-        await saveResultAsKnowledge(updated, employee, result);
+        const last = results[results.length - 1];
+        await saveResultAsKnowledge(updated, last.employee, last.result);
       }
 
       return updated;
     },
     [put, log, patchTask, updateEmployee]
   );
+
+  /** 実行中の仕事をやめる（新項目20）。 */
+  const cancelRun = useCallback(() => {
+    const c = abortRef.current;
+    if (!c) return false;
+    c.abort();
+    abortRef.current = null;
+    return true;
+  }, []);
 
   /** 仕事の成果を会社の知識として保存する。出典を必ず残す。 */
   const saveResultAsKnowledge = useCallback(
@@ -682,7 +730,7 @@ export function useStore() {
     async (taskId) => {
       for (let i = 0; i < 8; i += 1) {
         const t = stateRef.current.tasks.find((x) => x.id === taskId);
-        if (!t || !nextStep(t) || t.status === 'awaiting_approval' || t.status === 'failed') break;
+        if (!t || !nextGroup(t).length || t.status === 'awaiting_approval' || t.status === 'failed') break;
         // eslint-disable-next-line no-await-in-loop
         const after = await runNextStep(taskId);
         if (!after || after.status === 'awaiting_approval' || after.status === 'failed') break;
@@ -945,6 +993,7 @@ export function useStore() {
     live,
     activeEmployees,
     // 社員
+    cancelRun,
     loadAllAudit,
     auditPartial: isPartial(KEYS.audit),
     hireEmployee,

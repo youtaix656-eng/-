@@ -1,5 +1,10 @@
 // 定型の仕事の流れ（Workflow）。依頼のたびに社員を選ばなくて済むようにする。
 // steps は roleId の並び。dispatcher の自動判定より優先される。
+//
+// 新項目22：steps の要素に**配列**を書くと「同時に走らせてよい手順」になる。
+//   ['researcher', ['analyzer', 'reviewer'], 'strategist']
+// 入れ子を平らにして役職だけ見たい時は flatSteps() を使うこと
+// （`wf.steps` をそのまま回すと配列が混ざる）。
 
 export const WORKFLOWS = [
   {
@@ -7,8 +12,10 @@ export const WORKFLOWS = [
     name: '徹底調査',
     reading: 'てっていちょうさ',
     glyph: '⌕',
-    desc: '集める → 整理する → 確かめる → 使える形にする',
-    steps: ['researcher', 'analyzer', 'reviewer', 'strategist'],
+    desc: '集める →（整理する・確かめる を同時に）→ 使える形にする',
+    // 新項目22：入れ子は「同時に走らせてよい手順」。
+    // 整理と検証はどちらも「調べた結果」だけを見るので、互いの結果を待たなくてよい。
+    steps: ['researcher', ['analyzer', 'reviewer'], 'strategist'],
     example: '〇〇について、信頼できる情報だけをまとめて',
   },
   {
@@ -78,4 +85,9 @@ export const WORKFLOWS = [
 
 export function workflowById(id) {
   return WORKFLOWS.find((w) => w.id === id) || null;
+}
+
+/** steps の入れ子を平らにして、役職 id の並びだけを返す。 */
+export function flatSteps(wf) {
+  return (wf && Array.isArray(wf.steps) ? wf.steps : []).flatMap((x) => (Array.isArray(x) ? x : [x]));
 }
