@@ -4,22 +4,28 @@ import { useState } from 'react';
 import { Card, Field, SectionTitle, Row } from './ui.jsx';
 import { ROLES, roleById, DEPARTMENTS } from '../data/roles.js';
 import { presetEmployee, archetypeFor } from '../data/employees.js';
-import { nextSeat } from '../lib/seed.js';
+import { nextSeat, seatsOf } from '../lib/seed.js';
+import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { employeeLimit } from '../data/plans.js';
 import { TOOLS } from '../data/tools.js';
 import { PROVIDERS } from '../lib/providers/index.js';
 
 export default function Hire({ store, initialRoleId, go }) {
+  const arg = typeof initialRoleId === 'object' && initialRoleId ? initialRoleId : {};
   const [mode, setMode] = useState('preset');
-  const [roleId, setRoleId] = useState(initialRoleId || 'researcher');
+  const [roleId, setRoleId] = useState(arg.roleId || (typeof initialRoleId === 'string' ? initialRoleId : 'researcher'));
+  const [genreId, setGenreId] = useState(arg.genreId || DEFAULT_GENRE_ID);
   const [custom, setCustom] = useState(() => blankCustom());
+  const genres = allGenres(store.genres);
+  const seatsPerGenre = store.company?.seatsPerRole || 3;
 
   const limit = employeeLimit(store.company?.planId, store.company?.limitOverrides);
   const full = store.activeEmployees.length >= limit;
 
-  const seat = nextSeat(store.employees, roleId);
-  const preset = presetEmployee(roleId, seat);
+  const seat = nextSeat(store.employees, roleId, genreId);
+  const preset = presetEmployee(roleId, seat, genreId, store.genres);
   const arche = archetypeFor(seat);
+  const filled = seatsOf(store.employees, roleId, genreId).length;
 
   const hirePreset = () => {
     const emp = store.hireEmployee(preset);
@@ -28,13 +34,17 @@ export default function Hire({ store, initialRoleId, go }) {
 
   const hireCustom = () => {
     const role = roleById(custom.roleId);
+    const genre = genres.find((g) => g.id === custom.genreId);
     const emp = store.hireEmployee({
       name: custom.name || '名もなき社員',
       shortName: custom.name || '社員',
+      // 読みは目次の並びに使う。漢字の読みは推定しないので、入力がなければ空のまま。
+      reading: custom.reading.trim(),
       avatar: custom.avatar || '◉',
       roleId: custom.roleId,
+      genreId: custom.genreId,
       departmentId: role?.departmentId || 'admin',
-      seat: nextSeat(store.employees, custom.roleId),
+      seat: nextSeat(store.employees, custom.roleId, custom.genreId),
       title: custom.title || role?.name || '社員',
       specialties: custom.specialties.split(/[,、\s]+/).filter(Boolean),
       persona: custom.persona,
@@ -43,6 +53,9 @@ export default function Hire({ store, initialRoleId, go }) {
       seatHint: custom.instruction,
       toolIds: custom.toolIds,
       providerPref: custom.providerPref,
+      genreHint: genre && genre.id !== DEFAULT_GENRE_ID
+        ? `あなたの担当分野は「${genre.name}」です。${genre.desc || ''}`
+        : '',
     });
     go('employee', emp.id);
   };
@@ -93,10 +106,34 @@ export default function Hire({ store, initialRoleId, go }) {
             </div>
           ))}
 
+          <SectionTitle>ジャンルを選ぶ</SectionTitle>
+          <p className="muted" style={{ marginTop: -4 }}>
+            1つの組（役職 × ジャンル）につき{seatsPerGenre}席まで。同じ役職でも分野が違えば別の3人を雇えます。
+          </p>
+          <div className="chips" style={{ marginBottom: 12 }}>
+            {genres.map((g) => {
+              const n = seatsOf(store.employees, roleId, g.id).length;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  className={`chip ${g.id === genreId ? 'on' : ''}`}
+                  onClick={() => setGenreId(g.id)}
+                >
+                  {g.glyph} {g.name} {n}/{seatsPerGenre}
+                </button>
+              );
+            })}
+            <button type="button" className="chip" onClick={() => go('genre')}>
+              ＋ ジャンルを足す
+            </button>
+          </div>
+
           {preset && (
             <Card glyph={preset.avatar} title={preset.name}>
               <div className="muted" style={{ marginTop: -6 }}>
-                {preset.title}（{seat}席目）
+                {preset.title}／{genres.find((g) => g.id === genreId)?.name}の{seat}席目
+                {filled >= seatsPerGenre && '（既定の3席を超えます）'}
               </div>
               <p style={{ fontSize: 14.5 }}>{preset.persona}</p>
               <p className="muted">書き方：{preset.style}</p>
@@ -109,6 +146,8 @@ export default function Hire({ store, initialRoleId, go }) {
                 この席の持ち味：<strong style={{ color: '#fff' }}>{arche.strength}</strong>
                 — {arche.persona}
               </p>
+              {preset.genreHint && <p className="muted">分野の指示：{preset.genreHint}</p>}
+              <p className="muted">読み：{preset.reading}</p>
               <button type="button" className="btn primary block" onClick={hirePreset} disabled={full}>
                 {preset.name} を雇う
               </button>
@@ -133,6 +172,28 @@ export default function Hire({ store, initialRoleId, go }) {
               onChange={(e) => setCustom({ ...custom, avatar: e.target.value })}
               placeholder="◉"
             />
+          </Field>
+          <Field
+            label="読み（ひらがな）"
+            hint="目次の並びに使います。漢字を含む名前は入れてください（アプリでは読みを推測しません）。"
+          >
+            <input
+              className="input"
+              value={custom.reading}
+              onChange={(e) => setCustom({ ...custom, reading: e.target.value })}
+              placeholder="例：やきんせんもんりさーちゃーのくす"
+            />
+          </Field>
+          <Field label="ジャンル（担当する分野）">
+            <select
+              className="select"
+              value={custom.genreId}
+              onChange={(e) => setCustom({ ...custom, genreId: e.target.value })}
+            >
+              {genres.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
           </Field>
           <Field label="役職（部署はここから決まります）">
             <select
@@ -233,8 +294,10 @@ export default function Hire({ store, initialRoleId, go }) {
 function blankCustom() {
   return {
     name: '',
+    reading: '',
     avatar: '◉',
     roleId: 'researcher',
+    genreId: DEFAULT_GENRE_ID,
     title: '',
     specialties: '',
     persona: '',

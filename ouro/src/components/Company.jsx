@@ -79,6 +79,8 @@ export default function Company({ store, go }) {
       />
       <Row glyph="▤" title="操作履歴（Audit Log）" sub={`${audit.length}件の記録`} onClick={() => go('audit')} />
       <Row glyph="⚙" title="設定" sub="AIエンジン・プラン・データの持ち出し" onClick={() => go('settings')} />
+      <Row glyph="▤" title="目次" sub="社員・役職・ジャンル・道具を読みで引く" onClick={() => go('toc')} />
+      <Row glyph="◈" title="ジャンル" sub="担当する分野を足す・見直す" onClick={() => go('genre')} />
 
       <SectionTitle>役職ごとの在籍</SectionTitle>
       <Card className="tight">

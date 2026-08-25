@@ -5,6 +5,7 @@ export const WORKFLOWS = [
   {
     id: 'deep_research',
     name: '徹底調査',
+    reading: 'てっていちょうさ',
     glyph: '⌕',
     desc: '集める → 整理する → 確かめる → 使える形にする',
     steps: ['researcher', 'analyzer', 'reviewer', 'strategist'],
@@ -13,6 +14,7 @@ export const WORKFLOWS = [
   {
     id: 'make_content',
     name: 'コンテンツ制作',
+    reading: 'こんてんつせいさく',
     glyph: '✦',
     desc: '調べる → 作る → 誤りを潰す',
     steps: ['researcher', 'creator', 'reviewer'],
@@ -21,6 +23,7 @@ export const WORKFLOWS = [
   {
     id: 'decide',
     name: '意思決定を助ける',
+    reading: 'いしけっていをたすける',
     glyph: '△',
     desc: '整理する → 反対側から見る → 選択肢に落とす',
     steps: ['analyzer', 'reviewer', 'strategist'],
@@ -29,6 +32,7 @@ export const WORKFLOWS = [
   {
     id: 'learn',
     name: '学ぶ・身につける',
+    reading: 'まなぶみにつける',
     glyph: '◎',
     desc: '調べる → 噛み砕く → 続く形にする',
     steps: ['researcher', 'analyzer', 'mentor'],
@@ -37,6 +41,7 @@ export const WORKFLOWS = [
   {
     id: 'earn',
     name: 'お金にする道を探す',
+    reading: 'おかねにするみちをさがす',
     glyph: '¥',
     desc: '相場を調べる → 自分の持ち物と突き合わせる → 今日の1手を出す',
     steps: ['researcher', 'analyzer', 'strategist'],
@@ -45,6 +50,7 @@ export const WORKFLOWS = [
   {
     id: 'quick',
     name: 'ひとりで即答',
+    reading: 'ひとりでそくとう',
     glyph: '•',
     desc: '1人だけに聞く（速い・安い）',
     steps: [],

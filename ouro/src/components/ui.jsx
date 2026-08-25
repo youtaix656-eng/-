@@ -1,7 +1,32 @@
 // 画面をまたいで使う小さな部品。
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toBlocks } from '../lib/format.js';
+
+/**
+ * 目次から飛んできた項目を、固定ヘッダーの下に出して一時的に光らせる。
+ * （共通ルール5「飛び先はスクロール位置を固定ヘッダーの下に出し、一時的にハイライトする」）
+ */
+export function Jump({ id, active, children }) {
+  const ref = useRef(null);
+  const hit = active && id === active;
+
+  useEffect(() => {
+    if (!hit || !ref.current) return undefined;
+    const el = ref.current;
+    const t = setTimeout(() => {
+      const top = el.getBoundingClientRect().top + window.scrollY - 74;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [hit]);
+
+  return (
+    <div ref={ref} className={hit ? 'jump-hit' : undefined}>
+      {children}
+    </div>
+  );
+}
 
 export function Card({ title, glyph, action, children, className = '' }) {
   return (

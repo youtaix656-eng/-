@@ -12,6 +12,9 @@ import Employees from './components/Employees.jsx';
 import Compose from './components/Compose.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
 import Company from './components/Company.jsx';
+// カレンダーと目次は下部ナビ相当で頻繁に使うため即時 import（lazy に戻さない）
+import Calendar from './components/Calendar.jsx';
+import Toc from './components/Toc.jsx';
 
 const TaskDetail = lazy(() => import('./components/TaskDetail.jsx'));
 const EmployeeDetail = lazy(() => import('./components/EmployeeDetail.jsx'));
@@ -30,13 +33,15 @@ const Connect = lazy(() => import('./components/Connect.jsx'));
 const Approvals = lazy(() => import('./components/Approvals.jsx'));
 const AuditView = lazy(() => import('./components/AuditView.jsx'));
 const Settings = lazy(() => import('./components/Settings.jsx'));
+const GenreEditor = lazy(() => import('./components/GenreEditor.jsx'));
 
 const NAV = [
   { id: 'home', glyph: '◉', label: 'ホーム' },
+  { id: 'toc', glyph: '▤', label: '目次' },
   { id: 'employees', glyph: '☉', label: '社員' },
   { id: 'compose', glyph: '✎', label: '依頼' },
+  { id: 'calendar', glyph: '▦', label: '予定' },
   { id: 'knowledge', glyph: '⌕', label: '知識' },
-  { id: 'company', glyph: '▦', label: '会社' },
 ];
 
 const TITLES = {
@@ -44,6 +49,9 @@ const TITLES = {
   employees: 'AI社員',
   compose: '仕事を依頼する',
   knowledge: 'Ouro Knowledge',
+  toc: '目次',
+  calendar: '予定',
+  genre: 'ジャンル',
   company: '会社',
   task: '仕事',
   employee: '社員',
@@ -139,9 +147,12 @@ export default function App() {
         }
       >
         {view === 'home' && <Home store={store} go={go} />}
-        {view === 'employees' && <Employees store={store} go={go} />}
+        {view === 'employees' && <Employees store={store} go={go} preset={arg || {}} key={JSON.stringify(arg)} />}
         {view === 'compose' && <Compose store={store} preset={arg || {}} go={go} key={JSON.stringify(arg)} />}
         {view === 'knowledge' && <KnowledgeView store={store} go={go} />}
+        {view === 'toc' && <Toc store={store} go={go} />}
+        {view === 'calendar' && <Calendar store={store} go={go} toast={toast} />}
+        {view === 'genre' && <GenreEditor store={store} go={go} toast={toast} />}
         {view === 'company' && <Company store={store} go={go} />}
         {view === 'task' && <TaskDetail store={store} taskId={arg} go={go} />}
         {view === 'employee' && <EmployeeDetail store={store} employeeId={arg} go={go} />}
@@ -150,13 +161,20 @@ export default function App() {
         {view === 'ingest' && <Ingest store={store} go={go} toast={toast} />}
         {view === 'meeting' && <Meeting store={store} go={go} />}
         {view === 'meetingDetail' && <MeetingDetail store={store} meetingId={arg} go={go} />}
-        {view === 'deals' && <Deals store={store} go={go} toast={toast} />}
+        {view === 'deals' && <Deals store={store} go={go} toast={toast} highlight={arg && arg.templateId} />}
         {view === 'deal' && <DealDetail store={store} dealId={arg} go={go} />}
-        {view === 'connect' && <Connect store={store} go={go} toast={toast} />}
+        {view === 'connect' && <Connect store={store} go={go} toast={toast} highlight={arg && arg.toolId} />}
         {view === 'approvals' && <Approvals store={store} go={go} />}
         {view === 'audit' && <AuditView store={store} />}
         {view === 'settings' && <Settings store={store} toast={toast} />}
       </Suspense>
+
+      {/* 下部ナビは6つに絞ったため、「会社」への入口を常設のバーで確保する */}
+      {isTab && (
+        <button type="button" className="company-bar" onClick={() => go('company')}>
+          ▦ 会社（ダッシュボード・道具・承認・設定）
+        </button>
+      )}
 
       <nav className="nav">
         {NAV.map((n) => (

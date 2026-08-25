@@ -15,6 +15,8 @@ import { createMeeting, addRound, opinionPrompt, rebuttalPrompt, synthesisPrompt
 import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
 import { providerById } from './providers/index.js';
+import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
+import { makeEvent } from './schedule.js';
 
 const EMPTY = {
   company: null,
@@ -28,6 +30,8 @@ const EMPTY = {
   approvals: [],
   audit: [],
   connections: [],
+  genres: [],
+  events: [],
   settings: makeSettings(),
   secrets: {},
 };
@@ -72,6 +76,8 @@ export function useStore() {
         approvals: await arr(KEYS.approvals),
         audit: await arr(KEYS.audit),
         connections: await arr(KEYS.connections),
+        genres: await arr(KEYS.genres),
+        events: await arr(KEYS.events),
         settings: { ...makeSettings(), ...(await load(KEYS.settings, {})) },
         secrets: (await load(KEYS.secrets, {})) || {},
       };
@@ -115,11 +121,57 @@ export function useStore() {
   );
 
   const hireIntoRole = useCallback(
-    (roleId) => {
-      const preset = presetForNextSeat(stateRef.current.employees, roleId);
+    (roleId, genreId = DEFAULT_GENRE_ID) => {
+      const s = stateRef.current;
+      const preset = presetForNextSeat(s.employees, roleId, genreId, s.genres);
       return preset ? hireEmployee(preset) : null;
     },
     [hireEmployee]
+  );
+
+  // ── ジャンル ──
+  const addGenre = useCallback(
+    ({ name, reading, glyph, desc }) => {
+      const genre = makeGenre({ name, reading, glyph, desc });
+      put(KEYS.genres, [...stateRef.current.genres, genre]);
+      log({ actor: 'user', action: 'genreAdded', target: genre.name });
+      return genre;
+    },
+    [put, log]
+  );
+
+  const removeGenre = useCallback(
+    (genreId) => {
+      const s = stateRef.current;
+      // そのジャンルに社員が残っているうちは消させない（所属が迷子になるため）
+      if (s.employees.some((e) => e.genreId === genreId && !e.archivedAt)) {
+        throw new Error('このジャンルにはまだ社員がいます。先に休職にしてください');
+      }
+      put(KEYS.genres, s.genres.filter((g) => g.id !== genreId));
+    },
+    [put]
+  );
+
+  // ── カレンダーの予定 ──
+  const addEvent = useCallback(
+    (data) => {
+      const ev = makeEvent(data);
+      put(KEYS.events, [...stateRef.current.events, ev]);
+      return ev;
+    },
+    [put]
+  );
+
+  const updateEvent = useCallback(
+    (id, patch) => {
+      put(KEYS.events, stateRef.current.events.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    },
+    [put]
+  );
+
+  const removeEvent = useCallback(
+    (id) => put(KEYS.events, stateRef.current.events.filter((e) => e.id !== id)),
+    [put]
   );
 
   const updateEmployee = useCallback(
@@ -144,21 +196,29 @@ export function useStore() {
     [state.employees]
   );
 
-  /** 役職から担当を1人選ぶ。仕事の少ない席を優先（3人に均等に回るように）。 */
-  const assignFor = useCallback(
-    (roleId) => {
-      const pool = stateRef.current.employees.filter((e) => e.roleId === roleId && !e.archivedAt);
-      if (!pool.length) return null;
-      return [...pool].sort(
+  /**
+   * 役職から担当を1人選ぶ。仕事の少ない席を優先（3人に均等に回るように）。
+   * ジャンルが指定されていれば、その分野の社員を優先し、いなければ汎用へ落とす。
+   */
+  const assignFor = useCallback((roleId, genreId = null) => {
+    const all = stateRef.current.employees.filter((e) => e.roleId === roleId && !e.archivedAt);
+    if (!all.length) return null;
+    const byLoad = (list) =>
+      [...list].sort(
         (a, b) => (a.stats?.tasks || 0) - (b.stats?.tasks || 0) || (a.seat || 1) - (b.seat || 1)
       )[0];
-    },
-    []
-  );
+
+    if (genreId) {
+      const sameGenre = all.filter((e) => (e.genreId || DEFAULT_GENRE_ID) === genreId);
+      if (sameGenre.length) return byLoad(sameGenre);
+    }
+    const general = all.filter((e) => (e.genreId || DEFAULT_GENRE_ID) === DEFAULT_GENRE_ID);
+    return byLoad(general.length ? general : all);
+  }, []);
 
   // ---- 仕事 ----
   const newTask = useCallback(
-    ({ request, workflowId = null, employeeId = null, dealId = null, context = '' }) => {
+    ({ request, workflowId = null, employeeId = null, dealId = null, context = '', genreId = null }) => {
       let forceRoles = null;
       if (employeeId) {
         const emp = stateRef.current.employees.find((e) => e.id === employeeId);
@@ -175,9 +235,9 @@ export function useStore() {
         context,
         assign: (roleId, i) => {
           if (employeeId && i === 0) {
-            return stateRef.current.employees.find((e) => e.id === employeeId) || assignFor(roleId);
+            return stateRef.current.employees.find((e) => e.id === employeeId) || assignFor(roleId, genreId);
           }
-          return assignFor(roleId);
+          return assignFor(roleId, genreId);
         },
       });
 
@@ -621,6 +681,13 @@ export function useStore() {
     updateEmployee,
     archiveEmployee,
     assignFor,
+    // ジャンル
+    addGenre,
+    removeGenre,
+    // カレンダー
+    addEvent,
+    updateEvent,
+    removeEvent,
     // 仕事
     newTask,
     runTask,

@@ -7,6 +7,7 @@ import { planSteps, detectNeeds } from '../lib/dispatcher.js';
 import { roleById } from '../data/roles.js';
 import { workflowById } from '../data/workflows.js';
 import { availableProviders } from '../lib/providers/index.js';
+import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 
 const EXAMPLES = [
   'YouTubeとWebから腰痛について調べて、信頼できる情報だけまとめて',
@@ -20,7 +21,9 @@ export default function Compose({ store, preset = {}, go }) {
   const [workflowId, setWorkflowId] = useState(preset.employeeId ? null : 'auto');
   const [employeeId, setEmployeeId] = useState(preset.employeeId || null);
   const [dealId, setDealId] = useState(preset.dealId || null);
+  const [genreId, setGenreId] = useState(preset.genreId || DEFAULT_GENRE_ID);
   const [context, setContext] = useState('');
+  const genres = allGenres(store.genres);
 
   const chosenEmployee = store.employees.find((e) => e.id === employeeId);
 
@@ -34,9 +37,9 @@ export default function Compose({ store, preset = {}, go }) {
     const forceRoles = wf && wf.steps.length ? wf.steps : null;
     return planSteps(request, { forceRoles }).map((s) => ({
       roleId: s.roleId,
-      employee: store.assignFor(s.roleId),
+      employee: store.assignFor(s.roleId, genreId),
     }));
-  }, [request, workflowId, employeeId, chosenEmployee, store]);
+  }, [request, workflowId, employeeId, chosenEmployee, genreId, store]);
 
   const needs = detectNeeds(request);
   const engines = availableProviders(store.secrets).filter((p) => p.needsKey);
@@ -49,6 +52,7 @@ export default function Compose({ store, preset = {}, go }) {
       employeeId,
       dealId,
       context,
+      genreId,
     });
     go('task', task.id);
     store.runTask(task.id);
@@ -87,6 +91,27 @@ export default function Compose({ store, preset = {}, go }) {
         </Card>
       ) : (
         <>
+          <SectionTitle>どの分野の仕事か</SectionTitle>
+          <p className="muted" style={{ marginTop: -4 }}>
+            分野を選ぶと、その分野の社員が優先して担当します（いなければ汎用の社員が受けます）。
+          </p>
+          <div className="chips" style={{ marginBottom: 12 }}>
+            {genres.map((g) => {
+              const n = store.activeEmployees.filter((e) => (e.genreId || DEFAULT_GENRE_ID) === g.id).length;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  className={`chip ${genreId === g.id ? 'on' : ''}`}
+                  onClick={() => setGenreId(g.id)}
+                >
+                  {g.glyph} {g.name}
+                  {n ? ` ${n}人` : ''}
+                </button>
+              );
+            })}
+          </div>
+
           <SectionTitle>仕事の進め方</SectionTitle>
           <div className="chips" style={{ marginBottom: 12 }}>
             <button

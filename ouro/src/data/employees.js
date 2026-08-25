@@ -1,25 +1,31 @@
-// AI社員のプリセット。「1つの役職 × 3席」が初期構成。
+// AI社員のプリセット。
 //
-// 席（seat）は固定ではなく company.seatsPerRole の初期値でしかない。
-// 増席したいときは hireEmployee({roleId, seat: 4}) を呼ぶだけで足りる
-// （画面・スキーマの変更は不要）。
+//   役職（何ができるか） × ジャンル（どの分野で） × 席（3人）
+//
+// 「1つの役職 × 3席」が初期構成（ジャンルは汎用）。同じ役職でも分野が違えば
+// 別の組として3席ずつ雇える（例：リサーチャー×医療で3人、リサーチャー×副業で3人）。
+// 席数は company.seatsPerGenre の初期値でしかなく、増席できる。
 
 import { ROLES } from './roles.js';
+import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE, genreById } from './genres.js';
+import { kataToHira } from '../lib/yomi.js';
 
-// 席ごとの持ち味。同じ役職でも「どう働くか」を変えて、
+// 席ごとの持ち味。同じ役職・同じジャンルでも「どう働くか」を変えて、
 // 3人に依頼を割り振る意味を持たせる。
 export const SEAT_ARCHETYPES = [
   {
     seat: 1,
     label: '主席',
+    reading: 'しゅせき',
     persona: '丁寧で網羅的。抜け漏れを何より嫌う。',
     style: '結論 → 根拠 → 抜け漏れの確認、の順で書く。見出しと箇条書きを使う。',
     strength: '網羅',
-    hint: '網羅性を最優先します。answer に含めるべき論点を先に列挙してから書き始めます。',
+    hint: '網羅性を最優先します。答えに含めるべき論点を先に列挙してから書き始めます。',
   },
   {
     seat: 2,
     label: '次席',
+    reading: 'じせき',
     persona: '速くて実務的。今日動ける形にすることに全力を注ぐ。',
     style: '前置きを書かない。300字以内の要点 → そのまま使える手順、の順で書く。',
     strength: '速さ',
@@ -28,6 +34,7 @@ export const SEAT_ARCHETYPES = [
   {
     seat: 3,
     label: '三席',
+    reading: 'さんせき',
     persona: '慎重で天邪鬼。多数意見にあえて反対の目線を当てる。',
     style: '主流の見方を書いたうえで、それが崩れる条件と別解を必ず添える。',
     strength: '別視点',
@@ -35,9 +42,39 @@ export const SEAT_ARCHETYPES = [
   },
 ];
 
-// 4席目以降で使う名前（役職をまたいで共用）。
-// 席は増やせる設計なので、3人ぶんの名前で打ち止めにしない。
-export const EXTRA_NAMES = ['シキ', 'ミナ', 'レン', 'ユイ', 'タケル', 'アオ', 'リコ', 'ハル', 'ナオ', 'セナ'];
+// 4席目以降で使う名前（役職・ジャンルをまたいで共用）。
+export const EXTRA_NAMES = [
+  { name: 'シキ', reading: 'しき' },
+  { name: 'ミナ', reading: 'みな' },
+  { name: 'レン', reading: 'れん' },
+  { name: 'ユイ', reading: 'ゆい' },
+  { name: 'タケル', reading: 'たける' },
+  { name: 'アオ', reading: 'あお' },
+  { name: 'リコ', reading: 'りこ' },
+  { name: 'ハル', reading: 'はる' },
+  { name: 'ナオ', reading: 'なお' },
+  { name: 'セナ', reading: 'せな' },
+  { name: 'イズミ', reading: 'いずみ' },
+  { name: 'カエデ', reading: 'かえで' },
+  { name: 'ソウ', reading: 'そう' },
+  { name: 'トウカ', reading: 'とうか' },
+  { name: 'ハクア', reading: 'はくあ' },
+  { name: 'マヒロ', reading: 'まひろ' },
+  { name: 'ユウ', reading: 'ゆう' },
+  { name: 'リョウ', reading: 'りょう' },
+  { name: 'アカリ', reading: 'あかり' },
+  { name: 'クレハ', reading: 'くれは' },
+  { name: 'シノ', reading: 'しの' },
+  { name: 'ツバサ', reading: 'つばさ' },
+  { name: 'ネム', reading: 'ねむ' },
+  { name: 'ヒナ', reading: 'ひな' },
+  { name: 'マコト', reading: 'まこと' },
+  { name: 'ミツキ', reading: 'みつき' },
+  { name: 'ヤヨイ', reading: 'やよい' },
+  { name: 'ルイ', reading: 'るい' },
+  { name: 'ワカ', reading: 'わか' },
+  { name: 'ノゾミ', reading: 'のぞみ' },
+];
 
 /** 席の持ち味。4席目以降は主席→次席→三席を繰り返す。 */
 export function archetypeFor(seat) {
@@ -45,7 +82,7 @@ export function archetypeFor(seat) {
   return SEAT_ARCHETYPES[i];
 }
 
-// 役職ごとの3人の名前（席1・席2・席3）。
+// 役職ごとの3人の名前（席1・席2・席3）。カタカナなので読みは機械変換で足りる。
 const NAMES = {
   researcher: ['ルナ', 'ソラ', 'ヨル'],
   analyzer: ['カイ', 'リン', 'ハク'],
@@ -64,45 +101,82 @@ const NAMES = {
   accountant: ['ゼニ', 'ソロ', 'タマ'],
 };
 
-/** 役職 × 席 から社員のプリセットを組み立てる（保存はしない）。 */
-export function presetEmployee(roleId, seat) {
+// ジャンルごとに名前を少しずらして、別ジャンルの同じ席と名前が重ならないようにする。
+const GENRE_NAME_OFFSET = {
+  general: 0,
+  health: 3,
+  study: 6,
+  money: 9,
+  writing: 12,
+  design: 15,
+  tech: 18,
+  business: 21,
+  life: 24,
+};
+
+/**
+ * 役職 × ジャンル × 席 から社員のプリセットを組み立てる（保存はしない）。
+ */
+export function presetEmployee(roleId, seat, genreId = DEFAULT_GENRE_ID, customGenres = []) {
   const role = ROLES.find((r) => r.id === roleId);
   if (!role) return null;
+  const genre = genreById(genreId, customGenres) || genreById(DEFAULT_GENRE_ID);
   const arche = archetypeFor(seat);
-  const names = NAMES[roleId] || [];
-  const name = names[seat - 1] || extraName(seat);
+  const picked = pickName(roleId, seat, genre.id);
+
+  const isDefaultGenre = genre.id === DEFAULT_GENRE_ID;
+  const title = `${role.name}（${arche.label}${seat > SEAT_ARCHETYPES.length ? `・${seat}席` : ''}）`;
+
   return {
-    name: `${role.name}・${name}`,
-    shortName: name,
+    name: `${role.name}・${picked.name}`,
+    shortName: picked.name,
+    // 読みは明示して持たせる（目次で誤読しないため）。
+    reading: `${role.reading}${picked.reading}`,
     avatar: role.glyph,
     roleId: role.id,
+    genreId: genre.id,
     departmentId: role.departmentId,
     seat,
-    title: `${role.name}（${arche.label}${seat > SEAT_ARCHETYPES.length ? `・${seat}席` : ''}）`,
-    specialties: role.skills.slice(),
+    title,
+    // 専門分野は「役職の技能 ＋ ジャンル」。汎用のときはジャンル名を足さない。
+    specialties: isDefaultGenre ? role.skills.slice() : [genre.name, ...role.skills.slice(0, 3)],
     persona: arche.persona,
     style: arche.style,
     strength: arche.strength,
     seatHint: arche.hint,
+    genreHint: isDefaultGenre
+      ? ''
+      : `あなたの担当分野は「${genre.name}」です。${genre.desc}${genre.caution ? ` ${genre.caution}` : ''}`,
     toolIds: role.tools.slice(),
   };
 }
 
-/** 初期チーム（core の6役職 × seatsPerRole 席）のプリセット一覧。 */
-export function initialPresets(seatsPerRole = 3) {
+function pickName(roleId, seat, genreId) {
+  const names = NAMES[roleId] || [];
+  const offset = GENRE_NAME_OFFSET[genreId] ?? 27;
+  const idx = seat - 1;
+
+  // 汎用ジャンルの1〜3席目は、役職ごとの固有名をそのまま使う
+  if (offset === 0 && idx < names.length) {
+    return { name: names[idx], reading: kataToHira(names[idx]) };
+  }
+  // それ以外は共用の名前プールから、ジャンルごとにずらして取る
+  const pool = EXTRA_NAMES;
+  const at = (offset + idx) % pool.length;
+  const round = Math.floor((offset + idx) / pool.length);
+  const base = pool[at];
+  return round === 0
+    ? { name: base.name, reading: base.reading }
+    : { name: `${base.name}${round + 1}`, reading: `${base.reading}${round + 1}` };
+}
+
+/** 初期チーム（core の6役職 × 汎用ジャンル × seats 席）のプリセット一覧。 */
+export function initialPresets(seats = DEFAULT_SEATS_PER_GENRE) {
   const out = [];
   for (const role of ROLES.filter((r) => r.core)) {
-    for (let seat = 1; seat <= seatsPerRole; seat += 1) {
-      out.push(presetEmployee(role.id, seat));
+    for (let seat = 1; seat <= seats; seat += 1) {
+      out.push(presetEmployee(role.id, seat, DEFAULT_GENRE_ID));
     }
   }
   return out;
-}
-
-/** 4席目以降の名前。名前が尽きたら番号を添えて重ならないようにする。 */
-function extraName(seat) {
-  const i = seat - SEAT_ARCHETYPES.length - 1;
-  const base = EXTRA_NAMES[i % EXTRA_NAMES.length];
-  const round = Math.floor(i / EXTRA_NAMES.length);
-  return round === 0 ? base : `${base}${round + 1}`;
 }

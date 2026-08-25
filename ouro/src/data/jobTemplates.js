@@ -8,6 +8,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'article',
     name: 'ブログ記事・コラム作成',
+    reading: 'ぶろぐきじこらむさくせい',
     glyph: '✎',
     feeHint: [3000, 15000],
     unit: '1記事',
@@ -22,6 +23,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'sns',
     name: 'SNS投稿の作成代行',
+    reading: 'えすえぬえすとうこうのさくせいだいこう',
     glyph: '◍',
     feeHint: [5000, 30000],
     unit: '月10〜30本',
@@ -35,6 +37,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'research_report',
     name: 'リサーチ代行レポート',
+    reading: 'りさーちだいこうれぽーと',
     glyph: '⌕',
     feeHint: [5000, 50000],
     unit: '1件',
@@ -48,6 +51,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'slides',
     name: '資料・スライド作成代行',
+    reading: 'しりょうすらいどさくせいだいこう',
     glyph: '▤',
     feeHint: [5000, 40000],
     unit: '10〜30枚',
@@ -61,6 +65,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'transcript',
     name: '文字起こし・整文',
+    reading: 'もじおこしせいぶん',
     glyph: '✍',
     feeHint: [1000, 10000],
     unit: '60分',
@@ -74,6 +79,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'script',
     name: 'YouTube台本・構成',
+    reading: 'ゆーちゅーぶだいほんこうせい',
     glyph: '▷',
     feeHint: [3000, 30000],
     unit: '1本',
@@ -87,6 +93,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'product_copy',
     name: '商品説明文・販売ページ',
+    reading: 'しょうひんせつめいぶんはんばいぺーじ',
     glyph: '➤',
     feeHint: [3000, 50000],
     unit: '1商品',
@@ -100,6 +107,7 @@ export const JOB_TEMPLATES = [
   {
     id: 'own_media',
     name: '自分の発信を資産にする',
+    reading: 'じぶんのはっしんをしさんにする',
     glyph: '◉',
     feeHint: [0, 0],
     unit: '長期',

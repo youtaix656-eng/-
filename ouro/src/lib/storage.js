@@ -19,6 +19,8 @@ export const KEYS = {
   approvals: 'ouro:approvals',
   audit: 'ouro:audit',
   connections: 'ouro:connections',
+  genres: 'ouro:genres', // ユーザーが足したジャンル（組み込みは data/genres.js）
+  events: 'ouro:events', // カレンダーの予定（締切は deals から導くのでここには入れない）
   settings: 'ouro:settings',
   secrets: 'ouro:secrets', // APIキー。書き出しには絶対に含めない
   seeded: 'ouro:seeded',

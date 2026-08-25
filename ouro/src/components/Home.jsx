@@ -10,6 +10,7 @@ import { verifiedRate } from '../lib/knowledge.js';
 import { revenueSummary, formatMoney } from '../lib/revenue.js';
 import { roleById } from '../data/roles.js';
 import { availableProviders } from '../lib/providers/index.js';
+import { upcoming } from '../lib/schedule.js';
 
 export default function Home({ store, go }) {
   const {
@@ -136,7 +137,15 @@ export default function Home({ store, go }) {
         <button type="button" className="btn" onClick={() => go('deals')}>
           ¥ 案件・収益
         </button>
+        <button type="button" className="btn" onClick={() => go('toc')}>
+          ▤ 目次で探す
+        </button>
+        <button type="button" className="btn" onClick={() => go('calendar')}>
+          ▦ 予定を見る
+        </button>
       </div>
+
+      <UpcomingCard store={store} go={go} />
 
       {/* 稼ぐ（お金の状況） */}
       <SectionTitle>お金の状況</SectionTitle>
@@ -222,6 +231,26 @@ export default function Home({ store, go }) {
         ))}
       </Card>
     </div>
+  );
+}
+
+/** 直近の締切と予定。カレンダーを開かなくてもホームで気づけるようにする。 */
+function UpcomingCard({ store, go }) {
+  const soon = upcoming({ events: store.events, deals: store.deals }, Date.now(), 7);
+  if (!soon.length) return null;
+  return (
+    <>
+      <SectionTitle>これから1週間</SectionTitle>
+      {soon.slice(0, 3).map((x) => (
+        <Row
+          key={`${x.kind}-${x.id}`}
+          glyph={x.kind === 'deadline' ? '▲' : '■'}
+          title={x.title}
+          sub={x.daysLeft === 0 ? '今日' : `あと${x.daysLeft}日`}
+          onClick={() => (x.kind === 'deadline' ? go('deal', x.id) : go('calendar'))}
+        />
+      ))}
+    </>
   );
 }
 

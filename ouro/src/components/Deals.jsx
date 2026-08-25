@@ -4,13 +4,14 @@
 // （実際の相場はリサーチャーに調べさせる導線を必ず添える）。
 
 import { useState } from 'react';
-import { Card, Field, SectionTitle, Row, Empty, Stat } from './ui.jsx';
+import { Card, Field, SectionTitle, Row, Empty, Stat, Jump } from './ui.jsx';
 import { JOB_TEMPLATES, easiestFirst, templateById } from '../data/jobTemplates.js';
 import { DEAL_STATUS, revenueSummary, upcomingDeals, formatMoney, dealAiCost } from '../lib/revenue.js';
 import { relTime } from '../lib/format.js';
 
-export default function Deals({ store, go, toast }) {
-  const [tab, setTab] = useState(store.deals.length ? 'deals' : 'templates');
+export default function Deals({ store, go, toast, highlight = null }) {
+  // 目次から案件の型を指定して来たときは、その型が見えるタブを開く
+  const [tab, setTab] = useState(highlight ? 'templates' : store.deals.length ? 'deals' : 'templates');
   const [form, setForm] = useState(null);
 
   const money = revenueSummary(store.deals, store.tasks, { usdJpy: store.settings.usdJpy });
@@ -161,7 +162,8 @@ export default function Deals({ store, go, toast }) {
           </Card>
 
           {easiestFirst().map((t) => (
-            <Card key={t.id} glyph={t.glyph} title={t.name}>
+            <Jump key={t.id} id={t.id} active={highlight}>
+            <Card glyph={t.glyph} title={t.name}>
               <div className="muted" style={{ marginTop: -6 }}>
                 目安 {t.feeHint[0].toLocaleString()}〜{t.feeHint[1].toLocaleString()}円／{t.unit}
                 ・必要スキル{t.skillNeed}・元手{t.startCost}円
@@ -190,6 +192,7 @@ export default function Deals({ store, go, toast }) {
                 </button>
               </div>
             </Card>
+            </Jump>
           ))}
         </>
       )}

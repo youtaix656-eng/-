@@ -1,12 +1,12 @@
 // 「会社で使える道具」。連携アプリ一覧ではなく、社員の道具として並べる。
 // 接続上限はプラン定義から読む（画面に数字を直書きしない）。
 
-import { Card, SectionTitle, Empty } from './ui.jsx';
+import { Card, SectionTitle, Empty, Jump } from './ui.jsx';
 import { TOOLS, TOOL_CATEGORIES } from '../data/tools.js';
 import { planById, connectionLimit, PLANS } from '../data/plans.js';
 import { providerById } from '../lib/providers/index.js';
 
-export default function Connect({ store, go, toast }) {
+export default function Connect({ store, go, toast, highlight = null }) {
   const plan = planById(store.company?.planId);
   const limit = connectionLimit(store.company?.planId, store.company?.limitOverrides);
   const enabled = store.connections.filter((c) => c.enabled);
@@ -67,7 +67,8 @@ export default function Connect({ store, go, toast }) {
             {list.map((t) => {
               const on = isOn(t.id) || t.always;
               return (
-                <div key={t.id} className="card tight">
+                <Jump key={t.id} id={t.id} active={highlight}>
+                <div className="card tight">
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     <span className="rune" style={{ fontSize: 18, width: 24, textAlign: 'center' }}>
                       {t.glyph}
@@ -101,6 +102,7 @@ export default function Connect({ store, go, toast }) {
                     </div>
                   )}
                 </div>
+                </Jump>
               );
             })}
           </div>

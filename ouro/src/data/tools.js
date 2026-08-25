@@ -16,6 +16,7 @@ export const TOOLS = [
   {
     id: 'web',
     name: 'Web検索',
+    reading: 'うぇぶけんさく',
     category: 'collect',
     glyph: '⌕',
     capabilities: ['read'],
@@ -27,6 +28,7 @@ export const TOOLS = [
   {
     id: 'webfetch',
     name: 'Webページ取得',
+    reading: 'うぇぶぺーじしゅとく',
     category: 'collect',
     glyph: '⇩',
     capabilities: ['read'],
@@ -38,6 +40,7 @@ export const TOOLS = [
   {
     id: 'youtube',
     name: 'YouTube',
+    reading: 'ゆーちゅーぶ',
     category: 'collect',
     glyph: '▷',
     capabilities: ['read'],
@@ -49,6 +52,7 @@ export const TOOLS = [
   {
     id: 'pdf',
     name: 'PDF',
+    reading: 'ぴーでぃーえふ',
     category: 'collect',
     glyph: '▤',
     capabilities: ['read'],
@@ -60,6 +64,7 @@ export const TOOLS = [
   {
     id: 'note',
     name: 'メモ・音声メモ',
+    reading: 'めもおんせいめも',
     category: 'collect',
     glyph: '✍',
     capabilities: ['read', 'create'],
@@ -70,6 +75,7 @@ export const TOOLS = [
   {
     id: 'knowledge',
     name: 'Ouro Knowledge',
+    reading: 'うろないれっじ',
     category: 'internal',
     glyph: '◉',
     capabilities: ['read', 'create', 'edit'],
@@ -81,6 +87,7 @@ export const TOOLS = [
   {
     id: 'anthropic',
     name: 'Claude',
+    reading: 'くろーど',
     category: 'ai',
     glyph: '✳',
     capabilities: ['read'],
@@ -92,6 +99,7 @@ export const TOOLS = [
   {
     id: 'openai',
     name: 'ChatGPT',
+    reading: 'ちゃっとじーぴーてぃー',
     category: 'ai',
     glyph: '◍',
     capabilities: ['read'],
@@ -103,6 +111,7 @@ export const TOOLS = [
   {
     id: 'gemini',
     name: 'Gemini',
+    reading: 'じぇみに',
     category: 'ai',
     glyph: '◇',
     capabilities: ['read'],
@@ -114,6 +123,7 @@ export const TOOLS = [
   {
     id: 'drive',
     name: 'Google Drive',
+    reading: 'ぐーぐるどらいぶ',
     category: 'storage',
     glyph: '△',
     capabilities: ['read', 'create', 'delete'],
@@ -125,6 +135,7 @@ export const TOOLS = [
   {
     id: 'notion',
     name: 'Notion',
+    reading: 'のーしょん',
     category: 'storage',
     glyph: '▣',
     capabilities: ['read', 'create', 'edit'],
@@ -136,6 +147,7 @@ export const TOOLS = [
   {
     id: 'gmail',
     name: 'Gmail',
+    reading: 'じーめーる',
     category: 'comm',
     glyph: '✉',
     capabilities: ['read', 'send'],
@@ -147,6 +159,7 @@ export const TOOLS = [
   {
     id: 'calendar',
     name: 'カレンダー',
+    reading: 'かれんだー',
     category: 'comm',
     glyph: '▤',
     capabilities: ['read', 'create', 'edit'],

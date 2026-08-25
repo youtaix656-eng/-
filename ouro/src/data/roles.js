@@ -14,6 +14,7 @@ export const ROLES = [
   {
     id: 'researcher',
     name: 'リサーチャー',
+    reading: 'りさーちゃー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
     core: true,
     order: 1,
@@ -31,6 +32,7 @@ export const ROLES = [
   {
     id: 'analyzer',
     name: 'アナライザー',
+    reading: 'あならいざー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
     core: true,
     order: 2,
@@ -47,6 +49,7 @@ export const ROLES = [
   {
     id: 'creator',
     name: 'クリエイター',
+    reading: 'くりえいたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: true,
     order: 3,
@@ -63,6 +66,7 @@ export const ROLES = [
   {
     id: 'reviewer',
     name: 'レビュアー',
+    reading: 'れびゅあー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
     core: true,
     order: 4,
@@ -79,6 +83,7 @@ export const ROLES = [
   {
     id: 'strategist',
     name: 'ストラテジスト',
+    reading: 'すとらてじすと', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: true,
     order: 5,
@@ -95,6 +100,7 @@ export const ROLES = [
   {
     id: 'mentor',
     name: 'メンター',
+    reading: 'めんたー', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: true,
     order: 6,
@@ -113,6 +119,7 @@ export const ROLES = [
   {
     id: 'organizer',
     name: 'オーガナイザー',
+    reading: 'おーがないざー', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
     order: 7,
@@ -127,6 +134,7 @@ export const ROLES = [
   {
     id: 'automator',
     name: 'オートメーター',
+    reading: 'おーとめーたー', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
     order: 8,
@@ -141,6 +149,7 @@ export const ROLES = [
   {
     id: 'data',
     name: 'データサイエンティスト',
+    reading: 'でーたさいえんてぃすと', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: false,
     order: 9,
@@ -155,6 +164,7 @@ export const ROLES = [
   {
     id: 'security',
     name: 'セキュリティ',
+    reading: 'せきゅりてぃ', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
     order: 10,
@@ -169,6 +179,7 @@ export const ROLES = [
   {
     id: 'innovator',
     name: 'イノベーター',
+    reading: 'いのべーたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: false,
     order: 11,
@@ -183,6 +194,7 @@ export const ROLES = [
   {
     id: 'marketer',
     name: 'マーケター',
+    reading: 'まーけたー', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: false,
     order: 12,
@@ -197,6 +209,7 @@ export const ROLES = [
   {
     id: 'writer',
     name: 'ライター',
+    reading: 'らいたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: false,
     order: 13,
@@ -211,6 +224,7 @@ export const ROLES = [
   {
     id: 'designer',
     name: 'デザイナー',
+    reading: 'でざいなー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: false,
     order: 14,
@@ -225,6 +239,7 @@ export const ROLES = [
   {
     id: 'accountant',
     name: '経理',
+    reading: 'けいり', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
     order: 15,

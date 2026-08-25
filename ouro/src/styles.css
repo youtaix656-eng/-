@@ -53,7 +53,8 @@ select {
 /* ── レイアウト ── */
 .app {
   min-height: 100dvh;
-  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  /* 下部ナビ ＋ 常設の「会社」バー のぶんを空ける */
+  padding-bottom: calc(var(--nav-h) + 38px + env(safe-area-inset-bottom, 0px));
 }
 
 .screen {
@@ -106,7 +107,7 @@ select {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   background: rgba(0, 0, 0, 0.94);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
@@ -132,7 +133,7 @@ select {
 }
 
 .nav button .t {
-  font-size: 10.5px;
+  font-size: 10px;
   letter-spacing: 0.04em;
 }
 
@@ -781,7 +782,7 @@ select {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--nav-h) + 18px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--nav-h) + 56px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 70;
   background: #0d0d0d;
@@ -827,5 +828,369 @@ select {
   * {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* ══ 目次（索引） ══
+   共通ルール5「目次の文字は大きめ・タップで飛べる」に合わせる。 */
+
+.toc-search {
+  font-size: 16px;
+}
+
+.toc-head {
+  font-family: var(--serif);
+  font-size: 17px;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  margin: 22px 0 10px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--ink);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent);
+  border-radius: 0 8px 8px 0;
+  display: flex;
+  align-items: baseline;
+  transition: background 0.4s;
+  scroll-margin-top: 70px;
+}
+
+/* 目次からジャンプしたとき、一時的に光らせる */
+.toc-flash {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.34), transparent);
+}
+
+.kana-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.kana-key {
+  min-width: 48px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  cursor: pointer;
+  flex: 1 1 auto;
+}
+
+.kana-key:disabled {
+  opacity: 0.24;
+  cursor: default;
+}
+
+.kana-key:not(:disabled):hover {
+  background: var(--panel-2);
+  border-color: var(--ink-3);
+}
+
+/* 目次の行：文字を大きめに、タップ領域は52px以上 */
+.toc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  margin: 0 0 7px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.toc-row:hover {
+  background: var(--panel-2);
+}
+
+.toc-row .g {
+  font-family: var(--serif);
+  font-size: 19px;
+  width: 26px;
+  text-align: center;
+  color: var(--ink-2);
+  flex: none;
+}
+
+.toc-row .body {
+  flex: 1;
+  min-width: 0;
+}
+
+.toc-row .body .t {
+  display: block;
+  font-size: 16.5px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-row .body .r {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+
+.toc-row .body .s {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-row .arrow {
+  color: var(--ink-3);
+  flex: none;
+  font-size: 18px;
+}
+
+/* ── 役職 × ジャンル の席 ── */
+.genre-block {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0 0 10px;
+  background: var(--panel);
+}
+
+.genre-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.genre-head .n {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 76px;
+  border-radius: 11px;
+  padding: 8px 4px;
+  cursor: pointer;
+  color: inherit;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.seat.empty {
+  border-style: dashed;
+  color: var(--ink-3);
+  background: transparent;
+}
+
+.seat:hover {
+  border-color: var(--ink);
+  background: var(--panel-2);
+}
+
+.seat .sg {
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.seat .sn {
+  font-size: 12.5px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.seat .ss {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+/* ══ カレンダー ══ */
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cal-title {
+  flex: 1;
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+
+.cal {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.cal-week.head {
+  border-bottom: 1px solid var(--line);
+}
+
+.cal-wd {
+  text-align: center;
+  font-size: 11px;
+  padding: 6px 0;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+}
+
+.cal-wd.sun,
+.cal-day .d.sun {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.cal-wd.sat,
+.cal-day .d.sat {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cal-day {
+  position: relative;
+  min-height: 52px;
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 5px 2px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.cal-day:nth-child(7n) {
+  border-right: none;
+}
+
+.cal-day.out {
+  opacity: 0.3;
+}
+
+.cal-day .d {
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.cal-day.today .d {
+  background: var(--ink);
+  color: #000;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.cal-day.sel {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.cal-day .marks {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  justify-content: center;
+  line-height: 1;
+}
+
+.cal-day .mk {
+  font-style: normal;
+  font-size: 7px;
+  color: var(--ink-2);
+}
+
+.cal-day .mk.deadline {
+  color: #fff;
+}
+
+.cal-legend {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+}
+
+/* 下部ナビのすぐ上に常設する「会社」への入口 */
+.company-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  z-index: 39;
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.94);
+  backdrop-filter: blur(10px);
+  color: var(--ink-2);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.company-bar:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* 目次から飛んだ先を一時的に光らせる */
+.jump-hit {
+  animation: jumpflash 2s ease;
+  border-radius: 12px;
+  scroll-margin-top: 74px;
+}
+
+@keyframes jumpflash {
+  0%, 55% {
+    box-shadow: 0 0 0 1px var(--ink), 0 0 26px rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.14);
+  }
+  100% {
+    box-shadow: none;
+    background: transparent;
   }
 }

@@ -13,6 +13,7 @@ export const ACTIONS = {
   knowledgeUpdated: '知識を更新した',
   knowledgeDeleted: '知識を削除した',
   employeeHired: '社員を雇った',
+  genreAdded: 'ジャンルを足した',
   employeeArchived: '社員を休職にした',
   approvalRequested: '承認を求めた',
   approvalGranted: '承認した',

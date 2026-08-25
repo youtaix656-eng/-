@@ -2,6 +2,7 @@
 
 import { Card, Field, SectionTitle, Row, Empty } from './ui.jsx';
 import { roleById, departmentById } from '../data/roles.js';
+import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { TOOLS, toolById } from '../data/tools.js';
 import { PROVIDERS, providerById } from '../lib/providers/index.js';
 import { PERMISSIONS, permissionLabel } from '../lib/permissions.js';
@@ -13,6 +14,8 @@ export default function EmployeeDetail({ store, employeeId, go }) {
 
   const role = roleById(emp.roleId);
   const dept = departmentById(emp.departmentId);
+  const genres = allGenres(store.genres);
+  const genre = genres.find((g) => g.id === (emp.genreId || DEFAULT_GENRE_ID));
   const myTasks = store.tasks.filter((t) => (t.steps || []).some((s) => s.employeeId === emp.id));
   const provider = providerById(emp.providerPref);
 
@@ -27,7 +30,9 @@ export default function EmployeeDetail({ store, employeeId, go }) {
         </div>
         <div className="muted">
           {emp.title}／{dept?.name}
+          {genre ? `／${genre.glyph} ${genre.name}` : ''}
         </div>
+        {emp.reading && <div className="muted" style={{ fontSize: 11 }}>{emp.reading}</div>}
       </div>
 
       <Card glyph="◉" title="人物">
@@ -38,6 +43,41 @@ export default function EmployeeDetail({ store, employeeId, go }) {
             <span key={s} className="chip">{s}</span>
           ))}
         </div>
+      </Card>
+
+      <Card glyph="◈" title="ジャンル（担当する分野）">
+        <Field label="分野" hint="変えると、この社員に与える分野の指示も切り替わります。">
+          <select
+            className="select"
+            value={emp.genreId || DEFAULT_GENRE_ID}
+            onChange={(e) => {
+              const g = genres.find((x) => x.id === e.target.value);
+              set({
+                genreId: e.target.value,
+                genreHint:
+                  g && g.id !== DEFAULT_GENRE_ID
+                    ? `あなたの担当分野は「${g.name}」です。${g.desc || ''}${g.caution ? ` ${g.caution}` : ''}`
+                    : '',
+              });
+            }}
+          >
+            {genres.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </Field>
+        {emp.genreHint && <p className="muted" style={{ marginBottom: 8 }}>{emp.genreHint}</p>}
+        <Field
+          label="読み（ひらがな）"
+          hint="目次の並びに使います。空だと目次の「その他」に入ります（読みは推測しません）。"
+        >
+          <input
+            className="input"
+            value={emp.reading || ''}
+            onChange={(e) => set({ reading: e.target.value })}
+            placeholder="例：りさーちゃーるな"
+          />
+        </Field>
       </Card>
 
       <Card glyph={role?.glyph} title="役割">

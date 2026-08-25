@@ -1,41 +1,46 @@
 // AI社員の画面。主要6役職を円環で、追加役職はサブメンバー一覧で見せる。
+// 役職を選ぶと、その役職の**ジャンルごとの3席**が並ぶ。
 
 import { useState } from 'react';
 import OrgMap from './OrgMap.jsx';
 import { Card, Row, SectionTitle, Empty } from './ui.jsx';
 import { ROLES, roleById, DEPARTMENTS } from '../data/roles.js';
+import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
+import { seatsOf } from '../lib/seed.js';
 import { relTime } from '../lib/format.js';
 
-export default function Employees({ store, go }) {
+export default function Employees({ store, go, preset = {} }) {
   const { activeEmployees } = store;
-  const [roleId, setRoleId] = useState('researcher');
+  const [roleId, setRoleId] = useState(preset.roleId || 'researcher');
+  const [genreId, setGenreId] = useState(preset.genreId || DEFAULT_GENRE_ID);
   const [view, setView] = useState('map'); // 'map' | 'dept'
 
   const role = roleById(roleId);
-  const seats = activeEmployees
-    .filter((e) => e.roleId === roleId)
-    .sort((a, b) => (a.seat || 1) - (b.seat || 1));
-
+  const genres = allGenres(store.genres);
+  const seatsPerGenre = store.company?.seatsPerRole || 3;
+  const seats = seatsOf(store.employees, roleId, genreId);
   const extraRoles = ROLES.filter((r) => !r.core);
+
+  // ジャンルを絞って一覧するとき、社員がいるジャンルを先に出す
+  const genreOrder = [...genres].sort((a, b) => {
+    const na = seatsOf(store.employees, roleId, a.id).length;
+    const nb = seatsOf(store.employees, roleId, b.id).length;
+    return nb - na || (a.order || 99) - (b.order || 99);
+  });
 
   return (
     <div className="screen fade-in">
       <div className="btn-row" style={{ marginBottom: 12 }}>
-        <button
-          type="button"
-          className={`chip ${view === 'map' ? 'on' : ''}`}
-          onClick={() => setView('map')}
-        >
+        <button type="button" className={`chip ${view === 'map' ? 'on' : ''}`} onClick={() => setView('map')}>
           円環図
         </button>
-        <button
-          type="button"
-          className={`chip ${view === 'dept' ? 'on' : ''}`}
-          onClick={() => setView('dept')}
-        >
+        <button type="button" className={`chip ${view === 'dept' ? 'on' : ''}`} onClick={() => setView('dept')}>
           部署別
         </button>
         <span style={{ flex: 1 }} />
+        <button type="button" className="chip" onClick={() => go('toc')}>
+          ▤ 目次
+        </button>
         <button type="button" className="chip" onClick={() => go('hire')}>
           ＋ 雇う
         </button>
@@ -45,34 +50,73 @@ export default function Employees({ store, go }) {
         <>
           <OrgMap employees={activeEmployees} selectedRoleId={roleId} onPickRole={setRoleId} />
 
-          <SectionTitle>
-            {role?.name}（{seats.length}席）
-          </SectionTitle>
+          <SectionTitle>{role?.name}のジャンル</SectionTitle>
           <p className="muted" style={{ marginTop: -4 }}>
-            {role?.summary}／{role?.duties.slice(0, 4).join('・')}
+            {role?.summary}／1つのジャンルにつき{seatsPerGenre}席まで登録できます。
           </p>
+          <div className="chips" style={{ marginBottom: 12 }}>
+            {genreOrder.map((g) => {
+              const n = seatsOf(store.employees, roleId, g.id).length;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  className={`chip ${genreId === g.id ? 'on' : ''}`}
+                  onClick={() => setGenreId(g.id)}
+                >
+                  {g.glyph} {g.name} {n}/{seatsPerGenre}
+                </button>
+              );
+            })}
+          </div>
 
-          {seats.map((e) => (
-            <Row
-              key={e.id}
-              glyph={e.avatar}
-              title={`${e.shortName}　${e.title}`}
-              sub={`${e.strength || ''}・仕事${e.stats?.tasks || 0}件・${
-                e.stats?.lastActiveAt ? relTime(e.stats.lastActiveAt) : '未稼働'
-              }`}
-              onClick={() => go('employee', e.id)}
-            />
-          ))}
+          {seats.length ? (
+            seats.map((e) => (
+              <Row
+                key={e.id}
+                glyph={e.avatar}
+                title={`${e.shortName}　${e.title}`}
+                sub={`${e.strength || ''}・仕事${e.stats?.tasks || 0}件・${
+                  e.stats?.lastActiveAt ? relTime(e.stats.lastActiveAt) : '未稼働'
+                }`}
+                onClick={() => go('employee', e.id)}
+              />
+            ))
+          ) : (
+            <Empty>
+              この組（{role?.name} × {genres.find((g) => g.id === genreId)?.name}）にはまだ社員がいません。
+            </Empty>
+          )}
+
           <button
             type="button"
             className="btn small block"
             onClick={() => {
-              const emp = store.hireIntoRole(roleId);
+              const emp = store.hireIntoRole(roleId, genreId);
               if (emp) go('employee', emp.id);
             }}
           >
-            ＋ {role?.name}の席を増やす
+            ＋ {genres.find((g) => g.id === genreId)?.name}の席に雇う（
+            {seats.length}/{seatsPerGenre}）
           </button>
+
+          <SectionTitle>その他のAI社員（サブメンバー）</SectionTitle>
+          {extraRoles.map((r) => {
+            const count = activeEmployees.filter((e) => e.roleId === r.id).length;
+            return (
+              <Row
+                key={r.id}
+                glyph={r.glyph}
+                title={`${r.name}　${r.summary}`}
+                sub={count ? `${count}人が在籍` : '未雇用 — タップして雇う'}
+                right={count ? '›' : '＋'}
+                onClick={() => {
+                  if (count) setRoleId(r.id);
+                  else go('hire', { roleId: r.id, genreId });
+                }}
+              />
+            );
+          })}
 
           <SectionTitle>会社の全体図</SectionTitle>
           <details className="card tight">
@@ -89,27 +133,6 @@ export default function Employees({ store, go }) {
               style={{ width: '100%', borderRadius: 10, marginTop: 6 }}
             />
           </details>
-
-          <SectionTitle>その他のAI社員（サブメンバー）</SectionTitle>
-          {extraRoles.map((r) => {
-            const count = activeEmployees.filter((e) => e.roleId === r.id).length;
-            return (
-              <Row
-                key={r.id}
-                glyph={r.glyph}
-                title={`${r.name}　${r.summary}`}
-                sub={count ? `${count}人が在籍` : '未雇用 — タップして雇う'}
-                right={count ? '›' : '＋'}
-                onClick={() => {
-                  if (count) setRoleId(r.id);
-                  else go('hire', r.id);
-                }}
-              />
-            );
-          })}
-          {extraRoles.some((r) => activeEmployees.some((e) => e.roleId === r.id)) && (
-            <p className="muted">在籍している追加役職を選ぶと、上の一覧が切り替わります。</p>
-          )}
         </>
       ) : (
         DEPARTMENTS.map((d) => {
@@ -123,7 +146,7 @@ export default function Employees({ store, go }) {
                     key={e.id}
                     glyph={e.avatar}
                     title={`${e.shortName}　${e.title}`}
-                    sub={`仕事${e.stats?.tasks || 0}件`}
+                    sub={`${genreLabel(genres, e.genreId)}・仕事${e.stats?.tasks || 0}件`}
                     onClick={() => go('employee', e.id)}
                   />
                 ))
@@ -136,4 +159,9 @@ export default function Employees({ store, go }) {
       )}
     </div>
   );
+}
+
+function genreLabel(genres, genreId) {
+  const g = genres.find((x) => x.id === (genreId || DEFAULT_GENRE_ID));
+  return g ? g.name : '汎用';
 }
