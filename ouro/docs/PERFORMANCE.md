@@ -34,6 +34,9 @@
 7. **Service Worker** — `public/sw.js`。HTMLは network-first（コードは常に最新）、
    `/assets/` のハッシュ付きファイルと画像・フォントは cache-first。
    2回目以降の起動が体感で変わる。
+   ※ **古いキャッシュを消すときは名前の頭で絞る**。同じドメイン（GitHub Pages）に
+   同梱された他のアプリと CacheStorage を共有しているので、名前を見ずに消すと
+   そちらのキャッシュまで巻き添えで消える（Ouroは `ouro-`、鍼灸アプリは `shinkyu-`）。
 
 ## B. 保存を軽くする（8〜14）
 

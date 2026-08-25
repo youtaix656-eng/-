@@ -20,8 +20,15 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
+      // 同じドメインに同梱された別アプリ（鍼灸アプリ等）と CacheStorage を共有している。
+      // 名前を見ずに消すと、そちらのキャッシュまで巻き添えで消えるので、
+      // 「ouro-」で始まる自分の分の、古い版だけを消す。
       .then((names) =>
-        Promise.all(names.filter((n) => !n.startsWith(VERSION)).map((n) => caches.delete(n)))
+        Promise.all(
+          names
+            .filter((n) => n.startsWith('ouro-') && !n.startsWith(VERSION))
+            .map((n) => caches.delete(n))
+        )
       )
       .then(() => self.clients.claim())
   );
