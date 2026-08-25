@@ -7,6 +7,7 @@ import { TOOLS, toolById } from '../data/tools.js';
 import { PROVIDERS, providerById } from '../lib/providers/index.js';
 import { PERMISSIONS, permissionLabel } from '../lib/permissions.js';
 import { usd, relTime } from '../lib/format.js';
+import Portrait from './Portrait.jsx';
 
 export default function EmployeeDetail({ store, employeeId, go }) {
   const emp = store.employees.find((e) => e.id === employeeId);
@@ -24,10 +25,14 @@ export default function EmployeeDetail({ store, employeeId, go }) {
   return (
     <div className="screen fade-in">
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div className="rune" style={{ fontSize: 44, lineHeight: 1 }}>{emp.avatar}</div>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Portrait employee={emp} size={150} glyph={emp.avatar} className="portrait-big" />
+        </div>
         <div className="serif" style={{ fontSize: 22, letterSpacing: '0.08em', marginTop: 6 }}>
           {emp.name}
         </div>
+        {emp.kana && <div className="char-kana">{emp.kana}</div>}
+        {emp.origin && <div><span className="char-origin">{emp.origin}</span></div>}
         <div className="muted">
           {emp.title}／{dept?.name}
           {genre ? `／${genre.glyph} ${genre.name}` : ''}

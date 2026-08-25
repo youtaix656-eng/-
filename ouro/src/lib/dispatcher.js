@@ -6,16 +6,22 @@
 
 import { ROLES, roleById } from '../data/roles.js';
 
-/** 依頼文にどの役職が向いているかを点数化する。 */
+/**
+ * 依頼文にどの役職が向いているかを点数化する。
+ *
+ * 当たった語の**長さ**を点にする。長い語ほど具体的な合図だから
+ * （「優先順位」は「優先」より、その依頼を強く名指ししている）。
+ * 固定点にすると、一般的な短い語を持つ役職が常に勝ってしまう。
+ */
 export function scoreRoles(request = '') {
   const text = String(request);
   return ROLES.map((role) => {
     let score = 0;
     for (const t of role.triggers) {
-      if (text.includes(t)) score += 2;
+      if (text.includes(t)) score += t.length;
     }
     for (const d of role.duties) {
-      if (text.includes(d)) score += 1;
+      if (text.includes(d)) score += d.length;
     }
     return { roleId: role.id, score };
   }).sort((a, b) => b.score - a.score || orderOf(a.roleId) - orderOf(b.roleId));

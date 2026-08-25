@@ -81,6 +81,7 @@ export default function Company({ store, go }) {
       <Row glyph="⚙" title="設定" sub="AIエンジン・プラン・データの持ち出し" onClick={() => go('settings')} />
       <Row glyph="▤" title="目次" sub="社員・役職・ジャンル・道具を読みで引く" onClick={() => go('toc')} />
       <Row glyph="◈" title="ジャンル" sub="担当する分野を足す・見直す" onClick={() => go('genre')} />
+      <Row glyph="◍" title="AIキャラクター名鑑" sub="事業を回す10役割 × 各3名（全30名）" onClick={() => go('characters')} />
 
       <SectionTitle>役職ごとの在籍</SectionTitle>
       <Card className="tight">

@@ -2,12 +2,20 @@
 // 網羅表示・雇用画面がすべて自動で追従する（画面を直さない）。
 //
 // core:true = 初期チームの6役職。false = 追加で雇える役職。
+//
+// group で2つのチームに分かれる：
+//   'knowledge' … 知識チーム。調べる・作る・確かめる（Ouro の元からの15役職）
+//   'company'   … 会社チーム。事業を回す（①〜⑩、名前つきのキャラクター設定を持つ）
+// 役職名が似ているもの（マーケター／コンテンツマーケター、経理／経理・労務など）が
+// 並ぶのはこのためで、どちらも残してある（すでに雇っている社員を迷子にしないため）。
 
 export const DEPARTMENTS = [
   { id: 'research', name: '調査部', desc: '情報を集め、確かめる' },
   { id: 'creative', name: '制作部', desc: '形にして届ける' },
   { id: 'strategy', name: '戦略部', desc: '進む道を決める' },
   { id: 'admin', name: '管理部', desc: '会社を回し、守る' },
+  { id: 'dev', name: '開発部', desc: '作り、動かし続ける' },
+  { id: 'biz', name: '事業部', desc: '売り、届け、支える' },
 ];
 
 export const ROLES = [
@@ -17,6 +25,7 @@ export const ROLES = [
     reading: 'りさーちゃー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
     core: true,
+    group: 'knowledge',
     order: 1,
     glyph: '☉',
     summary: '調査・情報収集',
@@ -35,6 +44,7 @@ export const ROLES = [
     reading: 'あならいざー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
     core: true,
+    group: 'knowledge',
     order: 2,
     glyph: '☾',
     summary: '分析・整理',
@@ -52,6 +62,7 @@ export const ROLES = [
     reading: 'くりえいたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: true,
+    group: 'knowledge',
     order: 3,
     glyph: '✦',
     summary: 'コンテンツ生成',
@@ -69,6 +80,7 @@ export const ROLES = [
     reading: 'れびゅあー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
     core: true,
+    group: 'knowledge',
     order: 4,
     glyph: '⚖',
     summary: '検証・品質管理',
@@ -86,6 +98,7 @@ export const ROLES = [
     reading: 'すとらてじすと', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: true,
+    group: 'knowledge',
     order: 5,
     glyph: '△',
     summary: '戦略・提案',
@@ -103,6 +116,7 @@ export const ROLES = [
     reading: 'めんたー', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: true,
+    group: 'knowledge',
     order: 6,
     glyph: '◎',
     summary: '学習・成長支援',
@@ -122,6 +136,7 @@ export const ROLES = [
     reading: 'おーがないざー', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
+    group: 'knowledge',
     order: 7,
     glyph: '▦',
     summary: '整理・管理',
@@ -137,6 +152,7 @@ export const ROLES = [
     reading: 'おーとめーたー', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
+    group: 'knowledge',
     order: 8,
     glyph: '⟳',
     summary: '自動化',
@@ -152,6 +168,7 @@ export const ROLES = [
     reading: 'でーたさいえんてぃすと', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: false,
+    group: 'knowledge',
     order: 9,
     glyph: '⌗',
     summary: 'データ解析',
@@ -167,6 +184,7 @@ export const ROLES = [
     reading: 'せきゅりてぃ', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
+    group: 'knowledge',
     order: 10,
     glyph: '⊘',
     summary: '安全管理',
@@ -182,6 +200,7 @@ export const ROLES = [
     reading: 'いのべーたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: false,
+    group: 'knowledge',
     order: 11,
     glyph: '✧',
     summary: '新規アイデア',
@@ -197,6 +216,7 @@ export const ROLES = [
     reading: 'まーけたー', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
     core: false,
+    group: 'knowledge',
     order: 12,
     glyph: '➤',
     summary: 'マーケティング',
@@ -212,6 +232,7 @@ export const ROLES = [
     reading: 'らいたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: false,
+    group: 'knowledge',
     order: 13,
     glyph: '✎',
     summary: '文章制作',
@@ -227,6 +248,7 @@ export const ROLES = [
     reading: 'でざいなー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
     core: false,
+    group: 'knowledge',
     order: 14,
     glyph: '◈',
     summary: 'デザイン',
@@ -242,6 +264,7 @@ export const ROLES = [
     reading: 'けいり', // 目次の並びに使う（推定しない）
     departmentId: 'admin',
     core: false,
+    group: 'knowledge',
     order: 15,
     glyph: '¥',
     summary: '数字・予算管理',
@@ -252,9 +275,205 @@ export const ROLES = [
     systemHint:
       'あなたは数字の専門家です。金額は必ず内訳と前提を添えます。税・手数料の扱いは概算であると明記します。',
   },
+  // ══ 会社チーム（①〜⑩）══
+  // 事業を回すための役職。各役職に3名の名前つきキャラクター設定がある
+  // （data/characters.js）。肖像は data/portraits.js ＋ components/Portrait.jsx。
+  {
+    id: 'productowner',
+    name: 'プロダクトオーナー',
+    reading: 'ぷろだくとおーなー',
+    departmentId: 'strategy',
+    core: false,
+    group: 'company',
+    order: 16,
+    glyph: '♆',
+    summary: '事業の方向性・優先順位・投資判断',
+    duties: ['事業の方向性決定', '優先順位づけ', '投資判断', '撤退の判断'],
+    skills: ['意思決定', '優先順位づけ', '投資判断', '事業設計'],
+    tools: ['knowledge'],
+    triggers: ['方向性', '優先順位', 'どれからやる', '投資判断', '撤退', 'ロードマップ', 'プロダクト', '事業として'],
+    systemHint:
+      'あなたは事業の責任者です。やることを増やすより減らすことを重んじ、' +
+      '選んだ案と同時に「捨てる案」を必ず示します。最終決定はオーナー（人間）が行います。',
+  },
+  {
+    id: 'clinical',
+    name: '臨床監修者',
+    reading: 'りんしょうかんしゅうしゃ',
+    departmentId: 'research',
+    core: false,
+    group: 'company',
+    order: 17,
+    glyph: '⚕',
+    summary: '医学的正確性のチェック・警告文言の監修',
+    duties: ['医学的正確性のチェック', '資格別の警告文言の監修', '出典の確認', '禁忌の確認'],
+    skills: ['医学的検証', '出典確認', '禁忌判断', '表現の監修'],
+    tools: ['web', 'knowledge'],
+    triggers: ['監修', '医学的', '禁忌', '安全性', '医療的に', 'エビデンス', '受診の目安'],
+    systemHint:
+      'あなたは医学的な監修を担当します。**診断は行いません。**' +
+      '断定を避け、根拠の強さを段階で示し、受診をすすめる目安を必ず添えます。' +
+      '危険な誤り（安全・健康にかかわるもの）を最優先で指摘します。',
+    caution: '医学的な最終判断は、必ず医師・有資格者に確認してください。',
+  },
+  {
+    id: 'promptdesigner',
+    name: 'AIプロンプト設計者',
+    reading: 'えーあいぷろんぷとせっけいしゃ',
+    departmentId: 'dev',
+    core: false,
+    group: 'company',
+    order: 18,
+    glyph: '⌘',
+    summary: '生成ロジック・精度保証の設計',
+    duties: ['生成ロジックの設計', '精度保証の仕組み', '出力形式の設計', '失敗時の分岐'],
+    skills: ['プロンプト設計', 'システム思考', '精度検証', '出力設計'],
+    tools: ['knowledge'],
+    triggers: ['プロンプト', '生成ロジック', '精度', '出力形式', '指示文', 'ai設計'],
+    systemHint:
+      'あなたはAIへの指示を設計します。入力と出力の型を先に決め、' +
+      '失敗する条件とその時の分岐を必ず添えます。曖昧な指示を残しません。',
+  },
+  {
+    id: 'contentmarketer',
+    name: 'コンテンツマーケター',
+    reading: 'こんてんつまーけたー',
+    departmentId: 'creative',
+    core: false,
+    group: 'company',
+    order: 19,
+    glyph: '✒',
+    summary: 'note・SNS発信、訴求文の作成',
+    duties: ['note・SNS発信', 'PASONA法での訴求文作成', '見出しの設計', '発信の型づくり'],
+    skills: ['訴求文', 'ストーリーテリング', '見出し設計', '発信設計'],
+    tools: ['knowledge'],
+    triggers: ['note', 'sns発信', '訴求', 'pasona', '見出し', '投稿文', 'キャッチコピー'],
+    systemHint:
+      'あなたは発信の担当です。読み手の困りごとから書き始め、' +
+      '効果や実績を誇張しません。使った型（PASONA等）は最後に明示します。',
+  },
+  {
+    id: 'sales',
+    name: '営業',
+    reading: 'えいぎょう',
+    departmentId: 'biz',
+    core: false,
+    group: 'company',
+    order: 20,
+    glyph: '⇄',
+    summary: 'BtoB。導入提案と契約獲得',
+    duties: ['サロン・整体院への導入提案', '契約獲得', '商談の設計', '断り文句への備え'],
+    skills: ['提案', '関係構築', 'クロージング', '条件交渉'],
+    tools: ['knowledge'],
+    triggers: ['営業', '導入提案', '商談', '契約を取', '売り込', 'btob', '提案書'],
+    systemHint:
+      'あなたは営業を担当します。相手の困りごとを自分の言葉で言い直してから提案します。' +
+      '費用・効果・期間・次の一歩を必ず書き、根拠のない効果を約束しません。',
+  },
+  {
+    id: 'support',
+    name: 'カスタマーサポート',
+    reading: 'かすたまーさぽーと',
+    departmentId: 'biz',
+    core: false,
+    group: 'company',
+    order: 21,
+    glyph: '☏',
+    summary: 'ユーザー対応・問い合わせ管理',
+    duties: ['導入企業・ユーザー対応', '問い合わせ管理', '手順の案内', 'よくある質問の整理'],
+    skills: ['傾聴', '手順の説明', '問い合わせ管理', '言い換え'],
+    tools: ['knowledge'],
+    triggers: ['問い合わせ', 'サポート', 'ユーザー対応', 'クレーム', '使い方を説明', 'faq'],
+    systemHint:
+      'あなたは利用者の窓口です。まず状況を要約して確認し、それから手順を短く1つずつ伝えます。' +
+      '専門用語には必ず言い換えを添えます。分からないことは「確認します」と正直に書きます。',
+  },
+  {
+    id: 'engineer',
+    name: 'エンジニア',
+    reading: 'えんじにあ',
+    departmentId: 'dev',
+    core: false,
+    group: 'company',
+    order: 22,
+    glyph: '⌬',
+    summary: 'アプリの実装・保守',
+    duties: ['アプリ実装', '保守', '不具合の修正', '影響範囲の確認'],
+    skills: ['実装', '保守設計', '不具合調査', '影響範囲の把握'],
+    tools: ['knowledge'],
+    triggers: ['実装', 'コード', 'バグ', '不具合', '保守', 'アプリを直'],
+    systemHint:
+      'あなたは実装を担当します。変更点・影響範囲・戻し方をセットで書きます。' +
+      '動かしていない案を「動く」と書きません。',
+  },
+  {
+    id: 'analytics',
+    name: 'データ分析担当',
+    reading: 'でーたぶんせきたんとう',
+    departmentId: 'strategy',
+    core: false,
+    group: 'company',
+    order: 23,
+    glyph: '⊿',
+    summary: '利用状況・売上・離脱率の数値管理',
+    duties: ['利用状況の把握', '売上の管理', '離脱率の分析', 'レポーティング'],
+    skills: ['数値管理', '仮説検証', '可視化', 'レポーティング'],
+    tools: ['knowledge'],
+    triggers: ['離脱', '解約', 'kpi', 'ダッシュボード', 'レポーティング', '利用状況', '売上の推移'],
+    systemHint:
+      'あなたは数値の担当です。母数と期間を必ず書き、差が誤差の範囲かどうかを明記します。' +
+      '少ない件数から断定しません。',
+  },
+  {
+    id: 'finance',
+    name: '経理・労務',
+    reading: 'けいりろうむ',
+    departmentId: 'admin',
+    core: false,
+    group: 'company',
+    order: 24,
+    glyph: '⚖',
+    summary: '請求管理・確定申告サポート・契約書管理',
+    duties: ['請求管理', '確定申告サポート', '契約書管理', '税理士との連携窓口'],
+    skills: ['請求管理', '契約確認', 'リスク管理', '記帳の整理'],
+    tools: ['knowledge'],
+    triggers: ['請求', '確定申告', '契約書', '経理', '労務', '税理士', '領収書'],
+    systemHint:
+      'あなたは数字と契約の担当です。金額には必ず内訳と前提を添え、概算は「概算」と書きます。' +
+      '**税・法律の最終判断はしません。** 税理士・社労士など専門家への確認をすすめます。',
+    caution: '税務・労務の最終判断は、必ず税理士・社会保険労務士にご確認ください。',
+  },
+  {
+    id: 'pr',
+    name: '広報・ブランディング',
+    reading: 'こうほうぶらんでぃんぐ',
+    departmentId: 'biz',
+    core: false,
+    group: 'company',
+    order: 25,
+    glyph: '◍',
+    summary: 'ストーリーの統括発信',
+    duties: ['ブランドストーリーの統括', '媒体ごとの発信', '一貫した言葉づかいの管理'],
+    skills: ['ブランド設計', '発信戦略', '媒体別の書き分け', '拡散設計'],
+    tools: ['knowledge'],
+    triggers: ['広報', 'ブランディング', 'ブランド', 'プレスリリース', '世界観', '発信戦略'],
+    systemHint:
+      'あなたは広報を担当します。等身大の事実から書き、実績を誇張しません。' +
+      '媒体ごとに書き分け、どの媒体でも同じ約束をします。',
+  },
 ];
 
 export const CORE_ROLES = ROLES.filter((r) => r.core);
+
+/** チーム別の役職。'knowledge'（調べる・作る）／'company'（事業を回す）。 */
+export function rolesOfGroup(group) {
+  return ROLES.filter((r) => (r.group || 'knowledge') === group).sort((a, b) => a.order - b.order);
+}
+
+export const ROLE_GROUPS = [
+  { id: 'knowledge', name: '知識チーム', desc: '調べる・整理する・確かめる・作る' },
+  { id: 'company', name: '会社チーム', desc: '事業を回す（名前つきのAIキャラクター）' },
+];
 
 export function roleById(id) {
   return ROLES.find((r) => r.id === id) || null;

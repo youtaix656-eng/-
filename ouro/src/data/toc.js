@@ -25,13 +25,15 @@ export const TOC_KINDS = [
   { id: 'tool', name: '道具', glyph: '⚒', order: 6 },
 ];
 
-function entry({ id, kind, title, reading, sub, view, arg, anchor }) {
+function entry({ id, kind, title, reading, sub, view, arg, anchor, employee = null, alias = '' }) {
   const info = readingInfo(title, reading);
   return {
     id,
     kind,
     title,
     sub: sub || '',
+    alias, // カタカナ表記など、検索でも当たってほしい別表記
+    employee, // 社員のとき、肖像を描くために本体を持つ
     reading: info.reading,
     bucket: info.bucket,
     readingSource: info.source,
@@ -60,7 +62,9 @@ export function buildToc({ employees = [], customGenres = [] } = {}) {
         kind: 'employee',
         title: e.name,
         reading: e.reading,
-        sub: `${e.title}${e.strength ? `・${e.strength}` : ''}`,
+        sub: `${e.title}${e.strength ? `・${e.strength}` : ''}${e.origin ? `・${e.origin}` : ''}`,
+        alias: e.kana || '',
+        employee: e,
         view: 'employee',
         arg: e.id,
       })
@@ -153,7 +157,7 @@ export function filterToc(entries, { query = '', kind = null } = {}) {
   return entries.filter((e) => {
     if (kind && e.kind !== kind) return false;
     if (!q) return true;
-    const hay = `${e.title} ${e.reading} ${e.sub}`.toLowerCase();
+    const hay = `${e.title} ${e.reading} ${e.alias || ''} ${e.sub}`.toLowerCase();
     return hay.includes(q);
   });
 }

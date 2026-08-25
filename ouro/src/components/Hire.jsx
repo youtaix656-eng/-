@@ -9,6 +9,7 @@ import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { employeeLimit } from '../data/plans.js';
 import { TOOLS } from '../data/tools.js';
 import { PROVIDERS } from '../lib/providers/index.js';
+import Portrait from './Portrait.jsx';
 
 export default function Hire({ store, initialRoleId, go }) {
   const arg = typeof initialRoleId === 'object' && initialRoleId ? initialRoleId : {};
@@ -131,6 +132,9 @@ export default function Hire({ store, initialRoleId, go }) {
 
           {preset && (
             <Card glyph={preset.avatar} title={preset.name}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                <Portrait employee={preset} size={110} />
+              </div>
               <div className="muted" style={{ marginTop: -6 }}>
                 {preset.title}／{genres.find((g) => g.id === genreId)?.name}の{seat}席目
                 {filled >= seatsPerGenre && '（既定の3席を超えます）'}

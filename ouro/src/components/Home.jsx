@@ -143,6 +143,9 @@ export default function Home({ store, go }) {
         <button type="button" className="btn" onClick={() => go('calendar')}>
           ▦ 予定を見る
         </button>
+        <button type="button" className="btn" onClick={() => go('characters')}>
+          ◍ キャラクター名鑑
+        </button>
       </div>
 
       <UpcomingCard store={store} go={go} />

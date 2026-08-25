@@ -145,19 +145,31 @@ export default function Compose({ store, preset = {}, go }) {
           <div className="steps">
             {plan.map((p, i) => {
               const role = roleById(p.roleId);
+              // 未雇用の役職は実際には担当から外れる。ここでも同じように見せる。
+              const vacant = !p.employee;
               return (
-                <div key={i} className="step">
+                <div key={i} className={`step ${vacant ? 'vacant' : 'done'}`}>
                   <div className="who">
                     {role?.glyph} {p.employee ? p.employee.name : role?.name}
                     {p.employee?.strength ? (
                       <span className="badge" style={{ marginLeft: 6 }}>{p.employee.strength}</span>
-                    ) : null}
+                    ) : (
+                      <span className="badge" style={{ marginLeft: 6 }}>未雇用</span>
+                    )}
                   </div>
-                  <div className="what">{role?.summary}</div>
+                  <div className="what">
+                    {role?.summary}
+                    {vacant && '／まだ雇っていないので、今回は担当から外れます'}
+                  </div>
                 </div>
               );
             })}
           </div>
+          {plan.some((p) => !p.employee) && (
+            <button type="button" className="btn small" onClick={() => go('characters')}>
+              ＋ 足りない役職を雇う（キャラクター名鑑）
+            </button>
+          )}
           {needs.length > 0 && (
             <p className="muted" style={{ marginBottom: 0 }}>
               使う道具：{needs.join('・')}

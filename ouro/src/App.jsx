@@ -34,6 +34,7 @@ const Approvals = lazy(() => import('./components/Approvals.jsx'));
 const AuditView = lazy(() => import('./components/AuditView.jsx'));
 const Settings = lazy(() => import('./components/Settings.jsx'));
 const GenreEditor = lazy(() => import('./components/GenreEditor.jsx'));
+const Characters = lazy(() => import('./components/Characters.jsx'));
 
 const NAV = [
   { id: 'home', glyph: '◉', label: 'ホーム' },
@@ -52,6 +53,7 @@ const TITLES = {
   toc: '目次',
   calendar: '予定',
   genre: 'ジャンル',
+  characters: 'AIキャラクター名鑑',
   company: '会社',
   task: '仕事',
   employee: '社員',
@@ -153,6 +155,9 @@ export default function App() {
         {view === 'toc' && <Toc store={store} go={go} />}
         {view === 'calendar' && <Calendar store={store} go={go} toast={toast} />}
         {view === 'genre' && <GenreEditor store={store} go={go} toast={toast} />}
+        {view === 'characters' && (
+          <Characters store={store} go={go} toast={toast} highlight={arg && arg.roleId} />
+        )}
         {view === 'company' && <Company store={store} go={go} />}
         {view === 'task' && <TaskDetail store={store} taskId={arg} go={go} />}
         {view === 'employee' && <EmployeeDetail store={store} employeeId={arg} go={go} />}

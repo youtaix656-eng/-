@@ -4,7 +4,8 @@
 import { useState } from 'react';
 import OrgMap from './OrgMap.jsx';
 import { Card, Row, SectionTitle, Empty } from './ui.jsx';
-import { ROLES, roleById, DEPARTMENTS } from '../data/roles.js';
+import { ROLES, roleById, DEPARTMENTS, rolesOfGroup, ROLE_GROUPS } from '../data/roles.js';
+import Portrait from './Portrait.jsx';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { seatsOf } from '../lib/seed.js';
 import { relTime } from '../lib/format.js';
@@ -74,7 +75,7 @@ export default function Employees({ store, go, preset = {} }) {
             seats.map((e) => (
               <Row
                 key={e.id}
-                glyph={e.avatar}
+                avatar={<Portrait employee={e} size={44} frame={false} />}
                 title={`${e.shortName}　${e.title}`}
                 sub={`${e.strength || ''}・仕事${e.stats?.tasks || 0}件・${
                   e.stats?.lastActiveAt ? relTime(e.stats.lastActiveAt) : '未稼働'
@@ -100,8 +101,32 @@ export default function Employees({ store, go, preset = {} }) {
             {seats.length}/{seatsPerGenre}）
           </button>
 
-          <SectionTitle>その他のAI社員（サブメンバー）</SectionTitle>
-          {extraRoles.map((r) => {
+          <SectionTitle>会社チーム（①〜⑩・名前つき）</SectionTitle>
+          <p className="muted" style={{ marginTop: -4 }}>
+            事業を回す10の役割。それぞれ3名の人物設定と肖像があります。
+          </p>
+          <button type="button" className="btn block" onClick={() => go('characters')} style={{ marginBottom: 12 }}>
+            ◍ AIキャラクター名鑑をひらく（30名）
+          </button>
+          {rolesOfGroup('company').map((r) => {
+            const count = activeEmployees.filter((e) => e.roleId === r.id).length;
+            return (
+              <Row
+                key={r.id}
+                glyph={r.glyph}
+                title={`${r.name}　${r.summary}`}
+                sub={count ? `${count}名が在籍` : '未雇用 — タップして名鑑を見る'}
+                right={count ? '›' : '＋'}
+                onClick={() => {
+                  if (count) setRoleId(r.id);
+                  else go('characters', { roleId: r.id });
+                }}
+              />
+            );
+          })}
+
+          <SectionTitle>知識チーム（サブメンバー）</SectionTitle>
+          {extraRoles.filter((r) => (r.group || 'knowledge') === 'knowledge').map((r) => {
             const count = activeEmployees.filter((e) => e.roleId === r.id).length;
             return (
               <Row
@@ -144,7 +169,7 @@ export default function Employees({ store, go, preset = {} }) {
                 list.map((e) => (
                   <Row
                     key={e.id}
-                    glyph={e.avatar}
+                    avatar={<Portrait employee={e} size={44} frame={false} />}
                     title={`${e.shortName}　${e.title}`}
                     sub={`${genreLabel(genres, e.genreId)}・仕事${e.stats?.tasks || 0}件`}
                     onClick={() => go('employee', e.id)}

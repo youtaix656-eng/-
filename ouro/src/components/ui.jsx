@@ -47,10 +47,11 @@ export function SectionTitle({ children }) {
   return <div className="section-title">{children}</div>;
 }
 
-export function Row({ glyph, title, sub, onClick, right }) {
+export function Row({ glyph, title, sub, onClick, right, avatar = null }) {
   return (
     <button type="button" className="row" onClick={onClick}>
-      {glyph && <span className="g">{glyph}</span>}
+      {avatar}
+      {!avatar && glyph && <span className="g">{glyph}</span>}
       <span className="body">
         <span className="t">{title}</span>
         {sub && <span className="s">{sub}</span>}

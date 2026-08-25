@@ -8,6 +8,7 @@
 
 import { ROLES } from './roles.js';
 import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE, genreById } from './genres.js';
+import { characterAt } from './characters.js';
 import { kataToHira } from '../lib/yomi.js';
 
 // 席ごとの持ち味。同じ役職・同じジャンルでも「どう働くか」を変えて、
@@ -121,10 +122,15 @@ export function presetEmployee(roleId, seat, genreId = DEFAULT_GENRE_ID, customG
   const role = ROLES.find((r) => r.id === roleId);
   if (!role) return null;
   const genre = genreById(genreId, customGenres) || genreById(DEFAULT_GENRE_ID);
+  const isDefaultGenre = genre.id === DEFAULT_GENRE_ID;
+
+  // 会社チーム（①〜⑩）の汎用ジャンル1〜3席には、名前つきのキャラクター設定がある。
+  // 他のジャンルへ雇うときは、名前が重ならないよう共用の名前プールに落とす。
+  const character = isDefaultGenre ? characterAt(roleId, seat) : null;
+  if (character) return fromCharacter(role, genre, character);
+
   const arche = archetypeFor(seat);
   const picked = pickName(roleId, seat, genre.id);
-
-  const isDefaultGenre = genre.id === DEFAULT_GENRE_ID;
   const title = `${role.name}（${arche.label}${seat > SEAT_ARCHETYPES.length ? `・${seat}席` : ''}）`;
 
   return {
@@ -148,6 +154,33 @@ export function presetEmployee(roleId, seat, genreId = DEFAULT_GENRE_ID, customG
       ? ''
       : `あなたの担当分野は「${genre.name}」です。${genre.desc}${genre.caution ? ` ${genre.caution}` : ''}`,
     toolIds: role.tools.slice(),
+  };
+}
+
+/** キャラクター設定から社員のプリセットを作る。 */
+function fromCharacter(role, genre, c) {
+  return {
+    name: c.name,
+    shortName: c.name.split(' ')[0].replace(/^Dr\.$/, c.name.split(' ')[1] || c.name),
+    kana: c.kana,
+    reading: c.reading,
+    origin: c.origin,
+    avatar: role.glyph,
+    roleId: role.id,
+    genreId: genre.id,
+    departmentId: role.departmentId,
+    seat: c.seat,
+    title: `${role.name}（${c.strength}）`,
+    specialties: role.skills.slice(),
+    persona: c.persona,
+    style: c.style,
+    strength: c.strength,
+    // 席の持ち味はキャラクター本人の個性で置き換える（主席/次席/三席は使わない）
+    seatHint: `${c.persona} ${c.style}`,
+    genreHint: '',
+    portrait: c.portrait,
+    toolIds: role.tools.slice(),
+    character: true,
   };
 }
 

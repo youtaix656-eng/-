@@ -29,6 +29,19 @@ export default function TaskDetail({ store, taskId, go }) {
         </div>
       </Card>
 
+      {task.unstaffedRoles?.length > 0 && (
+        <Card glyph="＋" title="この仕事に向いている未雇用の役職">
+          <p className="muted" style={{ marginTop: -6 }}>
+            {task.unstaffedRoles.map((r) => roleById(r)?.name || r).join('・')}
+            が向いていますが、まだ雇っていないため今回は担当から外しました。
+            雇うと次から自動で担当に入ります。
+          </p>
+          <button type="button" className="btn small" onClick={() => go('characters')}>
+            AIキャラクター名鑑を見る
+          </button>
+        </Card>
+      )}
+
       {task.status === 'awaiting_approval' && (
         <Card glyph="⚖" title="承認が必要です">
           <p className="muted" style={{ marginTop: -6 }}>

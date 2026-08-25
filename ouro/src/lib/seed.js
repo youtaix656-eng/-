@@ -40,6 +40,10 @@ export function makeEmployee(preset, extra = {}) {
     seat: preset.seat || 1,
     // 目次の並びに使う読み。漢字を含む名前は必ずここに持たせる（推定しない）。
     reading: preset.reading || '',
+    kana: preset.kana || '', // カタカナ表記（外国名のキャラクター用）
+    origin: preset.origin || '', // 出身の系統（人物像。肖像の絵には持ち込まない）
+    portrait: preset.portrait || null, // 線画アバターのパーツ
+    character: Boolean(preset.character), // 名前つきのキャラクター設定を持つか
     title: preset.title,
     specialties: preset.specialties || [],
     persona: preset.persona || '',

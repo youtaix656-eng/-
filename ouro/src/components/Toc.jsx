@@ -8,9 +8,10 @@ import { useMemo, useRef, useState } from 'react';
 import { Card, Empty } from './ui.jsx';
 import { buildToc, filterToc, tocSections, kindCounts, TOC_KINDS } from '../data/toc.js';
 import { BUCKETS, UNKNOWN_BUCKET } from '../lib/yomi.js';
-import { ROLES } from '../data/roles.js';
+import { ROLES, ROLE_GROUPS, rolesOfGroup } from '../data/roles.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { seatsOf } from '../lib/seed.js';
+import Portrait from './Portrait.jsx';
 
 export default function Toc({ store, go }) {
   const [query, setQuery] = useState('');
@@ -116,7 +117,11 @@ export default function Toc({ store, go }) {
                     className="toc-row"
                     onClick={() => go(it.view, it.arg)}
                   >
-                    <span className="g">{TOC_KINDS.find((k) => k.id === it.kind)?.glyph || '◉'}</span>
+                    {it.kind === 'employee' && it.employee ? (
+                      <Portrait employee={it.employee} size={40} frame={false} />
+                    ) : (
+                      <span className="g">{TOC_KINDS.find((k) => k.id === it.kind)?.glyph || '◉'}</span>
+                    )}
                     <span className="body">
                       <span className="t">{it.title}</span>
                       <span className="r">{it.reading || '読み未設定'}</span>
@@ -150,22 +155,27 @@ function OrgIndex({ store, go }) {
           1つの組（役職 × ジャンル）につき<strong style={{ color: '#fff' }}>3席</strong>まで登録できます。
           同じ役職でも分野が違えば別の3人を雇えます。
         </p>
-        <div className="chips">
-          {ROLES.map((r) => {
-            const n = store.activeEmployees.filter((e) => e.roleId === r.id).length;
-            return (
-              <button
-                key={r.id}
-                type="button"
-                className={`chip ${roleId === r.id ? 'on' : ''}`}
-                onClick={() => setRoleId(r.id)}
-              >
-                {r.glyph} {r.name}
-                {n > 0 ? ` ${n}` : ''}
-              </button>
-            );
-          })}
-        </div>
+        {ROLE_GROUPS.map((g) => (
+          <div key={g.id} style={{ marginBottom: 10 }}>
+            <div className="muted" style={{ marginBottom: 4 }}>{g.name}｜{g.desc}</div>
+            <div className="chips">
+              {rolesOfGroup(g.id).map((r) => {
+                const n = store.activeEmployees.filter((e) => e.roleId === r.id).length;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className={`chip ${roleId === r.id ? 'on' : ''}`}
+                    onClick={() => setRoleId(r.id)}
+                  >
+                    {r.glyph} {r.name}
+                    {n > 0 ? ` ${n}` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </Card>
 
       <div className="toc-head">
@@ -198,7 +208,7 @@ function OrgIndex({ store, go }) {
                       className="seat filled"
                       onClick={() => go('employee', emp.id)}
                     >
-                      <span className="sg">{emp.avatar}</span>
+                      <Portrait employee={emp} size={40} frame={false} />
                       <span className="sn">{emp.shortName}</span>
                       <span className="ss">{emp.strength || `${i + 1}席`}</span>
                     </button>

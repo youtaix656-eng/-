@@ -32,11 +32,19 @@ export const STEP_STATUS = {
  * @param {function} o.assign  (roleId) => employee|null  席の割り当て
  */
 export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = null, context = '', assign }) {
-  const plan = planSteps(request, { forceRoles, maxSteps });
+  const rawPlan = planSteps(request, { forceRoles, maxSteps });
   const needs = detectNeeds(request);
 
-  const steps = plan.map((p, i) => {
-    const employee = assign ? assign(p.roleId, i) : null;
+  // 誰も雇っていない役職が計画に入ると、その社員が見つからず仕事全体が失敗する。
+  // 役職は25あり、ほとんどは未雇用なので、**在籍している役職だけで計画を組み直す**。
+  // 外した役職は unstaffedRoles に残し、「雇えばもっと良くなる」と伝えられるようにする。
+  const assigned = rawPlan.map((p, i) => ({ p, employee: assign ? assign(p.roleId, i) : null }));
+  const staffed = assigned.filter((x) => x.employee);
+  const unstaffedRoles = assigned.filter((x) => !x.employee).map((x) => x.p.roleId);
+  // 1人も在籍していないときは絞り込めないので、元の計画のまま進める
+  const chosen = staffed.length ? staffed : assigned;
+
+  const steps = chosen.map(({ p, employee }, i) => {
     return {
       id: newId('step'),
       order: i,
@@ -69,6 +77,7 @@ export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = 
     steps,
     currentStep: 0,
     dealId,
+    unstaffedRoles, // 向いているが未雇用だった役職
     createdAt: Date.now(),
     startedAt: null,
     finishedAt: null,

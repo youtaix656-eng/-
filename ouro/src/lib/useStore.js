@@ -16,6 +16,7 @@ import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
 import { providerById } from './providers/index.js';
 import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
+import { presetEmployee } from '../data/employees.js';
 import { makeEvent } from './schedule.js';
 
 const EMPTY = {
@@ -124,6 +125,24 @@ export function useStore() {
     (roleId, genreId = DEFAULT_GENRE_ID) => {
       const s = stateRef.current;
       const preset = presetForNextSeat(s.employees, roleId, genreId, s.genres);
+      return preset ? hireEmployee(preset) : null;
+    },
+    [hireEmployee]
+  );
+
+  /** 名前つきのキャラクター（会社チーム①〜⑩）を雇う。既に在籍していれば何もしない。 */
+  const hireCharacter = useCallback(
+    (roleId, seat) => {
+      const s = stateRef.current;
+      const already = s.employees.find(
+        (e) =>
+          e.roleId === roleId &&
+          e.seat === seat &&
+          (e.genreId || DEFAULT_GENRE_ID) === DEFAULT_GENRE_ID &&
+          !e.archivedAt
+      );
+      if (already) return already;
+      const preset = presetEmployee(roleId, seat, DEFAULT_GENRE_ID, s.genres);
       return preset ? hireEmployee(preset) : null;
     },
     [hireEmployee]
@@ -678,6 +697,7 @@ export function useStore() {
     // 社員
     hireEmployee,
     hireIntoRole,
+    hireCharacter,
     updateEmployee,
     archiveEmployee,
     assignFor,
