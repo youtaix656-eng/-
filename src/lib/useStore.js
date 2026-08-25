@@ -458,7 +458,13 @@ export function useStore() {
       ]);
       const token = await gd.requestAccessToken(clientId, { silent });
       const remoteText = await gd.downloadBackup(token, gd.SYNC_FILENAME);
-      const localSnapshot = { srs, history, memos, links, examResults, settings, bookmarks };
+      // quizProgress等（一問一答・模試・復習・音声の「続きから」）はReactのstoreに無いため、
+      // IndexedDBから直接読む（sessionはstoreにあるのでそのまま使う）。ユーザー指定により、
+      // 「別端末で今まさに進行中の活動を裏で上書きしかねない」という理由であえて対象外に
+      // していたが、常に最新の状態に同期する方針を優先してここに含めることにした
+      // （マージは各自身のタイムスタンプで新しい方を丸ごと採用＝mergeResumeState参照）。
+      const resumeState = await storage.loadResumeState();
+      const localSnapshot = { srs, history, memos, links, examResults, settings, bookmarks, ...resumeState, session };
       let merged = localSnapshot;
       let pulled = false;
       if (remoteText) {
@@ -482,6 +488,14 @@ export function useStore() {
         setLinks(merged.links);
         setExamResultsState(merged.examResults);
         setBookmarks(merged.bookmarks);
+        setSessionState(merged.session);
+        await Promise.all([
+          storage.saveSession(merged.session),
+          storage.saveQuizProgress(merged.quizProgress),
+          storage.saveExamProgress(merged.examProgress),
+          storage.saveReviewProgress(merged.reviewProgress),
+          storage.saveAudioProgress(merged.audioProgress),
+        ]);
         setCloudAutoSyncToast((n) => n + 1);
       }
       if (JSON.stringify(merged.settings) !== JSON.stringify(localSnapshot.settings)) {
@@ -497,7 +511,7 @@ export function useStore() {
       cloudSyncBusy.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, srs, history, memos, links, examResults, bookmarks]);
+  }, [settings, srs, history, memos, links, examResults, bookmarks, session]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -506,7 +520,7 @@ export function useStore() {
     const timer = setTimeout(() => { runCloudSync(true).catch(() => {}); }, 5000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults, bookmarks]);
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults, bookmarks, session]);
 
   // 「🔄 今すぐ同期」ボタン用（CloudBackup.jsx）。自動同期のデバウンス（最大5秒）を
   // 待たずに、設定を変えた直後や動作確認をしたい時にその場で同期できる。

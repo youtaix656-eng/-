@@ -7,6 +7,7 @@ import {
   mergeObjectMap,
   mergeProgress,
   progressChanged,
+  mergeResumeState,
 } from '../src/lib/progressMerge.js';
 
 test('mergeSrs: 片方にしかない問題はそのまま残る', () => {
@@ -140,4 +141,47 @@ test('progressChanged: history/memos/links/examResults/bookmarksのいずれか�
 test('progressChanged: local/mergedが欠けていても例外を投げない', () => {
   assert.equal(progressChanged(undefined, undefined), false);
   assert.equal(progressChanged({}, { srs: { a: 1 } }), true);
+});
+
+test('progressChanged: quizProgress/examProgress/reviewProgress/audioProgress/sessionの変化も検出する', () => {
+  const base = { srs: {}, history: [], memos: {}, links: {}, examResults: [], quizProgress: { at: 1 }, examProgress: { at: 1 }, reviewProgress: { at: 1 }, audioProgress: { at: 1 }, session: { startedAt: 1 } };
+  assert.equal(progressChanged(base, { ...base, quizProgress: { at: 2 } }), true);
+  assert.equal(progressChanged(base, { ...base, examProgress: { at: 2 } }), true);
+  assert.equal(progressChanged(base, { ...base, reviewProgress: { at: 2 } }), true);
+  assert.equal(progressChanged(base, { ...base, audioProgress: { at: 2 } }), true);
+  assert.equal(progressChanged(base, { ...base, session: { startedAt: 2 } }), true);
+  assert.equal(progressChanged(base, base), false);
+});
+
+test('mergeResumeState: 各フィールドとも自分自身のタイムスタンプ（at）が新しい方を丸ごと採用する', () => {
+  const local = { quizProgress: { subject: '解剖学', ids: ['q-1'], idx: 0, at: 100 } };
+  const remote = { quizProgress: { subject: '生理学', ids: ['q-2', 'q-3'], idx: 1, at: 500 } };
+  const out = mergeResumeState(local, remote);
+  assert.deepEqual(out.quizProgress, remote.quizProgress); // remoteの方が新しいので丸ごと採用
+});
+
+test('mergeResumeState: sessionだけはstartedAtで比較する', () => {
+  const local = { session: { subject: 'A', startedAt: 500 } };
+  const remote = { session: { subject: 'B', startedAt: 100 } };
+  const out = mergeResumeState(local, remote);
+  assert.deepEqual(out.session, local.session); // localの方が新しいので維持
+});
+
+test('mergeResumeState: 片方にしか無いフィールドはそのまま採用する', () => {
+  const out = mergeResumeState({ examProgress: { at: 1 } }, {});
+  assert.deepEqual(out.examProgress, { at: 1 });
+  assert.equal(out.reviewProgress, null);
+});
+
+test('mergeResumeState: local/remoteが両方欠けていても例外を投げず、全フィールドnullになる', () => {
+  const out = mergeResumeState(undefined, undefined);
+  assert.deepEqual(out, { quizProgress: null, examProgress: null, reviewProgress: null, audioProgress: null, session: null });
+});
+
+test('mergeProgress: quizProgress等・sessionもmergeResumeStateの結果としてマージ結果に含まれる', () => {
+  const local = { quizProgress: { at: 100 }, session: { startedAt: 100 } };
+  const remote = { quizProgress: { at: 900 }, session: { startedAt: 50 } };
+  const out = mergeProgress(local, remote, { localUpdatedAt: 0, remoteUpdatedAt: 0 });
+  assert.deepEqual(out.quizProgress, remote.quizProgress);
+  assert.deepEqual(out.session, local.session);
 });
