@@ -104,7 +104,7 @@ Ouro の要点だけ再掲：**AI社員（人格・役割・記憶）とAIエン
 ※ Olivia/Ethan/Sofia/Lucas は既存キャラクター（Olivia Bennett・Ethan Clarke・Sofia Marchetti・
 Dr. Lukas Weber）と名前が近い。ユーザー指定の名前をそのまま使っているため、画面では
 チーム名と役職を併記して取り違えを防いでいる。
-**速さの仕組みは `ouro/docs/PERFORMANCE.md` が単一の正**（30項目・2026-08-25）。要点だけ：
+**速さの仕組みは `ouro/docs/PERFORMANCE.md` が単一の正**（第1弾30＋第2弾30の計60項目・2026-08-25）。要点だけ：
 ①画面は原則 lazy（下部ナビ6画面と常設バーのみ即時）。②`vite.config.js` の `manualChunks` で
 `react` と `roster`（characters.js＋roles.js）を分ける。③紋章は `components/Seal.jsx` の
 SVGで描く（画像ファイルを持たない）。④`useStore.js` は二段階起動で、`FIRST_KEYS` を読んでから
@@ -120,6 +120,23 @@ SVGで描く（画像ファイルを持たない）。④`useStore.js` は二段
 ⑨AIは3社とも `lib/providers/stream.js` の `readSse()` で流し受けし、`throttleDelta()`（90ms）で
 描き直しを間引く。会議の意見・反論は `Promise.all`。⑩`lib/perf.js` が画面切替・保存・AI実行の
 所要時間を**端末内だけ**に記録し、会社画面「速さの記録」で中央値と最悪値を見る（送信しない）。
+第2弾で足した仕組みのうち、**壊しやすい約束**は次の6つ：
+⑪画面の読み込み関数は `lib/preload.js` の `LOADERS` が単一の正（lazy() と先読みが
+同じものを指す。別々に書くと二度読みになる）。⑫キャラクターの人物像・書き方・出身は
+`data/characterDetails.js` にあり **`loadCharacterDetails()` を待ってから**雇う
+（`data/characters.js` は索引だけ。読み込み前は席の持ち味で代用するので空にはならない）。
+この都合で `hireEmployee`／`hireIntoRole`／`hireCharacter` は**非同期**。
+⑬操作履歴は起動時に新しい400件だけ読む。**一部だけ読み込んだ印（`partialKeys`）が
+付いている間、読んでいないレコードを消してはいけない**（手元の400件を保存した瞬間に
+残りが全部消える）。書き出しは track:false で読み、取り込みは印を外してから書く。
+⑭古い記録を畳む処理（`foldAudit`）は**1日に1度だけ**（毎起動で走らせると全件を
+読み直してページングが無効になる）。⑮同時に走る手順（仕事の流れの steps の入れ子）の
+引き継ぎ先は **「g+1」ではなく残っている番号の中の次**を探す（未雇用の役職を外すと
+番号が飛ぶ）。同時の手順は**全部そろってから**次へ渡し、承認は必ず単独で最後。
+⑯窓表示（`components/Window.jsx`）の行の高さは **JSX の `ROW_H` と CSS の両方**を
+そろえる（片方だけ直すと行が増えるほどずれて空白が出る）。
+`npm run size`（起動時に読む量の上限）と `npm run perf`（起動の速さ・合否は出さない）で
+じわじわ遅くなるのを見張る。
 テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）
