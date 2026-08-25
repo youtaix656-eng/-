@@ -1,10 +1,11 @@
 // AI社員を雇う。プリセットから雇う／完全オリジナルを作る、の2通り。
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, Field, SectionTitle, Row } from './ui.jsx';
 import { ROLES, roleById, DEPARTMENTS } from '../data/roles.js';
 import { presetEmployee, archetypeFor } from '../data/employees.js';
-import { nextSeat, seatsOf } from '../lib/seed.js';
+import { loadCharacterDetails } from '../data/characters.js';
+import { nextSeat, seatsOf } from '../lib/seats.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { employeeLimit } from '../data/plans.js';
 import { TOOLS } from '../data/tools.js';
@@ -17,6 +18,17 @@ export default function Hire({ store, initialRoleId, go }) {
   const [roleId, setRoleId] = useState(arg.roleId || (typeof initialRoleId === 'string' ? initialRoleId : 'researcher'));
   const [genreId, setGenreId] = useState(arg.genreId || DEFAULT_GENRE_ID);
   const [custom, setCustom] = useState(() => blankCustom());
+  // キャラクターの人物像は別ファイル（新項目03）。読み込めたら作り直して表示に反映する。
+  const [detailsReady, setDetailsReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadCharacterDetails()
+      .then(() => alive && setDetailsReady(true))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const genres = allGenres(store.genres);
   const seatsPerGenre = store.company?.seatsPerRole || 3;
 
@@ -24,19 +36,23 @@ export default function Hire({ store, initialRoleId, go }) {
   const full = store.activeEmployees.length >= limit;
 
   const seat = nextSeat(store.employees, roleId, genreId);
-  const preset = presetEmployee(roleId, seat, genreId, store.genres);
+  // detailsReady が立った時に作り直して、キャラクターの人物像を反映する（新項目03）
+  const preset = useMemo(
+    () => presetEmployee(roleId, seat, genreId, store.genres),
+    [roleId, seat, genreId, store.genres, detailsReady]
+  );
   const arche = archetypeFor(seat);
   const filled = seatsOf(store.employees, roleId, genreId).length;
 
-  const hirePreset = () => {
-    const emp = store.hireEmployee(preset);
+  const hirePreset = async () => {
+    const emp = await store.hireEmployee(preset);
     go('employee', emp.id);
   };
 
-  const hireCustom = () => {
+  const hireCustom = async () => {
     const role = roleById(custom.roleId);
     const genre = genres.find((g) => g.id === custom.genreId);
-    const emp = store.hireEmployee({
+    const emp = await store.hireEmployee({
       name: custom.name || '名もなき社員',
       shortName: custom.name || '社員',
       // 読みは目次の並びに使う。漢字の読みは推定しないので、入力がなければ空のまま。

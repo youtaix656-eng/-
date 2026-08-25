@@ -3,13 +3,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CHARACTERS, charactersOf, characterAt, characterRoleIds } from '../src/data/characters.js';
+import {
+  CHARACTERS,
+  charactersOf,
+  characterAt,
+  characterRoleIds,
+  characterDetail,
+  loadCharacterDetails,
+} from '../src/data/characters.js';
 import { ROLES, roleById, rolesOfGroup, ROLE_GROUPS, DEPARTMENTS, departmentById } from '../src/data/roles.js';
 import { presetEmployee, initialPresets } from '../src/data/employees.js';
 import { portraitFor, normalizePortrait, HAIR_STYLES, GLASSES, EXTRAS, COLLARS } from '../src/data/portraits.js';
 import { buildToc, filterToc } from '../src/data/toc.js';
 import { seedAll, makeEmployee, nextSeat } from '../src/lib/seed.js';
 import { readingInfo, UNKNOWN_BUCKET, bucketOf } from '../src/lib/yomi.js';
+
+// 人物像・書き方・出身は別ファイルにあり、必要になった時に読み込む（新項目03）。
+// 同期のテストからも読めるよう、ここで先に読み込んでおく。
+await loadCharacterDetails();
 import { employeeLimit } from '../src/data/plans.js';
 import { pickRole, scoreRoles } from '../src/lib/dispatcher.js';
 import { createTask } from '../src/lib/workflow.js';
@@ -116,9 +127,22 @@ test('全員に読み・カナ・出身・人物像・書き方・持ち味が�
   for (const c of CHARACTERS) {
     assert.ok(/^[ぁ-んー]+$/.test(c.reading), `${c.name} の読みがひらがなでない：${c.reading}`);
     assert.ok(/^[ァ-ヶー・]+$/.test(c.kana), `${c.name} のカナがカタカナでない：${c.kana}`);
-    assert.ok(c.origin && c.persona && c.style && c.strength, `${c.name} の設定が欠けている`);
-    assert.ok(c.persona.length >= 10 && c.style.length >= 10, `${c.name} の説明が短すぎる`);
+    const d = characterDetail(c.roleId, c.seat);
+    assert.ok(d, `${c.name} の人物像が characterDetails.js に無い`);
+    assert.ok(d.origin && d.persona && d.style && c.strength, `${c.name} の設定が欠けている`);
+    assert.ok(d.persona.length >= 10 && d.style.length >= 10, `${c.name} の説明が短すぎる`);
   }
+});
+
+test('索引と人物像の対応に欠けも余りも無い（新項目03の分割）', () => {
+  const keys = new Set(CHARACTERS.map((c) => `${c.roleId}:${c.seat}`));
+  assert.equal(keys.size, CHARACTERS.length, '索引の側で roleId:seat が重複している');
+  // 余り（索引に無い人物像）が残っていないか
+  const detailKeys = Object.keys(
+    // characterDetail は1件ずつしか返さないので、索引の全キーで引いて数える
+    Object.fromEntries(CHARACTERS.map((c) => [`${c.roleId}:${c.seat}`, characterDetail(c.roleId, c.seat)]))
+  );
+  assert.equal(detailKeys.length, CHARACTERS.length);
 });
 
 test('全員の読みが目次の正しい行に入る（その他へ落ちない）', () => {
@@ -136,8 +160,10 @@ test('日本語以外の文字が説明文に紛れ込んでいない', () => {
   // 過去に編集中キリル文字が混入したことがあるため、機械チェックしておく
   const bad = /[Ѐ-ӿ؀-ۿ]/;
   for (const c of CHARACTERS) {
-    for (const key of ['persona', 'style', 'strength', 'origin']) {
-      assert.ok(!bad.test(c[key]), `${c.name} の ${key} に想定外の文字がある：${c[key]}`);
+    const d = characterDetail(c.roleId, c.seat);
+    const fields = { persona: d.persona, style: d.style, origin: d.origin, strength: c.strength };
+    for (const [key, value] of Object.entries(fields)) {
+      assert.ok(!bad.test(value), `${c.name} の ${key} に想定外の文字がある：${value}`);
     }
   }
 });

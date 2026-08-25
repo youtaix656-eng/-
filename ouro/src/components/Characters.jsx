@@ -3,11 +3,11 @@
 // 雇う前でも全員の設定を読める名簿。ここから1人ずつ、または役職ごとに雇える。
 // 肖像は線画のSVG（components/Portrait.jsx）。**顔立ちで出身を描き分けてはいない。**
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, Empty, Jump } from './ui.jsx';
 import Portrait from './Portrait.jsx';
 import { rolesOfGroup, departmentById, groupById, approverFor } from '../data/roles.js';
-import { charactersOf } from '../data/characters.js';
+import { charactersOf, characterDetail, loadCharacterDetails } from '../data/characters.js';
 import { DEFAULT_GENRE_ID } from '../data/genres.js';
 import { employeeLimit } from '../data/plans.js';
 
@@ -15,6 +15,17 @@ const TEAMS = ['company', 'marketing'];
 
 export default function Characters({ store, go, toast, highlight = null }) {
   const [openRole, setOpenRole] = useState(null);
+  // 人物像・書き方は別ファイル（新項目03）。この画面を開いた時に読み込む。
+  const [detailsReady, setDetailsReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadCharacterDetails()
+      .then(() => alive && setDetailsReady(true))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [team, setTeam] = useState(() => {
     // 目次などから役職を指定して来たときは、その役職のチームを開く
     const r = highlight ? rolesOfGroup('marketing').find((x) => x.id === highlight) : null;
@@ -31,16 +42,16 @@ export default function Characters({ store, go, toast, highlight = null }) {
   const limit = employeeLimit(store.company?.planId, store.company?.limitOverrides);
   const room = limit - store.activeEmployees.length;
 
-  const hireOne = (roleId, seat) => {
+  const hireOne = async (roleId, seat) => {
     if (room <= 0) {
       toast(`在籍数の上限（${limit}人）です。設定でプランを上げてください`);
       return;
     }
-    const emp = store.hireCharacter(roleId, seat);
+    const emp = await store.hireCharacter(roleId, seat);
     if (emp) go('employee', emp.id);
   };
 
-  const hireRole = (roleId) => {
+  const hireRole = async (roleId) => {
     const seats = charactersOf(roleId).filter((c) => !hiredOf(roleId, c.seat));
     if (!seats.length) {
       toast('この役職の3名はすでに全員在籍しています');
@@ -50,7 +61,12 @@ export default function Characters({ store, go, toast, highlight = null }) {
       toast(`在籍数の上限（${limit}人）です。設定でプランを上げてください`);
       return;
     }
-    for (const c of seats) store.hireCharacter(roleId, c.seat);
+    // 1人ずつ順に雇う（席番号が「その組の中の通し番号」なので、
+    // 同時に走らせると同じ番号を2人に割り当ててしまう）
+    for (const c of seats) {
+      // eslint-disable-next-line no-await-in-loop
+      await store.hireCharacter(roleId, c.seat);
+    }
     toast(`${seats.length}名を雇いました`);
   };
 
@@ -169,11 +185,13 @@ export default function Characters({ store, go, toast, highlight = null }) {
                           <div className="char-name">{c.name}</div>
                           <div className="char-kana">{c.kana}／{c.reading}</div>
                           <div>
-                            <span className="char-origin">{c.origin}</span>
+                            {detailsReady && (
+                              <span className="char-origin">{characterDetail(c.roleId, c.seat)?.origin}</span>
+                            )}
                             <span className="char-origin" style={{ marginLeft: 5 }}>{c.strength}</span>
                           </div>
                           <p className="muted" style={{ margin: '6px 0 4px', color: 'var(--ink-2)' }}>
-                            {c.persona}
+                            {detailsReady ? characterDetail(c.roleId, c.seat)?.persona : '　'}
                           </p>
                           <p className="muted" style={{ margin: 0 }}>書き方：{c.style}</p>
                           <div className="btn-row" style={{ marginTop: 8 }}>

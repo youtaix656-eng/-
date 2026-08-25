@@ -10,7 +10,7 @@ import { buildToc, filterToc, tocSections, kindCounts, TOC_KINDS } from '../data
 import { BUCKETS, UNKNOWN_BUCKET } from '../lib/yomi.js';
 import { ROLES, ROLE_GROUPS, rolesOfGroup } from '../data/roles.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
-import { seatsOf } from '../lib/seed.js';
+import { seatsOf } from '../lib/seats.js';
 import Portrait from './Portrait.jsx';
 
 export default function Toc({ store, go }) {
@@ -256,8 +256,8 @@ function OrgIndex({ store, go }) {
                     key={`empty-${i}`}
                     type="button"
                     className="seat empty"
-                    onClick={() => {
-                      const e = store.hireIntoRole(roleId, g.id);
+                    onClick={async () => {
+                      const e = await store.hireIntoRole(roleId, g.id);
                       if (e) go('employee', e.id);
                     }}
                   >
@@ -272,8 +272,8 @@ function OrgIndex({ store, go }) {
               <button
                 type="button"
                 className="btn ghost small"
-                onClick={() => {
-                  const e = store.hireIntoRole(roleId, g.id);
+                onClick={async () => {
+                  const e = await store.hireIntoRole(roleId, g.id);
                   if (e) go('employee', e.id);
                 }}
               >

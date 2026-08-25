@@ -1,6 +1,7 @@
 // 画面をまたいで使う小さな部品。
 
 import { memo, useEffect, useRef, useState } from 'react';
+import { preloadView } from '../lib/preload.js';
 import { toBlocks } from '../lib/format.js';
 
 /**
@@ -48,9 +49,11 @@ export function SectionTitle({ children }) {
 }
 
 // 項目18：中身が同じ行は描き直さない。件数が増えたときに効く。
-export const Row = memo(function Row({ glyph, title, sub, onClick, right, avatar = null }) {
+export const Row = memo(function Row({ glyph, title, sub, onClick, right, avatar = null, preload = '' }) {
+  // preload に画面名を渡すと、指が触れた時点でその画面を読み始める（新項目01）。
+  const warm = preload ? () => preloadView(preload) : undefined;
   return (
-    <button type="button" className="row" onClick={onClick}>
+    <button type="button" className="row" onClick={onClick} onPointerDown={warm} onPointerEnter={warm}>
       {avatar}
       {!avatar && glyph && <span className="g">{glyph}</span>}
       <span className="body">

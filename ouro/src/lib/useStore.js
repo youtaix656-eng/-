@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KEYS, load, loadMany, save, exportAll, importAll, flushNow } from './storage.js';
 import * as perf from './perf.js';
-import { seedAll, makeEmployee, makeSettings, presetForNextSeat } from './seed.js';
+import { afterPaint, whenIdle } from './idle.js';
+import { makeSettings } from './defaults.js';
 import { createTask, applyStepResult, nextStep, assembleResult } from './workflow.js';
 import { runStep, distill, extractUrls } from './runtime.js';
 import { createKnowledge, makeSource, markUsed, markVerified } from './knowledge.js';
@@ -17,8 +18,24 @@ import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
 import { providerById } from './providers/index.js';
 import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
-import { presetEmployee } from '../data/employees.js';
+import { loadCharacterDetails } from '../data/characters.js';
 import { makeEvent } from './schedule.js';
+
+// 新項目04：初期データの組み立て（seed.js）と社員プリセット（data/employees.js）は
+// 「会社を作る」「社員を雇う」時にしか要らない。毎回の起動で読むのをやめ、
+// 使う直前に読み込む。読み込みは1回だけ（Promise を使い回す）。
+let rosterMod = null;
+function loadRoster() {
+  if (!rosterMod) {
+    rosterMod = Promise.all([import('./seed.js'), import('../data/employees.js')])
+      .then(([seed, employees]) => ({ ...seed, presetEmployee: employees.presetEmployee }))
+      .catch((e) => {
+        rosterMod = null; // 次に呼ばれた時にやり直せるようにする
+        throw e;
+      });
+  }
+  return rosterMod;
+}
 
 // 最初の画面（ホーム）を描くのに要るもの
 const FIRST_KEYS = [
@@ -91,6 +108,8 @@ export function useStore() {
       // 以前は「保存してから読み直す」形だったため、18人の生成と13キーの
       // 書き込みが1フレームに集中して414ms固まっていた。
       if (!seeded) {
+        const { seedAll } = await loadRoster();
+        if (!alive) return;
         const fresh = seedAll();
         const next = {
           ...EMPTY,
@@ -159,6 +178,11 @@ export function useStore() {
       }
 
       // ── 残りを追いつかせる ──
+      // 新項目06：最初の画面を描き終えて、手が空いてから読む。
+      // ここを詰めて走らせると、起動直後に触った時だけ固まって見える。
+      await afterPaint();
+      await whenIdle(1500);
+      if (!alive) return;
       const rest = await loadMany(REST_KEYS, REST_FALLBACKS);
       if (!alive) return;
       const merged = { ...stateRef.current };
@@ -225,7 +249,8 @@ export function useStore() {
 
   // ---- 社員 ----
   const hireEmployee = useCallback(
-    (preset) => {
+    async (preset) => {
+      const { makeEmployee } = await loadRoster();
       const emp = makeEmployee(preset);
       const next = [...stateRef.current.employees, emp];
       put(KEYS.employees, next);
@@ -235,8 +260,14 @@ export function useStore() {
     [put, log]
   );
 
+  // 新項目03：人物像・書き方は別ファイルなので、雇う前に読み込みを待つ。
+  // 起動後の空き時間にも読んであるので、通常この await は即座に返る。
   const hireIntoRole = useCallback(
-    (roleId, genreId = DEFAULT_GENRE_ID) => {
+    async (roleId, genreId = DEFAULT_GENRE_ID) => {
+      const [{ presetForNextSeat }] = await Promise.all([
+        loadRoster(),
+        loadCharacterDetails().catch(() => {}),
+      ]);
       const s = stateRef.current;
       const preset = presetForNextSeat(s.employees, roleId, genreId, s.genres);
       return preset ? hireEmployee(preset) : null;
@@ -246,7 +277,11 @@ export function useStore() {
 
   /** 名前つきのキャラクター（会社チーム①〜⑩）を雇う。既に在籍していれば何もしない。 */
   const hireCharacter = useCallback(
-    (roleId, seat) => {
+    async (roleId, seat) => {
+      const [{ presetEmployee }] = await Promise.all([
+        loadRoster(),
+        loadCharacterDetails().catch(() => {}),
+      ]);
       const s = stateRef.current;
       const already = s.employees.find(
         (e) =>

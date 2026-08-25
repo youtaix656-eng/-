@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Card, Field, Empty } from './ui.jsx';
 import { GENRES, allGenres } from '../data/genres.js';
-import { seatsOf } from '../lib/seed.js';
+import { seatsOf } from '../lib/seats.js';
 import { ROLES } from '../data/roles.js';
 
 export default function GenreEditor({ store, go, toast }) {

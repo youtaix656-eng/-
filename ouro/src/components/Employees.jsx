@@ -7,7 +7,7 @@ import { Card, Row, SectionTitle, Empty } from './ui.jsx';
 import { ROLES, roleById, DEPARTMENTS, rolesOfGroup, ROLE_GROUPS } from '../data/roles.js';
 import Portrait from './Portrait.jsx';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
-import { seatsOf } from '../lib/seed.js';
+import { seatsOf } from '../lib/seats.js';
 import { relTime } from '../lib/format.js';
 
 export default function Employees({ store, go, preset = {} }) {
@@ -92,8 +92,8 @@ export default function Employees({ store, go, preset = {} }) {
           <button
             type="button"
             className="btn small block"
-            onClick={() => {
-              const emp = store.hireIntoRole(roleId, genreId);
+            onClick={async () => {
+              const emp = await store.hireIntoRole(roleId, genreId);
               if (emp) go('employee', emp.id);
             }}
           >

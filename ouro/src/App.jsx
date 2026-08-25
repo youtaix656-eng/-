@@ -7,6 +7,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { useStore } from './lib/useStore.js';
 import * as perf from './lib/perf.js';
+import { LOADERS, preloadView, preloadMany } from './lib/preload.js';
 import { useToast } from './components/ui.jsx';
 import Splash from './components/Splash.jsx';
 import Home from './components/Home.jsx';
@@ -17,28 +18,24 @@ import Company from './components/Company.jsx';
 // 肖像の額縁は全員で1つを使い回すので、その定義だけ即時に読む
 import { PortraitSprite } from './components/Portrait.jsx';
 
-const TaskDetail = lazy(() => import('./components/TaskDetail.jsx'));
-const EmployeeDetail = lazy(() => import('./components/EmployeeDetail.jsx'));
-const Hire = lazy(() => import('./components/Hire.jsx'));
-const KnowledgeDetail = lazy(() => import('./components/KnowledgeDetail.jsx'));
-const Ingest = lazy(() => import('./components/Ingest.jsx'));
-const Meeting = lazy(() => import('./components/Meeting.jsx'));
-const MeetingDetail = lazy(() =>
-  import('./components/Meeting.jsx').then((m) => ({ default: m.MeetingDetail }))
-);
-const Deals = lazy(() => import('./components/Deals.jsx'));
-const DealDetail = lazy(() =>
-  import('./components/Deals.jsx').then((m) => ({ default: m.DealDetail }))
-);
-const Connect = lazy(() => import('./components/Connect.jsx'));
-const Approvals = lazy(() => import('./components/Approvals.jsx'));
-const AuditView = lazy(() => import('./components/AuditView.jsx'));
-const Settings = lazy(() => import('./components/Settings.jsx'));
-// 項目07：下部ナビにあるが起動直後には要らないので、後から読む
-const Calendar = lazy(() => import('./components/Calendar.jsx'));
-const Toc = lazy(() => import('./components/Toc.jsx'));
-const GenreEditor = lazy(() => import('./components/GenreEditor.jsx'));
-const Characters = lazy(() => import('./components/Characters.jsx'));
+const TaskDetail = lazy(LOADERS.task);
+const EmployeeDetail = lazy(LOADERS.employee);
+const Hire = lazy(LOADERS.hire);
+const KnowledgeDetail = lazy(LOADERS.knowledgeDetail);
+const Ingest = lazy(LOADERS.ingest);
+const Meeting = lazy(LOADERS.meeting);
+const MeetingDetail = lazy(() => LOADERS.meetingDetail().then((m) => ({ default: m.MeetingDetail })));
+const Deals = lazy(LOADERS.deals);
+const DealDetail = lazy(() => LOADERS.deal().then((m) => ({ default: m.DealDetail })));
+const Connect = lazy(LOADERS.connect);
+const Approvals = lazy(LOADERS.approvals);
+const AuditView = lazy(LOADERS.audit);
+const Settings = lazy(LOADERS.settings);
+// 新項目01：下部ナビにあるが起動直後には要らないので、後から読む
+const Calendar = lazy(LOADERS.calendar);
+const Toc = lazy(LOADERS.toc);
+const GenreEditor = lazy(LOADERS.genre);
+const Characters = lazy(LOADERS.characters);
 
 const NAV = [
   { id: 'home', glyph: '◉', label: 'ホーム' },
@@ -84,6 +81,7 @@ export default function App() {
   const go = useCallback(
     (next, nextArg = null) => {
       perf.mark(`view:${next}`);
+      preloadView(next);
       setStack((s) => [...s, { view, arg }].slice(-20));
       setView(next);
       setArg(nextArg);
@@ -109,6 +107,7 @@ export default function App() {
 
   const navTo = (id) => {
     perf.mark(`view:${id}`);
+    preloadView(id);
     setStack([]);
     setView(id);
     setArg(null);
@@ -121,19 +120,18 @@ export default function App() {
     return () => cancelAnimationFrame(id);
   }, [view]);
 
-  // 項目08：ホームを描いたあとの空き時間に、次に開きそうな画面を取っておく。
-  // タブを押した瞬間の待ち時間が消える。通信が細い端末では邪魔しないよう
-  // requestIdleCallback を使い、無ければ何もしない。
+  // ホームを描いたあとの空き時間に、次に開きそうな画面を取っておく。
+  // 新項目02：対象を「会社」から開く画面まで広げ、節約モード・2G相当の端末では
+  // 先読みしない（本命の通信の邪魔になるため。判定は lib/preload.js）。
   useEffect(() => {
     if (!store.ready) return undefined;
     const idle = typeof requestIdleCallback === 'function' ? requestIdleCallback : null;
     if (!idle) return undefined;
     const id = idle(
       () => {
-        import('./components/Toc.jsx');
-        import('./components/Calendar.jsx');
-        import('./components/TaskDetail.jsx');
-        import('./components/EmployeeDetail.jsx');
+        preloadMany(['toc', 'calendar', 'task', 'employee']);
+        // さらに空きがあれば、会社バーから開く画面も
+        idle(() => preloadMany(['approvals', 'settings', 'characters', 'connect']), { timeout: 8000 });
       },
       { timeout: 4000 }
     );
@@ -223,6 +221,8 @@ export default function App() {
             key={n.id}
             type="button"
             aria-current={view === n.id}
+            onPointerDown={() => preloadView(n.id)}
+            onPointerEnter={() => preloadView(n.id)}
             onClick={() => navTo(n.id)}
           >
             <span className="g">{n.glyph}</span>

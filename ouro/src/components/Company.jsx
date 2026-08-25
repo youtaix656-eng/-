@@ -70,19 +70,26 @@ export default function Company({ store, go }) {
         glyph="⚖"
         title="承認待ち"
         sub={pending ? `${pending}件があなたの判断を待っています` : '待っているものはありません'}
+        preload="approvals"
         onClick={() => go('approvals')}
       />
       <Row
         glyph="⚒"
         title="会社で使える道具"
         sub={`${connected} / ${limit} 接続中・エンジン${engines.length}種`}
+        preload="connect"
         onClick={() => go('connect')}
       />
-      <Row glyph="▤" title="操作履歴（Audit Log）" sub={`${audit.length}件の記録`} onClick={() => go('audit')} />
-      <Row glyph="⚙" title="設定" sub="AIエンジン・プラン・データの持ち出し" onClick={() => go('settings')} />
-      <Row glyph="▤" title="目次" sub="社員・役職・ジャンル・道具を読みで引く" onClick={() => go('toc')} />
-      <Row glyph="◈" title="ジャンル" sub="担当する分野を足す・見直す" onClick={() => go('genre')} />
-      <Row glyph="◍" title="AIキャラクター名鑑" sub="事業を回す10役割 × 各3名（全30名）" onClick={() => go('characters')} />
+      <Row glyph="▤" title="操作履歴（Audit Log）" sub={`${audit.length}件の記録`} preload="audit"
+        onClick={() => go('audit')} />
+      <Row glyph="⚙" title="設定" sub="AIエンジン・プラン・データの持ち出し" preload="settings"
+        onClick={() => go('settings')} />
+      <Row glyph="▤" title="目次" sub="社員・役職・ジャンル・道具を読みで引く" preload="toc"
+        onClick={() => go('toc')} />
+      <Row glyph="◈" title="ジャンル" sub="担当する分野を足す・見直す" preload="genre"
+        onClick={() => go('genre')} />
+      <Row glyph="◍" title="AIキャラクター名鑑" sub="事業を回す10役割 × 各3名（全30名）" preload="characters"
+        onClick={() => go('characters')} />
 
       <SectionTitle>役職ごとの在籍</SectionTitle>
       <Card className="tight">

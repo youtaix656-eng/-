@@ -7,11 +7,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ROLES, roleById, rolesOfGroup, ROLE_GROUPS, groupById, approverFor, departmentById } from '../src/data/roles.js';
-import { CHARACTERS, charactersOf } from '../src/data/characters.js';
+import { CHARACTERS, charactersOf, loadCharacterDetails } from '../src/data/characters.js';
 import { presetEmployee } from '../src/data/employees.js';
 import { planSteps, withApprovers, pickRole } from '../src/lib/dispatcher.js';
 import { createTask } from '../src/lib/workflow.js';
 import { buildSystemPrompt } from '../src/lib/runtime.js';
+
+// 人物像は別ファイル（新項目03）。先に読み込んでおく。
+await loadCharacterDetails();
 import { WORKFLOWS } from '../src/data/workflows.js';
 import { buildToc } from '../src/data/toc.js';
 import { normalizePortrait } from '../src/data/portraits.js';

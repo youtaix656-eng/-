@@ -6,13 +6,17 @@
 import { newId } from './id.js';
 import { DEPARTMENTS, ROLES } from '../data/roles.js';
 import { initialPresets, presetEmployee } from '../data/employees.js';
-import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE } from '../data/genres.js';
+import { nextSeat, DEFAULT_SEATS_PER_ROLE } from './seats.js';
+import { makeSettings } from './defaults.js';
+import { DEFAULT_GENRE_ID } from '../data/genres.js';
 import { DEFAULT_PLAN_ID } from '../data/plans.js';
 import { DEFAULT_PERMISSIONS } from './permissions.js';
 import { SCOPES } from './memory.js';
 
-// 「1つの組（役職×ジャンル）に3席」の初期値。定数ではない（増席できる）。
-export const DEFAULT_SEATS_PER_ROLE = DEFAULT_SEATS_PER_GENRE;
+// 席を数える処理と設定の初期値は、起動時に読まれる画面でも使うので別ファイルにある
+// （新項目04）。ここから読めるよう、そのまま出し直す。
+export { DEFAULT_SEATS_PER_ROLE, nextSeat, seatsOf, isGenreFull } from './seats.js';
+export { makeSettings };
 
 export function makeCompany(name = 'あなたのAI会社') {
   return {
@@ -79,45 +83,9 @@ export function seedAll(companyName) {
   };
 }
 
-export function makeSettings() {
-  return {
-    routerMode: 'auto', // 'auto' | 'manual'
-    autoApproveCost: false, // コストのかかる実行を毎回確認するか
-    maxTokens: 8000,
-    usdJpy: 155, // 円換算の目安（設定で変えられる）
-    splashSeen: false,
-    theme: 'ouro',
-  };
-}
-
-/**
- * 新しく席を増やすときの席番号。**組（役職×ジャンル）の中で**空いている番号を返す。
- * 役職だけで数えると、別ジャンルの席が埋まっているせいで番号が飛んでしまう。
- */
-export function nextSeat(employees, roleId, genreId = DEFAULT_GENRE_ID) {
-  const used = employees
-    .filter((e) => e.roleId === roleId && (e.genreId || DEFAULT_GENRE_ID) === genreId && !e.archivedAt)
-    .map((e) => e.seat || 1);
-  let seat = 1;
-  while (used.includes(seat)) seat += 1;
-  return seat;
-}
-
 export function presetForNextSeat(employees, roleId, genreId = DEFAULT_GENRE_ID, customGenres = []) {
   const seat = nextSeat(employees, roleId, genreId);
   return presetEmployee(roleId, seat, genreId, customGenres);
-}
-
-/** その組（役職×ジャンル）に在籍している社員（席順）。 */
-export function seatsOf(employees, roleId, genreId = DEFAULT_GENRE_ID) {
-  return employees
-    .filter((e) => e.roleId === roleId && (e.genreId || DEFAULT_GENRE_ID) === genreId && !e.archivedAt)
-    .sort((a, b) => (a.seat || 1) - (b.seat || 1));
-}
-
-/** その組がいっぱいか（既定の3席まで埋まっているか）。 */
-export function isGenreFull(employees, roleId, genreId, seatsPerGenre = DEFAULT_SEATS_PER_GENRE) {
-  return seatsOf(employees, roleId, genreId).length >= seatsPerGenre;
 }
 
 export { ROLES };

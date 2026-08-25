@@ -8,7 +8,7 @@
 
 import { ROLES } from './roles.js';
 import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE, genreById } from './genres.js';
-import { characterAt } from './characters.js';
+import { characterAt, characterDetail } from './characters.js';
 import { kataToHira } from '../lib/yomi.js';
 
 // 席ごとの持ち味。同じ役職・同じジャンルでも「どう働くか」を変えて、
@@ -157,14 +157,23 @@ export function presetEmployee(roleId, seat, genreId = DEFAULT_GENRE_ID, customG
   };
 }
 
-/** キャラクター設定から社員のプリセットを作る。 */
+/**
+ * キャラクター設定から社員のプリセットを作る。
+ *
+ * 人物像・書き方・出身は別ファイルなので（新項目03）、まだ読み込めていない時は
+ * 席の持ち味で代用する。**空の人物像で雇わせない**ため。
+ * 呼ぶ側（useStore の hire 系）は loadCharacterDetails() を待ってから呼ぶので、
+ * 通常はここで代用にはならない。
+ */
 function fromCharacter(role, genre, c) {
+  const d = characterDetail(c.roleId, c.seat);
+  const arche = archetypeFor(c.seat);
   return {
     name: c.name,
     shortName: c.name.split(' ')[0].replace(/^Dr\.$/, c.name.split(' ')[1] || c.name),
     kana: c.kana,
     reading: c.reading,
-    origin: c.origin,
+    origin: (d && d.origin) || '',
     avatar: role.glyph,
     roleId: role.id,
     genreId: genre.id,
@@ -172,8 +181,8 @@ function fromCharacter(role, genre, c) {
     seat: c.seat,
     title: `${role.name}（${c.strength}）`,
     specialties: role.skills.slice(),
-    persona: c.persona,
-    style: c.style,
+    persona: (d && d.persona) || arche.persona,
+    style: (d && d.style) || arche.style,
     strength: c.strength,
     // 席の持ち味はキャラクター本人の個性で置き換える（主席/次席/三席は使わない）。
     // persona / style は buildSystemPrompt が「性格」「書き方」として既に出すので、
