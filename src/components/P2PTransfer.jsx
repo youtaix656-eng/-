@@ -59,25 +59,97 @@ function CodeOutputPanel({ chunks, onToast, label }) {
   );
 }
 
-// 相手から受け取ったコードを1ブロックずつ貼り付けて自動で組み立てる入力パネル
+// 相手から受け取ったコードを1ブロックずつ貼り付けて自動で組み立てる入力パネル。
+// カメラ対応端末（BarcodeDetector）では、QRを直接かざして読み取ることもできる
+// （端末のカメラアプリでの読み取り→コピペは、長い文字列だと"コピー"操作が出ない
+// 端末があるため、アプリ内スキャンをSyncScan.jsxと同じ方式で用意する）。
 function CodeInputPanel({ onComplete, onToast, label }) {
   const [text, setText] = useState('');
   const [progress, setProgress] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState('');
   const reassemblerRef = useRef(new Reassembler());
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
+  const activeRef = useRef(false);
+  const busyRef = useRef(false);
 
-  const add = () => {
-    if (!text.trim()) return;
-    const res = reassemblerRef.current.add(text.trim());
+  const hasDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
+  const stopCamera = () => {
+    activeRef.current = false;
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setScanning(false);
+  };
+  useEffect(() => () => stopCamera(), []);
+
+  // 1ブロック分の文字列（QR1枚・貼り付け1回ぶん）を処理（貼り付け・カメラ共通）
+  const addChunk = (raw) => {
+    const res = reassemblerRef.current.add(raw.trim());
     if (!res.ok) {
       onToast?.(`これは${label}のコードとして読み取れませんでした`);
-      return;
+      return false;
     }
     setProgress({ received: res.receivedCount, total: res.total });
-    setText('');
     if (res.complete) {
+      stopCamera();
       onComplete(reassemblerRef.current.assemble());
       reassemblerRef.current.reset();
       setProgress(null);
+    }
+    return true;
+  };
+
+  const addFromTextarea = () => {
+    if (!text.trim()) return;
+    if (addChunk(text)) setText('');
+  };
+
+  const startCamera = async () => {
+    setScanError('');
+    if (!hasDetector) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      streamRef.current = stream;
+      setScanning(true);
+      requestAnimationFrame(async () => {
+        const v = videoRef.current;
+        if (!v) return;
+        v.srcObject = stream;
+        v.setAttribute('playsinline', 'true');
+        try { await v.play(); } catch (e) { /* 自動再生の制約は無視 */ }
+        let detector;
+        try {
+          detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        } catch (e) {
+          setScanError('この端末ではQRの読み取りに対応していません。貼り付けをご利用ください。');
+          stopCamera();
+          return;
+        }
+        activeRef.current = true;
+        const tick = async () => {
+          if (!activeRef.current || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes && codes.length && !busyRef.current) {
+              busyRef.current = true;
+              addChunk(codes[0].rawValue);
+              busyRef.current = false;
+            }
+          } catch (e) { /* 一時的な検出エラーは無視して継続 */ }
+          if (activeRef.current) timerRef.current = setTimeout(tick, 250);
+        };
+        tick();
+      });
+    } catch (e) {
+      setScanError('カメラを起動できませんでした。ブラウザのカメラ許可を確認するか、貼り付けをご利用ください。');
+      stopCamera();
     }
   };
 
@@ -86,6 +158,34 @@ function CodeInputPanel({ onComplete, onToast, label }) {
       {progress && progress.total > 1 && (
         <p className="inline-note">{progress.received} / {progress.total} 個 取り込み済み</p>
       )}
+
+      {hasDetector && !scanning && (
+        <button className="btn" onClick={startCamera} style={{ marginBottom: 8 }}>📷 QRを読み取る（カメラ）</button>
+      )}
+      {scanError && <div className="auth-error" style={{ marginBottom: 8 }}>{scanError}</div>}
+
+      {scanning && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ position: 'relative', textAlign: 'center' }}>
+            <video ref={videoRef} muted playsInline style={{ width: '100%', maxWidth: 320, borderRadius: 12, background: '#000' }} />
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute', top: '50%', left: '50%', width: 160, height: 160,
+                transform: 'translate(-50%, -50%)', border: '3px solid rgba(255,255,255,0.9)',
+                borderRadius: 12, boxShadow: '0 0 0 9999px rgba(0,0,0,0.25)', pointerEvents: 'none',
+              }}
+            />
+          </div>
+          <p className="inline-note" style={{ marginTop: 6 }}>
+            相手の{label}コードを枠内に入れてください。複数枚に分かれている場合は、切り替わるQRをそのまま映し続けてください。
+          </p>
+          <div className="btn-row" style={{ marginTop: 6 }}>
+            <button className="btn ghost sm" onClick={stopCamera}>カメラを閉じる</button>
+          </div>
+        </div>
+      )}
+
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -94,7 +194,7 @@ function CodeInputPanel({ onComplete, onToast, label }) {
         style={{ width: '100%' }}
       />
       <div className="btn-row" style={{ marginTop: 8 }}>
-        <button className="btn primary" onClick={add} disabled={!text.trim()}>取り込む</button>
+        <button className="btn primary" onClick={addFromTextarea} disabled={!text.trim()}>取り込む</button>
       </div>
     </div>
   );

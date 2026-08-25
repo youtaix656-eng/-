@@ -5,8 +5,11 @@ import { splitIntoChunks } from '../lib/chunk.js';
 import QRImage from './QRImage.jsx';
 
 // 1枚のQRに載せるチャンクデータの目安文字数（URLのprefix・チャンクヘッダぶんの余裕を見た値）。
-// QR誤り訂正レベルLの実用上限（約2,953バイト）に対して十分小さく、スキャンもしやすい。
-const CHUNK_DATA_LEN = 900;
+// QR誤り訂正レベルLの実用上限（約2,953バイト）には収まるが、900文字だと画面越しの
+// カメラ撮影では読み取りにくいほど高密度（実測でモジュール1つ約2.9px）になっていたため、
+// スキャンのしやすさを優先して抑えた（実測でモジュール1つ約4.6pxまで改善、枚数は増える）。
+const CHUNK_DATA_LEN = 300;
+const QR_SIZE = 320;
 
 function fmtRemain(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -144,7 +147,7 @@ export default function SyncQR({ store, onToast }) {
             </div>
           ) : (
             <div style={{ textAlign: 'center', marginBottom: 10, position: 'relative' }}>
-              <QRImage matrix={matrix} dim={expired} />
+              <QRImage matrix={matrix} dim={expired} size={QR_SIZE} />
               {expired && (
                 <div
                   style={{
