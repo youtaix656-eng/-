@@ -513,41 +513,101 @@ export function useStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, srs, history, memos, links, examResults, bookmarks, session]);
 
+  // 「常に最新の状態」の各種自動トリガーが共有する間引き用の最終実行時刻。
+  // 起動時同期もここに登録することで、起動直後にfocus/visibilitychangeが偶発的に
+  // 発火しても（一部ブラウザは初回表示時にfocusイベントを出すことがある）、
+  // 直後に無駄なもう1回の同期が連続しないようにする。
+  const lastBgSyncRef = useRef(0);
+  const didInitialSyncRef = useRef(false);
+
+  // データ変更をきっかけにした同期（連打での通信を避けるため、変更が落ち着くのを待ってから）。
+  // loaded直後の"初回"はここでは動かさない（下の起動時同期が別途・待たずに担当する）。
   useEffect(() => {
-    if (!loaded) return;
-    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
-    // 変更が落ち着くのを待ってから同期（連打での通信を避ける）。loaded直後の初回実行も兼ねる
+    if (!loaded) return undefined;
+    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return undefined;
+    if (!didInitialSyncRef.current) return undefined; // 初回は起動時同期に任せる（二重発火防止）
     const timer = setTimeout(() => { runCloudSync(true).catch(() => {}); }, 5000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults, bookmarks, session]);
+
+  // ①起動時（URLを開いた・ホーム画面から起動した直後）は、上のデバウンスを待たず
+  // ほぼ即座に同期を試みる（「開いたらすぐ最新化する」という体感を優先）。
+  // ⑥失敗した場合（起動直後は回線がまだ安定していないことがある）は15秒後に1回だけ
+  // 自動で再試行する（無限リトライはしない＝失敗が続く環境で通信を送り続けない）。
+  useEffect(() => {
+    if (!loaded) return undefined;
+    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return undefined;
+    if (didInitialSyncRef.current) return undefined;
+    didInitialSyncRef.current = true;
+    let alive = true;
+    let retryTimer = null;
+    const timer = setTimeout(() => {
+      lastBgSyncRef.current = Date.now();
+      runCloudSync(true).catch(() => {
+        if (!alive) return;
+        retryTimer = setTimeout(() => {
+          if (!alive) return;
+          lastBgSyncRef.current = Date.now();
+          runCloudSync(true).catch(() => {});
+        }, 15000);
+      });
+    }, 300);
+    return () => { alive = false; clearTimeout(timer); if (retryTimer) clearTimeout(retryTimer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId]);
 
   // 「🔄 今すぐ同期」ボタン用（CloudBackup.jsx）。自動同期のデバウンス（最大5秒）を
   // 待たずに、設定を変えた直後や動作確認をしたい時にその場で同期できる。
   const syncCloudNow = useCallback(() => runCloudSync(false), [runCloudSync]);
 
   // 「常に最新の状態」に近づけるため、ローカルの変更を待つだけでなく、他端末での更新も
-  // 拾いに行く：このタブに戻ってきた時（他の端末で進めてから、この端末に戻ってきた場面が
-  // 典型）に自動で1回同期する。短時間に何度もタブを切り替えても連打にならないよう、
-  // 前回の試行から一定時間（1分）は間引く。
-  const lastFocusSyncRef = useRef(0);
+  // 積極的に拾いに行く。②タブに戻ってきた時（他の端末で進めてから、この端末に戻ってきた
+  // 場面が典型）③オフラインから復帰した時④開いたままの端末でも取りこぼさないよう
+  // 一定間隔（5分）で、それぞれ自動で1回同期する。短時間に何度も発火しても連打に
+  // ならないよう、共通の間引き（1分）を通す。
+  const triggerBackgroundSync = useCallback(() => {
+    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const BG_SYNC_MIN_INTERVAL_MS = 60_000;
+    const now = Date.now();
+    if (now - lastBgSyncRef.current < BG_SYNC_MIN_INTERVAL_MS) return;
+    lastBgSyncRef.current = now;
+    runCloudSync(true).catch(() => {});
+  }, [settings.googleDriveAutoSync, settings.googleDriveClientId, runCloudSync]);
+
+  useEffect(() => {
+    if (!loaded) return undefined;
+    if (typeof document === 'undefined' || typeof window === 'undefined') return undefined;
+    document.addEventListener('visibilitychange', triggerBackgroundSync);
+    window.addEventListener('focus', triggerBackgroundSync);
+    window.addEventListener('online', triggerBackgroundSync);
+    const interval = setInterval(triggerBackgroundSync, 5 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', triggerBackgroundSync);
+      window.removeEventListener('focus', triggerBackgroundSync);
+      window.removeEventListener('online', triggerBackgroundSync);
+      clearInterval(interval);
+    };
+  }, [loaded, triggerBackgroundSync]);
+
+  // ⑤バックグラウンドへ退避する直前（他アプリに切り替える・タブを閉じる等）にも、
+  // ローカルの最新の変更を一度プッシュしておく。次に開いた別端末が、待たされずに
+  // この端末の最新状態を受け取れるようにするため（間引きは共通のcloudSyncBusyのみ＝
+  // 退避の合図は取りこぼしたくないので上の1分間引きは適用しない）。
   useEffect(() => {
     if (!loaded) return undefined;
     if (typeof document === 'undefined') return undefined;
-    const FOCUS_SYNC_MIN_INTERVAL_MS = 60_000;
-    const trigger = () => {
-      if (document.visibilityState !== 'visible') return;
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden') return;
       if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
-      const now = Date.now();
-      if (now - lastFocusSyncRef.current < FOCUS_SYNC_MIN_INTERVAL_MS) return;
-      lastFocusSyncRef.current = now;
       runCloudSync(true).catch(() => {});
     };
-    document.addEventListener('visibilitychange', trigger);
-    window.addEventListener('focus', trigger);
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onHide);
     return () => {
-      document.removeEventListener('visibilitychange', trigger);
-      window.removeEventListener('focus', trigger);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onHide);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, runCloudSync]);

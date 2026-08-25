@@ -46,8 +46,20 @@ function useLongPress(onLongPress, onTap) {
 }
 
 // ホーム画面：学習状況の概要と各モードへの入り口
+// 「n分前」のような簡易な相対時刻表示（クラウド同期の鮮度表示専用の小さな整形なので、
+// 汎用ヘルパーとしては切り出さずここに閉じる）。
+function timeAgoJa(at) {
+  const sec = Math.max(0, Math.floor((Date.now() - at) / 1000));
+  if (sec < 60) return 'たった今';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}分前`;
+  const hour = Math.floor(min / 60);
+  if (hour < 24) return `${hour}時間前`;
+  return `${Math.floor(hour / 24)}日前`;
+}
+
 export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz }) {
-  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs } = store;
+  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus } = store;
   const overall = overallStats(history);
   const level = estimateLevel({ srs, history });
   const focusSubjects = useMemo(() => {
@@ -133,6 +145,28 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
         <button className="install-btn" onClick={onInstall}>
           <span>📲 ホーム画面に追加してアプリとして使う</span>
           <span className="install-cta">追加</span>
+        </button>
+      )}
+
+      {/* クラウド自動同期の状態を軽く見える化（常に最新かどうかの安心材料。詳細は設定画面） */}
+      {settings.googleDriveAutoSync && (
+        <button
+          className="inline-note"
+          onClick={() => onNavigate('settings')}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left', marginBottom: 10,
+            padding: '4px 2px', background: 'none', border: 'none',
+          }}
+        >
+          {!cloudSyncStatus ? (
+            '☁️ 同期を準備しています…'
+          ) : cloudSyncStatus.ok ? (
+            `☁️ 最新の状態に同期済み（${timeAgoJa(cloudSyncStatus.at)}）`
+          ) : cloudSyncStatus.needsRelogin ? (
+            '☁️ 再ログインが必要です（タップして設定へ）'
+          ) : (
+            `☁️ 同期に失敗しました（${timeAgoJa(cloudSyncStatus.at)}・自動で再試行します）`
+          )}
         </button>
       )}
 
