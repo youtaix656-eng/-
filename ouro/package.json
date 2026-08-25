@@ -6,9 +6,11 @@
   "description": "Ouro — 自分専用のAI会社（AI Knowledge OS）。端末内保存・BYOK。",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-size.mjs",
     "preview": "vite preview",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "size": "node scripts/check-size.mjs --strict",
+    "perf": "node scripts/perf.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

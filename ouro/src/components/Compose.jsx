@@ -1,7 +1,7 @@
 // 仕事の依頼。自然言語で書くだけで、Ouro が担当と順番を決める。
 
 import { useMemo, useState } from 'react';
-import { Card, Field, SectionTitle } from './ui.jsx';
+import { Card, Field, SectionTitle, Action } from './ui.jsx';
 import { WORKFLOWS } from '../data/workflows.js';
 import { planSteps, detectNeeds } from '../lib/dispatcher.js';
 import { roleById } from '../data/roles.js';
@@ -205,9 +205,10 @@ export default function Compose({ store, preset = {}, go }) {
         </div>
       </details>
 
-      <button type="button" className="btn primary block" onClick={submit} disabled={!request.trim()}>
+      {/* 新項目26：押した瞬間に待ちの見た目にする。二度押しで仕事が2つできるのを防ぐ。 */}
+      <Action className="btn primary block" onClick={submit} disabled={!request.trim()} busyLabel="依頼しています…">
         依頼する
-      </button>
+      </Action>
       {engines.length === 0 && (
         <p className="muted" style={{ textAlign: 'center', marginTop: 8 }}>
           AIエンジン未接続のため、今は「仕事の型」だけが返ります。

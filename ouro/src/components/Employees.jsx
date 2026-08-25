@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import OrgMap from './OrgMap.jsx';
-import { Card, Row, SectionTitle, Empty } from './ui.jsx';
+import { Card, Row, SectionTitle, Empty, Action } from './ui.jsx';
 import { ROLES, roleById, DEPARTMENTS, rolesOfGroup, ROLE_GROUPS } from '../data/roles.js';
 import Portrait from './Portrait.jsx';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
@@ -89,17 +89,17 @@ export default function Employees({ store, go, preset = {} }) {
             </Empty>
           )}
 
-          <button
-            type="button"
+          <Action
             className="btn small block"
             onClick={async () => {
               const emp = await store.hireIntoRole(roleId, genreId);
               if (emp) go('employee', emp.id);
             }}
+            busyLabel="雇っています…"
           >
             ＋ {genres.find((g) => g.id === genreId)?.name}の席に雇う（
             {seats.length}/{seatsPerGenre}）
-          </button>
+          </Action>
 
           <SectionTitle>名前つきのAIキャラクター</SectionTitle>
           <p className="muted" style={{ marginTop: -4 }}>

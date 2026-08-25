@@ -118,14 +118,22 @@ export default function Company({ store, go }) {
         </p>
         {perf.summary().length ? (
           perf.summary().map((s) => (
-            <div
-              key={s.category}
-              style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 13.5, padding: '3px 0' }}
-            >
-              <span style={{ flex: 1 }}>{perf.CATEGORY_LABEL[s.category] || s.category}</span>
-              <span className="mono-num dim">中央 {s.median}ms</span>
-              <span className="mono-num dim">最悪 {s.worst}ms</span>
-              <span className="muted" style={{ fontSize: 11 }}>{s.count}回</span>
+            <div key={s.category} style={{ padding: '3px 0' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 13.5 }}>
+                <span style={{ flex: 1 }}>{perf.CATEGORY_LABEL[s.category] || s.category}</span>
+                <span className="mono-num dim">中央 {s.median}ms</span>
+                <span className="mono-num dim">最悪 {s.worst}ms</span>
+                <span className="muted" style={{ fontSize: 11 }}>{s.count}回</span>
+              </div>
+              {/* 新項目28：いちばん遅かった時の状況。数字だけでは直す手がかりにならない。 */}
+              {s.worstNote && (
+                <div className="muted" style={{ fontSize: 11 }}>
+                  最悪だった時：{Object.entries(s.worstNote)
+                    .filter(([, v]) => v !== '' && v != null)
+                    .map(([k, v]) => `${k} ${v}`)
+                    .join('・')}
+                </div>
+              )}
             </div>
           ))
         ) : (

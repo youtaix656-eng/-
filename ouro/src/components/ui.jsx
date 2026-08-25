@@ -197,3 +197,67 @@ export const Spark = memo(function Spark({ series = [], field = 'total' }) {
     </svg>
   );
 });
+
+/**
+ * 押した瞬間に反応するボタン（新項目26）。
+ *
+ * onClick が非同期の時、押してから画面が変わるまでの間なにも起きないと
+ * 「効いていない」と思って二度押しされる。押した時点で待ちの見た目にし、
+ * 終わるまで押せないようにする。
+ * **同じ処理を二重に走らせない**という意味でもある（雇用・依頼の二重登録を防ぐ）。
+ */
+export function Action({ onClick, children, busyLabel = '', className = 'btn', ...rest }) {
+  const [busy, setBusy] = useState(false);
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    []
+  );
+
+  const handle = async (e) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onClick(e);
+    } finally {
+      // 画面が入れ替わったあとに setState しない
+      if (alive.current) setBusy(false);
+    }
+  };
+
+  return (
+    <button type="button" className={className} onClick={handle} disabled={busy || rest.disabled} {...rest}>
+      {busy ? (
+        <>
+          <span className="spinner" /> {busyLabel || children}
+        </>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
+
+/**
+ * 骨組み表示（新項目27）。
+ * 読み込み中に白紙を出すと「壊れた」ように見える。行の形だけ先に出す。
+ */
+export function Skeleton({ rows = 4 }) {
+  return (
+    <div className="skeleton" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        // 骨組みは中身を持たないので、並び順を key にしてよい唯一の場所
+        // eslint-disable-next-line react/no-array-index-key
+        <div key={i} className="sk-row">
+          <span className="sk-dot" />
+          <span className="sk-lines">
+            <span className="sk-line" />
+            <span className="sk-line short" />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}

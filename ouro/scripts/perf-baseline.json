@@ -1,0 +1,39 @@
+{
+  "at": "2026-08-25",
+  "表紙まで_ms": 395,
+  "使えるまで_ms": 1009,
+  "起動時の通信_KB_無圧縮": 418,
+  "画面切替": [
+    {
+      "category": "view",
+      "count": 6,
+      "median": 28,
+      "worst": 70,
+      "worstName": "view:employees",
+      "worstNote": {
+        "社員": 18,
+        "知識": 0,
+        "仕事": 0,
+        "履歴": 0
+      }
+    },
+    {
+      "category": "boot",
+      "count": 1,
+      "median": 62,
+      "worst": 62,
+      "worstName": "boot",
+      "worstNote": null
+    },
+    {
+      "category": "save",
+      "count": 2,
+      "median": 13,
+      "worst": 13,
+      "worstName": "保存 5件",
+      "worstNote": {
+        "キー": "company・departments・employees・settings・seeded"
+      }
+    }
+  ]
+}

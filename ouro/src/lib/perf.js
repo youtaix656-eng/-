@@ -14,16 +14,22 @@ export function mark(name) {
   marks.set(name, now());
 }
 
-/** mark からの経過を記録する。@returns 経過ms */
-export function measure(name, category = 'other') {
+/**
+ * mark からの経過を記録する。
+ * @param {object} [note] 新項目28：その時の状況（件数など）。
+ *   数字だけ残しても「なぜ遅かったか」が分からないので、
+ *   何件のデータを相手にしていたかを一緒に残す。
+ * @returns 経過ms
+ */
+export function measure(name, category = 'other', note = null) {
   const from = marks.get(name);
   if (from == null) return null;
   marks.delete(name);
-  return record(name, now() - from, category);
+  return record(name, now() - from, category, note);
 }
 
-export function record(name, ms, category = 'other') {
-  const entry = { name, ms: Math.round(ms), category, at: Date.now() };
+export function record(name, ms, category = 'other', note = null) {
+  const entry = { name, ms: Math.round(ms), category, at: Date.now(), note: note || null };
   log = [...log, entry].slice(-MAX);
   for (const fn of listeners) fn(entry);
   return entry.ms;
@@ -65,11 +71,20 @@ export function summary() {
   return [...byCat.entries()]
     .map(([category, list]) => {
       const sorted = [...list].sort((a, b) => a - b);
+      const worst = sorted[sorted.length - 1];
+      // 新項目28：いちばん遅かった時の状況も一緒に返す。
+      // 「画面の切り替え 最悪84ms」だけでは直しようがないが、
+      // 「知識1200件の一覧で84ms」なら、どこを直せばよいか分かる。
+      const worstEntry = log
+        .filter((e) => e.category === category)
+        .reduce((a, b) => (b.ms > (a ? a.ms : -1) ? b : a), null);
       return {
         category,
         count: sorted.length,
         median: sorted[Math.floor(sorted.length / 2)],
-        worst: sorted[sorted.length - 1],
+        worst,
+        worstName: worstEntry ? worstEntry.name : '',
+        worstNote: worstEntry ? worstEntry.note : null,
       };
     })
     .sort((a, b) => b.worst - a.worst);
@@ -85,4 +100,10 @@ export const CATEGORY_LABEL = {
 
 function now() {
   return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+}
+
+// 新項目30：計測スクリプト（scripts/perf.mjs）から、会社画面と同じ集計を読めるようにする。
+// 記録は端末の中にしかなく、ここでも外へは送らない。
+if (typeof window !== 'undefined') {
+  window.__ouroPerf = () => summary();
 }

@@ -8,7 +8,7 @@ import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { useStore } from './lib/useStore.js';
 import * as perf from './lib/perf.js';
 import { LOADERS, preloadView, preloadMany } from './lib/preload.js';
-import { useToast } from './components/ui.jsx';
+import { useToast, Skeleton } from './components/ui.jsx';
 import Splash from './components/Splash.jsx';
 import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
@@ -114,11 +114,19 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // 描き終わったところで、切り替えにかかった時間を記録する
+  // 描き終わったところで、切り替えにかかった時間を記録する。
+  // 新項目28：その時に抱えていた件数も一緒に残す（数字だけでは直せないため）。
   useEffect(() => {
-    const id = requestAnimationFrame(() => perf.measure(`view:${view}`, 'view'));
+    const id = requestAnimationFrame(() =>
+      perf.measure(`view:${view}`, 'view', {
+        社員: store.employees.length,
+        知識: store.knowledge.length,
+        仕事: store.tasks.length,
+        履歴: store.audit.length,
+      })
+    );
     return () => cancelAnimationFrame(id);
-  }, [view]);
+  }, [view, store.employees.length, store.knowledge.length, store.tasks.length, store.audit.length]);
 
   // ホームを描いたあとの空き時間に、次に開きそうな画面を取っておく。
   // 新項目02：対象を「会社」から開く画面まで広げ、節約モード・2G相当の端末では
@@ -175,10 +183,12 @@ export default function App() {
         </header>
       )}
 
+      {/* 新項目27：読み込み中は白紙でも輪でもなく、行の形を出す。
+          次に出るものと同じ形なので、切り替わった時に画面が跳ねない。 */}
       <Suspense
         fallback={
-          <div className="screen" style={{ textAlign: 'center', paddingTop: 60 }}>
-            <span className="spinner" />
+          <div className="screen">
+            <Skeleton rows={5} />
           </div>
         }
       >

@@ -1368,3 +1368,50 @@ select {
     will-change: auto;
   }
 }
+
+/* 新項目27：骨組み表示。読み込み中に白紙を出さない。
+   きらめきは控えめに（派手に動かすと、それ自体が重くなる）。 */
+.skeleton {
+  padding: 4px 0;
+}
+.sk-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.sk-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  flex: none;
+}
+.sk-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sk-line {
+  height: 9px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  animation: skpulse 1.4s ease-in-out infinite;
+}
+.sk-line.short {
+  width: 55%;
+}
+@keyframes skpulse {
+  50% {
+    background: rgba(255, 255, 255, 0.13);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-line {
+    animation: none;
+  }
+}

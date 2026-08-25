@@ -381,7 +381,10 @@ function drain(force = false) {
     .then(() => {
       draining = null;
       const ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - started;
-      perf.record(`保存 ${batch.length}件`, ms, 'save');
+      // 新項目28：どのキーを何件書いたかを残す（遅い保存の犯人が分かるように）
+      perf.record(`保存 ${batch.length}件`, ms, 'save', {
+        キー: batch.map(([k]) => String(k).replace(/^ouro:/, '')).join('・'),
+      });
       // 書いた内容を他のタブへ知らせる（新項目12）
       announce(batch.map(([key]) => key));
       // 書いている間に新しく溜まったぶんを続けて書く
