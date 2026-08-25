@@ -171,7 +171,7 @@ Ouro は**サーバーを持ちません**。月額費用はゼロです。
 ```bash
 npm install
 npm run dev       # 開発サーバー
-npm test          # node --test（165件）
+npm test          # node --test（174件）
 npm run build     # 本番ビルド
 npm run preview   # ビルド結果の確認
 ```
