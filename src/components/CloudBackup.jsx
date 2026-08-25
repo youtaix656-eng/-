@@ -116,9 +116,15 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
             <input
               type="text"
               value={clientId}
-              onChange={(e) => updateSettings({ googleDriveClientId: e.target.value })}
+              onChange={(e) => updateSettings({ googleDriveClientId: e.target.value.trim() })}
               placeholder="例）1234567890-abc...apps.googleusercontent.com"
             />
+            {clientId && !clientId.endsWith('.apps.googleusercontent.com') && (
+              <p className="inline-note" style={{ color: 'var(--wrong, #c62828)', marginTop: 4 }}>
+                ⚠ 「.apps.googleusercontent.com」で終わる文字列ではありません。クライアントID以外の値
+                （クライアントシークレットや別の項目）を貼り付けていないかご確認ください。
+              </p>
+            )}
           </div>
 
           <div className="section-label">② 連携・保存・復元</div>
