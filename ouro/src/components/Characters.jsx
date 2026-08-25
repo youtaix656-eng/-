@@ -4,7 +4,7 @@
 // 肖像は線画のSVG（components/Portrait.jsx）。**顔立ちで出身を描き分けてはいない。**
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { Card, Empty, Jump } from './ui.jsx';
+import { Card, Empty, Jump, Action } from './ui.jsx';
 import Portrait from './Portrait.jsx';
 import { rolesOfGroup, departmentById, groupById, approverFor } from '../data/roles.js';
 import { charactersOf, characterDetail, loadCharacterDetails } from '../data/characters.js';
@@ -216,13 +216,16 @@ export default function Characters({ store, go, toast, highlight = null }) {
                                 </button>
                               </>
                             ) : (
-                              <button
-                                type="button"
+                              // 二度押しで同じ席に2人できるのを防ぐ。
+                              // hireCharacter の重複チェックは読み込みを待ったあとに
+                              // 走るので、それだけでは速い2連打を止められない。
+                              <Action
                                 className="btn small primary"
                                 onClick={() => hireOne(role.id, c.seat)}
+                                busyLabel="雇っています…"
                               >
                                 この人を雇う
-                              </button>
+                              </Action>
                             )}
                           </div>
                         </div>
@@ -231,9 +234,9 @@ export default function Characters({ store, go, toast, highlight = null }) {
                   })}
 
                   {hired < chars.length && (
-                    <button type="button" className="btn block" onClick={() => hireRole(role.id)}>
+                    <Action className="btn block" onClick={() => hireRole(role.id)} busyLabel="雇っています…">
                       ＋ {role.name}の3名をまとめて雇う
-                    </button>
+                    </Action>
                   )}
                 </>
               )}

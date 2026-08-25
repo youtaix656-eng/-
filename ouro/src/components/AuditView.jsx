@@ -10,17 +10,16 @@ export default function AuditView({ store }) {
   const [filter, setFilter] = useState('all');
   // 新項目09：起動時は新しいぶんだけ読んでいる。古いぶんはここで読み足す。
   const [loadingAll, setLoadingAll] = useState(false);
-  // **その場の値を useState の初期値にしないこと。** 操作履歴は起動から1.5秒ほど
-  // 遅れて読み込まれるので、早く開くと「全部読んだ」と思い込んで
-  // 「すべて読み込む」が出なくなる。毎回 store を見て、読み終えた時だけ手元で覆す。
-  const [readAllDone, setReadAllDone] = useState(false);
-  const partial = store.auditPartial && !readAllDone;
+  // **その場の値を握らないこと。** 操作履歴は起動から少し遅れて読み込まれるので、
+  // 早く開いた時の値を持ち続けると「すべて読み込む」が出なくなる。
+  // 手元で覆すのも駄目——別のタブの保存で読み直しが起きると、また一部だけの
+  // 状態に戻るのに、こちらは「全部読んだ」と言い続けてしまう。毎回 store を見る。
+  const partial = store.auditPartial;
 
   const readAll = async () => {
     setLoadingAll(true);
     try {
       await store.loadAllAudit();
-      setReadAllDone(true);
     } finally {
       setLoadingAll(false);
     }
