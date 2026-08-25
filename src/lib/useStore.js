@@ -561,6 +561,15 @@ export function useStore() {
   // 待たずに、設定を変えた直後や動作確認をしたい時にその場で同期できる。
   const syncCloudNow = useCallback(() => runCloudSync(false), [runCloudSync]);
 
+  // runCloudSyncは解答するたび等、頻繁に変わるsrs/history等に依存しているため参照が
+  // 毎回変わる。下のイベントリスナー登録・setIntervalの依存にrunCloudSyncを直接使うと、
+  // 学習中（＝データが変わるたび）にリスナーの解除→再登録とsetIntervalの再作成が
+  // 繰り返されてしまい、④の5分間隔が実質リセットされ続けて発火しない・不要なchurnが
+  // 起きるバグがあった。常に最新のrunCloudSyncを参照しつつ、リスナー登録自体は
+  // データの変化と無関係に安定させるため、refに逃がす。
+  const runCloudSyncRef = useRef(runCloudSync);
+  useEffect(() => { runCloudSyncRef.current = runCloudSync; }, [runCloudSync]);
+
   // 「常に最新の状態」に近づけるため、ローカルの変更を待つだけでなく、他端末での更新も
   // 積極的に拾いに行く。②タブに戻ってきた時（他の端末で進めてから、この端末に戻ってきた
   // 場面が典型）③オフラインから復帰した時④開いたままの端末でも取りこぼさないよう
@@ -573,8 +582,8 @@ export function useStore() {
     const now = Date.now();
     if (now - lastBgSyncRef.current < BG_SYNC_MIN_INTERVAL_MS) return;
     lastBgSyncRef.current = now;
-    runCloudSync(true).catch(() => {});
-  }, [settings.googleDriveAutoSync, settings.googleDriveClientId, runCloudSync]);
+    runCloudSyncRef.current(true).catch(() => {});
+  }, [settings.googleDriveAutoSync, settings.googleDriveClientId]);
 
   useEffect(() => {
     if (!loaded) return undefined;
@@ -595,13 +604,14 @@ export function useStore() {
   // ローカルの最新の変更を一度プッシュしておく。次に開いた別端末が、待たされずに
   // この端末の最新状態を受け取れるようにするため（間引きは共通のcloudSyncBusyのみ＝
   // 退避の合図は取りこぼしたくないので上の1分間引きは適用しない）。
+  // ここも同じ理由でrunCloudSyncRef経由にし、データが変わるたびのリスナー再登録を避ける。
   useEffect(() => {
     if (!loaded) return undefined;
     if (typeof document === 'undefined') return undefined;
     const onHide = () => {
       if (document.visibilityState !== 'hidden') return;
       if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
-      runCloudSync(true).catch(() => {});
+      runCloudSyncRef.current(true).catch(() => {});
     };
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onHide);
@@ -610,7 +620,7 @@ export function useStore() {
       window.removeEventListener('pagehide', onHide);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, runCloudSync]);
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId]);
 
   const clearCloudAutoSyncToast = useCallback(() => setCloudAutoSyncToast(0), []);
 
