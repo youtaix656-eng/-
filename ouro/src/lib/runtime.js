@@ -7,11 +7,12 @@
 import { providerById, estimateCost } from './providers/index.js';
 import { route } from './router.js';
 import { buildContext } from './memory.js';
-import { roleById } from '../data/roles.js';
+import { roleById, groupById } from '../data/roles.js';
 
 /** 社員の人格をシステムプロンプトに起こす。 */
 export function buildSystemPrompt({ employee, company, contextText }) {
   const role = roleById(employee.roleId);
+  const group = role ? groupById(role.group || 'knowledge') : null;
   const lines = [
     `あなたは「${company?.name || 'Ouro'}」というAI会社に所属する社員です。`,
     `名前：${employee.name}`,
@@ -20,8 +21,12 @@ export function buildSystemPrompt({ employee, company, contextText }) {
     employee.specialties?.length ? `専門：${employee.specialties.join('・')}` : '',
     employee.persona ? `性格：${employee.persona}` : '',
     employee.style ? `書き方：${employee.style}` : '',
+    // チームの共通ルールは、個別の役割より先に読ませる
+    group?.commonPrompt ? `\n## チームの共通ルール\n${group.commonPrompt}` : '',
     role?.systemHint || '',
     employee.seatHint || '',
+    // noKpi / proposalOnly は systemHint 側で本文として書いてあるので、ここでは重ねない
+    role?.outOfScope?.length ? `\n権限外（あなたが決めてはいけないこと）：${role.outOfScope.join('／')}` : '',
     '',
     '## 会社の決まり',
     '- 事実と推測を必ず分けて書く。分からないことは「未確認」と書く。',

@@ -6,14 +6,22 @@
 import { useMemo, useState } from 'react';
 import { Card, Empty, Jump } from './ui.jsx';
 import Portrait from './Portrait.jsx';
-import { rolesOfGroup, departmentById } from '../data/roles.js';
+import { rolesOfGroup, departmentById, groupById, approverFor } from '../data/roles.js';
 import { charactersOf } from '../data/characters.js';
 import { DEFAULT_GENRE_ID } from '../data/genres.js';
 import { employeeLimit } from '../data/plans.js';
 
+const TEAMS = ['company', 'marketing'];
+
 export default function Characters({ store, go, toast, highlight = null }) {
   const [openRole, setOpenRole] = useState(null);
-  const roles = useMemo(() => rolesOfGroup('company'), []);
+  const [team, setTeam] = useState(() => {
+    // 目次などから役職を指定して来たときは、その役職のチームを開く
+    const r = highlight ? rolesOfGroup('marketing').find((x) => x.id === highlight) : null;
+    return r ? 'marketing' : 'company';
+  });
+  const roles = useMemo(() => rolesOfGroup(team), [team]);
+  const group = groupById(team);
 
   const hiredOf = (roleId, seat) =>
     store.activeEmployees.find(
@@ -50,15 +58,40 @@ export default function Characters({ store, go, toast, highlight = null }) {
     (n, r) => n + charactersOf(r.id).filter((c) => hiredOf(r.id, c.seat)).length,
     0
   );
+  const totalChars = roles.reduce((n, r) => n + charactersOf(r.id).length, 0);
 
   return (
     <div className="screen fade-in">
-      <Card glyph="◍" title="AIキャラクター名鑑">
+      <div className="btn-row" style={{ marginBottom: 12 }}>
+        {TEAMS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={`chip ${team === t ? 'on' : ''}`}
+            onClick={() => { setTeam(t); setOpenRole(null); }}
+          >
+            {groupById(t)?.name}
+          </button>
+        ))}
+      </div>
+
+      <Card glyph="◍" title={group?.name || 'AIキャラクター名鑑'}>
         <p className="muted" style={{ marginTop: -6 }}>
-          事業を回す10の役割に、それぞれ3名ずつの人物設定があります（全30名）。
-          在籍 <strong style={{ color: '#fff' }}>{totalHired} / 30</strong>。
+          {group?.desc}。{roles.length}の役割・全{totalChars}名。
+          在籍 <strong style={{ color: '#fff' }}>{totalHired} / {totalChars}</strong>。
           雇うと「社員」に加わり、依頼を受けられるようになります。
         </p>
+        {group?.commonPrompt && (
+          <div className="card tight" style={{ margin: '10px 0' }}>
+            <div className="muted" style={{ marginBottom: 4 }}>全員に共通で読ませているルール</div>
+            <div style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+              {group.commonPrompt}
+            </div>
+          </div>
+        )}
+        {group?.notes?.map((n) => (
+          <p key={n} className="muted" style={{ margin: '4px 0' }}>・{n}</p>
+        ))}
         <p className="muted" style={{ marginBottom: 0 }}>
           肖像は線画で描いています。<strong style={{ color: '#fff' }}>顔立ちで出身を描き分けてはいません</strong>——
           少ない線でそれをやると戯画になるため、見分けは髪型・装い・紋章でつけ、
@@ -81,9 +114,10 @@ export default function Characters({ store, go, toast, highlight = null }) {
                 <span className="num">{numberMark(i + 1)}</span>
                 <span className="rune">{role.glyph}</span>
                 <span className="body">
-                  <span className="n">{role.name}</span>
+                  <span className="n">{role.teamLabel || role.name}</span>
                   <span className="s">{role.summary}</span>
                 </span>
+                {role.stance && <span className="badge">{STANCE_SHORT[role.stance]}</span>}
                 <span className="badge">{hired} / {chars.length}</span>
                 <span className="arrow">{open ? '▲' : '▼'}</span>
               </button>
@@ -91,8 +125,37 @@ export default function Characters({ store, go, toast, highlight = null }) {
               {open && (
                 <>
                   <div className="muted" style={{ margin: '8px 0' }}>
-                    {departmentById(role.departmentId)?.name}／{role.duties.join('・')}
+                    {departmentById(role.departmentId)?.name}
+                    {role.stance && `／${STANCE_LABEL[role.stance]}`}
                   </div>
+                  <ul style={{ margin: '0 0 8px', paddingLeft: 20 }}>
+                    {role.duties.map((d) => (
+                      <li key={d} style={{ fontSize: 13, color: 'var(--ink-2)' }}>{d}</li>
+                    ))}
+                  </ul>
+                  {role.outOfScope?.length > 0 && (
+                    <div className="muted" style={{ marginBottom: 6 }}>
+                      権限外：{role.outOfScope.join('／')}
+                    </div>
+                  )}
+                  {role.requiresApprovalBy && (
+                    <div className="muted" style={{ marginBottom: 6 }}>
+                      ⚖ 成果物は必ず<strong style={{ color: '#fff' }}>
+                        {approverFor(role.id)?.name}
+                      </strong>の確認を通します（依頼すると自動で最後に入ります）
+                    </div>
+                  )}
+                  {role.isApprover && (
+                    <div className="muted" style={{ marginBottom: 6 }}>
+                      ⚖ 他の担当の成果物を<strong style={{ color: '#fff' }}>承認／差し戻し</strong>します。
+                      {role.noKpi && ' 成果目標（KPI）は持ちません。'}
+                    </div>
+                  )}
+                  {role.proposalOnly && (
+                    <div className="muted" style={{ marginBottom: 6 }}>
+                      ⊿ 提案までが仕事です。予算の執行も施策の実行もしません。
+                    </div>
+                  )}
                   {role.caution && (
                     <div className="muted" style={{ marginBottom: 8 }}>⚠ {role.caution}</div>
                   )}
@@ -161,13 +224,24 @@ export default function Characters({ store, go, toast, highlight = null }) {
         <p className="muted" style={{ marginTop: -6, marginBottom: 0 }}>
           臨床監修者は<strong style={{ color: '#fff' }}>診断をしません</strong>。
           経理・労務は<strong style={{ color: '#fff' }}>税務・労務の最終判断をしません</strong>。
-          どちらも「確認すべき点」を挙げるところまでが仕事で、
-          最終判断は医師・税理士・社労士などの専門家とあなたが行います。
+          マーケティングの分析・ガバナンス担当は
+          <strong style={{ color: '#fff' }}>法令の最終判断をしません</strong>。
+          いずれも「確認すべき点」を挙げるところまでが仕事で、
+          最終判断は医師・税理士・社労士・弁護士などの専門家とあなたが行います。
         </p>
       </Card>
     </div>
   );
 }
+
+const STANCE_LABEL = {
+  offense: '攻め（成果を最大化する側）',
+  defense: '守り（リスクを止める側）',
+  external: '対外専門（外に出る言葉を扱う）',
+  advisory: '助言（数値の裏づけを出す）',
+};
+
+const STANCE_SHORT = { offense: '攻め', defense: '守り', external: '対外', advisory: '助言' };
 
 function numberMark(n) {
   return '①②③④⑤⑥⑦⑧⑨⑩'[n - 1] || `${n}`;

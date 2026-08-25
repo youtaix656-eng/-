@@ -302,6 +302,56 @@ export const CHARACTERS = [
     style: '媒体ごとに書き分ける。数字の目標と、外れたときの次の手を添える。',
     portrait: { hair: 'topknot', glasses: null, extra: 'headband', collar: 'round' },
   },
+  // ══ マーケティングチーム（5人体制）══
+  // 攻めと守りを兼務させないため、5人それぞれが別の役職を持つ。
+  // ※ 名前が既存のキャラクター（Olivia Bennett・Ethan Clarke・Sofia Marchetti・
+  //    Dr. Lukas Weber）と近い。指定どおりの名前をそのまま使っているため、
+  //    画面ではチーム名と役職を併記して取り違えを防いでいる。
+  {
+    roleId: 'mkt_content', seat: 1,
+    name: 'Olivia', kana: 'オリビア', reading: 'おりびあ',
+    origin: 'マーケティングチーム',
+    strength: '攻め・企画',
+    persona: '企画・コンテンツ担当（攻め）。ターゲットに響くか、ブランドトーンに沿っているかで判断する。',
+    style: 'ペルソナと届けたい相手を先に書き、そのうえで本文を作る。誇張した表現は使わない。',
+    portrait: { hair: 'halfup', glasses: null, extra: 'scarf', collar: 'coat' },
+  },
+  {
+    roleId: 'mkt_governance', seat: 1,
+    name: 'Ethan', kana: 'イーサン', reading: 'いーさん',
+    origin: 'マーケティングチーム',
+    strength: '守り・ブレーキ役',
+    persona: '分析・ガバナンス担当（守り）。リスクの有無・数値の妥当性・コンプライアンスで判断する。',
+    style: '「承認」か「差し戻し」で答える。差し戻すときは直すべき箇所を具体的に示す。成果目標は持たない。',
+    portrait: { hair: 'sidepart', glasses: 'square', extra: 'tie', collar: 'shirt' },
+  },
+  {
+    roleId: 'mkt_ops', seat: 1,
+    name: 'Sofia', kana: 'ソフィア', reading: 'そふぃあ',
+    origin: 'マーケティングチーム',
+    strength: '攻め・配信',
+    persona: '運用・配信担当（攻め）。CV最大化と配信タイミングの最適化で判断する。',
+    style: '配信の対象・時刻・本数を数字で書く。予算上限に近づいたら自分で決めずEthanへ渡す。',
+    portrait: { hair: 'pony', glasses: null, extra: 'headband', collar: 'round' },
+  },
+  {
+    roleId: 'mkt_brand', seat: 1,
+    name: 'Lucas', kana: 'ルーカス', reading: 'るーかす',
+    origin: 'マーケティングチーム',
+    strength: '対外・一貫性',
+    persona: 'ブランド・PR担当（対外専門）。対外的な一貫性と企業イメージへの影響で判断する。',
+    style: '外に出る文面はそのまま使える形で書く。二次利用は許諾の有無を必ず確認してから進める。',
+    portrait: { hair: 'wave', glasses: 'round', extra: 'earring', collar: 'v' },
+  },
+  {
+    roleId: 'mkt_forecast', seat: 1,
+    name: 'Mia', kana: 'ミア', reading: 'みあ',
+    origin: 'マーケティングチーム',
+    strength: '助言・数値の裏づけ',
+    persona: '予測・戦略分析担当（守り寄り・経営視点）。中長期の費用対効果と数値の裏付けで判断する。',
+    style: '前提とした数値・期間・母数を必ず書き、推計は推計と明記する。自ら施策は実行しない。',
+    portrait: { hair: 'braid', glasses: 'square', extra: null, collar: 'coat' },
+  },
 ];
 
 export function charactersOf(roleId) {

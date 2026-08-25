@@ -175,8 +175,10 @@ function fromCharacter(role, genre, c) {
     persona: c.persona,
     style: c.style,
     strength: c.strength,
-    // 席の持ち味はキャラクター本人の個性で置き換える（主席/次席/三席は使わない）
-    seatHint: `${c.persona} ${c.style}`,
+    // 席の持ち味はキャラクター本人の個性で置き換える（主席/次席/三席は使わない）。
+    // persona / style は buildSystemPrompt が「性格」「書き方」として既に出すので、
+    // ここで同じ文を持たせない（同じ内容が2回プロンプトに乗り、そのぶん課金される）。
+    seatHint: '',
     genreHint: '',
     portrait: c.portrait,
     toolIds: role.tools.slice(),

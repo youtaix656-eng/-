@@ -29,6 +29,20 @@ export default function TaskDetail({ store, taskId, go }) {
         </div>
       </Card>
 
+      {task.missingApprovers?.length > 0 && (
+        <Card glyph="⚠" title="確認を通していない成果物です">
+          <p className="muted" style={{ marginTop: -6 }}>
+            この仕事には
+            {task.missingApprovers.map((r) => roleById(r)?.name || r).join('・')}
+            の確認が入るはずですが、まだ雇っていないため通せていません。
+            外へ出す前に、雇って確認させるか、ご自身で内容を確かめてください。
+          </p>
+          <button type="button" className="btn small primary" onClick={() => go('characters')}>
+            確認役を雇う
+          </button>
+        </Card>
+      )}
+
       {task.unstaffedRoles?.length > 0 && (
         <Card glyph="＋" title="この仕事に向いている未雇用の役職">
           <p className="muted" style={{ marginTop: -6 }}>

@@ -5,6 +5,7 @@
 
 import { newId } from './id.js';
 import { planSteps, titleFor, detectNeeds } from './dispatcher.js';
+import { roleById } from '../data/roles.js';
 
 export const TASK_STATUS = {
   draft: '下書き',
@@ -41,6 +42,9 @@ export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = 
   const assigned = rawPlan.map((p, i) => ({ p, employee: assign ? assign(p.roleId, i) : null }));
   const staffed = assigned.filter((x) => x.employee);
   const unstaffedRoles = assigned.filter((x) => !x.employee).map((x) => x.p.roleId);
+  // 承認役が未雇用のまま外れると「確認を通していない成果物」が出てしまう。
+  // 黙って落とさず、画面で分かるように控えておく。
+  const missingApprovers = unstaffedRoles.filter((r) => roleById(r)?.isApprover);
   // 1人も在籍していないときは絞り込めないので、元の計画のまま進める
   const chosen = staffed.length ? staffed : assigned;
 
@@ -78,6 +82,7 @@ export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = 
     currentStep: 0,
     dealId,
     unstaffedRoles, // 向いているが未雇用だった役職
+    missingApprovers, // そのうち「承認役」だったもの（確認を通せていない印）
     createdAt: Date.now(),
     startedAt: null,
     finishedAt: null,

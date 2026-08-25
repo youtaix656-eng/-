@@ -51,10 +51,7 @@ export function planSteps(request = '', options = {}) {
   const text = String(request).trim();
 
   if (Array.isArray(forceRoles) && forceRoles.length) {
-    return forceRoles.slice(0, maxSteps).map((roleId, i) => ({
-      roleId,
-      instruction: instructionFor(roleId, text, i === 0),
-    }));
+    return toSteps(withApprovers(forceRoles.slice(0, maxSteps)), text);
   }
 
   const scored = scoreRoles(text).filter((s) => s.score > 0);
@@ -73,13 +70,39 @@ export function planSteps(request = '', options = {}) {
     ordered.splice(Math.min(2, ordered.length), 0, 'reviewer');
   }
 
-  return ordered.slice(0, maxSteps).map((roleId, i) => ({
+  return toSteps(withApprovers(ordered.slice(0, maxSteps)), text);
+}
+
+/**
+ * 承認が要る役職が計画に入っていたら、その承認者を最後に足す。
+ *
+ * **maxSteps で切り落とした後に足すこと。** 承認は安全のための手順なので、
+ * 「上限に達したので確認は省きました」が起きてはいけない。
+ */
+export function withApprovers(roleIds = []) {
+  const out = [...roleIds];
+  for (const roleId of roleIds) {
+    const approver = roleById(roleId)?.requiresApprovalBy;
+    if (approver && !out.includes(approver)) out.push(approver);
+  }
+  return out;
+}
+
+function toSteps(roleIds, text) {
+  return roleIds.map((roleId, i) => ({
     roleId,
     instruction: instructionFor(roleId, text, i === 0),
   }));
 }
 
 const STEP_INSTRUCTIONS = {
+  mkt_governance:
+    '受け取った成果物を、リスク・数値の妥当性・コンプライアンス（薬機法・景表法など）の観点で確認してください。' +
+    '最後に必ず「承認」か「差し戻し」のどちらかを書き、差し戻す場合は直すべき箇所を具体的に示してください。' +
+    '成果を上げるための最適化提案はしないでください。',
+  mkt_forecast:
+    '数値の裏づけを整理してください。前提とした数値・期間・母数を必ず書き、推計は推計と明記してください。' +
+    '施策の実行や予算の執行はせず、判断材料の提供に徹してください。',
   researcher:
     '依頼に答えるために必要な情報を集め、出典（媒体名・URL・日付）付きで並べてください。' +
     '一次情報と二次情報を区別し、確認できなかった点は「未確認」と明記してください。',

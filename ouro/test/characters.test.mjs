@@ -36,10 +36,11 @@ test('会社チームは10役職で、指定どおりの並び', () => {
   );
 });
 
-test('チームは2つに分かれ、全役職がどちらかに属する', () => {
-  assert.deepEqual(ROLE_GROUPS.map((g) => g.id), ['knowledge', 'company']);
-  assert.equal(rolesOfGroup('knowledge').length + rolesOfGroup('company').length, ROLES.length);
-  for (const r of ROLES) assert.ok(['knowledge', 'company'].includes(r.group || 'knowledge'), r.name);
+test('全役職がいずれかのチームに属する', () => {
+  const ids = ROLE_GROUPS.map((g) => g.id);
+  const sum = ids.reduce((n, g) => n + rolesOfGroup(g).length, 0);
+  assert.equal(sum, ROLES.length, 'どのチームにも属さない役職がある');
+  for (const r of ROLES) assert.ok(ids.includes(r.group || 'knowledge'), r.name);
 });
 
 test('新しい役職の所属部署が実在する', () => {
@@ -74,13 +75,15 @@ test('責任の重い役職には、できないことが明記されている',
 
 // ───────── キャラクター30名 ─────────
 
-test('10役職 × 各3名 = 30名', () => {
-  assert.equal(CHARACTERS.length, 30);
-  assert.equal(characterRoleIds().length, 10);
+test('会社チームは10役職 × 各3名、マーケは5役職 × 各1名', () => {
+  assert.equal(CHARACTERS.length, 35);
+  assert.equal(characterRoleIds().length, 15);
   for (const roleId of characterRoleIds()) {
     const list = charactersOf(roleId);
-    assert.equal(list.length, 3, `${roleId} が3名でない`);
-    assert.deepEqual(list.map((c) => c.seat), [1, 2, 3]);
+    const expected = roleId.startsWith('mkt_') ? 1 : 3;
+    assert.equal(list.length, expected, `${roleId} の人数が ${list.length}`);
+    // 席番号は1から連番
+    assert.deepEqual(list.map((c) => c.seat), Array.from({ length: expected }, (_, i) => i + 1));
   }
 });
 
@@ -139,10 +142,11 @@ test('日本語以外の文字が説明文に紛れ込んでいない', () => {
   }
 });
 
-test('各役職の3名は持ち味が互いに違う', () => {
+test('同じ役職の中で持ち味が重複しない', () => {
   for (const roleId of characterRoleIds()) {
-    const s = charactersOf(roleId).map((c) => c.strength);
-    assert.equal(new Set(s).size, 3, `${roleId} の持ち味が重複している`);
+    const list = charactersOf(roleId);
+    const s = list.map((c) => c.strength);
+    assert.equal(new Set(s).size, list.length, `${roleId} の持ち味が重複している`);
   }
 });
 

@@ -89,6 +89,21 @@ Ouro の要点だけ再掲：**AI社員（人格・役割・記憶）とAIエン
 **未雇用の役職は計画から外す**（`workflow.js` の `createTask`）。25役職のほとんどは未雇用なので、
 計画に混ざると担当者が見つからず仕事全体が失敗する（実際に起きたバグ）。外した役職は
 `task.unstaffedRoles` に残し、依頼画面と結果画面で「雇えば次から担当に入る」と伝える。
+**マーケティングチーム（5人体制）**は3つめのチーム（`group:'marketing'`）。
+①企画・コンテンツ（Olivia／攻め）②分析・ガバナンス（Ethan／守り）③運用・配信（Sofia／攻め）
+④ブランド・PR（Lucas／対外）⑤予測・戦略分析（Mia／助言）。**このチームの核は「攻めと守りを
+同じ役職に兼務させない」こと**で、次をデータで持ちテストで機械チェックしている：
+`stance`（攻め/守り/対外/助言）・`isApprover`（承認と差し戻しができる＝Ethanだけ）・
+`requiresApprovalBy`（公開前に必ず通す確認役）・`noKpi`（Ethanに成果目標を持たせない。
+持たせると自身が攻め化してブレーキが甘くなる）・`proposalOnly`（Miaは提案のみ・実行しない）・
+`outOfScope`（権限外）。**承認は `dispatcher.js` の `withApprovers` が計画の最後に自動で足し、
+`maxSteps` で切り落とさない**（「上限に達したので確認を省いた」が起きてはいけないため）。
+確認役が未雇用のまま外れた場合は `task.missingApprovers` に残り、結果画面が
+「確認を通していない成果物です」と警告する。チーム共通のルールは `ROLE_GROUPS` の
+`commonPrompt` に置き、`runtime.js` が個別の役割より**先に**読ませる。
+※ Olivia/Ethan/Sofia/Lucas は既存キャラクター（Olivia Bennett・Ethan Clarke・Sofia Marchetti・
+Dr. Lukas Weber）と名前が近い。ユーザー指定の名前をそのまま使っているため、画面では
+チーム名と役職を併記して取り違えを防いでいる。
 テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）

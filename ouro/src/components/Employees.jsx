@@ -101,14 +101,15 @@ export default function Employees({ store, go, preset = {} }) {
             {seats.length}/{seatsPerGenre}）
           </button>
 
-          <SectionTitle>会社チーム（①〜⑩・名前つき）</SectionTitle>
+          <SectionTitle>名前つきのAIキャラクター</SectionTitle>
           <p className="muted" style={{ marginTop: -4 }}>
-            事業を回す10の役割。それぞれ3名の人物設定と肖像があります。
+            会社チーム10役割 × 3名と、マーケティングチーム5役割 × 1名。
+            人物設定と肖像があります。
           </p>
           <button type="button" className="btn block" onClick={() => go('characters')} style={{ marginBottom: 12 }}>
-            ◍ AIキャラクター名鑑をひらく（30名）
+            ◍ AIキャラクター名鑑をひらく（35名）
           </button>
-          {rolesOfGroup('company').map((r) => {
+          {[...rolesOfGroup('company'), ...rolesOfGroup('marketing')].map((r) => {
             const count = activeEmployees.filter((e) => e.roleId === r.id).length;
             return (
               <Row
