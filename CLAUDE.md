@@ -13,6 +13,7 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 | `sleep-tracker/` | `/sleep-tracker` | 分割睡眠トラッカー（Vite + TS） |
 | `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向けアセスメント支援。腰痛／肩こり・頸部痛／膝痛。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
 | `henkaku-note/` | `/henkaku-note` | 変革ノート（自己改革カレンダー。ゴーストモード7ステップの習慣トラッカー。Vite + React + TypeScript・PWA・端末内保存のみ）。詳細は `henkaku-note/README.md` |
+| `ouro/` | `/ouro` | Ouro（自分専用のAI会社。AI社員に仕事を依頼し、成果が知識資産として積み上がる Knowledge OS。Vite + React JSX・端末内保存・BYOK）。詳細は `ouro/README.md` と `ouro/docs/ARCHITECTURE.md` |
 
 腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
 医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、
@@ -45,6 +46,20 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 テストは `henkaku-note/tests/*.spec.ts`（TypeScript）。CIがNode 20のため `tsc` で
 `.test-build/` へ出してから `node --test` する（`npm test` はアプリ側で実行。ルートの再帰探索には
 拾われない名前にしてある）。
+
+Ouro の要点だけ再掲：**AI社員（人格・役割・記憶）とAIエンジン（Claude/GPT/Gemini）を必ず分離する**
+（社員は `providerPref` という希望だけを持ち、エンジンの実体を持たない。モデルが入れ替わっても社員は残る）。
+役職は `src/data/roles.js` が単一の正で、**1件足せばマインドマップ・自動社員選択・雇用画面が自動で追従する**
+（画面に if を足さない）。初期構成は6役職×3席＝18人だが、席数は `company.seatsPerRole` の初期値でしかなく
+増席できる。**出典のない知識を作らせない**（`createKnowledge()` が空なら「AI生成（未検証）」を自動で立て、
+`origin` で AI生成／外部由来／自分で書いた を必ず区別する）。**既定の権限は閲覧・作成のみ**で、
+送信・削除・支払い・外部公開は `lib/permissions.js` の `REQUIRE_APPROVAL` により必ずユーザー承認を通る。
+**接続数の上限をハードコードしない**（判定は `data/plans.js` の `connectionLimit()` の1か所だけ）。
+保存キーは `lib/storage.js` の `KEYS` に登録し、**`ouro:secrets`（APIキー）は書き出しに含めない**。
+`lib/storage.js` はネットワークに触れない。APIキーが1つも無くても全画面が動く（`providers/local.js` の
+ローカル社員が仕事の型を返し、AIではないことを画面に明記する）。実行系は `useStore.js` の `put`/`log` を
+必ず通す（直接 setState すると `stateRef` が古くなり、作った直後の仕事が見つからなくなる）。
+テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）
 一覧／目次／索引を作る時は、どのアプリでも次を守る。
