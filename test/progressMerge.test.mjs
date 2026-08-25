@@ -80,6 +80,7 @@ test('mergeProgress: 各フィールドが正しく統合される', () => {
     links: {},
     examResults: [{ id: 'ex-1', at: 100 }],
     settings: { dailyGoal: 100 },
+    bookmarks: { 'q-1': 100 },
   };
   const remote = {
     srs: { 'q-2': { lastAnswered: 200 } },
@@ -88,6 +89,7 @@ test('mergeProgress: 各フィールドが正しく統合される', () => {
     links: {},
     examResults: [{ id: 'ex-2', at: 200 }],
     settings: { dailyGoal: 200 },
+    bookmarks: { 'q-2': 200 },
   };
   const out = mergeProgress(local, remote, { localUpdatedAt: 100, remoteUpdatedAt: 500 });
   assert.deepEqual(Object.keys(out.srs).sort(), ['q-1', 'q-2']);
@@ -95,6 +97,7 @@ test('mergeProgress: 各フィールドが正しく統合される', () => {
   assert.deepEqual(out.memos, { 'q-1': 'ローカルのメモ', 'q-2': 'リモートのメモ' });
   assert.equal(out.examResults.length, 2);
   assert.equal(out.settings.dailyGoal, 200); // remoteの方が新しいので優先
+  assert.deepEqual(out.bookmarks, { 'q-1': 100, 'q-2': 200 }); // 片方だけのブックマークも両方残る
 });
 
 test('mergeProgress: 欠けているフィールドがあっても落ちない', () => {
@@ -125,12 +128,13 @@ test('progressChanged: 件数が同じでも既存キーの値だけ更新され
   assert.equal(progressChanged(local, merged), true);
 });
 
-test('progressChanged: history/memos/links/examResultsのいずれかの値変化も検出する', () => {
-  const base = { srs: {}, history: [{ questionId: 'q-1', at: 1, correct: true }], memos: { a: '1' }, links: { a: ['q-1'] }, examResults: [{ id: 'e-1', at: 1 }] };
+test('progressChanged: history/memos/links/examResults/bookmarksのいずれかの値変化も検出する', () => {
+  const base = { srs: {}, history: [{ questionId: 'q-1', at: 1, correct: true }], memos: { a: '1' }, links: { a: ['q-1'] }, examResults: [{ id: 'e-1', at: 1 }], bookmarks: { 'q-1': 1 } };
   assert.equal(progressChanged(base, { ...base, history: [{ questionId: 'q-1', at: 1, correct: false }] }), true);
   assert.equal(progressChanged(base, { ...base, memos: { a: '2' } }), true);
   assert.equal(progressChanged(base, { ...base, links: { a: ['q-2'] } }), true);
   assert.equal(progressChanged(base, { ...base, examResults: [{ id: 'e-1', at: 2 }] }), true);
+  assert.equal(progressChanged(base, { ...base, bookmarks: { 'q-1': 1, 'q-2': 2 } }), true);
 });
 
 test('progressChanged: local/mergedが欠けていても例外を投げない', () => {

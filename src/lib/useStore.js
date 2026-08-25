@@ -458,7 +458,7 @@ export function useStore() {
       ]);
       const token = await gd.requestAccessToken(clientId, { silent });
       const remoteText = await gd.downloadBackup(token, gd.SYNC_FILENAME);
-      const localSnapshot = { srs, history, memos, links, examResults, settings };
+      const localSnapshot = { srs, history, memos, links, examResults, settings, bookmarks };
       let merged = localSnapshot;
       let pulled = false;
       if (remoteText) {
@@ -481,6 +481,7 @@ export function useStore() {
         setMemos(merged.memos);
         setLinks(merged.links);
         setExamResultsState(merged.examResults);
+        setBookmarks(merged.bookmarks);
         setCloudAutoSyncToast((n) => n + 1);
       }
       if (JSON.stringify(merged.settings) !== JSON.stringify(localSnapshot.settings)) {
@@ -496,7 +497,7 @@ export function useStore() {
       cloudSyncBusy.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, srs, history, memos, links, examResults]);
+  }, [settings, srs, history, memos, links, examResults, bookmarks]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -505,11 +506,37 @@ export function useStore() {
     const timer = setTimeout(() => { runCloudSync(true).catch(() => {}); }, 5000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults]);
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults, bookmarks]);
 
   // 「🔄 今すぐ同期」ボタン用（CloudBackup.jsx）。自動同期のデバウンス（最大5秒）を
   // 待たずに、設定を変えた直後や動作確認をしたい時にその場で同期できる。
   const syncCloudNow = useCallback(() => runCloudSync(false), [runCloudSync]);
+
+  // 「常に最新の状態」に近づけるため、ローカルの変更を待つだけでなく、他端末での更新も
+  // 拾いに行く：このタブに戻ってきた時（他の端末で進めてから、この端末に戻ってきた場面が
+  // 典型）に自動で1回同期する。短時間に何度もタブを切り替えても連打にならないよう、
+  // 前回の試行から一定時間（1分）は間引く。
+  const lastFocusSyncRef = useRef(0);
+  useEffect(() => {
+    if (!loaded) return undefined;
+    if (typeof document === 'undefined') return undefined;
+    const FOCUS_SYNC_MIN_INTERVAL_MS = 60_000;
+    const trigger = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
+      const now = Date.now();
+      if (now - lastFocusSyncRef.current < FOCUS_SYNC_MIN_INTERVAL_MS) return;
+      lastFocusSyncRef.current = now;
+      runCloudSync(true).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', trigger);
+    window.addEventListener('focus', trigger);
+    return () => {
+      document.removeEventListener('visibilitychange', trigger);
+      window.removeEventListener('focus', trigger);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, runCloudSync]);
 
   const clearCloudAutoSyncToast = useCallback(() => setCloudAutoSyncToast(0), []);
 

@@ -65,11 +65,12 @@ export function progressChanged(local, merged) {
     JSON.stringify(m.history) !== JSON.stringify(l.history) ||
     JSON.stringify(m.memos) !== JSON.stringify(l.memos) ||
     JSON.stringify(m.links) !== JSON.stringify(l.links) ||
-    JSON.stringify(m.examResults) !== JSON.stringify(l.examResults)
+    JSON.stringify(m.examResults) !== JSON.stringify(l.examResults) ||
+    JSON.stringify(m.bookmarks) !== JSON.stringify(l.bookmarks)
   );
 }
 
-// local/remote: { srs, history, memos, links, examResults, settings }
+// local/remote: { srs, history, memos, links, examResults, settings, bookmarks }
 // localUpdatedAt/remoteUpdatedAt: lib/storage.jsのsyncMeta.updatedAt（ミリ秒epoch）
 export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdatedAt = 0 } = {}) {
   const remoteNewer = remoteUpdatedAt > localUpdatedAt;
@@ -80,5 +81,9 @@ export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdated
     links: mergeObjectMap(local?.links, remote?.links, remoteNewer),
     examResults: mergeExamResults(local?.examResults, remote?.examResults),
     settings: mergeSettings(local?.settings, remote?.settings, remoteNewer),
+    // ブックマークはメモ・リンクと同じくキー単位のUNION（片方の端末だけで付けた印を消さない）。
+    // QR／バックアップファイル／WebRTC経由の移行では既に引き継がれていたが、
+    // クラウド自動同期の対象からは漏れていたため合わせる。
+    bookmarks: mergeObjectMap(local?.bookmarks, remote?.bookmarks, remoteNewer),
   };
 }
