@@ -220,8 +220,9 @@ export default function Home({ store, go }) {
       {/* AI社員からの提案 */}
       <SectionTitle>AI社員からの提案</SectionTitle>
       <Card className="tight">
-        {suggestions({ tasks, knowledge, employees, deals, engines }).map((s, i) => (
-          <div key={i} style={{ marginBottom: 10 }}>
+        {suggestions({ tasks, knowledge, employees, deals, engines }).map((s) => (
+          // 新項目16：並び順（index）を key にしない。提案の増減で全部が作り直される。
+          <div key={s.id} style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 14 }}>
               <span className="rune">{roleById(s.roleId)?.glyph || '◉'}</span>{' '}
               <span className="dim">{roleById(s.roleId)?.name || '会社'}</span>：{s.text}
@@ -264,6 +265,7 @@ function suggestions({ tasks, knowledge, deals, engines }) {
 
   if (!engines.length) {
     out.push({
+      id: 'engine',
       roleId: 'strategist',
       text: 'まず無料枠のあるエンジンを1つ接続すると、社員が実際に考えられます。',
       action: 'settings',
@@ -272,6 +274,7 @@ function suggestions({ tasks, knowledge, deals, engines }) {
   }
   if (!deals.length) {
     out.push({
+      id: 'deal',
       roleId: 'strategist',
       text: '元手ゼロで始められる案件の型が8つあります。1つ選んで、見本を1本作るところから。',
       action: 'deals',
@@ -281,6 +284,7 @@ function suggestions({ tasks, knowledge, deals, engines }) {
   const unverified = knowledge.filter((k) => !k.verifiedAt).length;
   if (unverified >= 3) {
     out.push({
+      id: 'verify',
       roleId: 'reviewer',
       text: `未検証の知識が${unverified}件あります。使う前に確かめると資産になります。`,
       action: 'knowledge',
@@ -289,6 +293,7 @@ function suggestions({ tasks, knowledge, deals, engines }) {
   }
   if (!tasks.length) {
     out.push({
+      id: 'firsttask',
       roleId: 'researcher',
       text: '最初の依頼は短くて構いません。「〇〇について調べて」だけで社員は動きます。',
       action: 'compose',
@@ -297,6 +302,7 @@ function suggestions({ tasks, knowledge, deals, engines }) {
   }
   if (out.length === 0) {
     out.push({
+      id: 'steady',
       roleId: 'mentor',
       text: '順調です。今日は1件だけ知識を「検証済み」にすると、明日の仕事が速くなります。',
       action: 'knowledge',

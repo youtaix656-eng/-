@@ -3,7 +3,7 @@
 // 雇う前でも全員の設定を読める名簿。ここから1人ずつ、または役職ごとに雇える。
 // 肖像は線画のSVG（components/Portrait.jsx）。**顔立ちで出身を描き分けてはいない。**
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Card, Empty, Jump } from './ui.jsx';
 import Portrait from './Portrait.jsx';
 import { rolesOfGroup, departmentById, groupById, approverFor } from '../data/roles.js';
@@ -15,6 +15,8 @@ const TEAMS = ['company', 'marketing'];
 
 export default function Characters({ store, go, toast, highlight = null }) {
   const [openRole, setOpenRole] = useState(null);
+  // 新項目13：役職を開く／チームを切り替える時の作り直しは急がない更新にする
+  const [pending, startTransition] = useTransition();
   // 人物像・書き方は別ファイル（新項目03）。この画面を開いた時に読み込む。
   const [detailsReady, setDetailsReady] = useState(false);
   useEffect(() => {
@@ -77,14 +79,14 @@ export default function Characters({ store, go, toast, highlight = null }) {
   const totalChars = roles.reduce((n, r) => n + charactersOf(r.id).length, 0);
 
   return (
-    <div className="screen fade-in">
+    <div className="screen fade-in" style={pending ? { opacity: 0.62 } : undefined}>
       <div className="btn-row" style={{ marginBottom: 12 }}>
         {TEAMS.map((t) => (
           <button
             key={t}
             type="button"
             className={`chip ${team === t ? 'on' : ''}`}
-            onClick={() => { setTeam(t); setOpenRole(null); }}
+            onClick={() => startTransition(() => { setTeam(t); setOpenRole(null); })}
           >
             {groupById(t)?.name}
           </button>
@@ -125,7 +127,7 @@ export default function Characters({ store, go, toast, highlight = null }) {
               <button
                 type="button"
                 className="role-head"
-                onClick={() => setOpenRole(open ? null : role.id)}
+                onClick={() => startTransition(() => setOpenRole(open ? null : role.id))}
               >
                 <span className="num">{numberMark(i + 1)}</span>
                 <span className="rune">{role.glyph}</span>

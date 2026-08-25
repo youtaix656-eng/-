@@ -49,7 +49,15 @@ function entry({ id, kind, title, reading, sub, view, arg, anchor, employee = nu
  * @param {object[]} o.employees   在籍しているAI社員
  * @param {object[]} o.customGenres ユーザーが足したジャンル
  */
+let lastBuild = null;
+
 export function buildToc({ employees = [], customGenres = [] } = {}) {
+  // 新項目15：同じ社員・同じジャンルなら作り直さない。
+  // 目次は画面を離れるたびに捨てられるので、ここで覚えておかないと
+  // 戻るたびに86件ぶんの読み解析をやり直すことになる。
+  if (lastBuild && lastBuild.employees === employees && lastBuild.customGenres === customGenres) {
+    return lastBuild.result;
+  }
   const out = [];
 
   // AI社員（在籍中のみ）
@@ -148,18 +156,36 @@ export function buildToc({ employees = [], customGenres = [] } = {}) {
     );
   }
 
+  lastBuild = { employees, customGenres, result: out };
   return out;
 }
+
+// 新項目15：直前の絞り込みを1組だけ覚えておく。
+//
+// 目次は画面を離れると作り直されるので、useMemo では戻ってきた時に効かない。
+// 「同じ元データ・同じ条件なら、前の結果をそのまま返す」だけの1件キャッシュ。
+// **1件だけ**にしてあるのは、増やすと使わない結果を抱え続けることになるため。
+let lastFilter = null;
 
 /** 検索と分類の絞り込み。 */
 export function filterToc(entries, { query = '', kind = null } = {}) {
   const q = String(query).trim().toLowerCase();
-  return entries.filter((e) => {
+  if (
+    lastFilter &&
+    lastFilter.entries === entries &&
+    lastFilter.q === q &&
+    lastFilter.kind === kind
+  ) {
+    return lastFilter.result;
+  }
+  const result = entries.filter((e) => {
     if (kind && e.kind !== kind) return false;
     if (!q) return true;
     const hay = `${e.title} ${e.reading} ${e.alias || ''} ${e.sub}`.toLowerCase();
     return hay.includes(q);
   });
+  lastFilter = { entries, q, kind, result };
+  return result;
 }
 
 /** 枠（あ行〜わ行 → A-Z）ごとにまとめる。 */

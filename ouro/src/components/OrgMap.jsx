@@ -1,9 +1,11 @@
 // 社員のマインドマップ。中央に Ouro、周囲に主要6役職。
 // 7人目以降（追加役職）は右側のサブメンバー一覧に回す（仕様書 §17）。
 
+import { memo } from 'react';
 import { ROLES } from '../data/roles.js';
 
-export default function OrgMap({ employees, selectedRoleId, onPickRole }) {
+// 新項目17：円環と六芒星は形が変わらない。社員数や選択が同じなら描き直さない。
+function OrgMap({ employees, selectedRoleId, onPickRole }) {
   const core = ROLES.filter((r) => r.core).sort((a, b) => a.order - b.order);
   const n = core.length;
   const R = 36; // 中心からの距離（%）
@@ -76,3 +78,5 @@ export default function OrgMap({ employees, selectedRoleId, onPickRole }) {
     </div>
   );
 }
+
+export default memo(OrgMap);

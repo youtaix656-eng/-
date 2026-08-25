@@ -4,7 +4,7 @@
 //   あ〜ん → A〜Z の順／数字は読みで振り分け／読みは明示（推定しない）／
 //   タイトルは重複させない／文字は大きめ・タップで飛ぶ。
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Card, Empty } from './ui.jsx';
 import { buildToc, filterToc, tocSections, kindCounts, TOC_KINDS } from '../data/toc.js';
 import { BUCKETS, UNKNOWN_BUCKET } from '../lib/yomi.js';
@@ -19,6 +19,9 @@ export default function Toc({ store, go }) {
   // 入力そのものは即座に反映し、絞り込みは1拍遅らせる。
   const deferredQuery = useDeferredValue(query);
   const [kind, setKind] = useState(null);
+  // 新項目13：種類の絞り込みと表示の切り替えは「急がない更新」にする。
+  // 押した瞬間にボタンの見た目だけ変わり、一覧の作り直しは後ろで進む。
+  const [pending, startTransition] = useTransition();
   const [limit, setLimit] = useState(120); // 項目19：多い時は段階的に出す
   const [view, setView] = useState('org'); // 'org' = 役職×ジャンルの一覧 / 'kana' = 読み引き
   const sectionRefs = useRef({});
@@ -64,16 +67,17 @@ export default function Toc({ store, go }) {
   };
 
   return (
-    <div className="screen fade-in">
+    <div className="screen fade-in" style={pending ? { opacity: 0.62 } : undefined}>
       <div className="btn-row" style={{ marginBottom: 12 }}>
-        <button type="button" className={`chip ${view === 'org' ? 'on' : ''}`} onClick={() => setView('org')}>
+        <button type="button" className={`chip ${view === 'org' ? 'on' : ''}`} onClick={() => startTransition(() => setView('org'))}>
           役職 × ジャンル
         </button>
-        <button type="button" className={`chip ${view === 'kana' ? 'on' : ''}`} onClick={() => setView('kana')}>
+        <button type="button" className={`chip ${view === 'kana' ? 'on' : ''}`} onClick={() => startTransition(() => setView('kana'))}>
           あ〜ん で引く
         </button>
       </div>
 
+      {/* 新項目13：作り直しの最中は薄く見せる（固まったように見せない） */}
       {view === 'org' ? (
         <OrgIndex store={store} go={go} />
       ) : (
@@ -87,7 +91,7 @@ export default function Toc({ store, go }) {
           />
 
           <div className="chips" style={{ marginBottom: 10 }}>
-            <button type="button" className={`chip ${!kind ? 'on' : ''}`} onClick={() => setKind(null)}>
+            <button type="button" className={`chip ${!kind ? 'on' : ''}`} onClick={() => startTransition(() => setKind(null))}>
               すべて {entries.length}
             </button>
             {counts.map((k) => (
@@ -95,7 +99,7 @@ export default function Toc({ store, go }) {
                 key={k.id}
                 type="button"
                 className={`chip ${kind === k.id ? 'on' : ''}`}
-                onClick={() => setKind(kind === k.id ? null : k.id)}
+                onClick={() => startTransition(() => setKind(kind === k.id ? null : k.id))}
               >
                 {k.glyph} {k.name} {k.count}
               </button>
@@ -166,7 +170,7 @@ export default function Toc({ store, go }) {
             <button
               type="button"
               className="btn block"
-              onClick={() => setLimit((n) => n + 200)}
+              onClick={() => startTransition(() => setLimit((n) => n + 200))}
               style={{ marginTop: 10 }}
             >
               もっと見る（残り{filtered.length - shown.length}件）

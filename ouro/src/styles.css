@@ -1330,3 +1330,41 @@ select {
   border-color: var(--line-2);
   background: rgba(255, 255, 255, 0.05);
 }
+
+/* 新項目14：窓表示（見えている範囲だけ描く）の行。
+   高さがそろっていることが前提なので、ここで固定し、文字は1行で止める。
+   数値は components/AuditView.jsx の ROW_H と必ずそろえること。 */
+.log-row {
+  height: 62px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.clip1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 新項目19：合成レイヤーの決まり ──
+   `will-change` と `backdrop-filter` は、その要素を独立した layer に切り出す。
+   速くなる代わりに端末のメモリを使い、増やすほど合成そのものが重くなる。
+   そこで **常に画面に出ていて、常に背景の上に重なるもの** にだけ許す。
+     ・下部ナビ（.nav）
+     ・会社バー（.company-bar）
+     ・上部バー（.topbar）
+   一覧の行・カード・肖像には**付けない**。
+   数が多いので、1枚ずつ layer にすると逆に遅くなる。 */
+.nav,
+.company-bar,
+.topbar {
+  will-change: transform;
+}
+
+/* 動きを減らす設定の端末では、layer に切り出す意味も無くなる。 */
+@media (prefers-reduced-motion: reduce) {
+  .nav,
+  .company-bar,
+  .topbar {
+    will-change: auto;
+  }
+}

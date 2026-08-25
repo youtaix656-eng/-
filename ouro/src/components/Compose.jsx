@@ -148,7 +148,7 @@ export default function Compose({ store, preset = {}, go }) {
               // 未雇用の役職は実際には担当から外れる。ここでも同じように見せる。
               const vacant = !p.employee;
               return (
-                <div key={i} className={`step ${vacant ? 'vacant' : 'done'}`}>
+                <div key={p.stepId || `${p.roleId}-${i}`} className={`step ${vacant ? 'vacant' : 'done'}`}>
                   <div className="who">
                     {role?.glyph} {p.employee ? p.employee.name : role?.name}
                     {p.employee?.strength ? (

@@ -100,12 +100,22 @@ export function Bar({ pct }) {
   );
 }
 
-/** 最小限の Markdown 表示（外部ライブラリを使わない方針のため自前）。 */
-export function Doc({ text }) {
+/**
+ * 最小限の Markdown 表示（外部ライブラリを使わない方針のため自前）。
+ *
+ * 新項目18：長い成果物は最初から全部描かない。
+ * 段落が multiline を超えたら先頭だけ描き、「続きを読む」で伸ばす。
+ * 一度伸ばしたら畳まない（読んでいる途中で縮むと場所を見失うため）。
+ */
+export function Doc({ text, fold = 24 }) {
   const blocks = toBlocks(text || '');
+  const [expanded, setExpanded] = useState(false);
+  const folded = fold > 0 && blocks.length > fold && !expanded;
+  const shown = folded ? blocks.slice(0, fold) : blocks;
+
   return (
     <div className="doc">
-      {blocks.map((b, i) => {
+      {shown.map((b, i) => {
         if (b.type === 'heading') {
           const Tag = `h${Math.min(4, b.level + 1)}`;
           return <Tag key={i}>{b.text}</Tag>;
@@ -121,6 +131,11 @@ export function Doc({ text }) {
         }
         return <p key={i}>{b.text}</p>;
       })}
+      {folded && (
+        <button type="button" className="btn ghost small" onClick={() => setExpanded(true)}>
+          続きを読む（残り {blocks.length - fold} 段落）
+        </button>
+      )}
     </div>
   );
 }
@@ -156,8 +171,11 @@ export function useToast() {
   return [node, setMsg];
 }
 
-/** 折れ線（知識の成長）。SVG を自前で描く。 */
-export function Spark({ series = [], field = 'total' }) {
+/** 折れ線（知識の成長）。SVG を自前で描く。
+// 新項目17：同じ数字なら描き直さない。
+// 会社画面は数字が更新されるたびに全体が描き直されるが、折れ線は元データが
+// 変わらない限り同じ絵なので、そのぶんの計算（点の座標30個ぶん）を省ける。 */
+export const Spark = memo(function Spark({ series = [], field = 'total' }) {
   if (series.length < 2) return null;
   const values = series.map((s) => s[field] || 0);
   const max = Math.max(...values, 1);
@@ -178,4 +196,4 @@ export function Spark({ series = [], field = 'total' }) {
       />
     </svg>
   );
-}
+});

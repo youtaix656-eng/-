@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Card, Empty, SectionTitle } from './ui.jsx';
+import Window from './Window.jsx';
 import { actionLabel, totalCost } from '../lib/audit.js';
 import { relTime, usd } from '../lib/format.js';
 
@@ -61,28 +62,38 @@ export default function AuditView({ store }) {
       </div>
 
       <SectionTitle>{list.length}件</SectionTitle>
-      {list.length ? (
-        list.slice(0, 200).map((e) => {
-          const emp = store.employees.find((x) => x.id === e.actor);
-          return (
-            <div key={e.id} className="card tight" style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 13.5 }}>
-                <span className="dim">{emp ? emp.shortName : 'あなた'}</span>
-                {' が '}
-                {actionLabel(e.action)}
-                {e.target ? `：${e.target}` : ''}
-              </div>
-              <div className="muted">
-                {relTime(e.at)}
-                {e.detail && `・${e.detail}`}
-                {e.cost > 0 && `・${usd(e.cost)}`}
-              </div>
-            </div>
-          );
-        })
-      ) : (
-        <Empty>記録がありません。</Empty>
+      {!list.length && <Empty>記録がありません。</Empty>}
+      {/* 新項目14：件数が多い時だけ「見えている範囲だけ描く」に切り替える。
+          行の高さがそろっていることが前提なので、その時は文字を2行で止める。 */}
+      {list.length > 0 && list.length <= WINDOW_FROM && list.map((e) => <LogRow key={e.id} e={e} store={store} />)}
+      {list.length > WINDOW_FROM && (
+        <Window items={list} rowHeight={ROW_H}>
+          {(e) => <LogRow key={e.id} e={e} store={store} fixed />}
+        </Window>
       )}
+    </div>
+  );
+}
+
+// 一覧をこの件数より多く出す時だけ、窓表示に切り替える
+const WINDOW_FROM = 200;
+const ROW_H = 62; // 窓表示の1行の高さ（px）。CSS の .log-row と必ずそろえる
+
+function LogRow({ e, store, fixed = false }) {
+  const emp = store.employees.find((x) => x.id === e.actor);
+  return (
+    <div className={`card tight ${fixed ? 'log-row' : ''}`} style={{ marginBottom: 6 }}>
+      <div style={{ fontSize: 13.5 }} className={fixed ? 'clip1' : ''}>
+        <span className="dim">{emp ? emp.shortName : 'あなた'}</span>
+        {' が '}
+        {actionLabel(e.action)}
+        {e.target ? `：${e.target}` : ''}
+      </div>
+      <div className={`muted ${fixed ? 'clip1' : ''}`}>
+        {relTime(e.at)}
+        {e.detail && `・${e.detail}`}
+        {e.cost > 0 && `・${usd(e.cost)}`}
+      </div>
     </div>
   );
 }
