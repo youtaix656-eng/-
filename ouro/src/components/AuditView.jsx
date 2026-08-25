@@ -7,6 +7,19 @@ import { relTime, usd } from '../lib/format.js';
 
 export default function AuditView({ store }) {
   const [filter, setFilter] = useState('all');
+  // 新項目09：起動時は新しいぶんだけ読んでいる。古いぶんはここで読み足す。
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [partial, setPartial] = useState(store.auditPartial);
+
+  const readAll = async () => {
+    setLoadingAll(true);
+    try {
+      await store.loadAllAudit();
+      setPartial(false);
+    } finally {
+      setLoadingAll(false);
+    }
+  };
   const list = store.audit
     .slice()
     .reverse()
@@ -20,8 +33,19 @@ export default function AuditView({ store }) {
           この記録は端末の外に出ません。
         </p>
         <div className="muted">
-          累計 {store.audit.length} 件・AI費用 {usd(totalCost(store.audit))}
+          {partial ? '直近' : '累計'} {store.audit.length} 件・AI費用 {usd(totalCost(store.audit))}
         </div>
+        {partial && (
+          <>
+            <p className="muted" style={{ marginTop: 6 }}>
+              起動を速くするため、いまは新しいぶんだけを読み込んでいます。
+              30日より古い記録は日ごとに1件へまとめてあります（件数と費用は残ります）。
+            </p>
+            <button type="button" className="btn ghost small" disabled={loadingAll} onClick={readAll}>
+              {loadingAll ? '読み込み中…' : '古い記録もすべて読み込む'}
+            </button>
+          </>
+        )}
       </Card>
 
       <div className="chips" style={{ marginBottom: 12 }}>

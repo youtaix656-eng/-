@@ -21,6 +21,7 @@ import {
   idbGetMany,
   idbWriteMany,
   idbGetPrefix,
+  idbGetPrefixLast,
   isIdbSupported,
 } from './db.js';
 
@@ -106,13 +107,26 @@ async function readRaw(key, fallback) {
 }
 
 /** manifest からレコードを組み立てて配列に戻す。 */
-async function readCollection(key, manifest, fallback) {
+/**
+ * @param {boolean} track 読んだ内容を差分計算用に覚えるか。
+ *   書き出し（exportAll）のように「全部読むが、次の保存の基準にはしない」場合は false。
+ *   ここで覚えてしまうと、画面が持っている一部だけの配列を保存した時に
+ *   「覚えている全件」との差分で古いレコードが消される。
+ */
+async function readCollection(key, manifest, fallback, limit = 0, track = true) {
   const conf = RECORD_COLLECTIONS[key];
+  // 新項目09：並び順がキー自体にあるもの（操作履歴）は、新しい方から limit 件だけ読む。
+  // 全部読むと2000件ぶんの往復になるが、画面に出るのは最近のぶんだけ。
+  const paged = limit > 0 && conf.mode === 'sorted';
   let map;
   try {
-    map = await idbGetPrefix(`${key}#`);
+    map = paged ? await idbGetPrefixLast(`${key}#`, limit) : await idbGetPrefix(`${key}#`);
   } catch {
     return fallback;
+  }
+  if (track) {
+    if (paged && map.size >= limit) partialKeys.add(key);
+    else partialKeys.delete(key);
   }
 
   let list;
@@ -125,19 +139,21 @@ async function readCollection(key, manifest, fallback) {
     list = (manifest.ids || []).map((id) => byId.get(String(id))).filter((v) => v !== undefined);
   }
 
-  // 次回の差分計算のために、いま読んだ内容を覚えておく
-  const cache = new Map();
-  for (const [k, v] of map) cache.set(k, v);
-  recordCache.set(key, cache);
-  lastWritten.set(key, manifest);
+  if (track) {
+    // 次回の差分計算のために、いま読んだ内容を覚えておく
+    const cache = new Map();
+    for (const [k, v] of map) cache.set(k, v);
+    recordCache.set(key, cache);
+    lastWritten.set(key, manifest);
+  }
   return list;
 }
 
-export async function load(key, fallback) {
+export async function load(key, fallback, limit = 0, track = true) {
   const conf = RECORD_COLLECTIONS[key];
   const raw = await readRaw(key, undefined);
 
-  if (conf && isManifest(raw)) return readCollection(key, raw, fallback);
+  if (conf && isManifest(raw)) return readCollection(key, raw, fallback, limit, track);
 
   // 1件ずつ保存に切り替える前のデータ（ただの配列）はそのまま返す。
   // 次に save() したときに新しい形へ移る。
@@ -149,7 +165,7 @@ export async function load(key, fallback) {
  * 複数キーを1回のトランザクションでまとめて読む（起動を速くするため）。
  * 1件ずつ保存のコレクションは、そのあと個別に組み立てる。
  */
-export async function loadMany(keys, fallbacks = {}) {
+export async function loadMany(keys, fallbacks = {}, limits = {}) {
   const out = {};
   let rawMap = new Map();
   if (useIdb) {
@@ -166,7 +182,7 @@ export async function loadMany(keys, fallbacks = {}) {
     const fb = fallbacks[key];
     const conf = RECORD_COLLECTIONS[key];
     if (conf && isManifest(raw)) {
-      pending.push(readCollection(key, raw, fb).then((v) => { out[key] = v; }));
+      pending.push(readCollection(key, raw, fb, limits[key] || 0).then((v) => { out[key] = v; }));
     } else {
       if (raw !== undefined) lastWritten.set(key, raw);
       out[key] = raw === undefined ? fb : raw;
@@ -178,19 +194,42 @@ export async function loadMany(keys, fallbacks = {}) {
 
 // ───────────────────────── 書き込み ─────────────────────────
 
+// 新項目07：書き込みに優先度をつける。
+//   normal … いま画面で編集しているもの（社員・知識・設定）。指が止まったらすぐ書く。
+//   low    … 記録として積むだけのもの（操作履歴）。急がないので長めに待ち、
+//            そのあいだに何度積まれても1回にまとまる。
+// **急がない側を長く待たせるだけで、書く順番は変えない。**
+// 先に積まれたものを後回しにすると、閉じる直前の書き切りで順序が入れ替わる。
 const DEBOUNCE_MS = 400;
-const pending = new Map(); // key → value（まだ書いていないもの）
+const LOW_DEBOUNCE_MS = 2500;
+export const PRIORITY_DELAY = { normal: DEBOUNCE_MS, low: LOW_DEBOUNCE_MS };
+
+const pending = new Map(); // key → { value, due }（まだ書いていないもの）
 let timer = null;
 let idleId = null;
+
+// 新項目09：一部だけ読み込んだコレクション。
+// 読んでいない古いレコードを「消えた」と誤解して削除しないための印。
+const partialKeys = new Set();
+
+// 新項目11：JSON化は1キーにつき1回だけにする。
+// 以前は「変わったか確かめる」ためと「localStorage へ書く」ためで2回まわしていた。
+const lastJson = new Map();
+
+function toJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
 
 function sameValue(a, b) {
   if (a === b) return true;
   if (a === undefined || b === undefined) return false;
-  try {
-    return JSON.stringify(a) === JSON.stringify(b);
-  } catch {
-    return false;
-  }
+  const ja = toJson(a);
+  const jb = toJson(b);
+  return ja !== undefined && ja === jb;
 }
 
 /**
@@ -216,13 +255,22 @@ function planCollection(key, list, prev) {
   }
 
   const deleteKeys = [];
-  for (const rk of prev.keys()) if (!next.has(rk)) deleteKeys.push(rk);
+  // 新項目09：一部だけ読み込んだコレクション（操作履歴の新しい400件など）では、
+  // **読んでいない古いレコードを消してはいけない**。手元の配列に無い＝消された、
+  // ではなく、単に読んでいないだけだから。
+  if (!partialKeys.has(key)) {
+    for (const rk of prev.keys()) if (!next.has(rk)) deleteKeys.push(rk);
+  }
 
   const manifest =
     conf.mode === 'sorted'
       ? { [MANIFEST_TAG]: 2, mode: 'sorted', count: ids.length }
       : { [MANIFEST_TAG]: 2, mode: 'ids', ids };
-  if (!sameValue(lastWritten.get(key), manifest)) entries.push([key, manifest]);
+  // 一部だけ読み込んでいる時は、手元の件数で目録を書き換えない（新項目09）。
+  // 400件しか読んでいないのに count:400 と書くと、実際の件数が分からなくなる。
+  if (!partialKeys.has(key) && !sameValue(lastWritten.get(key), manifest)) {
+    entries.push([key, manifest]);
+  }
 
   return { entries, deleteKeys, manifest, next };
 }
@@ -272,19 +320,26 @@ async function writeCollection(key, value, conf) {
 }
 
 async function writePlain(key, value) {
-  if (sameValue(lastWritten.get(key), value)) return; // 中身が同じなら書かない
+  // 新項目11：JSON化はここで1回だけ。
+  // 「変わったか」の判定にも localStorage への書き込みにも同じ文字列を使う。
+  const json = toJson(value);
+  if (json !== undefined && lastJson.get(key) === json) return; // 中身が同じなら書かない
+  if (json === undefined && sameValue(lastWritten.get(key), value)) return; // JSON化できない値
+
   try {
     if (useIdb) {
       await idbSet(key, value);
       lastWritten.set(key, value);
+      if (json !== undefined) lastJson.set(key, json);
       return;
     }
   } catch {
     /* localStorage へフォールバック */
   }
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key, json !== undefined ? json : JSON.stringify(value));
     lastWritten.set(key, value);
+    if (json !== undefined) lastJson.set(key, json);
   } catch {
     /* 容量超過などは黙って諦める */
   }
@@ -294,14 +349,25 @@ async function writePlain(key, value) {
 // 書いている途中のものを「もう無い」と誤って扱ってしまう。
 let draining = null;
 
-function drain() {
+function drain(force = false) {
   timer = null;
   idleId = null;
-  if (draining) return draining.then(() => (pending.size ? drain() : undefined));
+  if (draining) return draining.then(() => (pending.size ? drain(force) : undefined));
   if (!pending.size) return Promise.resolve();
 
-  const batch = [...pending.entries()];
-  pending.clear();
+  const now = Date.now();
+  // 期限が来たものだけ書く（新項目07）。force のときは全部書く。
+  const batch = [];
+  for (const [key, item] of pending) {
+    if (force || item.due <= now) {
+      batch.push([key, item.value]);
+      pending.delete(key);
+    }
+  }
+  if (!batch.length) {
+    schedule(); // まだ早いものが残っている
+    return Promise.resolve();
+  }
   const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
   draining = (async () => {
@@ -316,8 +382,10 @@ function drain() {
       draining = null;
       const ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - started;
       perf.record(`保存 ${batch.length}件`, ms, 'save');
+      // 書いた内容を他のタブへ知らせる（新項目12）
+      announce(batch.map(([key]) => key));
       // 書いている間に新しく溜まったぶんを続けて書く
-      if (pending.size) return drain();
+      if (pending.size) return drain(force);
       return undefined;
     });
 
@@ -325,6 +393,11 @@ function drain() {
 }
 
 function schedule() {
+  if (!pending.size) return;
+  let earliest = Infinity;
+  for (const item of pending.values()) earliest = Math.min(earliest, item.due);
+  const wait = Math.max(0, earliest - Date.now());
+
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     // 空き時間に書く（操作中に引っかからないように）
@@ -333,12 +406,20 @@ function schedule() {
     } else {
       drain();
     }
-  }, DEBOUNCE_MS);
+  }, wait);
 }
 
-/** 保存（すぐには書かず、指が止まってからまとめて書く）。 */
-export function save(key, value) {
-  pending.set(key, value);
+/**
+ * 保存（すぐには書かず、指が止まってからまとめて書く）。
+ * @param {'normal'|'low'} priority 記録として積むだけのものは 'low'（新項目07）
+ */
+export function save(key, value, priority = 'normal') {
+  const delay = PRIORITY_DELAY[priority] ?? DEBOUNCE_MS;
+  const prev = pending.get(key);
+  // 同じキーに何度も積まれた時、期限は**最初に積まれた時のもの**を保つ。
+  // 毎回いまから数え直すと、積み続けている間ずっと書かれないままになる。
+  const due = prev ? Math.min(prev.due, Date.now() + delay) : Date.now() + delay;
+  pending.set(key, { value, due });
   schedule();
 }
 
@@ -352,9 +433,16 @@ export async function flushNow() {
     cancelIdleCallback(idleId);
     idleId = null;
   }
-  // 走っている最中のものも必ず待つ
-  await drain();
+  // 走っている最中のものも必ず待つ。
+  // force を立てて、まだ期限の来ていない「急がない」書き込みも全部書き切る
+  // （新項目07。期限待ちのまま閉じると、その分が消える）。
+  await drain(true);
   if (draining) await draining;
+}
+
+/** そのコレクションを一部だけしか読み込んでいないか（新項目09）。 */
+export function isPartial(key) {
+  return partialKeys.has(key);
 }
 
 /** 書き残しがあるか（テストと、閉じる前の判定に使う）。 */
@@ -377,6 +465,8 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 export async function remove(key) {
   pending.delete(key);
   lastWritten.delete(key);
+  lastJson.delete(key);
+  partialKeys.delete(key);
   try {
     if (useIdb) {
       if (RECORD_COLLECTIONS[key]) {
@@ -403,7 +493,8 @@ export async function exportAll() {
   const out = { app: 'ouro', version: 1, exportedAt: Date.now(), data: {} };
   for (const key of Object.values(KEYS)) {
     if (EXPORT_EXCLUDE.includes(key)) continue;
-    const v = await load(key, undefined);
+    // 全部読むが、次の保存の基準にはしない（track:false）
+    const v = await load(key, undefined, 0, false);
     if (v !== undefined) out.data[key] = v;
   }
   return out;
@@ -418,10 +509,93 @@ export async function importAll(payload) {
   let count = 0;
   for (const [key, value] of Object.entries(payload.data)) {
     if (!known.has(key) || EXPORT_EXCLUDE.includes(key)) continue;
-    // 取り込みは失われては困るので、まとめ書きに載せず即書きする
+    // 取り込みは失われては困るので、まとめ書きに載せず即書きする。
+    // 取り込む配列は「全部」なので、一部読み込みの印を外して
+    // 古いレコードがちゃんと消えるようにする（外し忘れると孤児が残る）。
+    partialKeys.delete(key);
     // eslint-disable-next-line no-await-in-loop
     await writeNow(key, value);
     count += 1;
   }
   return count;
+}
+
+// ───────────────── 他のタブへ知らせる（新項目12）─────────────────
+//
+// 同じ端末で2つ開いていると、片方の保存がもう片方の画面に出ない。
+// 書いたキーの名前だけを流し、受け取った側が読み直す。
+// **中身は流さない**（端末内保存の窓口をここ1つに保つため。
+// 受け取り側も必ず load() を通って読む）。
+
+const CHANNEL = 'ouro:changes';
+let channel = null;
+const listeners = new Set();
+
+function getChannel() {
+  if (channel !== null) return channel;
+  try {
+    if (typeof BroadcastChannel === 'function') {
+      channel = new BroadcastChannel(CHANNEL);
+      channel.onmessage = (e) => {
+        const keys = (e.data && e.data.keys) || [];
+        if (!keys.length) return;
+        for (const fn of listeners) {
+          try {
+            fn(keys);
+          } catch {
+            /* 受け手の失敗で他の受け手を止めない */
+          }
+        }
+      };
+    } else {
+      channel = false; // 対応していないブラウザ
+    }
+  } catch {
+    channel = false;
+  }
+  return channel;
+}
+
+function announce(keys) {
+  if (!keys || !keys.length) return;
+  const ch = getChannel();
+  if (!ch) return;
+  try {
+    ch.postMessage({ keys });
+  } catch {
+    /* noop */
+  }
+}
+
+/**
+ * 他のタブでの保存を受け取る。戻り値を呼ぶと解除。
+ * 自分が書いたぶんは自分には届かない（BroadcastChannel の仕様）。
+ */
+export function onExternalChange(fn) {
+  getChannel();
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+// ───────────────── 保存容量の見張り（新項目10）─────────────────
+
+/**
+ * 端末に残っている保存容量の目安。
+ * ブラウザが教えてくれない場合は null（＝分からない、ではなく「見張れない」）。
+ * **ネットワークには触れない。**
+ */
+export async function storageEstimate() {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return null;
+    const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+    if (!quota) return null;
+    return { usage, quota, ratio: usage / quota };
+  } catch {
+    return null;
+  }
+}
+
+/** 残りが少ないか（既定は9割を超えたら）。 */
+export function isStorageTight(est, threshold = 0.9) {
+  return Boolean(est && est.ratio >= threshold);
 }

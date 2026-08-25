@@ -1,5 +1,6 @@
 // 会社の画面。ダッシュボード・道具・承認・監査ログ・設定への入口。
 
+import { useEffect, useState } from 'react';
 import { Card, Row, SectionTitle, Stat, Spark } from './ui.jsx';
 import { cycleStats, growthSeries } from '../lib/cycle.js';
 import { verifiedRate } from '../lib/knowledge.js';
@@ -9,6 +10,7 @@ import { planById, connectionLimit } from '../data/plans.js';
 import { availableProviders } from '../lib/providers/index.js';
 import { ROLES } from '../data/roles.js';
 import * as perf from '../lib/perf.js';
+import { storageEstimate, isStorageTight } from '../lib/storage.js';
 
 export default function Company({ store, go }) {
   const { company, tasks, knowledge, activeEmployees, audit, approvals, connections, deals } = store;
@@ -109,6 +111,7 @@ export default function Company({ store, go }) {
       </Card>
 
       <SectionTitle>速さの記録</SectionTitle>
+      <StorageCard />
       <Card className="tight">
         <p className="muted" style={{ marginTop: 0 }}>
           この端末での実測です。遅くなった時に気づけるように残しています（外へは送りません）。
@@ -168,5 +171,42 @@ function labelOf(action) {
       dealChanged: '案件を更新した',
       meetingHeld: '会議を開いた',
     }[action] || action
+  );
+}
+
+/**
+ * 保存容量の見張り（新項目10）。
+ * 書けなくなってから気づくのを防ぐため、残りが少なくなったら知らせる。
+ * ブラウザが教えてくれない端末では、そもそも何も出さない（憶測で不安にさせない）。
+ */
+function StorageCard() {
+  const [est, setEst] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    storageEstimate().then((v) => alive && setEst(v));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!est) return null;
+
+  const mb = (n) => `${(n / 1024 / 1024).toFixed(1)}MB`;
+  const tight = isStorageTight(est);
+  return (
+    <Card className="tight">
+      <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 13.5 }}>
+        <span style={{ flex: 1 }}>この端末の保存容量</span>
+        <span className="mono-num dim">
+          {mb(est.usage)} / {mb(est.quota)}
+        </span>
+        <span className="mono-num dim">{Math.round(est.ratio * 100)}%</span>
+      </div>
+      {tight && (
+        <p className="muted" style={{ marginBottom: 0 }}>
+          残りが少なくなっています。設定からバックアップを取り、古い知識や仕事を整理してください。
+          いっぱいになると新しい保存ができなくなります。
+        </p>
+      )}
+    </Card>
   );
 }

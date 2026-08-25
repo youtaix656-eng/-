@@ -3,14 +3,16 @@
 // 画面（components/*.jsx）は保存キーを直接触らない。必ずこのフック経由。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KEYS, load, loadMany, save, exportAll, importAll, flushNow } from './storage.js';
+import {
+  KEYS, load, loadMany, save, exportAll, importAll, flushNow, isPartial, onExternalChange,
+} from './storage.js';
 import * as perf from './perf.js';
 import { afterPaint, whenIdle } from './idle.js';
 import { makeSettings } from './defaults.js';
 import { createTask, applyStepResult, nextStep, assembleResult } from './workflow.js';
 import { runStep, distill, extractUrls } from './runtime.js';
 import { createKnowledge, makeSource, markUsed, markVerified } from './knowledge.js';
-import { makeEntry, appendAudit } from './audit.js';
+import { makeEntry, appendAudit, foldAudit } from './audit.js';
 import { checkAction } from './permissions.js';
 import { createDeal } from './revenue.js';
 import { createMeeting, addRound, opinionPrompt, rebuttalPrompt, synthesisPrompt } from './meeting.js';
@@ -42,6 +44,11 @@ const FIRST_KEYS = [
   KEYS.company, KEYS.settings, KEYS.employees, KEYS.tasks, KEYS.knowledge,
   KEYS.deals, KEYS.events, KEYS.genres, KEYS.approvals, KEYS.secrets,
 ];
+// 新項目09：起動時に読む操作履歴の件数。画面に出るのは最近のぶんだけなので、
+// 全件（最大2000）を読まずに新しい方から400件だけ読む。
+// 「すべて読み込む」を押した時と、畳む時だけ全件を読む。
+export const AUDIT_PAGE = 400;
+
 // 開くまで見えないもの（操作履歴は最大2000件あるので、必ず後回しにする）
 const REST_KEYS = [
   KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit, KEYS.connections,
@@ -94,6 +101,8 @@ export function useStore() {
   const hydratedRef = useRef(false);
   // その時間帯に積まれた操作履歴（追記しかしないので、あとから足せる）
   const preAuditRef = useRef([]);
+  // 古い記録を畳む処理（新項目08）は1回の起動につき1度だけ
+  const foldedRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -183,7 +192,7 @@ export function useStore() {
       await afterPaint();
       await whenIdle(1500);
       if (!alive) return;
-      const rest = await loadMany(REST_KEYS, REST_FALLBACKS);
+      const rest = await loadMany(REST_KEYS, REST_FALLBACKS, { [KEYS.audit]: AUDIT_PAGE });
       if (!alive) return;
       const merged = { ...stateRef.current };
       for (const key of REST_KEYS) {
@@ -205,7 +214,7 @@ export function useStore() {
 
       // 待たせていたぶんをここで保存する
       if (preAuditRef.current.length) {
-        save(KEYS.audit, merged.audit);
+        save(KEYS.audit, merged.audit, 'low');
         preAuditRef.current = [];
       }
       for (const key of REST_KEYS) {
@@ -213,11 +222,67 @@ export function useStore() {
           save(key, stateRef.current[keyName(key)]);
         }
       }
+
+      // 新項目08：手が空いたら、古い記録を日ごとに1件へ畳む。
+      // 畳むには全件が要るので、ここでだけ全部読む（起動の速さには影響しない）。
+      // 1回の起動につき1度だけ、たまっている時だけ走る。
+      if (!foldedRef.current && isPartial(KEYS.audit)) {
+        foldedRef.current = true;
+        await whenIdle(6000);
+        if (!alive) return;
+        try {
+          const full = await load(KEYS.audit, []);
+          if (!alive) return;
+          // 全件を読んでいる最中に積まれた記録は、まだディスクに無いことがある。
+          // 読んだぶんに、手元にしか無いものを足してから畳む。
+          const onDisk = new Set(full.map((e) => e && e.id));
+          const merging = [...full, ...stateRef.current.audit.filter((e) => e && !onDisk.has(e.id))].sort(
+            (a, b) => (a.at || 0) - (b.at || 0)
+          );
+          const { list, folded } = foldAudit(merging);
+          // **畳めた／畳めなかったに関わらず、必ず手元を全件に合わせる。**
+          // ここで全件を読んだ時点で「一部だけ読み込み」の印が外れるので、
+          // 手元が400件のままだと、次に記録を1件足した瞬間に
+          // 「残り1600件は消された」と判断されてディスクから消える。
+          const withAudit = { ...stateRef.current, audit: list };
+          stateRef.current = withAudit;
+          setState(withAudit);
+          if (folded > 0) save(KEYS.audit, list, 'low');
+        } catch {
+          /* 畳めなくても動作には支障がないので黙って諦める */
+        }
+      }
     })();
 
     return () => {
       alive = false;
     };
+  }, []);
+
+  // ── 新項目12：他のタブでの保存を取り込む ──
+  //
+  // 同じ端末で2つ開いていると、片方で雇った社員がもう片方に出ない。
+  // 変わったキーの名前だけが届くので、こちらで読み直して画面に反映する。
+  // **読み直した結果を保存し返さない**（往復して書き合いになるため）。
+  useEffect(() => {
+    const stop = onExternalChange(async (keys) => {
+      if (!hydratedRef.current) return; // まだ読み込み中は触らない
+      for (const key of keys) {
+        if (key === KEYS.secrets || key === KEYS.seeded) continue; // APIキーは持ち回らない
+        const name = keyName(key);
+        if (!name || !(name in stateRef.current)) continue;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const value = await load(key, undefined, key === KEYS.audit ? AUDIT_PAGE : 0);
+          if (value === undefined) continue;
+          stateRef.current = { ...stateRef.current, [name]: value };
+          setState(stateRef.current);
+        } catch {
+          /* 読めなければそのまま（次の操作で追いつく） */
+        }
+      }
+    });
+    return stop;
   }, []);
 
   // 保存つきの更新。key に対応する値だけを書く。
@@ -244,7 +309,23 @@ export function useStore() {
       preAuditRef.current.push(made);
       return;
     }
-    save(KEYS.audit, next);
+    // 新項目07：記録として積むだけなので急がない。まとめて書く。
+    save(KEYS.audit, next, 'low');
+  }, []);
+
+  /**
+   * 操作履歴を全部読み込む（新項目09）。
+   * 起動時は新しい400件だけなので、古いぶんを見たい時にこれを呼ぶ。
+   */
+  const loadAllAudit = useCallback(async () => {
+    const full = await load(KEYS.audit, []);
+    const onDisk = new Set(full.map((e) => e && e.id));
+    const merged = [...full, ...stateRef.current.audit.filter((e) => e && !onDisk.has(e.id))].sort(
+      (a, b) => (a.at || 0) - (b.at || 0)
+    );
+    stateRef.current = { ...stateRef.current, audit: merged };
+    setState(stateRef.current);
+    return merged.length;
   }, []);
 
   // ---- 社員 ----
@@ -864,6 +945,8 @@ export function useStore() {
     live,
     activeEmployees,
     // 社員
+    loadAllAudit,
+    auditPartial: isPartial(KEYS.audit),
     hireEmployee,
     hireIntoRole,
     hireCharacter,

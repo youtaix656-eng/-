@@ -135,3 +135,33 @@ export function idbGetPrefix(prefix) {
       })
   );
 }
+
+/**
+ * 同じ頭文字のレコードを、**新しい方から** limit 件だけ読む（新項目09）。
+ * 操作履歴のようにキー自体が時刻順のものにだけ使う。
+ * 戻り値は昇順（古い→新しい）に整えた Map。
+ */
+export function idbGetPrefixLast(prefix, limit) {
+  if (!Number.isFinite(limit) || limit <= 0) return idbGetPrefix(prefix);
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const t = db.transaction(STORE, 'readonly');
+        const store = t.objectStore(STORE);
+        const picked = [];
+        const range = IDBKeyRange.bound(prefix, `${prefix}￿`, false, false);
+        // 'prev' ＝ 新しい方から。limit 件そろったらそこで打ち切る。
+        const req = store.openCursor(range, 'prev');
+        req.onsuccess = () => {
+          const cur = req.result;
+          if (!cur) return;
+          picked.push([String(cur.key), cur.value]);
+          if (picked.length >= limit) return; // continue しない＝ここで走査を終える
+          cur.continue();
+        };
+        t.oncomplete = () => resolve(new Map(picked.reverse()));
+        t.onerror = () => reject(t.error);
+        t.onabort = () => reject(t.error);
+      })
+  );
+}
