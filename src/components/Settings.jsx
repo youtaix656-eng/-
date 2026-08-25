@@ -239,6 +239,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         onToast={onToast}
         importBackup={importBackup}
         cloudSyncStatus={store.cloudSyncStatus}
+        syncCloudNow={store.syncCloudNow}
       />
 
       {/* ===== 問題データのインポート ===== */}

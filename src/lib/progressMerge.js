@@ -52,6 +52,23 @@ export function mergeSettings(local, remote, remoteNewer) {
   return mergeObjectMap(local, remote, remoteNewer);
 }
 
+// マージ結果が元のlocalと実質的に異なるか（＝端末の状態へ反映する価値があるか）を判定する。
+// 単純な件数比較（Object.keys(...).length）だと、既存の問題IDのlastAnswered/dueだけが
+// 新しく更新されたケース（件数は変わらず値だけ変わる、実運用で最も多いパターン）を
+// 「変化なし」と誤判定してしまう（useStore.jsのクラウド自動同期で実際に発生していたバグ）。
+// 中身まで比較することで、件数が同じでも値が更新されていれば正しく「変化あり」を返す。
+export function progressChanged(local, merged) {
+  const l = local || {};
+  const m = merged || {};
+  return (
+    JSON.stringify(m.srs) !== JSON.stringify(l.srs) ||
+    JSON.stringify(m.history) !== JSON.stringify(l.history) ||
+    JSON.stringify(m.memos) !== JSON.stringify(l.memos) ||
+    JSON.stringify(m.links) !== JSON.stringify(l.links) ||
+    JSON.stringify(m.examResults) !== JSON.stringify(l.examResults)
+  );
+}
+
 // local/remote: { srs, history, memos, links, examResults, settings }
 // localUpdatedAt/remoteUpdatedAt: lib/storage.jsのsyncMeta.updatedAt（ミリ秒epoch）
 export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdatedAt = 0 } = {}) {

@@ -6,6 +6,7 @@ import {
   mergeExamResults,
   mergeObjectMap,
   mergeProgress,
+  progressChanged,
 } from '../src/lib/progressMerge.js';
 
 test('mergeSrs: 片方にしかない問題はそのまま残る', () => {
@@ -102,4 +103,37 @@ test('mergeProgress: 欠けているフィールドがあっても落ちない',
   assert.deepEqual(out.history, []);
   assert.deepEqual(out.memos, {});
   assert.deepEqual(out.examResults, []);
+});
+
+test('progressChanged: 何も変わらなければfalse', () => {
+  const local = {
+    srs: { 'q-1': { lastAnswered: 100 } },
+    history: [{ questionId: 'q-1', at: 100, correct: true }],
+    memos: {},
+    links: {},
+    examResults: [],
+  };
+  assert.equal(progressChanged(local, local), false);
+});
+
+test('progressChanged: 件数が同じでも既存キーの値だけ更新されていればtrue（クラウド自動同期のバグ再発防止）', () => {
+  // 実際に起きていたバグ: 他端末でq-1をより新しく解答した結果がマージされても、
+  // 件数（Object.keys(...).length）は変わらないため「変化なし」と誤判定され、
+  // マージ済みの新しい値がローカルの画面・SRSスケジューリングに反映されなかった。
+  const local = { srs: { 'q-1': { lastAnswered: 100 } }, history: [], memos: {}, links: {}, examResults: [] };
+  const merged = { srs: { 'q-1': { lastAnswered: 999 } }, history: [], memos: {}, links: {}, examResults: [] };
+  assert.equal(progressChanged(local, merged), true);
+});
+
+test('progressChanged: history/memos/links/examResultsのいずれかの値変化も検出する', () => {
+  const base = { srs: {}, history: [{ questionId: 'q-1', at: 1, correct: true }], memos: { a: '1' }, links: { a: ['q-1'] }, examResults: [{ id: 'e-1', at: 1 }] };
+  assert.equal(progressChanged(base, { ...base, history: [{ questionId: 'q-1', at: 1, correct: false }] }), true);
+  assert.equal(progressChanged(base, { ...base, memos: { a: '2' } }), true);
+  assert.equal(progressChanged(base, { ...base, links: { a: ['q-2'] } }), true);
+  assert.equal(progressChanged(base, { ...base, examResults: [{ id: 'e-1', at: 2 }] }), true);
+});
+
+test('progressChanged: local/mergedが欠けていても例外を投げない', () => {
+  assert.equal(progressChanged(undefined, undefined), false);
+  assert.equal(progressChanged({}, { srs: { a: 1 } }), true);
 });

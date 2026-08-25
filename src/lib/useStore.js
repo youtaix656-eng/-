@@ -442,65 +442,74 @@ export function useStore() {
   // googleDrive.js・progressMerge.js は実際に使う時だけ動的import（未使用ユーザーの
   // バンドルを増やさないため）。サイレント認証・通信の失敗は静かに諦める（ユーザー操作を妨げない）。
   const cloudSyncBusy = useRef(false);
+  // 実際の同期処理本体（自動同期のデバウンス後・手動の「今すぐ同期」ボタンの両方から呼ぶ）。
+  // silent=trueは自動同期用（同意画面を出さず、失敗しても静かに諦める）。
+  // silent=falseは手動トリガー用（初回は同意画面が出てよい）。
+  const runCloudSync = useCallback(async (silent) => {
+    if (cloudSyncBusy.current) return;
+    const clientId = settings.googleDriveClientId;
+    if (!clientId) return;
+    cloudSyncBusy.current = true;
+    try {
+      const [gd, pm, meta] = await Promise.all([
+        import('./googleDrive.js'),
+        import('./progressMerge.js'),
+        storage.loadSyncMeta(),
+      ]);
+      const token = await gd.requestAccessToken(clientId, { silent });
+      const remoteText = await gd.downloadBackup(token, gd.SYNC_FILENAME);
+      const localSnapshot = { srs, history, memos, links, examResults, settings };
+      let merged = localSnapshot;
+      let pulled = false;
+      if (remoteText) {
+        const remote = JSON.parse(remoteText);
+        merged = pm.mergeProgress(localSnapshot, remote.data || {}, {
+          localUpdatedAt: meta.updatedAt || 0,
+          remoteUpdatedAt: (remote.meta && remote.meta.updatedAt) || 0,
+        });
+        // 件数だけの比較だと、既存の問題IDのlastAnswered/dueだけが他端末で更新された
+        // ケース（件数は変わらず値だけ変わる、実運用で最も多いパターン）を「変化なし」と
+        // 誤判定し、マージ結果をローカルへ反映し損ねてしまう（progressMerge.jsのバグ修正参照）。
+        pulled = pm.progressChanged(localSnapshot, merged);
+      }
+      const newUpdatedAt = Date.now();
+      await gd.uploadBackup(token, JSON.stringify({ meta: { updatedAt: newUpdatedAt }, data: merged }), gd.SYNC_FILENAME);
+      await storage.saveSyncMeta({ updatedAt: newUpdatedAt });
+      if (pulled) {
+        setSrs(merged.srs);
+        setHistory(merged.history);
+        setMemos(merged.memos);
+        setLinks(merged.links);
+        setExamResultsState(merged.examResults);
+        setCloudAutoSyncToast((n) => n + 1);
+      }
+      if (JSON.stringify(merged.settings) !== JSON.stringify(localSnapshot.settings)) {
+        setSettings(merged.settings);
+      }
+      setCloudSyncStatus({ ok: true, at: newUpdatedAt, pulled });
+    } catch (e) {
+      const gd = await import('./googleDrive.js').catch(() => null);
+      const needsRelogin = gd && gd.isSilentAuthError(e);
+      setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message, needsRelogin });
+      throw e;
+    } finally {
+      cloudSyncBusy.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings, srs, history, memos, links, examResults]);
+
   useEffect(() => {
     if (!loaded) return;
     if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
-    let alive = true;
-    const clientId = settings.googleDriveClientId;
-    const timer = setTimeout(async () => {
-      if (cloudSyncBusy.current) return;
-      cloudSyncBusy.current = true;
-      try {
-        const [gd, pm, meta] = await Promise.all([
-          import('./googleDrive.js'),
-          import('./progressMerge.js'),
-          storage.loadSyncMeta(),
-        ]);
-        const token = await gd.requestAccessToken(clientId, { silent: true });
-        if (!alive) return;
-        const remoteText = await gd.downloadBackup(token, gd.SYNC_FILENAME);
-        const localSnapshot = { srs, history, memos, links, examResults, settings };
-        let merged = localSnapshot;
-        let pulled = false;
-        if (remoteText) {
-          const remote = JSON.parse(remoteText);
-          merged = pm.mergeProgress(localSnapshot, remote.data || {}, {
-            localUpdatedAt: meta.updatedAt || 0,
-            remoteUpdatedAt: (remote.meta && remote.meta.updatedAt) || 0,
-          });
-          pulled =
-            Object.keys(merged.srs).length !== Object.keys(localSnapshot.srs).length ||
-            merged.history.length !== localSnapshot.history.length ||
-            Object.keys(merged.memos).length !== Object.keys(localSnapshot.memos).length ||
-            Object.keys(merged.links).length !== Object.keys(localSnapshot.links).length ||
-            merged.examResults.length !== localSnapshot.examResults.length;
-        }
-        const newUpdatedAt = Date.now();
-        await gd.uploadBackup(token, JSON.stringify({ meta: { updatedAt: newUpdatedAt }, data: merged }), gd.SYNC_FILENAME);
-        await storage.saveSyncMeta({ updatedAt: newUpdatedAt });
-        if (!alive) return;
-        if (pulled) {
-          setSrs(merged.srs);
-          setHistory(merged.history);
-          setMemos(merged.memos);
-          setLinks(merged.links);
-          setExamResultsState(merged.examResults);
-          setCloudAutoSyncToast((n) => n + 1);
-        }
-        if (JSON.stringify(merged.settings) !== JSON.stringify(localSnapshot.settings)) {
-          setSettings(merged.settings);
-        }
-        setCloudSyncStatus({ ok: true, at: newUpdatedAt, pulled });
-      } catch (e) {
-        const gd = await import('./googleDrive.js').catch(() => null);
-        const needsRelogin = gd && gd.isSilentAuthError(e);
-        setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message, needsRelogin });
-      } finally {
-        cloudSyncBusy.current = false;
-      }
-    }, 5000); // 変更が落ち着くのを待ってから同期（連打での通信を避ける）。loaded直後の初回実行も兼ねる
-    return () => { alive = false; clearTimeout(timer); };
+    // 変更が落ち着くのを待ってから同期（連打での通信を避ける）。loaded直後の初回実行も兼ねる
+    const timer = setTimeout(() => { runCloudSync(true).catch(() => {}); }, 5000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults]);
+
+  // 「🔄 今すぐ同期」ボタン用（CloudBackup.jsx）。自動同期のデバウンス（最大5秒）を
+  // 待たずに、設定を変えた直後や動作確認をしたい時にその場で同期できる。
+  const syncCloudNow = useCallback(() => runCloudSync(false), [runCloudSync]);
 
   const clearCloudAutoSyncToast = useCallback(() => setCloudAutoSyncToast(0), []);
 
@@ -883,6 +892,7 @@ export function useStore() {
     cloudAutoSyncToast,
     clearCloudAutoSyncToast,
     cloudSyncStatus,
+    syncCloudNow,
     settings,
     reviewQuestions,
     dueReviewQuestions,

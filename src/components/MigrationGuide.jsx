@@ -115,6 +115,7 @@ export default function MigrationGuide({ store, onToast }) {
         onToast={onToast}
         importBackup={importBackup}
         cloudSyncStatus={store.cloudSyncStatus}
+        syncCloudNow={store.syncCloudNow}
       />
 
       <div className="section-label">④ WebRTCで直接転送{recommendation.id === 'webrtc' ? '（おすすめ）' : ''}</div>

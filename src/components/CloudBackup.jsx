@@ -11,7 +11,7 @@ import {
 // Googleドライブ（アプリ専用のappDataFolダー・ユーザーには見えない領域）への
 // クラウドバックアップ。他の機能と違いGoogleのサーバーと通信するため、
 // 既定ではオフ（クライアントID未設定の間は何も送信しない）で、注記も明示する。
-export default function CloudBackup({ settings, updateSettings, onToast, importBackup, cloudSyncStatus }) {
+export default function CloudBackup({ settings, updateSettings, onToast, importBackup, cloudSyncStatus, syncCloudNow }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -78,6 +78,22 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
     signOut();
     setSignedIn(false);
     onToast?.('Googleからログアウトしました（この端末のバックアップデータは残ります）');
+  };
+
+  // 自動同期は変更が落ち着いてから最大5秒後に走るため、設定変更の直後や動作確認をしたい時に
+  // 待たずにその場で試せるようにする（フル一致するuploadBackup/downloadBackupは
+  // 手動の「保存」「復元」と同じだが、こちらは進捗のマージまで含む自動同期そのものを起動する）。
+  const doSyncNow = async () => {
+    if (!syncCloudNow) return;
+    setBusy(true);
+    try {
+      await syncCloudNow();
+      onToast?.('今すぐ同期しました');
+    } catch (e) {
+      onToast?.(e.message || '同期に失敗しました');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -165,6 +181,13 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
               </small>
             </span>
           </label>
+          {settings.googleDriveAutoSync && clientId.trim() && (
+            <div className="btn-row" style={{ marginTop: 8 }}>
+              <button className="btn ghost sm" onClick={doSyncNow} disabled={busy}>
+                {busy ? '通信中…' : '🔄 今すぐ同期'}
+              </button>
+            </div>
+          )}
           {settings.googleDriveAutoSync && cloudSyncStatus && (
             <div style={{ marginTop: 6 }}>
               {cloudSyncStatus.ok ? (
