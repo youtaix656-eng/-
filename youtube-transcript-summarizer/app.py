@@ -12,6 +12,15 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api import CouldNotRetrieveTranscript, RequestBlocked
 
 MAX_WHISPER_BYTES = 24 * 1024 * 1024  # Whisper APIの上限(25MB)に余裕を持たせる
+DEFAULT_TEXT_MODEL = os.environ.get("OPENAI_TEXT_MODEL", "gpt-5.4-mini")
+
+CLEANUP_SYSTEM_PROMPT = (
+    "あなたは日本語の文字起こしの校正者です。渡された文字起こしテキストの"
+    "誤字脱字・誤変換・聞き取りミスを修正し、読みやすいように句読点を補ってください。"
+    "内容の要約・省略・言い換えや、新しい情報の追加は絶対にしないでください。"
+    "話されている内容と語順はそのまま保持し、表記の誤りだけを直してください。"
+    "出力は修正後の本文のみとし、前置きや説明を含めないでください。"
+)
 
 VIDEO_ID_PATTERNS = [
     r"(?:v=|/shorts/|/embed/|/live/)([0-9A-Za-z_-]{11})",
@@ -86,6 +95,19 @@ def fetch_transcript_via_whisper(url: str, openai_api_key: str) -> str:
         return transcription.text
 
 
+def clean_transcript_with_openai(api_key: str, model: str, transcript_text: str) -> str:
+    """誤字脱字・句読点を自動修正する。要約や内容の変更は行わない。"""
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": CLEANUP_SYSTEM_PROMPT},
+            {"role": "user", "content": transcript_text},
+        ],
+    )
+    return response.choices[0].message.content.strip()
+
+
 def sanitize_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "_", name).strip() or "transcript"
 
@@ -95,10 +117,20 @@ st.set_page_config(page_title="YouTube文字起こし", page_icon="📝", layout
 st.title("📝 YouTube 文字起こしアプリ")
 st.caption("YouTubeのURLを貼ると、文字起こしを取得して表示します。")
 
-openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+raw_openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+openai_api_key = raw_openai_api_key if raw_openai_api_key.isascii() else None
+
+if not raw_openai_api_key:
+    st.error("環境変数 `OPENAI_API_KEY` が設定されていません。設定してからアプリを再起動してください。")
+elif not raw_openai_api_key.isascii():
+    st.error(
+        "APIキーに全角文字やスマート引用符など、使用できない文字が含まれているようです。"
+        "Streamlit CloudのSecretsを開き、APIキーを一度削除してから貼り付け直してください"
+        "（前後の引用符は半角の \" を使い、スマートフォンの自動修正機能はオフにしてください）。"
+    )
 
 url = st.text_input("YouTube動画のURL", placeholder="https://www.youtube.com/watch?v=...")
-run = st.button("取得", type="primary")
+run = st.button("取得", type="primary", disabled=not openai_api_key)
 
 if run:
     st.session_state.pop("result", None)
@@ -119,21 +151,23 @@ if run:
                 st.error(f"字幕の取得中にエラーが発生しました: {e}")
 
         if transcript_text is None:
-            if not openai_api_key:
-                st.error(
-                    "この動画には字幕がありません。音声からの文字起こしには "
-                    "環境変数 `OPENAI_API_KEY` の設定が必要です。"
-                )
-            else:
-                with st.spinner(
-                    "字幕が見つからないため、音声から文字起こししています（数分かかることがあります）..."
-                ):
-                    try:
-                        transcript_text = fetch_transcript_via_whisper(url, openai_api_key)
-                    except Exception as e:
-                        st.error(f"音声からの文字起こし中にエラーが発生しました: {e}")
+            with st.spinner(
+                "字幕が見つからないため、音声から文字起こししています（数分かかることがあります）..."
+            ):
+                try:
+                    transcript_text = fetch_transcript_via_whisper(url, openai_api_key)
+                except Exception as e:
+                    st.error(f"音声からの文字起こし中にエラーが発生しました: {e}")
 
         if transcript_text:
+            with st.spinner("誤字脱字を修正しています..."):
+                try:
+                    transcript_text = clean_transcript_with_openai(
+                        openai_api_key, DEFAULT_TEXT_MODEL, transcript_text
+                    )
+                except Exception as e:
+                    st.warning(f"誤字脱字の自動修正に失敗したため、元の文字起こしを表示します: {e}")
+
             title = fetch_video_title(url)
             st.session_state["result"] = {
                 "title": title,
