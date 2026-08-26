@@ -3603,3 +3603,46 @@ code.block {
 
 /* ===== なぜ?チェーン・誤答リンク（#4/#8） ===== */
 .why-box, .wrongchoice-box { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: 10px 12px; }
+
+/* ===== 経絡経穴概論 索引・目次 =====
+   このアプリの基本は黒背景（アプリ全体は :root の --bg/--text を黒地・白文字で
+   統一している）。ただし「該当ページは白背景黒文字でみやすく」というこの機能限定の
+   明示指定により、.kz-page だけは教科書のページを見ている感覚に近い白背景・黒文字を
+   スコープ限定で使う（:root のトークンは変更しない。他画面には一切影響しない）。 */
+.kz-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.kz-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; cursor: pointer; color: var(--text); font: inherit; text-align: left;
+}
+.kz-chip .kz-term { font-size: 14px; font-weight: 700; }
+.kz-chip .kz-pages { font-size: 10px; color: var(--text-sub); }
+.kz-chip.kz-card { border-color: var(--accent); }
+.kz-chip.kz-card .kz-term { color: var(--accent); }
+.kz-chip.kz-point .kz-term, .kz-chip.kz-meridian .kz-term, .kz-chip.kz-extra .kz-term { color: #6bbf9a; }
+.kz-chip.kz-point, .kz-chip.kz-meridian, .kz-chip.kz-extra { border-color: #3f6e56; }
+.kz-chip.kz-confusable { border-color: #a8752a; }
+.kz-chip.kz-confusable .kz-term { color: #d4a24c; }
+.kz-chip.kz-none { opacity: 0.65; }
+.kz-chip.active { box-shadow: 0 0 0 2px var(--accent) inset; }
+
+.kz-page {
+  background: #ffffff; color: #111111; border-radius: 14px; padding: 16px; margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: box-shadow .3s ease;
+}
+.kz-page.kz-jumped { box-shadow: 0 0 0 3px #f2a71b, 0 4px 14px rgba(0,0,0,.3); }
+.kz-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.kz-page-term { font-size: 22px; font-weight: 800; margin-right: 8px; }
+.kz-page-yomi { font-size: 13px; color: #555555; }
+.kz-page-close { background: none; border: none; font-size: 18px; color: #555555; cursor: pointer; padding: 4px; }
+.kz-page-pages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.kz-page-badge { background: #f1f5f9; color: #1e293b; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px; }
+.kz-page-body { color: #111111; }
+.kz-page-body svg text { fill: #0f172a; }
+.kz-page-lead { font-size: 13px; color: #333333; margin: 0 0 8px; }
+.kz-page-note { margin-top: 10px; font-size: 12px; color: #7a4a06; background: #fef3c7; border-radius: 8px; padding: 8px 10px; }
+.kz-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kz-table th, .kz-table td { border: 1px solid #e2e8f0; padding: 7px 9px; vertical-align: top; text-align: left; }
+.kz-table th { background: #f1f5f9; width: 96px; font-weight: 700; color: #111111; white-space: nowrap; }
+.kz-table td { color: #111111; line-height: 1.6; }
+.kz-hit { background: #fde68a; color: #111111 !important; }
