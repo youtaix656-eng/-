@@ -90,13 +90,28 @@ jobs:
         run: npm run build
         working-directory: henkaku-note
 
+      # Ouro（自分専用のAI会社 / Vite + React JSX）を /ouro サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (Ouro)
+        run: npm ci
+        working-directory: ouro
+
+      - name: Test (Ouro)
+        run: npm test
+        working-directory: ouro
+
+      - name: Build (Ouro / /ouro)
+        run: npm run build
+        working-directory: ouro
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
           cp -r henkaku-note/dist dist/henkaku-note
+          cp -r ouro/dist dist/ouro
           touch dist/.nojekyll
 
       - name: Upload artifact

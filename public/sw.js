@@ -20,8 +20,13 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      // 同じドメイン（GitHub Pages）に同梱の別アプリ（/ouro など）も CacheStorage を
+      // 共有している。名前を見ずに消すと、そちらのキャッシュまで巻き添えで消える。
+      // このアプリの分（shinkyu-）だけを対象にする。
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await Promise.all(
+        keys.filter((k) => k.startsWith('shinkyu-') && k !== CACHE).map((k) => caches.delete(k))
+      );
       await self.clients.claim();
     })()
   );
