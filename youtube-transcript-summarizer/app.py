@@ -9,10 +9,11 @@ import streamlit as st
 import yt_dlp
 from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api import CouldNotRetrieveTranscript, RequestBlocked
+from youtube_transcript_api import CouldNotRetrieveTranscript, NoTranscriptFound, RequestBlocked
 
 MAX_WHISPER_BYTES = 24 * 1024 * 1024  # Whisper APIの上限(25MB)に余裕を持たせる
 DEFAULT_TEXT_MODEL = os.environ.get("OPENAI_TEXT_MODEL", "gpt-5.4-mini")
+DEFAULT_TRANSCRIBE_MODEL = os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe")
 
 CLEANUP_SYSTEM_PROMPT = (
     "あなたは日本語の文字起こしの校正者です。渡された文字起こしテキストの"
@@ -49,9 +50,23 @@ def fetch_video_title(url: str) -> str:
         return "YouTube動画"
 
 
-def fetch_transcript_via_captions(video_id: str) -> str | None:
-    """字幕（手動・自動生成問わず）から文字起こしを取得する。日本語優先、なければ英語。
-    字幕が存在しない場合はNoneを返す。"""
+def fetch_manual_captions(video_id: str) -> str | None:
+    """手動作成された字幕のみを取得する（自動生成字幕は精度が低いため対象外）。
+    日本語優先、なければ英語。手動字幕が存在しない場合はNoneを返す。"""
+    api = YouTubeTranscriptApi()
+    transcript_list = api.list(video_id)
+    try:
+        transcript = transcript_list.find_manually_created_transcript(
+            ["ja", "ja-JP", "en", "en-US"]
+        )
+    except NoTranscriptFound:
+        return None
+    fetched = transcript.fetch()
+    return " ".join(snippet.text for snippet in fetched)
+
+
+def fetch_auto_captions(video_id: str) -> str | None:
+    """自動生成字幕を取得する（手動字幕・音声文字起こしの両方が使えないときの最終手段）。"""
     try:
         api = YouTubeTranscriptApi()
         fetched = api.fetch(video_id, languages=["ja", "ja-JP", "en", "en-US"])
@@ -60,8 +75,9 @@ def fetch_transcript_via_captions(video_id: str) -> str | None:
         return None
 
 
-def fetch_transcript_via_whisper(url: str, openai_api_key: str) -> str:
-    """字幕がない場合のフォールバック。yt-dlpで音声のみ取得し、Whisper APIで文字起こしする。"""
+def fetch_transcript_via_whisper(url: str, openai_api_key: str, title: str) -> str:
+    """字幕がない場合のフォールバック。yt-dlpで音声のみ取得し、文字起こしAPIで文字起こしする。
+    動画タイトルをプロンプトとして渡し、固有名詞の誤認識を減らす。"""
     with tempfile.TemporaryDirectory() as tmpdir:
         ydl_opts = {
             "format": "bestaudio/best",
@@ -85,24 +101,32 @@ def fetch_transcript_via_whisper(url: str, openai_api_key: str) -> str:
 
         if os.path.getsize(mp3_path) > MAX_WHISPER_BYTES:
             raise RuntimeError(
-                "動画が長すぎるため文字起こしできません（Whisper APIは25MBまで）。"
+                "動画が長すぎるため文字起こしできません（文字起こしAPIは25MBまで）。"
                 "短い動画でお試しください。"
             )
 
         client = OpenAI(api_key=openai_api_key)
         with open(mp3_path, "rb") as f:
-            transcription = client.audio.transcriptions.create(model="whisper-1", file=f)
+            transcription = client.audio.transcriptions.create(
+                model=DEFAULT_TRANSCRIBE_MODEL,
+                file=f,
+                prompt=title,
+            )
         return transcription.text
 
 
-def clean_transcript_with_openai(api_key: str, model: str, transcript_text: str) -> str:
-    """誤字脱字・句読点を自動修正する。要約や内容の変更は行わない。"""
+def clean_transcript_with_openai(api_key: str, model: str, title: str, transcript_text: str) -> str:
+    """誤字脱字・句読点を自動修正する。要約や内容の変更は行わない。
+    動画タイトルを文脈として渡し、固有名詞の修正精度を上げる。"""
     client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": CLEANUP_SYSTEM_PROMPT},
-            {"role": "user", "content": transcript_text},
+            {
+                "role": "user",
+                "content": f"動画タイトル（固有名詞の参考にしてください）: {title}\n\n文字起こし:\n{transcript_text}",
+            },
         ],
     )
     return response.choices[0].message.content.strip()
@@ -138,37 +162,48 @@ if run:
     if not video_id:
         st.error("有効なYouTubeのURLを入力してください。")
     else:
+        title = fetch_video_title(url)
         transcript_text = None
-        with st.spinner("字幕を取得しています..."):
+
+        with st.spinner("手動作成された字幕を確認しています..."):
             try:
-                transcript_text = fetch_transcript_via_captions(video_id)
+                transcript_text = fetch_manual_captions(video_id)
             except RequestBlocked:
                 st.error(
                     "YouTube側からのアクセス制限（IPブロック）により字幕を取得できませんでした。"
                     "時間を置いて再度お試しください。"
                 )
+            except CouldNotRetrieveTranscript:
+                pass
             except Exception as e:
                 st.error(f"字幕の取得中にエラーが発生しました: {e}")
 
         if transcript_text is None:
             with st.spinner(
-                "字幕が見つからないため、音声から文字起こししています（数分かかることがあります）..."
+                "手動字幕が見つからないため、音声から文字起こししています（数分かかることがあります）..."
             ):
                 try:
-                    transcript_text = fetch_transcript_via_whisper(url, openai_api_key)
+                    transcript_text = fetch_transcript_via_whisper(url, openai_api_key, title)
                 except Exception as e:
-                    st.error(f"音声からの文字起こし中にエラーが発生しました: {e}")
+                    with st.spinner("音声からの文字起こしに失敗したため、自動生成字幕を確認しています..."):
+                        transcript_text = fetch_auto_captions(video_id)
+                    if transcript_text:
+                        st.warning(
+                            "音声からの文字起こしに失敗したため、精度の低い自動生成字幕を"
+                            f"使用しています（エラー: {e}）。"
+                        )
+                    else:
+                        st.error(f"文字起こしに失敗しました: {e}")
 
         if transcript_text:
             with st.spinner("誤字脱字を修正しています..."):
                 try:
                     transcript_text = clean_transcript_with_openai(
-                        openai_api_key, DEFAULT_TEXT_MODEL, transcript_text
+                        openai_api_key, DEFAULT_TEXT_MODEL, title, transcript_text
                     )
                 except Exception as e:
                     st.warning(f"誤字脱字の自動修正に失敗したため、元の文字起こしを表示します: {e}")
 
-            title = fetch_video_title(url)
             st.session_state["result"] = {
                 "title": title,
                 "url": url,
