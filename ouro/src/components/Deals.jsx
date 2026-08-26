@@ -275,6 +275,9 @@ export function DealDetail({ store, dealId, go }) {
       )}
 
       <SectionTitle>この案件の仕事</SectionTitle>
+      <button type="button" className="btn small" style={{ marginBottom: 8 }} onClick={() => go('ledger')}>
+        台帳で見る
+      </button>
       {tasks.length ? (
         tasks.map((t) => (
           <Row key={t.id} glyph="✎" title={t.title} sub={relTime(t.createdAt)} onClick={() => go('task', t.id)} />

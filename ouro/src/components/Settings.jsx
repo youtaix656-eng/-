@@ -157,6 +157,19 @@ export default function Settings({ store, toast }) {
             <option value={16000}>16,000（長い・高い）</option>
           </select>
         </Field>
+        <Field
+          label="社員から社員への引き継ぎ"
+          hint="要点だけ＝次の担当に要るものだけを渡します。前の担当の出力が長いほど費用が下がります。拾えなかった時は全文をそのまま渡すので、材料が消えることはありません。"
+        >
+          <select
+            className="select"
+            value={store.settings.handoffMode || 'compact'}
+            onChange={(e) => store.updateSettings({ handoffMode: e.target.value })}
+          >
+            <option value="compact">要点だけ渡す（標準）</option>
+            <option value="full">前の担当の出力を全部渡す</option>
+          </select>
+        </Field>
       </Card>
 
       <Card glyph="⚙" title="会社">

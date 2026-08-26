@@ -10,6 +10,7 @@ import { isBusyError, failureAdvice } from './providers/stream.js';
 import { buildContext } from './memory.js';
 import { roleById, groupById } from '../data/roles.js';
 import { isToolEnabled } from '../data/tools.js';
+import { outputFormatPrompt } from './outline.js';
 
 // ── 新項目21：同じ問いの答えを使い回す ──
 //
@@ -45,8 +46,21 @@ export function clearAnswerCache() {
   answerCache.clear();
 }
 
+/**
+ * この手順が「会社としての提出物」を書く最後の手順か。
+ * 手順の group 番号が最大なら最後（未雇用の役職を外すと番号が飛ぶので、
+ * 位置ではなく番号の大小で見る）。
+ */
+export function isFinalStep(task, step) {
+  const steps = (task && task.steps) || [];
+  if (steps.length <= 1) return true;
+  const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
+  const max = Math.max(...steps.map(g));
+  return g(step) === max;
+}
+
 /** 社員の人格をシステムプロンプトに起こす。 */
-export function buildSystemPrompt({ employee, company, contextText }) {
+export function buildSystemPrompt({ employee, company, contextText, isFinal = false }) {
   const role = roleById(employee.roleId);
   const group = role ? groupById(role.group || 'knowledge') : null;
   const lines = [
@@ -71,6 +85,12 @@ export function buildSystemPrompt({ employee, company, contextText }) {
     '- 医療・法律・お金に関わる断定は避け、確認先を添える。',
     '- 日本語で答える。前置きの挨拶は書かない。',
   ].filter(Boolean);
+
+  // 会社としての提出物を書く**最後の手順にだけ**、5項目の枠をかける。
+  // 途中の手順にまでかけると、1行で足りる調査結果まで長くなって読みにくい。
+  if (isFinal) {
+    lines.push('', outputFormatPrompt());
+  }
 
   if (contextText) {
     lines.push('', '## 使える材料', contextText);
@@ -112,15 +132,28 @@ export async function runStep({
   if (!provider) throw new Error(`エンジン ${decision.providerId} が見つかりません`);
 
   const context = buildContext({ employee, task, knowledgeList, inherited });
-  const system = buildSystemPrompt({ employee, company, contextText: context.text });
+  const system = buildSystemPrompt({ employee, company, contextText: context.text, isFinal: isFinalStep(task, step) });
+
+  // 受付のときに決めた条件（成果物の形・完成条件・使う材料・触れないこと）。
+  // 空なら何も足さないので、これまでどおり1行の依頼でも動く。
+  const spec = task.spec || {};
+  const specLines = [
+    spec.deliverable ? `- 成果物の形：${spec.deliverable}` : '',
+    spec.doneWhen ? `- これが満たせたら完成：${spec.doneWhen}` : '',
+    spec.materials ? `- 使ってよい材料：${spec.materials}` : '',
+    spec.constraints ? `- 触れてはいけないこと：${spec.constraints}` : '',
+  ].filter(Boolean);
 
   const userContent = [
     `# オーナーからの依頼`,
     task.request || '',
+    specLines.length ? `\n# 依頼の条件\n${specLines.join('\n')}` : '',
     '',
     `# あなたへの指示`,
     step.instruction || '担当業務の観点から答えてください。',
-  ].join('\n');
+  ]
+    .filter((x) => x !== '')
+    .join('\n');
 
   const tools = [];
   for (const need of needs) {

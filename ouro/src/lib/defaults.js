@@ -24,5 +24,9 @@ export function makeSettings() {
     costTotalUsd: 0,
     costMonth: '', // 'YYYY-MM'
     costMonthUsd: 0,
+    // 手順から手順への引き継ぎ方（lib/handoff.js）。
+    //   compact … 次の担当に要るものだけ渡す（既定・トークンが減る）
+    //   full    … これまでどおり前の担当の出力をまるごと渡す
+    handoffMode: 'compact',
   };
 }

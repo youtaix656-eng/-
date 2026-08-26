@@ -3,9 +3,18 @@
 import { Card, Empty, SectionTitle } from './ui.jsx';
 import { relTime } from '../lib/format.js';
 import { REQUIRE_APPROVAL } from '../lib/permissions.js';
+import { openDecisions } from '../lib/decisions.js';
+import { useAllTasks } from './useAllTasks.js';
 
 export default function Approvals({ store, go }) {
+  // 判断待ちは古い仕事にも残るので、ここでは全部の仕事を見る
+  useAllTasks(store);
   const pending = store.approvals.filter((a) => a.status === 'pending');
+  // 成果物の中身についての判断（実行前の承認とは別の層）。
+  // 承認＝実行してよいか／判断＝出てきたものをどうするか。
+  const judging = store.tasks
+    .map((t) => ({ task: t, items: openDecisions(t) }))
+    .filter((x) => x.items.length);
   const decided = store.approvals.filter((a) => a.status !== 'pending').slice(0, 12);
 
   return (
@@ -17,6 +26,27 @@ export default function Approvals({ store, go }) {
           あなたが承認するまで実行されません。
         </p>
       </Card>
+
+      {judging.length > 0 && (
+        <>
+          <SectionTitle>あなたの判断が要ること {judging.reduce((n, x) => n + x.items.length, 0)}件</SectionTitle>
+          <p className="muted" style={{ marginTop: -6 }}>
+            こちらは「実行してよいか」ではなく、
+            <strong style={{ color: '#fff' }}>出てきた成果物をどうするか</strong>です。
+            仕事の画面で1件ずつ決められます。
+          </p>
+          {judging.slice(0, 8).map(({ task, items }) => (
+            <button key={task.id} type="button" className="row" onClick={() => go('task', task.id)}>
+              <span className="g">⚖</span>
+              <span className="body">
+                <span className="t">{task.title}</span>
+                <span className="s">{items[0].text}{items.length > 1 ? `　ほか${items.length - 1}件` : ''}</span>
+              </span>
+              <span className="arrow">›</span>
+            </button>
+          ))}
+        </>
+      )}
 
       <SectionTitle>承認待ち {pending.length}件</SectionTitle>
       {pending.length ? (

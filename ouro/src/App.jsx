@@ -25,6 +25,7 @@ const KnowledgeDetail = lazy(LOADERS.knowledgeDetail);
 const Ingest = lazy(LOADERS.ingest);
 const Meeting = lazy(LOADERS.meeting);
 const MeetingDetail = lazy(() => LOADERS.meetingDetail().then((m) => ({ default: m.MeetingDetail })));
+const Ledger = lazy(LOADERS.ledger);
 const Deals = lazy(LOADERS.deals);
 const DealDetail = lazy(() => LOADERS.deal().then((m) => ({ default: m.DealDetail })));
 const Connect = lazy(LOADERS.connect);
@@ -63,6 +64,7 @@ const TITLES = {
   ingest: '情報を追加',
   meeting: 'AI会議',
   meetingDetail: 'AI会議',
+  ledger: '仕事台帳',
   deals: '案件・収益',
   deal: '案件',
   connect: '会社で使える道具',
@@ -139,7 +141,7 @@ export default function App() {
       () => {
         preloadMany(['toc', 'calendar', 'task', 'employee']);
         // さらに空きがあれば、会社バーから開く画面も
-        idle(() => preloadMany(['approvals', 'settings', 'characters', 'connect']), { timeout: 8000 });
+        idle(() => preloadMany(['approvals', 'ledger', 'settings', 'characters', 'connect']), { timeout: 8000 });
       },
       { timeout: 4000 }
     );
@@ -210,6 +212,7 @@ export default function App() {
         {view === 'ingest' && <Ingest store={store} go={go} toast={toast} />}
         {view === 'meeting' && <Meeting store={store} go={go} />}
         {view === 'meetingDetail' && <MeetingDetail store={store} meetingId={arg} go={go} />}
+        {view === 'ledger' && <Ledger store={store} go={go} toast={toast} />}
         {view === 'deals' && <Deals store={store} go={go} toast={toast} highlight={arg && arg.templateId} />}
         {view === 'deal' && <DealDetail store={store} dealId={arg} go={go} />}
         {view === 'connect' && <Connect store={store} go={go} toast={toast} highlight={arg && arg.toolId} />}

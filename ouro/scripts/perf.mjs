@@ -12,7 +12,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createServer } from 'node:http';
 import { extname } from 'node:path';
 
@@ -53,11 +53,16 @@ async function main() {
   // playwright はこのアプリの依存に入れていないので、無ければ黙って飛ばす。
   // 別の場所に入れてある時は PLAYWRIGHT_PATH でその場所を渡せる。
   let chromium;
-  for (const spec of [process.env.PLAYWRIGHT_PATH, 'playwright'].filter(Boolean)) {
+  // 絶対パスを渡された時は file:// に直してから読む（そのままでは import できない）。
+  const given = process.env.PLAYWRIGHT_PATH;
+  const asUrl = given && given.startsWith('/') ? pathToFileURL(given).href : given;
+  for (const spec of [asUrl, given, 'playwright'].filter(Boolean)) {
     try {
       // eslint-disable-next-line no-await-in-loop
-      ({ chromium } = await import(spec));
-      break;
+      const mod = await import(spec);
+      // playwright は CommonJS なので、名前つきで取れない置き方もある
+      chromium = mod.chromium || (mod.default && mod.default.chromium);
+      if (chromium) break;
     } catch {
       /* 次の候補へ */
     }

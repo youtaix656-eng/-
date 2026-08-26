@@ -68,6 +68,13 @@ export default function Company({ store, go }) {
 
       <SectionTitle>会社の管理</SectionTitle>
       <Row
+        glyph="▦"
+        title="仕事台帳"
+        sub="受け付けた仕事を1枚で見る・CSVで書き出す"
+        preload="ledger"
+        onClick={() => go('ledger')}
+      />
+      <Row
         glyph="⚖"
         title="承認待ち"
         sub={pending ? `${pending}件があなたの判断を待っています` : '待っているものはありません'}

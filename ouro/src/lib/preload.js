@@ -15,6 +15,7 @@ export const LOADERS = {
   ingest: () => import('../components/Ingest.jsx'),
   meeting: () => import('../components/Meeting.jsx'),
   meetingDetail: () => import('../components/Meeting.jsx'),
+  ledger: () => import('../components/Ledger.jsx'),
   deals: () => import('../components/Deals.jsx'),
   deal: () => import('../components/Deals.jsx'),
   connect: () => import('../components/Connect.jsx'),

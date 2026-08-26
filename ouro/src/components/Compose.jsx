@@ -23,6 +23,9 @@ export default function Compose({ store, preset = {}, go }) {
   const [dealId, setDealId] = useState(preset.dealId || null);
   const [genreId, setGenreId] = useState(preset.genreId || DEFAULT_GENRE_ID);
   const [context, setContext] = useState('');
+  // 受付のときに決めておくと、あとで手戻りが減るもの（全部任意）。
+  // 空なら今までどおり1行の依頼としてそのまま動く。
+  const [spec, setSpec] = useState({ dueAt: '', deliverable: '', doneWhen: '', materials: '', constraints: '' });
   const genres = allGenres(store.genres);
 
   const chosenEmployee = store.employees.find((e) => e.id === employeeId);
@@ -55,6 +58,11 @@ export default function Compose({ store, preset = {}, go }) {
       dealId,
       context,
       genreId,
+      dueAt: spec.dueAt ? new Date(spec.dueAt).getTime() : null,
+      deliverableSpec: spec.deliverable,
+      doneWhen: spec.doneWhen,
+      materials: spec.materials,
+      constraints: spec.constraints,
     });
     go('task', task.id);
     store.runTask(task.id);
@@ -187,8 +195,48 @@ export default function Compose({ store, preset = {}, go }) {
       )}
 
       <details style={{ marginBottom: 12 }}>
-        <summary className="muted" style={{ cursor: 'pointer' }}>補足を書く（任意）</summary>
+        <summary className="muted" style={{ cursor: 'pointer' }}>受付の条件を決める（任意）</summary>
         <div style={{ marginTop: 10 }}>
+          <p className="muted" style={{ marginTop: 0 }}>
+            ここを埋めると、社員が「何を作れば終わりなのか」を分かった状態で始められます。
+            空のままでも依頼できます。
+          </p>
+          <Field label="期限" hint="台帳とホームの『今日やること』に出ます。">
+            <input
+              className="input"
+              type="date"
+              value={spec.dueAt}
+              onChange={(e) => setSpec({ ...spec, dueAt: e.target.value })}
+            />
+          </Field>
+          <Field label="成果物の形" hint="例：1500字の記事／比較表／メール文案">
+            <input
+              className="input"
+              value={spec.deliverable}
+              onChange={(e) => setSpec({ ...spec, deliverable: e.target.value })}
+            />
+          </Field>
+          <Field label="これが満たせたら完成" hint="例：出典が3つ以上あり、初心者が読んで分かる">
+            <input
+              className="input"
+              value={spec.doneWhen}
+              onChange={(e) => setSpec({ ...spec, doneWhen: e.target.value })}
+            />
+          </Field>
+          <Field label="使ってよい材料" hint="例：公式サイトと厚労省の統計だけ">
+            <input
+              className="input"
+              value={spec.materials}
+              onChange={(e) => setSpec({ ...spec, materials: e.target.value })}
+            />
+          </Field>
+          <Field label="触れてはいけないこと" hint="例：価格を約束しない／効果を保証しない">
+            <input
+              className="input"
+              value={spec.constraints}
+              onChange={(e) => setSpec({ ...spec, constraints: e.target.value })}
+            />
+          </Field>
           <Field label="社員に伝えておきたい前提" hint="例：初心者向け／文字数は1500字／〇〇には触れない">
             <textarea className="textarea" value={context} onChange={(e) => setContext(e.target.value)} />
           </Field>

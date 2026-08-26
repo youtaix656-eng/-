@@ -12,6 +12,7 @@ import { revenueSummary, formatMoney } from '../lib/revenue.js';
 import { roleById } from '../data/roles.js';
 import { availableProviders } from '../lib/providers/index.js';
 import { upcoming } from '../lib/schedule.js';
+import { buildLedger, todayFocus } from '../lib/ledger.js';
 import Seal from './Seal.jsx';
 
 export default function Home({ store, go }) {
@@ -45,6 +46,12 @@ export default function Home({ store, go }) {
   // **操作履歴から数え直さない。** 履歴は起動時に新しい400件しか読まないので、
   // 数え直すと実際より小さく出る。log() が設定に積み上げた値を使う。
   const spent = Number(store.settings.costTotalUsd) || 0;
+  // 「今日やること」＝期限切れ・今日まで・あなたの判断・止まっているもの。
+  // **ここは起動時に読んだぶん（新しい120件）だけで数える。**
+  // ホームで全件を読み足すと、仕事が増えるほど起動が遅くなるため。
+  // 全部を見るときは台帳（useAllTasks で読み足す）へ。
+  const focus = useMemo(() => todayFocus(buildLedger(tasks, { deals })), [tasks, deals]);
+
   const remind = backupReminder({
     lastExportAt: store.settings.lastExportAt,
     items: knowledge.length + deals.length,
@@ -87,6 +94,38 @@ export default function Home({ store, go }) {
           </p>
           <button type="button" className="btn block" onClick={() => go('settings')}>
             書き出す
+          </button>
+        </Card>
+      )}
+
+      {/* 今日やること（期限切れ・今日まで・判断待ち・止まっているもの） */}
+      {focus.total > 0 && (
+        <Card glyph="◎" title="今日やること">
+          <div className="chips" style={{ marginTop: -4, marginBottom: 8 }}>
+            {focus.overdue.length > 0 && <span className="chip on">期限切れ {focus.overdue.length}</span>}
+            {focus.today.length > 0 && <span className="chip on">今日まで {focus.today.length}</span>}
+            {focus.decisions.length > 0 && <span className="chip on">あなたの判断 {focus.decisions.length}</span>}
+            {focus.stopped.length > 0 && <span className="chip on">止まっている {focus.stopped.length}</span>}
+          </div>
+          {/* 期限切れと判断待ちは重なりうる（同じ仕事が両方に入る）。
+              そのまま並べると同じ行が2回出て件数も二重になるので、id で畳む。 */}
+          {dedupeById([...focus.overdue, ...focus.today, ...focus.decisions])
+            .slice(0, 3)
+            .map((r) => (
+            <button key={r.id} type="button" className="row" onClick={() => go('task', r.id)}>
+              <span className="g">{r.decisions ? '⚖' : '⏳'}</span>
+              <span className="body">
+                <span className="t">{r.title}</span>
+                <span className="s">
+                  {r.nextAction}
+                  {r.dueAt ? `・期限 ${new Date(r.dueAt).toLocaleDateString('ja-JP')}` : ''}
+                </span>
+              </span>
+              <span className="arrow">›</span>
+            </button>
+            ))}
+          <button type="button" className="btn small block" onClick={() => go('ledger')}>
+            台帳で全部見る
           </button>
         </Card>
       )}
@@ -320,4 +359,9 @@ function suggestions({ tasks, knowledge, deals, engines }) {
     });
   }
   return out.slice(0, 3);
+}
+
+function dedupeById(rows) {
+  const seen = new Set();
+  return rows.filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
 }

@@ -18,9 +18,15 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 
 // gzip 後のキロバイト。実測 103.6KB（2026-08-25）を基準にした。
-// 内訳の目安：React 44 ／ アプリ本体 44 ／ 役職・キャラクターの索引 11 ／ CSS 4。
+// 内訳の目安：React 44 ／ アプリ本体 49 ／ 役職・キャラクターの索引 11 ／ CSS 4。
 // **React の44KBは動かせない**ので、増減するのは実質アプリ本体と索引。
-const WARN_KB = 110;
+//
+// 2026-08-26：台帳（lib/ledger.js・outline.js・decisions.js・handoff.js）で
+// アプリ本体が 4.7KB 増えて 112.8KB になった。ホームの「今日やること」を
+// 最初の描画で出すため、この4つは起動時に要る（CSV まわりは ledgerCsv.js へ
+// 分けて外した）。原因を確かめたうえで目安を 115KB へ上げている。
+// 上限 125KB は動かさない。
+const WARN_KB = 115;
 const MAX_KB = 125;
 
 function eagerAssets(html) {

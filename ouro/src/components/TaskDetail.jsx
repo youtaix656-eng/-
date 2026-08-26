@@ -2,10 +2,14 @@
 
 import { useState } from 'react';
 import { Card, Doc, Empty, Bar, SectionTitle, Field } from './ui.jsx';
-import { TASK_STATUS, taskProgress, nextStep, assembleResult } from '../lib/workflow.js';
+import { TASK_STATUS, taskProgress, nextStep, assembleResult, isRunnable, finalOutput } from '../lib/workflow.js';
 import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
 import { useAllTasks } from './useAllTasks.js';
+import { openDecisions } from '../lib/decisions.js';
+import { checkPromises } from '../lib/guard.js';
+import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js';
+import { ticketOf, dueStateOf, DUE_LABELS } from '../lib/ledger.js';
 
 export default function TaskDetail({ store, taskId, go }) {
   // 古い仕事も要る画面なので、残りを読み足す
@@ -13,6 +17,7 @@ export default function TaskDetail({ store, taskId, go }) {
   const task = store.tasks.find((t) => t.id === taskId);
   const [followUp, setFollowUp] = useState('');
   const [open, setOpen] = useState({});
+  const [meta, setMeta] = useState(null); // 台帳の3列を編集中かどうか
 
   if (!task) return <div className="screen"><Empty>仕事が見つかりません。</Empty></div>;
 
@@ -39,7 +44,12 @@ export default function TaskDetail({ store, taskId, go }) {
           {TASK_STATUS[task.status]}・{relTime(task.createdAt)}
           {task.totalCost > 0 && `・${usd(task.totalCost)}`}
         </div>
+        <div className="muted" style={{ fontSize: 11 }}>受付番号 {ticketOf(task)}</div>
       </Card>
+
+      <LedgerCard task={task} store={store} meta={meta} setMeta={setMeta} />
+
+      {openDecisions(task).length > 0 && <DecisionCard task={task} store={store} />}
 
       {task.missingApprovers?.length > 0 && (
         <Card glyph="⚠" title="確認を通していない成果物です">
@@ -154,7 +164,9 @@ export default function TaskDetail({ store, taskId, go }) {
         })}
       </div>
 
-      {pending && task.status !== 'awaiting_approval' && task.status !== 'failed' && (
+      {/* 保留・中止・完了は動かさない。押しても何も起きないボタンを出さないため
+          （runTask 側も isRunnable で止めている）。 */}
+      {pending && isRunnable(task) && task.status !== 'awaiting_approval' && task.status !== 'failed' && (
         <button
           type="button"
           className="btn block"
@@ -198,7 +210,10 @@ export default function TaskDetail({ store, taskId, go }) {
       {task.status === 'done' && (
         <>
           <SectionTitle>会社としての提出物</SectionTitle>
+          <PromiseWarning text={deliverable} />
           <Card>
+            {/* 見出しは「提出物を書いた手順」の本文から拾う（連結文からは拾わない） */}
+            <Highlights text={finalOutput(task)} />
             <Doc text={deliverable} />
             <div className="btn-row" style={{ marginTop: 10 }}>
               <button
@@ -291,4 +306,195 @@ export default function TaskDetail({ store, taskId, go }) {
       </div>
     </div>
   );
+}
+
+/**
+ * 台帳の3列（期限・次の対応・保留）。
+ * **ここだけが手で書き換えられる列**で、残りは仕事から導かれる。
+ */
+function LedgerCard({ task, store, meta, setMeta }) {
+  const editing = meta !== null;
+  const dueState = dueStateOf(task.dueAt);
+  const start = () =>
+    setMeta({
+      // **toISOString() を使わないこと**（UTCに直るので、日本時間の午前0時だと前日になる）
+      dueAt: task.dueAt ? toDateInput(task.dueAt) : '',
+      nextAction: task.nextAction || '',
+    });
+  const save = () => {
+    store.setTaskMeta(task.id, {
+      dueAt: meta.dueAt ? new Date(meta.dueAt).getTime() : null,
+      nextAction: meta.nextAction,
+    });
+    setMeta(null);
+  };
+
+  return (
+    <Card glyph="▦" title="台帳">
+      {!editing ? (
+        <>
+          <div className="muted" style={{ marginTop: -6 }}>
+            期限：
+            {task.dueAt ? (
+              <>
+                {new Date(task.dueAt).toLocaleDateString('ja-JP')}
+                {DUE_LABELS[dueState] && <span className="badge warn" style={{ marginLeft: 6 }}>{DUE_LABELS[dueState]}</span>}
+              </>
+            ) : (
+              '未設定'
+            )}
+          </div>
+          <div className="muted">次の対応：{task.nextAction || '（自動で表示しています）'}</div>
+          {task.holdReason && <div className="muted">保留の理由：{task.holdReason}</div>}
+          {task.spec && (task.spec.doneWhen || task.spec.deliverable) && (
+            <div className="muted">
+              完成の条件：{task.spec.doneWhen || task.spec.deliverable}
+            </div>
+          )}
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button type="button" className="btn small" onClick={start}>
+              期限・次の対応を書く
+            </button>
+            {task.status === 'on_hold' ? (
+              <button type="button" className="btn small primary" onClick={() => store.resumeTask(task.id)}>
+                保留を解く
+              </button>
+            ) : (
+              task.status !== 'done' &&
+              task.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  className="btn small ghost"
+                  onClick={() => {
+                    // 理由の無い保留は、あとで見た時に再開してよいか分からなくなる
+                    const reason = window.prompt('保留にする理由を書いてください（あとで自分が読みます）');
+                    if (reason === null) return;
+                    store.holdTask(task.id, reason);
+                  }}
+                >
+                  保留にする
+                </button>
+              )
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <Field label="期限">
+            <input
+              className="input"
+              type="date"
+              value={meta.dueAt}
+              onChange={(e) => setMeta({ ...meta, dueAt: e.target.value })}
+            />
+          </Field>
+          <Field label="次の対応（誰が・何を）">
+            <input
+              className="input"
+              value={meta.nextAction}
+              onChange={(e) => setMeta({ ...meta, nextAction: e.target.value })}
+              placeholder="例：自分が価格を決めてから、ライターに戻す"
+            />
+          </Field>
+          <div className="btn-row">
+            <button type="button" className="btn small primary" onClick={save}>
+              保存
+            </button>
+            <button type="button" className="btn small ghost" onClick={() => setMeta(null)}>
+              やめる
+            </button>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * 成果物の③から拾った「あなたの判断が要ること」。
+ * AIをもう一度呼ばずに、本文から機械的に取り出しているだけ。
+ */
+function DecisionCard({ task, store }) {
+  const items = openDecisions(task);
+  return (
+    <Card glyph="⚖" title={`あなたの判断が要ること ${items.length}件`}>
+      <p className="muted" style={{ marginTop: -6 }}>
+        成果物の中で、社員が「これは人が決めることです」と書いた所です。
+        決めるまで、この仕事は台帳で「確認待ち」のままになります。
+      </p>
+      {items.map((d) => (
+        <div key={d.id} className="card tight" style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 14 }}>{d.text}</div>
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn small primary"
+              onClick={() => store.decideTask(task.id, d.id, 'approved')}
+            >
+              これで進める
+            </button>
+            <button
+              type="button"
+              className="btn small ghost"
+              onClick={() => {
+                // キャンセルは「やめる」。握り潰して却下を確定させない（保留の扱いとそろえる）
+                const note = window.prompt('見送る理由（任意）');
+                if (note === null) return;
+                store.decideTask(task.id, d.id, 'rejected', note);
+              }}
+            >
+              見送る
+            </button>
+          </div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+/** 結論と最優先事項だけを先に出す（長い本文を頭から読まないで済ませる）。 */
+function Highlights({ text }) {
+  const { sections, found } = parseSections(text);
+  const keys = OUTPUT_SECTIONS.map((s) => s.key).filter((k) => k !== 'deliverable' && found.includes(k));
+  if (keys.length < 2) return null;
+  return (
+    <div className="card tight" style={{ marginBottom: 10 }}>
+      {keys.map((k) => (
+        <div key={k} style={{ marginBottom: 6 }}>
+          <div className="muted" style={{ fontSize: 11 }}>
+            {sectionByKey(k).num}
+            {sectionByKey(k).title}
+          </div>
+          <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{sections[k]}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 外へ出す前に、約束になっている表現を知らせる（止めはしない）。 */
+function PromiseWarning({ text }) {
+  const hits = checkPromises(text);
+  if (!hits.length) return null;
+  return (
+    <Card glyph="⚠" title="外へ出す前に確かめてください">
+      <p className="muted" style={{ marginTop: -6 }}>
+        この文章には「約束」になる表現が {hits.length} か所あります。
+        価格・納期・効果の確約は、AIではなくあなたが引き受けるところです。
+      </p>
+      <div className="chips">
+        {hits.map((h) => (
+          <span key={`${h.label}:${h.phrase}`} className="chip">
+            {h.phrase}（{h.label}）
+          </span>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** 日付の入力欄用（ローカルの日付のまま YYYY-MM-DD にする）。 */
+function toDateInput(ts) {
+  const d = new Date(ts);
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
 }
