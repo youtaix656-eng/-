@@ -8,7 +8,10 @@
 //    → ファイル名にハッシュが付くため、内容が変わればURLも変わる＝キャッシュしても安全。
 //  - 新しい Service Worker は待たずに有効化（skipWaiting + clients.claim）。
 
-const CACHE = 'shinkyu-cache-v2';
+// 同じGitHub Pages配下に他の同梱アプリ（るるくる・睡眠トラッカー・腰痛ナビ等）も
+// 存在するため、将来それぞれが独自のService Workerを持った時にキャッシュ名が
+// 衝突しないよう、アプリ名を含めた分かりやすい名前にしている。
+const CACHE = 'shinkyu-exam-app-cache-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

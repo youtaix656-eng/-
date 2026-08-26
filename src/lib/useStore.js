@@ -6,7 +6,7 @@ import * as storage from './storage.js';
 import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
-import { decodeSync, syncToBackup, isSyncExpired } from './sync.js';
+import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
@@ -903,6 +903,18 @@ export function useStore() {
     setQuestions(sampleQuestions);
   }, []);
 
+  // 端末内の解答履歴（history）は追記型で無制限に増え続けるため、既定オフの
+  // オプションとして、古い履歴（90日超）を「日付×科目×正誤の件数」に要約して
+  // 軽量化できるようにする（QR/バックアップ転送で使っているsummarizeHistoryForTransferと
+  // 同じロジック。要約後は個々の問題までは遡れなくなるため、必ず件数を見せてから
+  // ユーザーの明示操作でのみ実行する。設定画面「⚙️」から）。
+  const summarizeOldHistory = useCallback(() => {
+    const before = history.length;
+    const summarized = summarizeHistoryForTransfer(history);
+    setHistory(summarized);
+    return { before, after: summarized.length };
+  }, [history]);
+
   // バックアップ実行後にカウンタをリセット
   const markBackedUp = useCallback(() => {
     setSettings((prev) => ({
@@ -1023,6 +1035,7 @@ export function useStore() {
     updateSettings,
     resetProgress,
     restoreSamples,
+    summarizeOldHistory,
     markBackedUp,
     importBackup,
     emptyState,

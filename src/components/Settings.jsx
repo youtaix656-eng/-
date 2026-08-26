@@ -34,7 +34,24 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     restoreSamples,
     markBackedUp,
     importBackup,
+    summarizeOldHistory,
   } = store;
+
+  const HISTORY_SUMMARY_CUTOFF_DAYS = 90;
+  const doSummarizeOldHistory = () => {
+    if (
+      !confirm(
+        `解答履歴のうち直近${HISTORY_SUMMARY_CUTOFF_DAYS}日より前の分を、「日付・科目・正誤ごとの件数」にまとめて軽量化します。` +
+          '要約後は、古い方の履歴について1問ごとの詳細（どの問題を間違えたか等）には戻せません。よろしいですか？'
+      )
+    ) return;
+    const { before, after } = summarizeOldHistory();
+    onToast?.(
+      before === after
+        ? '要約できる古い履歴はありませんでした（直近90日以内のみ）'
+        : `解答履歴を${before}件→${after}件に軽量化しました`
+    );
+  };
 
   const fileRef = useRef(null);
   const [importMode, setImportMode] = useState('append'); // append | replace
@@ -409,6 +426,18 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         >
           解答履歴をCSVで保存
         </button>
+      </div>
+
+      <div className="section-label">解答履歴の軽量化（任意）</div>
+      <div className="card">
+        <p className="inline-note" style={{ marginBottom: 10 }}>
+          解答履歴（現在{history.length}件）は追記され続けるため、端末のストレージが気になる場合は、
+          直近{HISTORY_SUMMARY_CUTOFF_DAYS}日より前の分を「日付・科目・正誤ごとの件数」に要約して
+          軽量化できます。直近{HISTORY_SUMMARY_CUTOFF_DAYS}日分と、要約後の件数はそのまま残ります。
+          <br />※ 要約すると、古い方の履歴は1問ごとの詳細（どの問題だったか）が失われます。
+          先に上のCSV書き出しで控えを残すことをおすすめします。
+        </p>
+        <button className="btn" onClick={doSummarizeOldHistory}>🗜️ 古い履歴を要約して軽量化する</button>
       </div>
 
       {/* ===== 音声設定 ===== */}
