@@ -53,6 +53,7 @@ const ExamDayChecklist = lazy(() => import('./components/ExamDayChecklist.jsx'))
 const AcupointTap = lazy(() => import('./components/AcupointTap.jsx'));
 const MnemonicQuiz = lazy(() => import('./components/MnemonicQuiz.jsx'));
 const KeiketsuReverseQuiz = lazy(() => import('./components/KeiketsuReverseQuiz.jsx'));
+const KeiketsuLibrary = lazy(() => import('./components/KeiketsuLibrary.jsx'));
 
 function ViewLoading() {
   return (
@@ -554,6 +555,8 @@ export default function App() {
         return <AcupointTap onNavigate={setView} />;
       case 'keiketsureverse':
         return <KeiketsuReverseQuiz onNavigate={setView} />;
+      case 'keiketsulibrary':
+        return <KeiketsuLibrary onToast={showToast} onNavigate={setView} />;
       case 'mnemonics':
         return <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} />;
       case 'mnemonicquiz':

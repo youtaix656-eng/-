@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateQuestions, generateVariants, GENERATORS } from '../src/lib/generator.js';
 import { yuanPoints, meridians } from '../src/data/knowledgeBase.js';
+import { KEIKETSU_CARDS } from '../src/data/keiketsuCards.js';
 
 test('生成した問題は必要な項目を備える', () => {
   const qs = generateQuestions({ count: 8 });
@@ -53,6 +54,34 @@ test('相剋の生成は正しい（木→土 など）', () => {
 test('指定タイプのみ生成される', () => {
   const qs = generateQuestions({ types: ['sheng'], count: 5 });
   qs.forEach((q) => assert.ok(q.tags.includes('相生')));
+});
+
+test('経穴カード→経絡の生成はkeiketsuCards.jsと正解が一致する', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.keiketsuMeridian.fn();
+    assert.ok(q, 'カードが4枚以上あるので必ず生成される');
+    const c = KEIKETSU_CARDS.find((x) => q.question.includes(x.name));
+    assert.ok(c, '経穴名が設問に含まれる');
+    assert.equal(q.choices[q.answer], c.meridian);
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('経穴カード→取穴部位の生成はkeiketsuCards.jsと正解が一致する', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.keiketsuLocation.fn();
+    assert.ok(q);
+    const c = KEIKETSU_CARDS.find((x) => q.question.includes(x.name));
+    assert.ok(c, '経穴名が設問に含まれる');
+    assert.equal(q.choices[q.answer], c.location);
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('keiketsuCards.jsの全カードにsourceIds配列がある', () => {
+  KEIKETSU_CARDS.forEach((c) => {
+    assert.ok(Array.isArray(c.sourceIds), `${c.name} に sourceIds が無い`);
+  });
 });
 
 test('○×変形は正誤が整合する', () => {
