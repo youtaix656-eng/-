@@ -11,6 +11,18 @@ export const MEETING_PHASES = [
   { id: 'synthesis', name: '統合', desc: '議長がまとめ、オーナーへの提案にする' },
 ];
 
+/**
+ * 会議1回でAIを何回呼ぶかの見積り（新規）。
+ *   意見（参加人数）＋ 反論（参加人数）＋ 統合（議長1人）
+ * 承認画面で「何回ぶんの費用が出るのか」を先に伝えるために使う。
+ */
+export function estimatedCalls(participantCount) {
+  const n = Math.max(0, Number(participantCount) || 0);
+  return n * 2 + (n > 0 ? 1 : 0);
+}
+
+export const MEETING_ESTIMATED_CALLS = estimatedCalls;
+
 export function createMeeting({ topic, employees = [], chairId = null }) {
   return {
     id: newId('mtg'),
@@ -25,6 +37,8 @@ export function createMeeting({ topic, employees = [], chairId = null }) {
     createdAt: Date.now(),
     finishedAt: null,
     totalCost: 0,
+    // 費用の出る実行なので、仕事と同じく1回だけユーザー承認を通す
+    costApproved: false,
   };
 }
 

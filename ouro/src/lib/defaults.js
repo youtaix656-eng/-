@@ -13,5 +13,10 @@ export function makeSettings() {
     usdJpy: 155, // 円換算の目安（設定で変えられる）
     splashSeen: false,
     theme: 'ouro',
+    // 今月のAI費用の上限（USD）。0 で上限なし。
+    // 「毎回の確認を省く」を入れても、この線を越えたら確認へ戻る。
+    monthlyCapUsd: 5,
+    // 最後にバックアップを書き出した時刻。0 は一度も書き出していない。
+    lastExportAt: 0,
   };
 }

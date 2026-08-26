@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { Card, Field, SectionTitle, Row, Empty, Doc, Bar } from './ui.jsx';
-import { MEETING_PHASES, meetingProgress } from '../lib/meeting.js';
+import { MEETING_PHASES, meetingProgress, estimatedCalls } from '../lib/meeting.js';
 import { relTime, usd } from '../lib/format.js';
 
 const TOPICS = [
@@ -76,7 +76,7 @@ export default function Meeting({ store, go }) {
           onClick={start}
           disabled={!topic.trim() || picked.length < 2}
         >
-          会議をはじめる（{picked.length * 2 + 1}回の発言）
+          会議をはじめる（AIを約{estimatedCalls(picked.length)}回呼びます）
         </button>
       </Card>
 
@@ -87,7 +87,7 @@ export default function Meeting({ store, go }) {
             key={m.id}
             glyph="◎"
             title={m.topic}
-            sub={`${m.participantIds.length}人・${m.status === 'done' ? '結論あり' : '進行中'}・${relTime(m.createdAt)}`}
+            sub={`${m.participantIds.length}人・${MEETING_STATUS[m.status] || '進行中'}・${relTime(m.createdAt)}`}
             onClick={() => go('meetingDetail', m.id)}
           />
         ))
@@ -97,6 +97,15 @@ export default function Meeting({ store, go }) {
     </div>
   );
 }
+
+// 会議の状態の言葉づかい（一覧と詳細でそろえる）
+const MEETING_STATUS = {
+  queued: '待機中',
+  awaiting_approval: '承認待ち',
+  running: '進行中',
+  done: '結論あり',
+  cancelled: '中止',
+};
 
 export function MeetingDetail({ store, meetingId }) {
   const mtg = store.meetings.find((m) => m.id === meetingId);
@@ -114,7 +123,24 @@ export function MeetingDetail({ store, meetingId }) {
           {mtg.totalCost > 0 && `・${usd(mtg.totalCost)}`}
           {busy && <> ・<span className="spinner" /> 進行中</>}
         </div>
+        {mtg.status === 'awaiting_approval' && (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            費用が発生するため、承認画面であなたの確認を待っています。
+          </p>
+        )}
       </Card>
+
+      {/* 会議も途中でやめられる。止めればその先の利用料はかからない。 */}
+      {busy && (
+        <button
+          type="button"
+          className="btn ghost block"
+          onClick={() => store.cancelRun()}
+          style={{ marginBottom: 12 }}
+        >
+          やめる（ここまでの発言は残ります）
+        </button>
+      )}
 
       {MEETING_PHASES.map((phase) => {
         const rounds = mtg.rounds.filter((r) => r.phase === phase.id);

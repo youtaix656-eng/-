@@ -364,7 +364,7 @@ ouro/
    `permissions.REQUIRE_APPROVAL` に登録する。「とりあえず全許可」を作らない。
 5. **役職の追加はデータだけで済ませる。** `data/roles.js` に 1 件足せば、
    マインドマップ・自動社員選択・網羅表示が自動で追従する（画面を直さない）。
-6. **席（seat）は可変。** 「1役職3人」は `company.seatsPerRole` の初期値であって
+6. **席（seat）は可変。** 「1役職3人」は `company.seatsPerGenre` の初期値であって
    定数ではない。増席は `hireEmployee({roleId, seat})` だけで足りる。
 7. **Task の steps は配列。** 単発実行を `task.output` に直書きしない。
    1 ステップでも `steps:[...]` に入れる（後で会議・並列化に拡張できる）。

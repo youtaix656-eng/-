@@ -26,6 +26,18 @@ export const STEP_STATUS = {
 };
 
 /**
+ * 応答が空だったか（新規）。
+ *
+ * エラーは出ていないのに本文が空、という結果がある（モデルが何も返さない等）。
+ * これを「完了」にすると、提出物ゼロ・知識ゼロのまま
+ * 画面に「完了」とだけ出て、何が起きたのか分からなくなる。
+ * 空白だけを空とみなす（「該当なし」のような短い正当な答えは通す）。
+ */
+export function isEmptyResult(result = {}) {
+  return !result.error && !String(result.text || '').trim();
+}
+
+/**
  * 依頼文から Task を組み立てる（実行はしない）。
  * @param {object} o
  * @param {string} o.request 自然言語の依頼
@@ -37,7 +49,7 @@ export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = 
   const needs = detectNeeds(request);
 
   // 誰も雇っていない役職が計画に入ると、その社員が見つからず仕事全体が失敗する。
-  // 役職は25あり、ほとんどは未雇用なので、**在籍している役職だけで計画を組み直す**。
+  // 役職は30あり、ほとんどは未雇用なので、**在籍している役職だけで計画を組み直す**。
   // 外した役職は unstaffedRoles に残し、「雇えばもっと良くなる」と伝えられるようにする。
   const assigned = rawPlan.map((p, i) => ({ p, employee: assign ? assign(p.roleId, i) : null }));
   const staffed = assigned.filter((x) => x.employee);
@@ -88,7 +100,8 @@ export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = 
     createdAt: Date.now(),
     startedAt: null,
     finishedAt: null,
-    result: { text: '', knowledgeIds: [], sourceIds: [] },
+    // 本文はここに持たない（手順の出力と知識の body にある）。参照だけを残す。
+    result: { knowledgeIds: [], sourceIds: [] },
     totalCost: 0,
   };
 }
@@ -122,9 +135,10 @@ function groupOf(step, steps) {
 export function applyStepResult(task, stepId, result) {
   const steps = task.steps.map((s) => {
     if (s.id !== stepId) return s;
+    const empty = isEmptyResult(result);
     return {
       ...s,
-      status: result.error ? 'failed' : 'done',
+      status: result.error || empty ? 'failed' : 'done',
       output: result.text || '',
       providerId: result.providerId || null,
       providerName: result.providerName || null,
@@ -136,7 +150,7 @@ export function applyStepResult(task, stepId, result) {
       citations: result.citations || [],
       usedKnowledgeIds: result.usedKnowledgeIds || [],
       finishedAt: Date.now(),
-      error: result.error || null,
+      error: result.error || (empty ? 'AIから空の応答が返りました' : null),
     };
   });
 
@@ -144,7 +158,7 @@ export function applyStepResult(task, stepId, result) {
   // 新項目22：同時に走る手順があるので、**その group が全部終わってから**
   // 次の group へ渡す。1つ終わるたびに渡すと、片方の結果しか届かない。
   const idx = steps.findIndex((s) => s.id === stepId);
-  if (idx >= 0 && !result.error) {
+  if (idx >= 0 && !result.error && !isEmptyResult(result)) {
     const g = groupOf(steps[idx], steps);
     const sameGroup = steps.filter((s) => groupOf(s, steps) === g);
     const groupDone = sameGroup.every((s) => s.status === 'done' || s.status === 'skipped');
@@ -179,18 +193,37 @@ export function applyStepResult(task, stepId, result) {
     startedAt: task.startedAt || Date.now(),
     finishedAt: allDone || failed ? Date.now() : null,
     totalCost: steps.reduce((sum, s) => sum + (s.cost || 0), 0),
-    result: allDone
-      ? {
-          ...task.result,
-          text: lastOutput(steps),
-        }
-      : task.result,
+    // **提出物の本文をここに持たせない。**
+    // 同じ文章を steps（各手順の出力）と result.text と知識の body の
+    // 3か所に持っていたため、仕事1件あたりの保存量が実際の3倍になっていた。
+    // 本文が要る所では assembleResult(task) で組み立てる。
+    result: task.result,
   };
 }
 
-function lastOutput(steps) {
-  const done = steps.filter((s) => s.status === 'done' && s.output);
-  return done.length ? done[done.length - 1].output : '';
+/**
+ * 失敗した手順を待機に戻して、そこからやり直せる形にする（新規）。
+ *
+ * これまでは1手順でも失敗すると task.status が failed で固まり、
+ * 画面には「続きを実行する」が出るのに runTask が即座に抜けるため、
+ * 押しても何も起きない行き止まりになっていた。
+ *
+ * @param {string} [stepId] 指定するとその手順だけ。省略すると失敗した全手順。
+ */
+export function retryFailed(task, stepId = null) {
+  const steps = (task.steps || []).map((s) => {
+    if (s.status !== 'failed') return s;
+    if (stepId && s.id !== stepId) return s;
+    return { ...s, status: 'pending', output: '', error: null, startedAt: null, finishedAt: null };
+  });
+  const changed = steps.some((s, i) => s !== task.steps[i]);
+  if (!changed) return task;
+  return {
+    ...task,
+    steps,
+    status: 'queued',
+    finishedAt: null,
+  };
 }
 
 /** 全ステップの出力をつなげた「会社としての提出物」。 */

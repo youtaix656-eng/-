@@ -39,6 +39,7 @@ export default function Approvals({ store, go }) {
                     // 承認したら仕事の画面へ移る。ここに留まると、実行が
                     // 始まっているのに何も起きていないように見える（項目27）。
                     if (a.taskId) go('task', a.taskId);
+                    else if (a.meetingId) go('meetingDetail', a.meetingId);
                     store.decideApproval(a.id, true);
                   }}
                 >

@@ -18,7 +18,7 @@ export default function Employees({ store, go, preset = {} }) {
 
   const role = roleById(roleId);
   const genres = allGenres(store.genres);
-  const seatsPerGenre = store.company?.seatsPerRole || 3;
+  const seatsPerGenre = store.company?.seatsPerGenre || 3;
   const seats = seatsOf(store.employees, roleId, genreId);
   const extraRoles = ROLES.filter((r) => !r.core);
 
