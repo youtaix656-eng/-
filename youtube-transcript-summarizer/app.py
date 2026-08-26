@@ -1,30 +1,17 @@
-"""YouTube動画の字幕を取得し、Claudeで詳細文章と要約を生成するStreamlitアプリ。"""
+"""YouTube動画のURLから文字起こしを取得して表示するStreamlitアプリ。"""
 
 import os
 import re
+import tempfile
 
-import anthropic
 import requests
 import streamlit as st
+import yt_dlp
+from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api import CouldNotRetrieveTranscript, RequestBlocked
 
-DEFAULT_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-5")
-
-SYSTEM_PROMPT = """あなたは優秀な編集者です。YouTube動画の字幕テキストを渡すので、次の2つを作成してください。
-
-1. 詳細文章: 話し言葉の字幕を、意味を保ったまま読みやすい文章体に整えてください。話題の区切りが分かる場合はMarkdownの見出し（##）で章立てしてください。
-2. 要約: 300〜500文字程度で、動画の内容を過不足なくまとめてください。
-
-出力は必ず次の形式のみで返してください。前後に説明や挨拶などの余計な文章を含めないでください。
-
----SUMMARY-START---
-(ここに要約)
----SUMMARY-END---
----DETAIL-START---
-(ここに詳細文章)
----DETAIL-END---
-"""
+MAX_WHISPER_BYTES = 24 * 1024 * 1024  # Whisper APIの上限(25MB)に余裕を持たせる
 
 VIDEO_ID_PATTERNS = [
     r"(?:v=|/shorts/|/embed/|/live/)([0-9A-Za-z_-]{11})",
@@ -53,81 +40,65 @@ def fetch_video_title(url: str) -> str:
         return "YouTube動画"
 
 
-def fetch_transcript_text(video_id: str) -> tuple[str, str]:
-    """(字幕テキスト, 言語コード) を返す。日本語優先、なければ英語。"""
-    api = YouTubeTranscriptApi()
-    fetched = api.fetch(video_id, languages=["ja", "ja-JP", "en", "en-US"])
-    text = " ".join(snippet.text for snippet in fetched)
-    return text, fetched.language_code
+def fetch_transcript_via_captions(video_id: str) -> str | None:
+    """字幕（手動・自動生成問わず）から文字起こしを取得する。日本語優先、なければ英語。
+    字幕が存在しない場合はNoneを返す。"""
+    try:
+        api = YouTubeTranscriptApi()
+        fetched = api.fetch(video_id, languages=["ja", "ja-JP", "en", "en-US"])
+        return " ".join(snippet.text for snippet in fetched)
+    except CouldNotRetrieveTranscript:
+        return None
 
 
-def summarize_with_claude(api_key: str, model: str, title: str, transcript_text: str) -> tuple[str, str]:
-    client = anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model=model,
-        max_tokens=16000,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": f"動画タイトル: {title}\n\n字幕全文:\n{transcript_text}",
-            }
-        ],
-    )
-    raw = "".join(block.text for block in message.content if block.type == "text")
+def fetch_transcript_via_whisper(url: str, openai_api_key: str) -> str:
+    """字幕がない場合のフォールバック。yt-dlpで音声のみ取得し、Whisper APIで文字起こしする。"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "64",
+                }
+            ],
+            "quiet": True,
+            "noprogress": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
 
-    summary_match = re.search(r"---SUMMARY-START---(.*?)---SUMMARY-END---", raw, re.DOTALL)
-    detail_match = re.search(r"---DETAIL-START---(.*?)---DETAIL-END---", raw, re.DOTALL)
+        mp3_path = os.path.join(tmpdir, "audio.mp3")
+        if not os.path.exists(mp3_path):
+            raise RuntimeError("音声のダウンロードに失敗しました。")
 
-    if not summary_match or not detail_match:
-        if message.stop_reason == "max_tokens":
-            raise ValueError(
-                "動画が長く、出力が上限に達したため途中で切れました。"
-                "もう一度実行しても同じ結果になります（動画が長すぎる可能性があります）。"
+        if os.path.getsize(mp3_path) > MAX_WHISPER_BYTES:
+            raise RuntimeError(
+                "動画が長すぎるため文字起こしできません（Whisper APIは25MBまで）。"
+                "短い動画でお試しください。"
             )
-        raise ValueError("Claudeの応答を解析できませんでした。もう一度お試しください。")
 
-    return summary_match.group(1).strip(), detail_match.group(1).strip()
+        client = OpenAI(api_key=openai_api_key)
+        with open(mp3_path, "rb") as f:
+            transcription = client.audio.transcriptions.create(model="whisper-1", file=f)
+        return transcription.text
 
 
 def sanitize_filename(name: str) -> str:
-    return re.sub(r'[\\/:*?"<>|]', "_", name).strip() or "youtube_summary"
+    return re.sub(r'[\\/:*?"<>|]', "_", name).strip() or "transcript"
 
 
-def build_markdown(title: str, url: str, summary: str, detail: str) -> str:
-    return f"""# {title}
+st.set_page_config(page_title="YouTube文字起こし", page_icon="📝", layout="wide")
 
-**URL**: {url}
+st.title("📝 YouTube 文字起こしアプリ")
+st.caption("YouTubeのURLを貼ると、文字起こしを取得して表示します。")
 
-## 要約
-
-{summary}
-
-## 詳細文章
-
-{detail}
-"""
-
-
-st.set_page_config(page_title="YouTube字幕要約", page_icon="📺", layout="wide")
-
-st.title("📺 YouTube 字幕要約アプリ")
-st.caption("YouTubeのURLを入力すると、字幕から詳細文章と要約をClaudeが生成します。")
-
-raw_api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-api_key = raw_api_key if raw_api_key.isascii() else None
-
-if not raw_api_key:
-    st.error("環境変数 `ANTHROPIC_API_KEY` が設定されていません。設定してからアプリを再起動してください。")
-elif not raw_api_key.isascii():
-    st.error(
-        "APIキーに全角文字やスマート引用符など、使用できない文字が含まれているようです。"
-        "Streamlit CloudのSecretsを開き、APIキーを一度削除してから貼り付け直してください"
-        "（前後の引用符は半角の \" を使い、スマートフォンの自動修正機能はオフにしてください）。"
-    )
+openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
 
 url = st.text_input("YouTube動画のURL", placeholder="https://www.youtube.com/watch?v=...")
-run = st.button("実行", type="primary", disabled=not api_key)
+run = st.button("取得", type="primary")
 
 if run:
     st.session_state.pop("result", None)
@@ -135,41 +106,40 @@ if run:
     if not video_id:
         st.error("有効なYouTubeのURLを入力してください。")
     else:
+        transcript_text = None
         with st.spinner("字幕を取得しています..."):
             try:
-                transcript_text, lang_code = fetch_transcript_text(video_id)
+                transcript_text = fetch_transcript_via_captions(video_id)
             except RequestBlocked:
                 st.error(
                     "YouTube側からのアクセス制限（IPブロック）により字幕を取得できませんでした。"
-                    "サーバーのIPアドレスが一時的にブロックされている可能性があります。"
                     "時間を置いて再度お試しください。"
                 )
-                transcript_text = None
-            except CouldNotRetrieveTranscript:
-                st.error("この動画には字幕（日本語・英語）が存在しないか、取得できませんでした。")
-                transcript_text = None
             except Exception as e:
                 st.error(f"字幕の取得中にエラーが発生しました: {e}")
-                transcript_text = None
+
+        if transcript_text is None:
+            if not openai_api_key:
+                st.error(
+                    "この動画には字幕がありません。音声からの文字起こしには "
+                    "環境変数 `OPENAI_API_KEY` の設定が必要です。"
+                )
+            else:
+                with st.spinner(
+                    "字幕が見つからないため、音声から文字起こししています（数分かかることがあります）..."
+                ):
+                    try:
+                        transcript_text = fetch_transcript_via_whisper(url, openai_api_key)
+                    except Exception as e:
+                        st.error(f"音声からの文字起こし中にエラーが発生しました: {e}")
 
         if transcript_text:
             title = fetch_video_title(url)
-            st.info(f"字幕を取得しました（言語: {lang_code}）。要約を生成しています...")
-
-            with st.spinner("Claudeが文章を生成しています..."):
-                try:
-                    summary, detail = summarize_with_claude(api_key, DEFAULT_MODEL, title, transcript_text)
-                except Exception as e:
-                    st.error(f"要約生成中にエラーが発生しました: {e}")
-                    summary, detail = None, None
-
-            if summary and detail:
-                st.session_state["result"] = {
-                    "title": title,
-                    "url": url,
-                    "summary": summary,
-                    "detail": detail,
-                }
+            st.session_state["result"] = {
+                "title": title,
+                "url": url,
+                "transcript": transcript_text,
+            }
 
 if "result" in st.session_state:
     result = st.session_state["result"]
@@ -177,16 +147,12 @@ if "result" in st.session_state:
     st.subheader(f"🎬 {result['title']}")
     st.markdown(f"[{result['url']}]({result['url']})")
 
-    st.markdown("### 要約")
-    st.code(result["summary"], language="text", wrap_lines=True)
+    st.markdown("### 文字起こし")
+    st.code(result["transcript"], language="text", wrap_lines=True)
 
-    st.markdown("### 詳細文章")
-    st.code(result["detail"], language="text", wrap_lines=True)
-
-    markdown_content = build_markdown(result["title"], result["url"], result["summary"], result["detail"])
     st.download_button(
-        label="Markdownファイルをダウンロード",
-        data=markdown_content.encode("utf-8"),
-        file_name=f"{sanitize_filename(result['title'])}.md",
-        mime="text/markdown",
+        label="テキストファイルをダウンロード",
+        data=result["transcript"].encode("utf-8"),
+        file_name=f"{sanitize_filename(result['title'])}.txt",
+        mime="text/plain",
     )

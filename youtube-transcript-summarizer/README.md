@@ -1,28 +1,38 @@
-# YouTube 字幕要約アプリ
+# YouTube 文字起こしアプリ
 
-YouTubeのURLを入力すると、動画の字幕（日本語優先、なければ英語）を取得し、
-Claudeで「読みやすい詳細文章」と「300〜500文字の要約」を生成するStreamlitアプリです。
+YouTubeのURLを貼ると文字起こしを取得して表示するStreamlitアプリです。
+字幕がある動画はそのまま取得し、字幕がない動画は音声をダウンロードして
+Whisper APIで文字起こしします。
 
 ## セットアップ
 
 ```bash
 cd youtube-transcript-summarizer
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...
+# 音声フォールバック(yt-dlp)を使うにはffmpegが必要
+# 例: sudo apt-get install ffmpeg / brew install ffmpeg
+export OPENAI_API_KEY=sk-...   # 字幕なし動画のWhisper文字起こしに必要（任意）
 streamlit run app.py
 ```
 
 ## 使い方
 
 1. YouTube動画のURLを入力欄に貼り付ける。
-2. 「実行」ボタンを押す。
-3. 「要約」「詳細文章」がそれぞれコピー用のコードブロックで表示される
+2. 「取得」ボタンを押す。
+3. 字幕があればそのまま、なければ音声から文字起こしした結果が表示される
    （右上のアイコンでワンクリックコピー可能）。
-4. 「Markdownファイルをダウンロード」ボタンで、動画タイトル・URL・要約・
-   詳細文章をまとめた `.md` ファイルを保存できる。
+4. 「テキストファイルをダウンロード」ボタンで `.txt` として保存できる。
+
+## 処理の流れ
+
+1. URLから動画IDを抽出。
+2. `youtube-transcript-api` で字幕取得を試みる（日本語優先、なければ英語）。
+3. 字幕が存在しない場合、`yt-dlp` で音声のみダウンロードし、
+   OpenAIのWhisper APIで文字起こしする。
+4. 結果を画面に表示し、ダウンロードボタンを設置。
 
 ## 注意事項
 
-- 字幕が存在しない・非公開設定などで取得できない動画はエラーメッセージを表示します。
-- 使用するClaudeモデルは環境変数 `CLAUDE_MODEL` で変更可能です（未設定時は `claude-sonnet-5`）。
-- 動画タイトルはYouTubeのoEmbed APIから取得します（APIキー不要）。
+- Whisper APIによる音声文字起こしは1ファイル25MBまで（長い動画は非対応）。
+- `OPENAI_API_KEY` が未設定の場合、字幕がない動画は「字幕なし」エラーになる。
+- Streamlit Cloudにデプロイする場合、`packages.txt` の `ffmpeg` が自動でインストールされる。
