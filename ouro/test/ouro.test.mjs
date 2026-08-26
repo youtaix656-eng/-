@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ROLES, CORE_ROLES, roleById } from '../src/data/roles.js';
-import { initialPresets, presetEmployee, SEAT_ARCHETYPES, archetypeFor } from '../src/data/employees.js';
+import { initialPresets, presetEmployee, SEAT_ARCHETYPES, archetypeFor, EXTRA_NAMES } from '../src/data/employees.js';
 import { PLANS, connectionLimit, employeeLimit, planById } from '../src/data/plans.js';
 import { TOOLS, countableTools } from '../src/data/tools.js';
 import { JOB_TEMPLATES, easiestFirst } from '../src/data/jobTemplates.js';
@@ -656,4 +656,62 @@ test('最小限の Markdown を表示用に分解できる', () => {
   assert.equal(blocks[2].type, 'list');
   assert.deepEqual(blocks[2].items, ['項目1', '項目2']);
   assert.equal(blocks[3].type, 'p');
+});
+
+// ───────── 社員の名前が重ならない（実際に踏んだ不具合） ─────────
+
+test('同じジャンルの中で、役職ごとに違う名前が付く', () => {
+  // 以前は名前の起点をジャンルだけで決めていたため、同じジャンルに複数の役職を
+  // 雇うと、どの役職の1席目も同じ名前になっていた
+  // （リサーチャー・ルイ／アナライザー・ルイ／レビュアー・ルイ…）。
+  for (const genreId of ['health', 'money', 'writing', 'design', 'tech', 'business', 'life', 'study']) {
+    const names = [];
+    for (const role of ROLES) {
+      for (const seat of [1, 2, 3]) names.push(presetEmployee(role.id, seat, genreId).shortName);
+    }
+    const dup = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
+    assert.equal(dup.length, 0, `${genreId} で名前が重複している：${dup.join('・')}`);
+  }
+});
+
+test('ユーザーが足したジャンルも、既存のジャンルと名前がぶつからない', () => {
+  // 以前はユーザーが足したジャンルの起点が一律だったので、
+  // 複数足すと互いに同じ名前になっていた。
+  const custom = [
+    { id: 'g_side', name: '副業・受注', reading: 'ふくぎょうじゅちゅう' },
+    { id: 'g_shop', name: '物販', reading: 'ぶっぱん' },
+  ];
+  const a = ROLES.map((r) => presetEmployee(r.id, 1, 'g_side', custom).shortName);
+  const b = ROLES.map((r) => presetEmployee(r.id, 1, 'g_shop', custom).shortName);
+  assert.equal(new Set(a).size, a.length, '同じジャンルの中で重複している');
+  const same = a.filter((n, i) => n === b[i]);
+  assert.equal(same.length, 0, `別ジャンルの同じ役職に同じ名前が付いている：${same.join('・')}`);
+});
+
+test('ジャンルの起点は席数ぶんずらす（隣のジャンルと区画が重ならない）', () => {
+  // 1つずつずらすと、隣のジャンルの1席目とこのジャンルの2席目が同じ名前になる。
+  const a = [1, 2, 3].map((s) => presetEmployee('researcher', s, 'health').shortName);
+  const b = [1, 2, 3].map((s) => presetEmployee('researcher', s, 'study').shortName);
+  const overlap = a.filter((n) => b.includes(n));
+  assert.deepEqual(overlap, [], `隣り合うジャンルで名前が重なっている：${overlap.join('・')}`);
+});
+
+test('共用の名前プールは、役職の数 × 席数 より多い', () => {
+  // 少ないと、同じジャンルの別の役職に同じ名前が回ってしまう
+  assert.ok(
+    EXTRA_NAMES.length >= ROLES.length * 3,
+    `名前が足りない（プール${EXTRA_NAMES.length}名／必要${ROLES.length * 3}名）`
+  );
+  const names = EXTRA_NAMES.map((x) => x.name);
+  assert.equal(new Set(names).size, names.length, 'プールの中で名前が重複している');
+  for (const x of EXTRA_NAMES) {
+    assert.match(x.name, /^[ァ-ヶー]+$/, `${x.name} がカタカナでない`);
+    assert.match(x.reading, /^[ぁ-んー]+$/, `${x.name} の読みがひらがなでない`);
+  }
+});
+
+test('4席目以降も名前が尽きず、3席目までと重ならない', () => {
+  const seats = [1, 2, 3, 4, 5, 6, 7].map((s) => presetEmployee('researcher', s, 'health').shortName);
+  assert.equal(new Set(seats).size, seats.length, `4席目以降で名前が重複：${seats.join('・')}`);
+  for (const n of seats) assert.ok(n && n.length > 0);
 });

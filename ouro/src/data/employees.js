@@ -7,7 +7,7 @@
 // 席数は company.seatsPerGenre の初期値でしかなく、増席できる。
 
 import { ROLES } from './roles.js';
-import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE, genreById } from './genres.js';
+import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE, genreById, allGenres } from './genres.js';
 import { characterAt, characterDetail } from './characters.js';
 import { kataToHira } from '../lib/yomi.js';
 
@@ -43,7 +43,10 @@ export const SEAT_ARCHETYPES = [
   },
 ];
 
-// 4席目以降で使う名前（役職・ジャンルをまたいで共用）。
+// 汎用ジャンル以外で使う名前（役職・ジャンルをまたいで共用）。
+//
+// **役職の数 × 席数 より多く持つこと。** 少ないと、同じジャンルの別の役職に
+// 同じ名前が回ってしまう（30役職 × 3席 ＝ 90 なので、90名ぶん用意してある）。
 export const EXTRA_NAMES = [
   { name: 'シキ', reading: 'しき' },
   { name: 'ミナ', reading: 'みな' },
@@ -75,6 +78,66 @@ export const EXTRA_NAMES = [
   { name: 'ルイ', reading: 'るい' },
   { name: 'ワカ', reading: 'わか' },
   { name: 'ノゾミ', reading: 'のぞみ' },
+  { name: 'アキラ', reading: 'あきら' },
+  { name: 'イオリ', reading: 'いおり' },
+  { name: 'ウタ', reading: 'うた' },
+  { name: 'ノドカ', reading: 'のどか' },
+  { name: 'オト', reading: 'おと' },
+  { name: 'カナタ', reading: 'かなた' },
+  { name: 'キリ', reading: 'きり' },
+  { name: 'クオン', reading: 'くおん' },
+  { name: 'ケイ', reading: 'けい' },
+  { name: 'コハク', reading: 'こはく' },
+  { name: 'サキ', reading: 'さき' },
+  { name: 'シオリ', reading: 'しおり' },
+  { name: 'ミサキ', reading: 'みさき' },
+  { name: 'エリカ', reading: 'えりか' },
+  { name: 'スバル', reading: 'すばる' },
+  { name: 'タヅル', reading: 'たづる' },
+  { name: 'チアキ', reading: 'ちあき' },
+  { name: 'ツカサ', reading: 'つかさ' },
+  { name: 'テル', reading: 'てる' },
+  { name: 'トモエ', reading: 'ともえ' },
+  { name: 'セイラ', reading: 'せいら' },
+  { name: 'ニコ', reading: 'にこ' },
+  { name: 'ヌイ', reading: 'ぬい' },
+  { name: 'ネネ', reading: 'ねね' },
+  { name: 'ソウマ', reading: 'そうま' },
+  { name: 'ハナ', reading: 'はな' },
+  { name: 'ヒカリ', reading: 'ひかり' },
+  { name: 'フウカ', reading: 'ふうか' },
+  { name: 'ヘイジ', reading: 'へいじ' },
+  { name: 'ホマレ', reading: 'ほまれ' },
+  { name: 'マイ', reading: 'まい' },
+  { name: 'ナギサ', reading: 'なぎさ' },
+  { name: 'ムツキ', reading: 'むつき' },
+  { name: 'メイ', reading: 'めい' },
+  { name: 'モモ', reading: 'もも' },
+  { name: 'ヤマト', reading: 'やまと' },
+  { name: 'ユキ', reading: 'ゆき' },
+  { name: 'ヨウ', reading: 'よう' },
+  { name: 'ラン', reading: 'らん' },
+  { name: 'リオ', reading: 'りお' },
+  { name: 'ルカ', reading: 'るか' },
+  { name: 'レイ', reading: 'れい' },
+  { name: 'ロク', reading: 'ろく' },
+  { name: 'ワタル', reading: 'わたる' },
+  { name: 'アヤメ', reading: 'あやめ' },
+  { name: 'イチカ', reading: 'いちか' },
+  { name: 'ウミ', reading: 'うみ' },
+  { name: 'エイジ', reading: 'えいじ' },
+  { name: 'オウガ', reading: 'おうが' },
+  { name: 'カレン', reading: 'かれん' },
+  { name: 'キョウ', reading: 'きょう' },
+  { name: 'クルミ', reading: 'くるみ' },
+  { name: 'ケント', reading: 'けんと' },
+  { name: 'コトネ', reading: 'ことね' },
+  { name: 'サトル', reading: 'さとる' },
+  { name: 'シュン', reading: 'しゅん' },
+  { name: 'スミカ', reading: 'すみか' },
+  { name: 'セリカ', reading: 'せりか' },
+  { name: 'ソノカ', reading: 'そのか' },
+  { name: 'タイガ', reading: 'たいが' },
 ];
 
 /** 席の持ち味。4席目以降は主席→次席→三席を繰り返す。 */
@@ -102,18 +165,22 @@ const NAMES = {
   accountant: ['ゼニ', 'ソロ', 'タマ'],
 };
 
-// ジャンルごとに名前を少しずらして、別ジャンルの同じ席と名前が重ならないようにする。
-const GENRE_NAME_OFFSET = {
-  general: 0,
-  health: 3,
-  study: 6,
-  money: 9,
-  writing: 12,
-  design: 15,
-  tech: 18,
-  business: 21,
-  life: 24,
-};
+/**
+ * ジャンルごとに、名前プールのどこから使い始めるかの起点。
+ *
+ * **ジャンルの並び順を使う**（名前から作る数ではなく）。
+ * 数から作ると、たまたま同じ位置に落ちた2つのジャンルで、同じ役職に同じ名前が付く。
+ * 並び順なら必ず1つずつずれるので、それが起きない。
+ * ジャンルは末尾に足されていくので、あとから足しても既にあるジャンルの起点は動かない。
+ * ジャンルが30を超えると一周して先頭のジャンルと同じ名前に戻る
+ * （プール90名 ÷ 3席）。その時は EXTRA_NAMES を増やす。
+ */
+function genreOffset(genreId, customGenres) {
+  const i = allGenres(customGenres).findIndex((g) => g.id === genreId);
+  // **席数ぶんずらすこと。** 1つずつだと、隣のジャンルの1席目と
+  // このジャンルの2席目が同じ名前になる（区画が重なる）。
+  return (i < 0 ? 0 : i) * DEFAULT_SEATS_PER_GENRE;
+}
 
 /**
  * 役職 × ジャンル × 席 から社員のプリセットを組み立てる（保存はしない）。
@@ -130,7 +197,7 @@ export function presetEmployee(roleId, seat, genreId = DEFAULT_GENRE_ID, customG
   if (character) return fromCharacter(role, genre, character);
 
   const arche = archetypeFor(seat);
-  const picked = pickName(roleId, seat, genre.id);
+  const picked = pickName(roleId, seat, genre.id, customGenres);
   const title = `${role.name}（${arche.label}${seat > SEAT_ARCHETYPES.length ? `・${seat}席` : ''}）`;
 
   return {
@@ -195,23 +262,36 @@ function fromCharacter(role, genre, c) {
   };
 }
 
-function pickName(roleId, seat, genreId) {
+function pickName(roleId, seat, genreId, customGenres) {
   const names = NAMES[roleId] || [];
-  const offset = GENRE_NAME_OFFSET[genreId] ?? 27;
   const idx = seat - 1;
 
   // 汎用ジャンルの1〜3席目は、役職ごとの固有名をそのまま使う
-  if (offset === 0 && idx < names.length) {
+  if (genreId === DEFAULT_GENRE_ID && idx < names.length) {
     return { name: names[idx], reading: kataToHira(names[idx]) };
   }
-  // それ以外は共用の名前プールから、ジャンルごとにずらして取る
+
+  // それ以外は共用の名前プールから取る。位置は3つの足し算で決める。
+  //   ① ジャンルの並び順 …… 同じ役職でも、分野が違えば別の名前になる
+  //   ② 役職ごとの区画   …… 同じ分野の中で、役職どうしがぶつからない
+  //   ③ 席番号           …… 区画の中で1人ずつずれる
+  // プールは「役職の数 × 席数」より多く持ってあるので、①が無くても
+  // 同じ分野の中では重ならない（①は分野をまたいだ重複を防ぐためのもの）。
   const pool = EXTRA_NAMES;
-  const at = (offset + idx) % pool.length;
-  const round = Math.floor((offset + idx) / pool.length);
+  const seats = DEFAULT_SEATS_PER_GENRE;
+  const within = idx % seats;
+  const round = Math.floor(idx / seats); // 4席目以降は区画を一周したとみなす
+  const at = (genreOffset(genreId, customGenres) + roleIndex(roleId) * seats + within) % pool.length;
   const base = pool[at];
   return round === 0
     ? { name: base.name, reading: base.reading }
     : { name: `${base.name}${round + 1}`, reading: `${base.reading}${round + 1}` };
+}
+
+/** 役職の並び順。区画の割り当てに使う。 */
+function roleIndex(roleId) {
+  const i = ROLES.findIndex((r) => r.id === roleId);
+  return i < 0 ? 0 : i;
 }
 
 /** 初期チーム（core の6役職 × 汎用ジャンル × seats 席）のプリセット一覧。 */
