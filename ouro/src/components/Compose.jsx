@@ -17,8 +17,11 @@ const EXAMPLES = [
 ];
 
 export default function Compose({ store, preset = {}, go }) {
-  const [request, setRequest] = useState('');
-  const [workflowId, setWorkflowId] = useState(preset.employeeId ? null : 'auto');
+  // 呼び出し元が下書きを渡せる（棚卸しなど、書き出しが決まっているもの）
+  const [request, setRequest] = useState(preset.request || '');
+  const [workflowId, setWorkflowId] = useState(
+    preset.employeeId ? null : preset.workflowId || 'auto'
+  );
   const [employeeId, setEmployeeId] = useState(preset.employeeId || null);
   const [dealId, setDealId] = useState(preset.dealId || null);
   const [genreId, setGenreId] = useState(preset.genreId || DEFAULT_GENRE_ID);

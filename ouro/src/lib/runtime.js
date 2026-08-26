@@ -11,6 +11,7 @@ import { buildContext } from './memory.js';
 import { roleById, groupById } from '../data/roles.js';
 import { isToolEnabled } from '../data/tools.js';
 import { outputFormatPrompt } from './outline.js';
+import { rulesPrompt } from './rules.js';
 
 // ── 新項目21：同じ問いの答えを使い回す ──
 //
@@ -53,9 +54,13 @@ export function clearAnswerCache() {
  */
 export function isFinalStep(task, step) {
   const steps = (task && task.steps) || [];
-  if (steps.length <= 1) return true;
+  // 完成の確認（kind:'check'）は提出物を書く手順ではないので、枠を掛けない。
+  // 数える側からも外す（外さないと、確認の手順が「最後」になってしまう）。
+  if (step && step.kind === 'check') return false;
+  const work = steps.filter((x) => x.kind !== 'check');
+  if (work.length <= 1) return true;
   const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
-  const max = Math.max(...steps.map(g));
+  const max = Math.max(...work.map(g));
   return g(step) === max;
 }
 
@@ -78,12 +83,9 @@ export function buildSystemPrompt({ employee, company, contextText, isFinal = fa
     // noKpi / proposalOnly は systemHint 側で本文として書いてあるので、ここでは重ねない
     role?.outOfScope?.length ? `\n権限外（あなたが決めてはいけないこと）：${role.outOfScope.join('／')}` : '',
     '',
-    '## 会社の決まり',
-    '- 事実と推測を必ず分けて書く。分からないことは「未確認」と書く。',
-    '- 情報を使ったら出典（媒体名・URL・日付）を最後に「出典：」として並べる。',
-    '- 最終的な意思決定はオーナー（人間）が行う。あなたは調査・分析・提案までを担う。',
-    '- 医療・法律・お金に関わる断定は避け、確認先を添える。',
-    '- 日本語で答える。前置きの挨拶は書かない。',
+    // 会社の決まりは lib/rules.js が単一の正。
+    // 消せない5行が必ず先に来て、そのあとにオーナーが足したルールが続く。
+    rulesPrompt(company && company.rules),
   ].filter(Boolean);
 
   // 会社としての提出物を書く**最後の手順にだけ**、5項目の枠をかける。

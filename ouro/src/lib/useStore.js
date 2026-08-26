@@ -26,6 +26,9 @@ import { runStep, distill, extractUrls } from './runtime.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
 import { decisionsFrom, decideDecision } from './decisions.js';
+import { addNote, removeNote, notesOf } from './memory.js';
+import { normalizeRules, addRule, removeRule } from './rules.js';
+import { makeFunnel, normalizeFunnel } from './funnel.js';
 import { checkAction, addCost, spentThisMonthOf } from './permissions.js';
 import { createDeal } from './revenue.js';
 import {
@@ -80,9 +83,12 @@ const FOLD_EVERY_MS = 24 * 60 * 60 * 1000;
 // 開くまで見えないもの（操作履歴は最大2000件あるので、必ず後回しにする）
 const REST_KEYS = [
   KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit,
+  // 収益導線の数字。ホームは「詰まっている所」を1行出すだけなので後回しでよい。
+  KEYS.funnel,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
-const REST_FALLBACKS = Object.fromEntries(REST_KEYS.map((k) => [k, []]));
+// 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
+const REST_FALLBACKS = Object.fromEntries(REST_KEYS.map((k) => [k, k === KEYS.funnel ? makeFunnel() : []]));
 
 const EMPTY = {
   company: null,
@@ -98,6 +104,7 @@ const EMPTY = {
   connections: [],
   genres: [],
   events: [],
+  funnel: makeFunnel(),
   settings: makeSettings(),
   secrets: {},
 };
@@ -244,6 +251,13 @@ export function useStore() {
         }
         // ②の最中に触られたキーは、読み込んだ古い値で上書きしない
         if (touchedRef.current.has(key)) continue;
+        // **収益導線だけは配列ではなくオブジェクト。**
+        // ここで asArray に通すと、起動のたびに空配列で上書きされ、
+        // 次に数字を1件入れた時点で、これまでの週が全部消える。
+        if (key === KEYS.funnel) {
+          merged.funnel = normalizeFunnel(rest[key]);
+          continue;
+        }
         merged[keyName(key)] = asArray(rest[key]);
       }
       hydratedRef.current = true;
@@ -515,6 +529,104 @@ export function useStore() {
     (id, patch) => {
       const next = stateRef.current.employees.map((e) => (e.id === id ? { ...e, ...patch } : e));
       put(KEYS.employees, next);
+    },
+    [put]
+  );
+
+  /**
+   * 社員を育てる（新規）。「次からはこうして」を1行だけ覚えさせる。
+   * 次にその社員が動くとき、buildContext が必ず読む。
+   */
+  const teachEmployee = useCallback(
+    (employeeId, text, taskId = null) => {
+      const emp = stateRef.current.employees.find((e) => e.id === employeeId);
+      if (!emp || !String(text || '').trim()) return null;
+      const notes = addNote(emp, text, taskId);
+      updateEmployee(employeeId, { memory: { ...(emp.memory || {}), notes } });
+      log({ actor: 'user', action: 'employeeTaught', target: emp.name, detail: String(text).slice(0, 120) });
+      return notes;
+    },
+    [updateEmployee, log]
+  );
+
+  const forgetEmployeeNote = useCallback(
+    (employeeId, noteId) => {
+      const emp = stateRef.current.employees.find((e) => e.id === employeeId);
+      if (!emp) return null;
+      const notes = removeNote(emp, noteId);
+      updateEmployee(employeeId, { memory: { ...(emp.memory || {}), notes } });
+      return notes;
+    },
+    [updateEmployee]
+  );
+
+  /** 会社のルール（CLAUDE.md にあたるもの）。消せない決まりは触らない。 */
+  const updateRules = useCallback(
+    (patch) => {
+      const co = stateRef.current.company;
+      if (!co) return null;
+      const rules = { ...normalizeRules(co.rules), ...patch, updatedAt: Date.now() };
+      put(KEYS.company, { ...co, rules });
+      return rules;
+    },
+    [put]
+  );
+
+  const addCompanyRule = useCallback(
+    (text) => {
+      const co = stateRef.current.company;
+      if (!co) return null;
+      const rules = addRule(co.rules, text);
+      put(KEYS.company, { ...co, rules });
+      log({ actor: 'user', action: 'ruleAdded', target: String(text).slice(0, 120) });
+      return rules;
+    },
+    [put, log]
+  );
+
+  const removeCompanyRule = useCallback(
+    (text) => {
+      const co = stateRef.current.company;
+      if (!co) return null;
+      const rules = removeRule(co.rules, text);
+      put(KEYS.company, { ...co, rules });
+      return rules;
+    },
+    [put]
+  );
+
+  /** 収益導線：今週の数字を入れる／消す（新規）。端末内だけに残る。 */
+  // 週の数字を書く処理は導線の画面でしか要らないので、押した時に読む
+  // （起動時に読む量を増やさないため）。
+  const putFunnelEntry = useCallback(
+    async (entry) => {
+      const { putEntry } = await import('./funnelInput.js');
+      const next = putEntry(stateRef.current.funnel, entry);
+      put(KEYS.funnel, next);
+      log({ actor: 'user', action: 'funnelEntry', target: new Date(entry.weekStart || Date.now()).toLocaleDateString('ja-JP') });
+      return next;
+    },
+    [put, log]
+  );
+
+  const removeFunnelEntry = useCallback(
+    async (id) => {
+      const { removeEntry } = await import('./funnelInput.js');
+      const next = removeEntry(stateRef.current.funnel, id);
+      put(KEYS.funnel, next);
+      return next;
+    },
+    [put]
+  );
+
+  const renameFunnelStage = useCallback(
+    (stageId, name) => {
+      const cur = stateRef.current.funnel || makeFunnel();
+      const labels = { ...(cur.labels || {}) };
+      const clean = String(name || '').trim().slice(0, 20);
+      if (clean) labels[stageId] = clean;
+      else delete labels[stageId];
+      put(KEYS.funnel, { ...cur, labels, updatedAt: Date.now() });
     },
     [put]
   );
@@ -835,8 +947,12 @@ export function useStore() {
       // 件数・成長のグラフ・関連度の判定を薄めてしまうため。
       // 型そのものは仕事の中に残るので、必要なら結果画面から手で知識にできる。
       if (updated.status === 'done') {
-        const last = results[results.length - 1];
-        if (!last.result.offline) {
+        // **完成条件の確認（kind:'check'）を「成果」として扱わない。**
+        // 確認の手順は ○× の並びを返すだけなので、これを元に知識を作ると
+        // 担当も出典も来歴も、確認役のものになってしまう。
+        const made = results.filter((r) => r.step.kind !== 'check');
+        const last = made[made.length - 1];
+        if (last && !last.result.offline) {
           await saveResultAsKnowledge(updated, last.employee, last.result);
         }
       }
@@ -925,7 +1041,8 @@ export function useStore() {
   saveTaskAsKnowledgeRef.current = (taskId) => {
     const t = stateRef.current.tasks.find((x) => x.id === taskId);
     if (!t) return null;
-    const step = [...(t.steps || [])].reverse().find((x) => x.status === 'done' && x.output);
+    // 確認の手順は成果ではないので、担当としても選ばない
+    const step = [...(t.steps || [])].reverse().find((x) => x.status === 'done' && x.output && x.kind !== 'check');
     if (!step) return null;
     const emp = stateRef.current.employees.find((e) => e.id === step.employeeId) || {
       id: 'user',
@@ -1333,6 +1450,14 @@ export function useStore() {
     deleteTask,
     patchTask,
     setTaskMeta,
+    teachEmployee,
+    forgetEmployeeNote,
+    putFunnelEntry,
+    removeFunnelEntry,
+    renameFunnelStage,
+    updateRules,
+    addCompanyRule,
+    removeCompanyRule,
     holdTask,
     resumeTask,
     decideTask,

@@ -1469,3 +1469,49 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── 収益導線 ── */
+.funnel-stage {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.funnel-stage.neck {
+  border-color: var(--ink-2);
+  background: var(--panel-2);
+}
+
+.funnel-stage .fs-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.funnel-stage .fs-name {
+  flex: 1;
+  font-size: 14.5px;
+}
+
+.funnel-stage .fs-value {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.funnel-stage .fs-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.funnel-stage .fs-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}

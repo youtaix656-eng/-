@@ -28,5 +28,8 @@ export function makeSettings() {
     //   compact … 次の担当に要るものだけ渡す（既定・トークンが減る）
     //   full    … これまでどおり前の担当の出力をまるごと渡す
     handoffMode: 'compact',
+    // 最初の道しるべ（lib/onboarding.js）。棚卸しだけは状態から導けないので印を持つ。
+    didInventory: false,
+    starterHidden: false,
   };
 }

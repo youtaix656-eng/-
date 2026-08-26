@@ -14,7 +14,6 @@ import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
 import Compose from './components/Compose.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
-import Company from './components/Company.jsx';
 // 肖像の額縁は全員で1つを使い回すので、その定義だけ即時に読む
 import { PortraitSprite } from './components/Portrait.jsx';
 
@@ -25,7 +24,12 @@ const KnowledgeDetail = lazy(LOADERS.knowledgeDetail);
 const Ingest = lazy(LOADERS.ingest);
 const Meeting = lazy(LOADERS.meeting);
 const MeetingDetail = lazy(() => LOADERS.meetingDetail().then((m) => ({ default: m.MeetingDetail })));
+// 会社は下部ナビではなく常設バーから開く画面なので、押した時に読む。
+// バー（ボタン）は即時、画面は lazy。指が触れた時点で先読みされる。
+const Company = lazy(LOADERS.company);
 const Ledger = lazy(LOADERS.ledger);
+const Funnel = lazy(LOADERS.funnel);
+const Rules = lazy(LOADERS.rules);
 const Deals = lazy(LOADERS.deals);
 const DealDetail = lazy(() => LOADERS.deal().then((m) => ({ default: m.DealDetail })));
 const Connect = lazy(LOADERS.connect);
@@ -65,6 +69,8 @@ const TITLES = {
   meeting: 'AI会議',
   meetingDetail: 'AI会議',
   ledger: '仕事台帳',
+  funnel: '収益導線',
+  rules: '会社のルール',
   deals: '案件・収益',
   deal: '案件',
   connect: '会社で使える道具',
@@ -141,7 +147,7 @@ export default function App() {
       () => {
         preloadMany(['toc', 'calendar', 'task', 'employee']);
         // さらに空きがあれば、会社バーから開く画面も
-        idle(() => preloadMany(['approvals', 'ledger', 'settings', 'characters', 'connect']), { timeout: 8000 });
+        idle(() => preloadMany(['company', 'approvals', 'ledger', 'funnel', 'settings', 'characters', 'connect']), { timeout: 8000 });
       },
       { timeout: 4000 }
     );
@@ -213,6 +219,8 @@ export default function App() {
         {view === 'meeting' && <Meeting store={store} go={go} />}
         {view === 'meetingDetail' && <MeetingDetail store={store} meetingId={arg} go={go} />}
         {view === 'ledger' && <Ledger store={store} go={go} toast={toast} />}
+        {view === 'funnel' && <Funnel store={store} go={go} toast={toast} />}
+        {view === 'rules' && <Rules store={store} toast={toast} />}
         {view === 'deals' && <Deals store={store} go={go} toast={toast} highlight={arg && arg.templateId} />}
         {view === 'deal' && <DealDetail store={store} dealId={arg} go={go} />}
         {view === 'connect' && <Connect store={store} go={go} toast={toast} highlight={arg && arg.toolId} />}
@@ -223,7 +231,13 @@ export default function App() {
 
       {/* 下部ナビは6つに絞ったため、「会社」への入口を常設のバーで確保する */}
       {isTab && (
-        <button type="button" className="company-bar" onClick={() => go('company')}>
+        <button
+          type="button"
+          className="company-bar"
+          onPointerDown={() => preloadView('company')}
+          onPointerEnter={() => preloadView('company')}
+          onClick={() => go('company')}
+        >
           ▦ 会社（ダッシュボード・道具・承認・設定）
         </button>
       )}

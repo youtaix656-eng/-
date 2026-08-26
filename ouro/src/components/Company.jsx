@@ -68,6 +68,20 @@ export default function Company({ store, go }) {
 
       <SectionTitle>会社の管理</SectionTitle>
       <Row
+        glyph="◎"
+        title="収益導線"
+        sub="どこで人が減っているかを見る（数字は端末内だけ）"
+        preload="funnel"
+        onClick={() => go('funnel')}
+      />
+      <Row
+        glyph="⚖"
+        title="会社のルール"
+        sub="全AI社員が仕事の前に必ず読むもの"
+        preload="rules"
+        onClick={() => go('rules')}
+      />
+      <Row
         glyph="▦"
         title="仕事台帳"
         sub="受け付けた仕事を1枚で見る・CSVで書き出す"

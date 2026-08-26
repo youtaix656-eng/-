@@ -10,6 +10,8 @@ import { openDecisions } from '../lib/decisions.js';
 import { checkPromises } from '../lib/guard.js';
 import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js';
 import { ticketOf, dueStateOf, DUE_LABELS } from '../lib/ledger.js';
+import { checkSummary } from '../lib/checks.js';
+import { similarOpenings } from '../lib/opening.js';
 
 export default function TaskDetail({ store, taskId, go }) {
   // 古い仕事も要る画面なので、残りを読み足す
@@ -210,7 +212,9 @@ export default function TaskDetail({ store, taskId, go }) {
       {task.status === 'done' && (
         <>
           <SectionTitle>会社としての提出物</SectionTitle>
+          <CheckCard task={task} />
           <PromiseWarning text={deliverable} />
+          <SameOpeningWarning task={task} store={store} go={go} />
           <Card>
             {/* 見出しは「提出物を書いた手順」の本文から拾う（連結文からは拾わない） */}
             <Highlights text={finalOutput(task)} />
@@ -230,6 +234,7 @@ export default function TaskDetail({ store, taskId, go }) {
                   知識として見る
                 </button>
               )}
+              <TeachButton task={task} store={store} />
               {!knowledge[0] && isTemplate && (
                 <button
                   type="button"
@@ -497,4 +502,151 @@ function PromiseWarning({ text }) {
 function toDateInput(ts) {
   const d = new Date(ts);
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+}
+
+/**
+ * 完成条件の確認（新規）。
+ * 「文章を出した＝完了」にしないための手順。読み取れなければ本文をそのまま出す
+ * （勝手に「合格」にしない）。
+ */
+function CheckCard({ task }) {
+  const sum = checkSummary(task);
+  if (sum.state === 'none') {
+    if (!task.checkUnstaffed) return null;
+    return (
+      <Card glyph="⚠" title="完成の確認ができていません">
+        <p className="muted" style={{ marginTop: -6, marginBottom: 0 }}>
+          完成条件は決めてありますが、確かめる担当（レビュアー）を雇っていないため確認できませんでした。
+          レビュアーを雇うと、次から自動で1つずつ確かめます。
+        </p>
+      </Card>
+    );
+  }
+  if (sum.state === 'pending') return null;
+  if (sum.state === 'unread') {
+    return (
+      <Card glyph="?" title="完成の確認（読み取れませんでした）">
+        <p className="muted" style={{ marginTop: -6 }}>
+          決まった形で返ってこなかったので、○×として読み取れませんでした。中身はそのまま出します。
+        </p>
+        <Doc text={sum.step.output} fold={0} />
+      </Card>
+    );
+  }
+  const ng = sum.items.filter((x) => !x.ok);
+  return (
+    <Card
+      glyph={sum.state === 'passed' ? '✓' : '⚠'}
+      title={sum.state === 'passed' ? '完成条件を満たしています' : `満たしていない条件が${ng.length}件あります`}
+    >
+      {sum.items.map((x) => (
+        <div key={x.text} style={{ marginBottom: 6 }}>
+          <div style={{ fontSize: 14 }}>
+            <span className="badge" style={{ marginRight: 6 }}>{x.ok ? '○' : '×'}</span>
+            {x.text}
+          </div>
+          {x.reason && <div className="muted" style={{ marginLeft: 4 }}>{x.reason}</div>}
+        </div>
+      ))}
+      {sum.state !== 'passed' && (
+        <p className="muted" style={{ marginBottom: 0 }}>
+          直すところが分かっているので、「追加で聞く」から直させると早いです。
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/** 書き出しが過去の成果物とそっくりでないか（AIは呼ばない）。 */
+function SameOpeningWarning({ task, store, go }) {
+  // **比べるものをそろえる。** 知識の body は全手順を連ねた文なので、
+  // その書き出しは「最初の手順」の冒頭。こちらも同じ形で取り出さないと、
+  // 別の層どうしを比べることになり、本当に似ているものを見落とす。
+  const text = assembleResult(task);
+  const past = (store.knowledge || [])
+    .filter((k) => k.taskId && k.taskId !== task.id && k.body)
+    .slice(0, 30)
+    .map((k) => ({ id: k.id, title: k.title, text: k.body }));
+  const hits = similarOpenings(text, past);
+  if (!hits.length) return null;
+  return (
+    <Card glyph="≡" title="書き出しが前のものとそっくりです">
+      <p className="muted" style={{ marginTop: -6 }}>
+        中身は違っても、入口が同じだと読み手には同じものに見えます。冒頭だけ変えると効きます。
+      </p>
+      {hits.map((h) => (
+        <button
+          key={h.id}
+          type="button"
+          className="btn ghost small block"
+          style={{ marginBottom: 6 }}
+          onClick={() => go('knowledgeDetail', h.id)}
+        >
+          {h.title}（{Math.round(h.score * 100)}% 一致）
+        </button>
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * この結果を見て、担当した社員に1行覚えさせる（改善ログ）。
+ * 「①ミス → ②ルール化 → ③次回改善」を、結果を見ているその場で回すための入口。
+ */
+function TeachButton({ task, store }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const workers = (task.steps || [])
+    .filter((s) => s.employeeId && s.status === 'done')
+    .map((s) => ({ id: s.employeeId, name: s.employeeName || s.roleId }));
+  const uniq = workers.filter((w, i) => workers.findIndex((x) => x.id === w.id) === i);
+  const [who, setWho] = useState(uniq[0]?.id || '');
+  if (!uniq.length) return null;
+
+  if (!open) {
+    return (
+      <button type="button" className="btn small" onClick={() => setOpen(true)}>
+        次から直してほしい所を教える
+      </button>
+    );
+  }
+  return (
+    <div className="card tight" style={{ width: '100%', marginTop: 8 }}>
+      <Field label="誰に覚えさせるか">
+        <select className="select" value={who} onChange={(e) => setWho(e.target.value)}>
+          {uniq.map((w) => (
+            <option key={w.id} value={w.id}>{w.name}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="次からはこうしてほしい" hint="1行で。この社員が次に動くとき、必ず読んでから書きます。">
+        <input
+          className="input"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="例：見出しは1つ200字まで"
+        />
+      </Field>
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn small primary"
+          disabled={!text.trim() || !who}
+          onClick={() => {
+            store.teachEmployee(who, text, task.id);
+            setText('');
+            setOpen(false);
+          }}
+        >
+          覚えさせる
+        </button>
+        <button type="button" className="btn small ghost" onClick={() => setOpen(false)}>
+          やめる
+        </button>
+      </div>
+      <p className="muted" style={{ marginBottom: 0 }}>
+        全員に守らせたいことなら、会社 →「会社のルール」に書いてください。
+      </p>
+    </div>
+  );
 }
