@@ -20,4 +20,6 @@ export function useAllTasks(store) {
       // 読めなくても画面は出す（手元にあるぶんだけで動く）
     });
   }, [partial, load]);
+  // 全部そろっているか。件数を出す画面が「読み込み中」を出せるように返す。
+  return !partial;
 }

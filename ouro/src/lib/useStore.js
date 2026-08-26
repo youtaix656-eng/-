@@ -11,10 +11,21 @@ import * as perf from './perf.js';
 import { afterPaint, whenIdle } from './idle.js';
 import { makeSettings } from './defaults.js';
 
-import { createTask, applyStepResult, nextGroup, assembleResult, retryFailed } from './workflow.js';
+import {
+  createTask,
+  applyStepResult,
+  nextGroup,
+  assembleResult,
+  retryFailed,
+  finalOutput,
+  holdTask as holdTaskFn,
+  resumeTask as resumeTaskFn,
+  isRunnable,
+} from './workflow.js';
 import { runStep, distill, extractUrls } from './runtime.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
+import { decisionsFrom, decideDecision } from './decisions.js';
 import { checkAction, addCost, spentThisMonthOf } from './permissions.js';
 import { createDeal } from './revenue.js';
 import {
@@ -544,7 +555,19 @@ export function useStore() {
 
   // ---- 仕事 ----
   const newTask = useCallback(
-    ({ request, workflowId = null, employeeId = null, dealId = null, context = '', genreId = null }) => {
+    ({
+      request,
+      workflowId = null,
+      employeeId = null,
+      dealId = null,
+      context = '',
+      genreId = null,
+      dueAt = null,
+      deliverableSpec = '',
+      doneWhen = '',
+      materials = '',
+      constraints = '',
+    }) => {
       let forceRoles = null;
       if (employeeId) {
         const emp = stateRef.current.employees.find((e) => e.id === employeeId);
@@ -559,6 +582,11 @@ export function useStore() {
         forceRoles,
         dealId,
         context,
+        dueAt,
+        deliverableSpec,
+        doneWhen,
+        materials,
+        constraints,
         assign: (roleId, i) => {
           if (employeeId && i === 0) {
             return stateRef.current.employees.find((e) => e.id === employeeId) || assignFor(roleId, genreId);
@@ -582,6 +610,66 @@ export function useStore() {
       return task;
     },
     [put]
+  );
+
+  /**
+   * 台帳で人が手で持つ3つ（期限・次の対応・保留理由）を書き換える（新規）。
+   * 台帳は仕事から導くビューなので、書き込み先は必ず仕事の側になる。
+   */
+  const setTaskMeta = useCallback(
+    (taskId, patch = {}) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const next = { ...task };
+      if ('dueAt' in patch) next.dueAt = patch.dueAt || null;
+      if ('nextAction' in patch) next.nextAction = String(patch.nextAction || '').slice(0, 120);
+      if ('holdReason' in patch) next.holdReason = String(patch.holdReason || '').slice(0, 200);
+      return patchTask(next);
+    },
+    [patchTask]
+  );
+
+  /** 保留にする／解く（新規）。 */
+  const holdTask = useCallback(
+    (taskId, reason = '') => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const next = holdTaskFn(task, reason);
+      if (next === task) return task;
+      log({ actor: 'user', action: 'taskHeld', target: task.title, detail: reason });
+      return patchTask(next);
+    },
+    [patchTask, log]
+  );
+
+  const resumeTask = useCallback(
+    (taskId) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const next = resumeTaskFn(task);
+      if (next === task) return task;
+      log({ actor: 'user', action: 'taskResumed', target: task.title });
+      return patchTask(next);
+    },
+    [patchTask, log]
+  );
+
+  /** 「あなたの判断が要ること」を1件決める（新規）。 */
+  const decideTask = useCallback(
+    (taskId, decisionId, state, note = '') => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const next = decideDecision(task, decisionId, state, note);
+      const item = (next.decisions || []).find((d) => d.id === decisionId);
+      log({
+        actor: 'user',
+        action: state === 'approved' ? 'decisionApproved' : 'decisionRejected',
+        target: task.title,
+        detail: item ? item.text : '',
+      });
+      return patchTask(next);
+    },
+    [patchTask, log]
   );
 
   /**
@@ -699,7 +787,7 @@ export function useStore() {
 
       let updated = stateRef.current.tasks.find((t) => t.id === taskId) || task;
       for (const { step, employee, result } of results) {
-        updated = applyStepResult(updated, step.id, result);
+        updated = applyStepResult(updated, step.id, result, stateRef.current.settings.handoffMode || 'compact');
         log({
           actor: employee.id,
           action: result.error ? 'stepFailed' : 'stepRun',
@@ -730,6 +818,14 @@ export function useStore() {
             stateRef.current.knowledge.map((k) => (used.has(k.id) ? markUsed(k) : k))
           );
         }
+      }
+      // 完了したら、提出物の③から「あなたの判断が要ること」を拾う（新規）。
+      // AIをもう一度呼ばないので費用はかからない。拾えなければ空のまま。
+      if (updated.status === 'done' && !(updated.decisions || []).length) {
+        // **assembleResult から拾わない。** 全手順を連ねた文なので、
+        // 途中の手順の見出しや担当者名を「判断が要ること」として拾ってしまう。
+        const found = decisionsFrom(finalOutput(updated));
+        if (found.length) updated = { ...updated, decisions: found };
       }
       patchTask(updated);
 
@@ -848,7 +944,9 @@ export function useStore() {
     async (taskId) => {
       for (let i = 0; i < 8; i += 1) {
         const t = stateRef.current.tasks.find((x) => x.id === taskId);
-        if (!t || !nextGroup(t).length || t.status === 'awaiting_approval' || t.status === 'failed') break;
+        // 保留（on_hold）も動かさない。保留は「今は寝かせる」という宣言なので、
+        // 続きを実行するボタンやリトライから勝手に走り出してはいけない。
+        if (!t || !isRunnable(t) || !nextGroup(t).length || t.status === 'awaiting_approval' || t.status === 'failed') break;
         // eslint-disable-next-line no-await-in-loop
         const after = await runNextStep(taskId);
         if (!after || after.status === 'awaiting_approval' || after.status === 'failed') break;
@@ -907,7 +1005,9 @@ export function useStore() {
       const task = s.tasks.find((t) => t.id === apv.taskId);
       if (!task) return;
       if (ok) {
-        patchTask({ ...task, costApproved: true, status: 'running' });
+        // 保留のまま承認された時は、承認を「進めてよい」の合図として保留を解く。
+        // ここで保留を残すと、承認したのに何も起きない行き止まりになる。
+        patchTask({ ...task, costApproved: true, status: 'running', holdReason: '', heldAt: null });
         await runTask(task.id);
       } else {
         patchTask({ ...task, status: 'cancelled' });
@@ -1232,6 +1332,10 @@ export function useStore() {
     retryTask,
     deleteTask,
     patchTask,
+    setTaskMeta,
+    holdTask,
+    resumeTask,
+    decideTask,
     // 承認
     decideApproval,
     // 知識

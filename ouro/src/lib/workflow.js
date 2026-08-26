@@ -6,12 +6,14 @@
 import { newId } from './id.js';
 import { planSteps, titleFor, detectNeeds } from './dispatcher.js';
 import { roleById } from '../data/roles.js';
+import { buildHandoff } from './handoff.js';
 
 export const TASK_STATUS = {
   draft: '下書き',
   queued: '待機中',
   running: '進行中',
   awaiting_approval: '承認待ち',
+  on_hold: '保留',
   done: '完了',
   failed: '失敗',
   cancelled: '中止',
@@ -44,7 +46,20 @@ export function isEmptyResult(result = {}) {
  * @param {string[]} [o.forceRoles] 役職を指定したいとき
  * @param {function} o.assign  (roleId) => employee|null  席の割り当て
  */
-export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = null, context = '', assign }) {
+export function createTask({
+  request,
+  forceRoles = null,
+  maxSteps = 4,
+  dealId = null,
+  context = '',
+  assign,
+  // 受付のときに決まっていることがあれば預かる（全部あとから足せる）。
+  dueAt = null,
+  deliverableSpec = '',
+  doneWhen = '',
+  materials = '',
+  constraints = '',
+}) {
   const rawPlan = planSteps(request, { forceRoles, maxSteps });
   const needs = detectNeeds(request);
 
@@ -95,6 +110,14 @@ export function createTask({ request, forceRoles = null, maxSteps = 4, dealId = 
     steps,
     currentStep: 0,
     dealId,
+    // ── 台帳の3列。ここだけは人が手で持つ（lib/ledger.js のコメント参照） ──
+    dueAt: dueAt || null,
+    nextAction: '',
+    holdReason: '',
+    // 受付のときに決めた条件（空でも動く。あとから足せる）
+    spec: { deliverable: String(deliverableSpec || ''), doneWhen: String(doneWhen || ''), materials: String(materials || ''), constraints: String(constraints || '') },
+    // 成果物から拾った「あなたの判断が要ること」（完了時に1度だけ作る）
+    decisions: [],
     unstaffedRoles, // 向いているが未雇用だった役職
     missingApprovers, // そのうち「承認役」だったもの（確認を通せていない印）
     createdAt: Date.now(),
@@ -132,7 +155,7 @@ function groupOf(step, steps) {
 }
 
 /** ステップの結果を書き戻し、次のステップへ引き継ぐ。 */
-export function applyStepResult(task, stepId, result) {
+export function applyStepResult(task, stepId, result, handoffMode = 'compact') {
   const steps = task.steps.map((s) => {
     if (s.id !== stepId) return s;
     const empty = isEmptyResult(result);
@@ -163,10 +186,9 @@ export function applyStepResult(task, stepId, result) {
     const sameGroup = steps.filter((s) => groupOf(s, steps) === g);
     const groupDone = sameGroup.every((s) => s.status === 'done' || s.status === 'skipped');
     if (groupDone) {
-      const handoff = sameGroup
-        .filter((s) => s.output)
-        .map((s) => (sameGroup.length > 1 ? `## ${s.employeeName || s.roleId}\n\n${s.output}` : s.output))
-        .join('\n\n---\n\n');
+      // 引き継ぎは「次の担当が続きをやるために要るもの」だけにする（lib/handoff.js）。
+      // 枠に沿っていない出力はそのまま全部渡すので、材料が消えることはない。
+      const handoff = buildHandoff(sameGroup, handoffMode);
       // **「g + 1」で探さないこと。** 未雇用の役職を計画から外すと group の番号が
       // 飛ぶ（例：0, 2）ので、+1 では次の手順が見つからず引き継ぎが空になる。
       // 実際に残っている番号の中から「g より大きい最小」を探す。
@@ -185,11 +207,16 @@ export function applyStepResult(task, stepId, result) {
   const failed = steps.some((s) => s.status === 'failed');
   const allDone = steps.every((s) => s.status === 'done' || s.status === 'skipped');
 
+  // **実行中に保留にされた仕事を、勝手に running へ戻さない。**
+  // 戻すと runTask のループが「動かしてよい」と判断して残りの手順まで走り、
+  // 止めたはずなのにAIの利用料がかかる。
+  const held = task.status === 'on_hold' && !failed && !allDone;
+
   return {
     ...task,
     steps,
     currentStep: Math.min(idx + 1, steps.length - 1),
-    status: failed ? 'failed' : allDone ? 'done' : 'running',
+    status: held ? 'on_hold' : failed ? 'failed' : allDone ? 'done' : 'running',
     startedAt: task.startedAt || Date.now(),
     finishedAt: allDone || failed ? Date.now() : null,
     totalCost: steps.reduce((sum, s) => sum + (s.cost || 0), 0),
@@ -236,9 +263,71 @@ export function assembleResult(task) {
   return parts.join('\n\n---\n\n');
 }
 
+/**
+ * 会社としての提出物を書いた手順の出力（＝5項目の枠が掛かっている本文）。
+ *
+ * **判断や見出しを assembleResult から拾ってはいけない。**
+ * あれは全手順の出力を「## 担当者名」で連ねたものなので、
+ * 見出しを探すと途中の手順の「まとめ」や担当者名を拾ってしまい、
+ * 本物の「あなたの判断が要ること」が見つからなくなる（実際に起きた）。
+ */
+export function finalOutput(task) {
+  const steps = (task && task.steps) || [];
+  const done = steps.filter((s) => s.status === 'done' && s.output);
+  if (!done.length) return '';
+  const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
+  let best = done[0];
+  for (const s of done) if (g(s) >= g(best)) best = s;
+  return best.output || '';
+}
+
 export function taskProgress(task) {
   const steps = task.steps || [];
   if (!steps.length) return 0;
   const done = steps.filter((s) => s.status === 'done' || s.status === 'skipped').length;
   return Math.round((done / steps.length) * 100);
+}
+
+/**
+ * 保留にする（新規）。
+ *
+ * これまでは「今は寝かせる」と宣言する手段が無く、失敗した仕事が
+ * failed のまま溜まっていくだけだった。保留は理由を必ず添える
+ * （理由の無い保留は、あとで見た時に再開してよいか分からなくなる）。
+ */
+export function holdTask(task, reason = '') {
+  if (!task || task.status === 'done' || task.status === 'cancelled') return task;
+  return {
+    ...task,
+    status: 'on_hold',
+    holdReason: String(reason || '').slice(0, 200),
+    // 何の状態から保留にしたかを覚えておく。
+    // 承認待ちだった仕事を queued に戻すと、承認がまだ残っているのに
+    // 「続きを実行する」が押せてしまい、同じ仕事の承認が二重に並ぶ。
+    heldFrom: task.status,
+    heldAt: Date.now(),
+  };
+}
+
+/** 保留を解いて、手順の状態から本来の状態へ戻す。 */
+export function resumeTask(task) {
+  if (!task || task.status !== 'on_hold') return task;
+  const steps = task.steps || [];
+  const failed = steps.some((s) => s.status === 'failed');
+  const allDone = steps.length > 0 && steps.every((s) => s.status === 'done' || s.status === 'skipped');
+  const started = steps.some((s) => s.status === 'done' || s.status === 'running');
+  // 承認待ちから保留にしたものは、承認待ちへ戻す（承認はまだ残っている）
+  const back = task.heldFrom === 'awaiting_approval' && !failed && !allDone ? 'awaiting_approval' : null;
+  return {
+    ...task,
+    status: back || (failed ? 'failed' : allDone ? 'done' : started ? 'running' : 'queued'),
+    holdReason: '',
+    heldFrom: null,
+    heldAt: null,
+  };
+}
+
+/** 実行してよい状態か（保留・中止・完了は動かさない）。 */
+export function isRunnable(task) {
+  return Boolean(task) && !['on_hold', 'cancelled', 'done'].includes(task.status);
 }

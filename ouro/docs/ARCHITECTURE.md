@@ -166,10 +166,14 @@ APIキーが混ざる事故を防ぐため `storage.exportAll()` が明示的に
 ```js
 Task = {
   id, title, request,           // ユーザーの自然言語依頼
-  status: 'draft'|'queued'|'running'|'awaiting_approval'|'done'|'failed'|'cancelled',
+  status: 'draft'|'queued'|'running'|'awaiting_approval'|'on_hold'|'done'|'failed'|'cancelled',
   steps: [ Step ],              // 分割されたタスク
   currentStep, dealId, createdAt, finishedAt,
-  result: { text, knowledgeIds, sourceIds }
+  // 台帳で人が手で持つ3つ。ここ以外に台帳用の表を作らない
+  dueAt, nextAction, holdReason, heldFrom,
+  spec: { deliverable, doneWhen, materials, constraints },  // 受付のときの条件（任意）
+  decisions: [ { id, text, state:'open'|'approved'|'rejected', note, decidedAt } ],
+  result: { knowledgeIds, sourceIds }   // 本文は持たない（assembleResult で組み立てる）
 }
 Step = {
   id, roleId, employeeId, instruction, status,
@@ -183,6 +187,13 @@ Workflow = { id, name, description, steps: [{ roleId, instruction }] }
 - `workflow.runTask()` が 1 ステップずつ実行し、`output` を次の `input` に渡す
   （＝社員間のハンドオフ）
 - 途中で承認が必要な操作に当たると `awaiting_approval` で停止する
+- 引き継ぎは `lib/handoff.js` が絞る（枠が拾えた時だけ②③と出典を落とす。
+  拾えなければ全文をそのまま渡す）
+- **提出物の枠（5項目）は最後の手順にだけ掛ける**（`runtime.isFinalStep`）。
+  判断・見出しを読むときは `workflow.finalOutput(task)` を使い、
+  全手順を連ねた `assembleResult` からは拾わない
+- 台帳（`lib/ledger.js` / `Ledger.jsx`）は Task から**毎回導くビュー**。
+  台帳側にレコードを持たない
 
 ---
 

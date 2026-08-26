@@ -1416,3 +1416,56 @@ select {
     animation: none;
   }
 }
+
+/* ── 仕事台帳の行 ──
+   高さは Ledger.jsx の ROW_H とそろえること。
+   片方だけ直すと、行が増えるほど位置がずれて空白が出る。 */
+.ledger-row {
+  display: block;
+  width: 100%;
+  height: 86px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  margin: 0 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ledger-row:hover {
+  background: var(--panel-2);
+}
+
+.ledger-row .lg-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.ledger-row .lg-ticket {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-row .lg-title {
+  font-size: 14px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-row .lg-sub {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
