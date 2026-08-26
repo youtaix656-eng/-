@@ -60,8 +60,17 @@ test('時刻の無い記録は畳まない（壊れたデータで消さない�
   assert.ok(out.some((e) => e.id === 'x'), '時刻の無い記録が消えている');
 });
 
-test('上限を超えたぶんだけ古いものが落ちる（従来どおり）', () => {
+test('上限に達したら、古い記録を落とさずに畳んで枠を作る', () => {
+  // 以前は slice で捨てていた。foldAudit は「30日より古いもの」しか畳まないので、
+  // 30日以内に上限へ達すると、畳まれる前に消えていた
+  // （「消すのではなく畳む」という約束と矛盾していた）。
   let list = [];
-  for (let i = 0; i < AUDIT_LIMIT + 5; i += 1) list = appendAudit(list, makeEntry({ action: 'stepRun' }));
-  assert.equal(list.length, AUDIT_LIMIT);
+  const N = AUDIT_LIMIT + 50;
+  for (let i = 0; i < N; i += 1) list = appendAudit(list, makeEntry({ action: 'stepRun', cost: 0.01 }));
+  assert.ok(list.length <= AUDIT_LIMIT);
+  const folded = list.filter((e) => e.action === FOLD_ACTION);
+  assert.ok(folded.length > 0, '畳まれた記録が無い＝そのまま消えている');
+  const counted = folded.reduce((n, e) => n + (e.count || 0), 0) + (list.length - folded.length);
+  assert.equal(counted, N, '件数が失われている');
+  assert.ok(Math.abs(totalCost(list) - N * 0.01) < 1e-6, '費用の合計が失われている');
 });

@@ -8,8 +8,11 @@ import { Card, Field, SectionTitle, Row, Empty, Stat, Jump } from './ui.jsx';
 import { JOB_TEMPLATES, easiestFirst, templateById } from '../data/jobTemplates.js';
 import { DEAL_STATUS, revenueSummary, upcomingDeals, formatMoney, dealAiCost } from '../lib/revenue.js';
 import { relTime } from '../lib/format.js';
+import { useAllTasks } from './useAllTasks.js';
 
 export default function Deals({ store, go, toast, highlight = null }) {
+  // 古い仕事も要る画面なので、残りを読み足す
+  useAllTasks(store);
   // 目次から案件の型を指定して来たときは、その型が見えるタブを開く
   const [tab, setTab] = useState(highlight ? 'templates' : store.deals.length ? 'deals' : 'templates');
   const [form, setForm] = useState(null);
@@ -201,6 +204,8 @@ export default function Deals({ store, go, toast, highlight = null }) {
 }
 
 export function DealDetail({ store, dealId, go }) {
+  // 古い仕事も要る画面なので、残りを読み足す
+  useAllTasks(store);
   const deal = store.deals.find((d) => d.id === dealId);
   if (!deal) return <div className="screen"><Empty>案件が見つかりません。</Empty></div>;
 

@@ -42,7 +42,9 @@ export default function Home({ store, go }) {
   const series = growthSeries(knowledge, 14);
   const money = revenueSummary(deals, tasks, { usdJpy: store.settings.usdJpy });
   const engines = availableProviders(secrets).filter((p) => p.needsKey);
-  const spent = audit.reduce((s, e) => s + (e.cost || 0), 0);
+  // **操作履歴から数え直さない。** 履歴は起動時に新しい400件しか読まないので、
+  // 数え直すと実際より小さく出る。log() が設定に積み上げた値を使う。
+  const spent = Number(store.settings.costTotalUsd) || 0;
   const remind = backupReminder({
     lastExportAt: store.settings.lastExportAt,
     items: knowledge.length + deals.length,

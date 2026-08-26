@@ -9,7 +9,6 @@ import Portrait from './Portrait.jsx';
 import { rolesOfGroup, departmentById, groupById, approverFor } from '../data/roles.js';
 import { charactersOf, characterDetail, loadCharacterDetails } from '../data/characters.js';
 import { DEFAULT_GENRE_ID } from '../data/genres.js';
-import { employeeLimit } from '../data/plans.js';
 
 const TEAMS = ['company', 'marketing'];
 
@@ -41,14 +40,7 @@ export default function Characters({ store, go, toast, highlight = null }) {
       (e) => e.roleId === roleId && e.seat === seat && (e.genreId || DEFAULT_GENRE_ID) === DEFAULT_GENRE_ID
     );
 
-  const limit = employeeLimit(store.company?.planId, store.company?.limitOverrides);
-  const room = limit - store.activeEmployees.length;
-
   const hireOne = async (roleId, seat) => {
-    if (room <= 0) {
-      toast(`在籍数の上限（${limit}人）です。設定でプランを上げてください`);
-      return;
-    }
     const emp = await store.hireCharacter(roleId, seat);
     if (emp) go('employee', emp.id);
   };
@@ -57,10 +49,6 @@ export default function Characters({ store, go, toast, highlight = null }) {
     const seats = charactersOf(roleId).filter((c) => !hiredOf(roleId, c.seat));
     if (!seats.length) {
       toast('この役職の3名はすでに全員在籍しています');
-      return;
-    }
-    if (room < seats.length) {
-      toast(`在籍数の上限（${limit}人）です。設定でプランを上げてください`);
       return;
     }
     // 1人ずつ順に雇う（席番号が「その組の中の通し番号」なので、

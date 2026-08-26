@@ -2,19 +2,23 @@
 // 接続上限はプラン定義から読む（画面に数字を直書きしない）。
 
 import { Card, SectionTitle, Empty, Jump } from './ui.jsx';
-import { TOOLS, TOOL_CATEGORIES } from '../data/tools.js';
+import { TOOLS, TOOL_CATEGORIES, isToolEnabled, countableTools } from '../data/tools.js';
 import { planById, connectionLimit, PLANS } from '../data/plans.js';
 import { providerById } from '../lib/providers/index.js';
 
 export default function Connect({ store, go, toast, highlight = null }) {
   const plan = planById(store.company?.planId);
   const limit = connectionLimit(store.company?.planId, store.company?.limitOverrides);
-  const enabled = store.connections.filter((c) => c.enabled);
-  const isOn = (id) => enabled.some((c) => c.toolId === id);
+  // **実行側（runtime.js）と同じ判定を使う。**
+  // 画面が「記録が無い＝未接続」、実行が「記録が無い＝使える」と食い違っていると、
+  // 未接続に見えている道具を社員が使ってしまう。判定は tools.js の1か所だけ。
+  const isOn = (id) => isToolEnabled(store.connections, id);
+  const enabled = countableTools().filter((t) => t.available && isOn(t.id));
 
   const toggle = (tool) => {
     const on = isOn(tool.id);
-    if (!on && !tool.always && enabled.filter((c) => !TOOLS.find((t) => t.id === c.toolId)?.always).length >= limit) {
+    // enabled は既に「数える道具のうち使えるもの」なので、そのまま数える
+    if (!on && !tool.always && enabled.length >= limit) {
       toast(`${plan.name}プランで使える道具は${limit}つまでです`);
       return;
     }

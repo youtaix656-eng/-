@@ -6,9 +6,10 @@
 
 import { providerById, estimateCost } from './providers/index.js';
 import { route, markBusy } from './router.js';
-import { isBusyError } from './providers/stream.js';
+import { isBusyError, failureAdvice } from './providers/stream.js';
 import { buildContext } from './memory.js';
 import { roleById, groupById } from '../data/roles.js';
+import { isToolEnabled } from '../data/tools.js';
 
 // ── 新項目21：同じ問いの答えを使い回す ──
 //
@@ -90,10 +91,15 @@ export async function runStep({
   inherited = '',
   secrets = {},
   settings = {},
+  connections = [],
   signal,
   onDelta,
 }) {
-  const needs = (step.needs || []).filter((n) => (employee.toolIds || []).includes(n));
+  // 道具を使ってよいかは2段構え：社員が持っているか（toolIds）と、
+  // 会社として切っていないか（connections）。会社が切ったものは誰も使わない。
+  const needs = (step.needs || [])
+    .filter((n) => (employee.toolIds || []).includes(n))
+    .filter((n) => isToolEnabled(connections, n));
   const decision = route({
     employee,
     secrets,
@@ -188,6 +194,13 @@ async function callWithRetry(provider, args) {
   try {
     return await provider.run(args);
   } catch (e) {
+    // fetch そのものが失敗した時（圏外・機内モード）は状態番号が無い。
+    // 生の "Failed to fetch" を出さず、何をすればよいかに置き換える。
+    if (e && !e.status && /fetch|network|Load failed/i.test(e.message || '')) {
+      const wrapped = new Error(`${provider.name}：${failureAdvice(0)}`);
+      wrapped.offlineLike = true;
+      throw wrapped;
+    }
     if (!isBusyError(e)) throw e;
     markBusy(provider.id, e.retryAfterMs);
     // 中止されているならやり直さない

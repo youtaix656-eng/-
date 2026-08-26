@@ -21,7 +21,6 @@ import { readingInfo, UNKNOWN_BUCKET, bucketOf } from '../src/lib/yomi.js';
 // 人物像・書き方・出身は別ファイルにあり、必要になった時に読み込む（新項目03）。
 // 同期のテストからも読めるよう、ここで先に読み込んでおく。
 await loadCharacterDetails();
-import { employeeLimit } from '../src/data/plans.js';
 import { pickRole, scoreRoles } from '../src/lib/dispatcher.js';
 import { createTask } from '../src/lib/workflow.js';
 
@@ -229,9 +228,11 @@ test('社員データにカナ・出身・肖像が保存される', () => {
   assert.equal(e.provider, undefined);
 });
 
-test('30名すべてを雇っても在籍数の上限に収まる', () => {
+test('30名すべてを雇っても、在籍数で止められない', () => {
+  // 在籍数の上限は廃止した（30役職×3席＝90人で、以前の上限72人を超えていたうえ、
+  // 4つある雇用の経路のうち2つでしか見ていなかったため歯止めになっていなかった）。
   const { employees } = seedAll();
-  assert.ok(employees.length + CHARACTERS.length <= employeeLimit('free'), '無料プランで30名を雇えない');
+  assert.ok(employees.length + CHARACTERS.length > 0);
 });
 
 test('キャラクターの席は汎用ジャンルの1〜3席', () => {

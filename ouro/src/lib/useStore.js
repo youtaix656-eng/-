@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KEYS, load, loadMany, save, exportAll, importAll, flushNow, isPartial, onExternalChange,
-  requestPersistent,
+  requestPersistent, adoptFullList,
 } from './storage.js';
 import * as perf from './perf.js';
 import { afterPaint, whenIdle } from './idle.js';
@@ -15,7 +15,7 @@ import { createTask, applyStepResult, nextGroup, assembleResult, retryFailed } f
 import { runStep, distill, extractUrls } from './runtime.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
-import { checkAction, monthStart } from './permissions.js';
+import { checkAction, addCost, spentThisMonthOf } from './permissions.js';
 import { createDeal } from './revenue.js';
 import {
   createMeeting, addRound, opinionPrompt, rebuttalPrompt, synthesisPrompt, estimatedCalls,
@@ -47,11 +47,20 @@ function loadRoster() {
 const FIRST_KEYS = [
   KEYS.company, KEYS.settings, KEYS.employees, KEYS.tasks, KEYS.knowledge,
   KEYS.deals, KEYS.events, KEYS.genres, KEYS.approvals, KEYS.secrets,
+  // 道具を切ってあるかどうかは**実行の判定に使う**ので、後回しにできない。
+  // 読み込み前は空＝「全部使える」になり、切ったはずの道具が使われてしまう。
+  // 数件しか無いので、最初のひと組に入れても起動は重くならない。
+  KEYS.connections,
 ];
 // 新項目09：起動時に読む操作履歴の件数。画面に出るのは最近のぶんだけなので、
 // 全件（最大2000）を読まずに新しい方から400件だけ読む。
 // 「すべて読み込む」を押した時と、畳む時だけ全件を読む。
 export const AUDIT_PAGE = 400;
+
+// 起動時に読む仕事の件数。1件が手順の本文をまるごと抱えるので、
+// 全部読むと使い込むほど起動が遅くなる（実測 600件で 377ms → 962ms）。
+// ホームに要るのは進行中のものと今日の完了だけ。古いものは仕事の一覧で読み足す。
+export const TASK_PAGE = 120;
 
 // 古い記録を畳む間隔（新項目08）。畳む対象は30日より古い記録なので、
 // 起動のたびに確かめる必要はない。
@@ -59,7 +68,7 @@ const FOLD_EVERY_MS = 24 * 60 * 60 * 1000;
 
 // 開くまで見えないもの（操作履歴は最大2000件あるので、必ず後回しにする）
 const REST_KEYS = [
-  KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit, KEYS.connections,
+  KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 const REST_FALLBACKS = Object.fromEntries(REST_KEYS.map((k) => [k, []]));
@@ -161,7 +170,7 @@ export function useStore() {
       }
 
       // ── 2回目以降：まず最初の画面に要るものだけ ──
-      const first = await loadMany(FIRST_KEYS, FIRST_FALLBACKS);
+      const first = await loadMany(FIRST_KEYS, FIRST_FALLBACKS, { [KEYS.tasks]: TASK_PAGE });
       if (!alive) return;
       const next = {
         ...EMPTY,
@@ -173,6 +182,7 @@ export function useStore() {
         events: asArray(first[KEYS.events]),
         genres: asArray(first[KEYS.genres]),
         approvals: asArray(first[KEYS.approvals]),
+        connections: asArray(first[KEYS.connections]),
         settings: { ...makeSettings(), ...(first[KEYS.settings] || {}) },
         secrets: first[KEYS.secrets] || {},
       };
@@ -253,7 +263,8 @@ export function useStore() {
         await whenIdle(6000);
         if (!alive) return;
         try {
-          const full = await load(KEYS.audit, []);
+          await flushNow(); // 古い配列が後から書かれて消えるのを防ぐ
+          const full = await load(KEYS.audit, [], 0, false);
           if (!alive) return;
           // 全件を読んでいる最中に積まれた記録は、まだディスクに無いことがある。
           // 読んだぶんに、手元にしか無いものを足してから畳む。
@@ -269,6 +280,8 @@ export function useStore() {
           const withAudit = { ...stateRef.current, audit: list };
           stateRef.current = withAudit;
           setState(withAudit);
+          // 手元が全件になったあとで印を外す（順番が逆だと読んでいない分が消える）
+          adoptFullList(KEYS.audit, list);
           if (folded > 0) save(KEYS.audit, list, 'low');
           // 次に畳むのは1日後
           const settings = { ...stateRef.current.settings, lastAuditFold: Date.now() };
@@ -314,12 +327,10 @@ export function useStore() {
 
   /**
    * 今月のAI費用（USD）。上限の判定に使う。
-   * 操作履歴に残っている費用の合計なので、会議も仕事も両方入る。
+   * **操作履歴から数え直さない。** 履歴は起動時に新しい400件しか読まないので、
+   * 数え直すと実際より小さく出て、上限が効かなくなる。設定に積み上げた値を使う。
    */
-  const spentThisMonth = useCallback(
-    () => totalCost(stateRef.current.audit, monthStart()),
-    []
-  );
+  const spentThisMonth = useCallback(() => spentThisMonthOf(stateRef.current.settings), []);
 
   // 保存つきの更新。key に対応する値だけを書く。
   // ref を先に更新してから setState することで、同じ処理の中で続けて
@@ -336,9 +347,13 @@ export function useStore() {
   const log = useCallback((entry) => {
     touchedRef.current.add(KEYS.audit);
     const made = makeEntry(entry);
-    const next = appendAudit(stateRef.current.audit, made);
-    stateRef.current = { ...stateRef.current, audit: next };
+    // 一部だけ読み込んでいる間は畳まない（畳んだ元がディスクに残ってしまうため）
+    const next = appendAudit(stateRef.current.audit, made, { fold: !isPartial(KEYS.audit) });
+    // 費用は履歴と別に積み上げる（履歴は一部しか読まないので数え直せない）
+    const settings = made.cost > 0 ? addCost(stateRef.current.settings, made.cost) : stateRef.current.settings;
+    stateRef.current = { ...stateRef.current, audit: next, settings };
     setState(stateRef.current);
+    if (made.cost > 0) save(KEYS.settings, settings, 'low');
     // 読み込みが終わる前は保存を待つ。ここで書くと、まだ空の履歴で
     // 保存済みの履歴を消してしまう。読み終わってから足す。
     if (!hydratedRef.current) {
@@ -353,14 +368,40 @@ export function useStore() {
    * 操作履歴を全部読み込む（新項目09）。
    * 起動時は新しい400件だけなので、古いぶんを見たい時にこれを呼ぶ。
    */
+  /** 古い仕事も全部読み込む（新規）。起動時は新しい120件だけ読んでいる。 */
+  const loadAllTasks = useCallback(async () => {
+    // **先に書き残しを片付ける。**
+    // save() は「呼んだ時点の配列」を持って待つ。全件を手元に入れたあとで
+    // その古い配列（一部だけ）が書き込まれると、読んでいない分が消える
+    // （実際に 300件 → 120件 になった）。印が付いているうちに書き切らせる。
+    await flushNow();
+    // track:false で読む（この時点では「一部だけ」の印を外さない）
+    const full = await load(KEYS.tasks, [], 0, false);
+    // **手元にあるものを優先する。** 読んでいる間も実行は進んでいて、
+    // ディスク側は1つ前の状態のことがある。古い方で上書きすると、
+    // いま書き込まれた手順の結果が巻き戻る。
+    const mine = new Map(stateRef.current.tasks.filter(Boolean).map((t) => [t.id, t]));
+    const merged = [
+      ...stateRef.current.tasks.filter(Boolean),
+      ...full.filter((t) => t && !mine.has(t.id)),
+    ];
+    stateRef.current = { ...stateRef.current, tasks: merged };
+    setState(stateRef.current);
+    // 手元が全件になった**あと**で印を外す（順番を逆にすると読んでいない分が消える）
+    adoptFullList(KEYS.tasks, merged);
+    return merged.length;
+  }, []);
+
   const loadAllAudit = useCallback(async () => {
-    const full = await load(KEYS.audit, []);
+    await flushNow(); // 古い配列が後から書かれて消えるのを防ぐ（上と同じ理由）
+    const full = await load(KEYS.audit, [], 0, false);
     const onDisk = new Set(full.map((e) => e && e.id));
     const merged = [...full, ...stateRef.current.audit.filter((e) => e && !onDisk.has(e.id))].sort(
       (a, b) => (a.at || 0) - (b.at || 0)
     );
     stateRef.current = { ...stateRef.current, audit: merged };
     setState(stateRef.current);
+    adoptFullList(KEYS.audit, merged);
     return merged.length;
   }, []);
 
@@ -630,6 +671,7 @@ export function useStore() {
               inherited: step.input,
               secrets: s.secrets,
               settings: s.settings,
+              connections: s.connections,
               signal: controller ? controller.signal : undefined,
               // 受け取った先から画面へ出す。ここでは保存しない。
               onDelta: (piece) =>
@@ -691,10 +733,16 @@ export function useStore() {
       }
       patchTask(updated);
 
-      // 完了したら成果を知識にする（＝ウロボロスの循環）
+      // 完了したら成果を知識にする（＝ウロボロスの循環）。
+      // ただし **AIが動いていない「仕事の型」は自動で知識にしない。**
+      // キーを入れる前に何度か試すたびに中身の無い知識が積まれ、
+      // 件数・成長のグラフ・関連度の判定を薄めてしまうため。
+      // 型そのものは仕事の中に残るので、必要なら結果画面から手で知識にできる。
       if (updated.status === 'done') {
         const last = results[results.length - 1];
-        await saveResultAsKnowledge(updated, last.employee, last.result);
+        if (!last.result.offline) {
+          await saveResultAsKnowledge(updated, last.employee, last.result);
+        }
       }
 
       return updated;
@@ -709,6 +757,16 @@ export function useStore() {
     c.abort();
     abortRef.current = null;
     return true;
+  }, []);
+
+  /**
+   * 仕事の成果を、あとから手で知識にする（新規）。
+   * AI未接続の「仕事の型」は自動保存しないので、その受け皿。
+   */
+  const saveTaskAsKnowledgeRef = useRef(null);
+  const saveTaskAsKnowledge = useCallback((taskId) => {
+    const fn = saveTaskAsKnowledgeRef.current;
+    return fn ? fn(taskId) : null;
   }, []);
 
   /** 仕事の成果を会社の知識として保存する。出典を必ず残す。 */
@@ -766,6 +824,24 @@ export function useStore() {
     },
     [put, log, patchTask]
   );
+
+  // 手で知識にする経路（saveResultAsKnowledge の定義より前で公開したいので ref に載せる）
+  saveTaskAsKnowledgeRef.current = (taskId) => {
+    const t = stateRef.current.tasks.find((x) => x.id === taskId);
+    if (!t) return null;
+    const step = [...(t.steps || [])].reverse().find((x) => x.status === 'done' && x.output);
+    if (!step) return null;
+    const emp = stateRef.current.employees.find((e) => e.id === step.employeeId) || {
+      id: 'user',
+      name: step.employeeName || '担当',
+      roleId: step.roleId,
+    };
+    // 型は AI が動いていないので、来歴は 'template' のままにする
+    return saveResultAsKnowledge(t, emp, {
+      offline: Boolean(step.offline),
+      providerName: step.providerName,
+    });
+  };
 
   /** 最後まで一気に走らせる。 */
   const runTask = useCallback(
@@ -998,6 +1074,7 @@ export function useStore() {
             knowledgeList: s.knowledge,
             secrets: s.secrets,
             settings: s.settings,
+            connections: s.connections,
             signal: controller ? controller.signal : undefined,
           });
           return { text: r.text, providerId: r.providerId, model: r.model, cost: r.cost };
@@ -1098,14 +1175,22 @@ export function useStore() {
     [put]
   );
 
-  const exportData = useCallback(async () => {
+  /**
+   * 書き出す。
+   * @param {boolean} recordDate 書き出した日を覚えるか。
+   *   取り込み直前の保険で書き出す時は false にする。true のままだと
+   *   「取り込む前の設定」の保存が待ち行列に残り、取り込み後の離脱時に
+   *   それが書かれて、取り込んだ設定を巻き戻してしまう。
+   */
+  const exportData = useCallback(async (recordDate = true) => {
     await flushNow(); // 書き残しをバックアップに含めるため
     const out = await exportAll();
-    // 書き出した日を覚えておく（ホームの「そろそろ書き出しましょう」の判定に使う）
-    const settings = { ...stateRef.current.settings, lastExportAt: Date.now() };
-    stateRef.current = { ...stateRef.current, settings };
-    setState(stateRef.current);
-    save(KEYS.settings, settings);
+    if (recordDate) {
+      const settings = { ...stateRef.current.settings, lastExportAt: Date.now() };
+      stateRef.current = { ...stateRef.current, settings };
+      setState(stateRef.current);
+      save(KEYS.settings, settings);
+    }
     return out;
   }, []);
   const importData = useCallback(async (payload) => {
@@ -1122,6 +1207,9 @@ export function useStore() {
     activeEmployees,
     // 社員
     cancelRun,
+    saveTaskAsKnowledge,
+    loadAllTasks,
+    tasksPartial: isPartial(KEYS.tasks),
     loadAllAudit,
     auditPartial: isPartial(KEYS.audit),
     hireEmployee,

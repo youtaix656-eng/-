@@ -7,7 +7,6 @@ import { presetEmployee, archetypeFor } from '../data/employees.js';
 import { loadCharacterDetails } from '../data/characters.js';
 import { nextSeat, seatsOf } from '../lib/seats.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
-import { employeeLimit } from '../data/plans.js';
 import { TOOLS } from '../data/tools.js';
 import { PROVIDERS } from '../lib/providers/index.js';
 import Portrait from './Portrait.jsx';
@@ -31,9 +30,6 @@ export default function Hire({ store, initialRoleId, go }) {
   }, []);
   const genres = allGenres(store.genres);
   const seatsPerGenre = store.company?.seatsPerGenre || 3;
-
-  const limit = employeeLimit(store.company?.planId, store.company?.limitOverrides);
-  const full = store.activeEmployees.length >= limit;
 
   const seat = nextSeat(store.employees, roleId, genreId);
   // detailsReady が立った時に作り直して、キャラクターの人物像を反映する（新項目03）
@@ -82,7 +78,7 @@ export default function Hire({ store, initialRoleId, go }) {
       <p className="muted" style={{ marginTop: 0 }}>
         席（1役職あたりの人数）は固定ではありません。同じ役職でも持ち味の違う社員を並べると、
         仕事を分担できます。<br />
-        在籍 {store.activeEmployees.length} / {limit} 人
+        在籍 {store.activeEmployees.length} 人
       </p>
 
       <div className="btn-row" style={{ marginBottom: 14 }}>
@@ -93,14 +89,6 @@ export default function Hire({ store, initialRoleId, go }) {
           オリジナル社員を作る
         </button>
       </div>
-
-      {full && (
-        <Card glyph="⚠" title="在籍数の上限です">
-          <p className="muted" style={{ marginBottom: 0 }}>
-            設定でプランを上げるか、使っていない社員を休職にしてください。
-          </p>
-        </Card>
-      )}
 
       {mode === 'preset' ? (
         <>
@@ -169,7 +157,7 @@ export default function Hire({ store, initialRoleId, go }) {
               {preset.genreHint && <p className="muted">分野の指示：{preset.genreHint}</p>}
               <p className="muted">読み：{preset.reading}</p>
               {/* 二度押しで同じ席に2人できるのを防ぐ（新項目26。雇用は非同期になった） */}
-              <Action className="btn primary block" onClick={hirePreset} disabled={full} busyLabel="雇っています…">
+              <Action className="btn primary block" onClick={hirePreset} busyLabel="雇っています…">
                 {preset.name} を雇う
               </Action>
             </Card>
@@ -303,7 +291,7 @@ export default function Hire({ store, initialRoleId, go }) {
               })}
             </div>
           </Field>
-          <Action className="btn primary block" onClick={hireCustom} disabled={full || !custom.name} busyLabel="雇っています…">
+          <Action className="btn primary block" onClick={hireCustom} disabled={!custom.name} busyLabel="雇っています…">
             この社員を雇う
           </Action>
         </Card>

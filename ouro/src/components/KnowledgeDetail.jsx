@@ -3,8 +3,11 @@
 import { Card, Doc, Empty, SectionTitle, Row } from './ui.jsx';
 import { ORIGINS, SOURCE_TYPES } from '../lib/knowledge.js';
 import { relTime } from '../lib/format.js';
+import { useAllTasks } from './useAllTasks.js';
 
 export default function KnowledgeDetail({ store, knowledgeId, go }) {
+  // 古い仕事も要る画面なので、残りを読み足す
+  useAllTasks(store);
   const k = store.knowledge.find((x) => x.id === knowledgeId);
   if (!k) return <div className="screen"><Empty>知識が見つかりません。</Empty></div>;
 

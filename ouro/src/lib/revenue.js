@@ -30,7 +30,7 @@ export function createDeal(data = {}) {
     status: DEAL_STATUS[data.status] ? data.status : 'lead',
     dueAt: data.dueAt || null,
     hoursSpent: Number(data.hoursSpent) || 0,
-    taskIds: data.taskIds || [],
+    // taskIds は持たない。仕事の側の dealId だけで結びつける（二重管理にしない）。
     knowledgeIds: data.knowledgeIds || [],
     notes: String(data.notes || ''),
     createdAt: Date.now(),
@@ -39,10 +39,19 @@ export function createDeal(data = {}) {
   };
 }
 
-/** 案件にかかった AI 費用（円換算）。 */
+/**
+ * 案件にかかった AI 費用（円換算）。
+ *
+ * **仕事の側が持つ dealId で数える。** 以前は deal.taskIds を見ていたが、
+ * この項目に値が入る場所がどこにも無く、費用が常に0になっていた
+ * （＝「手残り」が報酬と同額のまま表示され、利益が実際より多く見えていた）。
+ * 案件と仕事の結びつきは task.dealId の一方向だけで持つ。
+ */
 export function dealAiCost(deal, tasks = [], usdJpy = 155) {
-  const ids = new Set(deal.taskIds || []);
-  const usd = tasks.filter((t) => ids.has(t.id)).reduce((s, t) => s + (t.totalCost || 0), 0);
+  if (!deal) return 0;
+  const usd = tasks
+    .filter((t) => t.dealId === deal.id)
+    .reduce((s, t) => s + (t.totalCost || 0), 0);
   return usd * usdJpy;
 }
 

@@ -5,8 +5,11 @@ import { Card, Doc, Empty, Bar, SectionTitle, Field } from './ui.jsx';
 import { TASK_STATUS, taskProgress, nextStep, assembleResult } from '../lib/workflow.js';
 import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
+import { useAllTasks } from './useAllTasks.js';
 
 export default function TaskDetail({ store, taskId, go }) {
+  // 古い仕事も要る画面なので、残りを読み足す
+  useAllTasks(store);
   const task = store.tasks.find((t) => t.id === taskId);
   const [followUp, setFollowUp] = useState('');
   const [open, setOpen] = useState({});
@@ -21,6 +24,9 @@ export default function TaskDetail({ store, taskId, go }) {
   const failedSteps = (task.steps || []).filter((s) => s.status === 'failed');
   // 提出物は保存せず、その場で組み立てる（同じ文章を二重に持たないため）
   const deliverable = assembleResult(task);
+  // AIが動いていない「仕事の型」は自動で知識にしない（知識を薄めないため）。
+  // 型が役に立つなら、ここから手で知識にできる。
+  const isTemplate = (task.steps || []).some((s) => s.status === 'done' && s.offline);
   const knowledge = store.knowledge.filter((k) => k.taskId === task.id);
 
   return (
@@ -209,12 +215,31 @@ export default function TaskDetail({ store, taskId, go }) {
                   知識として見る
                 </button>
               )}
+              {!knowledge[0] && isTemplate && (
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={async () => {
+                    const k = await store.saveTaskAsKnowledge(task.id);
+                    if (k) go('knowledgeDetail', k.id);
+                  }}
+                >
+                  これを知識として残す
+                </button>
+              )}
             </div>
           </Card>
 
           {knowledge.length > 0 && (
             <p className="muted">
               ◉ この成果は会社の知識になりました。次の仕事で自動的に材料として使われます。
+            </p>
+          )}
+          {!knowledge.length && isTemplate && (
+            <p className="muted">
+              ✳ これはAIが考えた結果ではなく「仕事の型」です（AIエンジンが未接続のため）。
+              知識には自動で入れていません。役に立つと思ったら、上のボタンで残せます。
+              設定でエンジンを1つ接続すると、この型のとおりに社員が実際に調べて書きます。
             </p>
           )}
 
