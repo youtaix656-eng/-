@@ -27,11 +27,39 @@ export default function Settings({ store, toast }) {
 
   const doImport = async (file) => {
     if (!file) return;
+    // **いちばん壊れる操作なのに、ここだけ確認が無かった。**
+    // 案件1件・知識1件・仕事1件の削除には確認があるのに、
+    // 全部を置き換える取り込みだけ素通りしていた。
+    const okToGo = window.confirm(
+      'いまの端末のデータ（社員・知識・案件・履歴）を、このファイルの内容で置き換えます。\n' +
+        '元に戻せません。よろしいですか？'
+    );
+    if (!okToGo) return;
     try {
       const payload = JSON.parse(await file.text());
+      // 置き換える前に、いまの状態を自動で書き出しておく（取り違えた時の保険）
+      await autoBackupBeforeImport();
       await store.importData(payload);
     } catch (e) {
       toast(`取り込めませんでした：${e.message}`);
+    }
+  };
+
+  /** 取り込みの直前に、いまのデータを1つ書き出しておく。 */
+  const autoBackupBeforeImport = async () => {
+    try {
+      // recordDate:false ＝ 書き出した日を記録しない。
+      // 記録すると「取り込む前の設定」の保存が待ち行列に残り、
+      // 取り込んだ内容をあとから上書きしてしまう。
+      const data = await store.exportData(false);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `ouro-before-import-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      // 書き出せなくても取り込みは止めない（止めると復旧手段が無くなる）
     }
   };
 
@@ -147,7 +175,7 @@ export default function Settings({ store, toast }) {
           >
             {PLANS.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name}（道具{p.maxConnections}・社員{p.maxEmployees}）
+                {p.name}（道具{p.maxConnections}まで）
               </option>
             ))}
           </select>
@@ -175,7 +203,7 @@ export default function Settings({ store, toast }) {
             書き出す
           </button>
           <label className="btn" style={{ cursor: 'pointer' }}>
-            取り込む
+            取り込む（置き換え）
             <input
               type="file"
               accept="application/json,.json"

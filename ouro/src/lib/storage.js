@@ -115,6 +115,33 @@ async function readRaw(key, fallback) {
  */
 async function readCollection(key, manifest, fallback, limit = 0, track = true) {
   const conf = RECORD_COLLECTIONS[key];
+
+  // 並び順を manifest に持つもの（社員・仕事・知識など）は、
+  // 先頭 limit 件の id だけを読む。仕事は1件が手順の本文をまるごと抱えるので、
+  // 全部読むと使い込むほど起動が遅くなる（実測 600件で 377ms → 962ms）。
+  if (limit > 0 && conf.mode === 'ids' && Array.isArray(manifest.ids) && manifest.ids.length > limit) {
+    const head = manifest.ids.slice(0, limit);
+    let got;
+    try {
+      got = await idbGetMany(head.map((id) => recordKey(key, id)));
+    } catch {
+      return fallback;
+    }
+    const list = head.map((id) => got.get(recordKey(key, id))).filter((v) => v !== undefined);
+    if (track) {
+      partialKeys.add(key);
+      partialTail.set(key, manifest.ids.slice(limit));
+      const cache = new Map();
+      for (const id of head) {
+        const rk = recordKey(key, id);
+        if (got.has(rk)) cache.set(rk, got.get(rk));
+      }
+      recordCache.set(key, cache);
+      lastWritten.set(key, manifest);
+    }
+    return list;
+  }
+
   // 新項目09：並び順がキー自体にあるもの（操作履歴）は、新しい方から limit 件だけ読む。
   // 全部読むと2000件ぶんの往復になるが、画面に出るのは最近のぶんだけ。
   const paged = limit > 0 && conf.mode === 'sorted';
@@ -126,7 +153,10 @@ async function readCollection(key, manifest, fallback, limit = 0, track = true) 
   }
   if (track) {
     if (paged && map.size >= limit) partialKeys.add(key);
-    else partialKeys.delete(key);
+    else {
+      partialKeys.delete(key);
+      partialTail.delete(key);
+    }
   }
 
   let list;
@@ -212,6 +242,14 @@ let idleId = null;
 // 読んでいない古いレコードを「消えた」と誤解して削除しないための印。
 const partialKeys = new Set();
 
+// 一部だけ読み込んだ時に、**読まなかった id の並び**を覚えておく。
+//
+// 順番を manifest に持つ形（mode:'ids'）では、これが無いと詰む：
+// 手元の200件だけで manifest を書き直すと残りの id が消え、
+// 逆に manifest を書かないと、新しく作ったものが manifest に載らず
+// 次の起動で消える。読まなかった分を末尾に付け直すことで両方を避ける。
+const partialTail = new Map();
+
 // 新項目11：JSON化は1キーにつき1回だけにする。
 // 以前は「変わったか確かめる」ためと「localStorage へ書く」ためで2回まわしていた。
 const lastJson = new Map();
@@ -262,13 +300,19 @@ function planCollection(key, list, prev) {
     for (const rk of prev.keys()) if (!next.has(rk)) deleteKeys.push(rk);
   }
 
+  // 一部だけ読み込んでいる時、順番を持つ側（ids）は
+  // **読まなかった id を末尾に付け直してから**書く。
+  // 手元の分だけで書くと残りが消え、書かないと新しく作った分が載らない。
+  const tail = partialKeys.has(key) ? partialTail.get(key) || [] : [];
   const manifest =
     conf.mode === 'sorted'
       ? { [MANIFEST_TAG]: 2, mode: 'sorted', count: ids.length }
-      : { [MANIFEST_TAG]: 2, mode: 'ids', ids };
-  // 一部だけ読み込んでいる時は、手元の件数で目録を書き換えない（新項目09）。
+      : { [MANIFEST_TAG]: 2, mode: 'ids', ids: tail.length ? [...ids, ...tail.filter((id) => !ids.includes(id))] : ids };
+
+  // 件数しか持たない側（sorted）は、一部読み込み中に書き換えない。
   // 400件しか読んでいないのに count:400 と書くと、実際の件数が分からなくなる。
-  if (!partialKeys.has(key) && !sameValue(lastWritten.get(key), manifest)) {
+  const skipManifest = partialKeys.has(key) && conf.mode === 'sorted';
+  if (!skipManifest && !sameValue(lastWritten.get(key), manifest)) {
     entries.push([key, manifest]);
   }
 
@@ -448,6 +492,30 @@ export function isPartial(key) {
   return partialKeys.has(key);
 }
 
+/**
+ * 「いま全件を手元に持った」と宣言する。
+ *
+ * **全件を読んだ瞬間に印を外してはいけない。**
+ * 読み終わってから画面が全件を受け取るまでのあいだに保存が1回でも走ると、
+ * その保存は手元の一部だけを「全部」とみなし、読んでいないレコードを消す
+ * （実際に 300件 → 121件 に減らした）。
+ * 読む時は track:false で何も触らず、**画面が全件を受け取ったあとで**ここを呼ぶ。
+ * await を挟まないので、その間に保存が割り込む隙が無い。
+ */
+export function adoptFullList(key, list = []) {
+  const conf = RECORD_COLLECTIONS[key];
+  if (!conf) return;
+  const cache = new Map();
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const id = conf.mode === 'sorted' ? conf.keyOf(item) : String(item.id ?? '');
+    if (id) cache.set(recordKey(key, id), item);
+  }
+  recordCache.set(key, cache);
+  partialKeys.delete(key);
+  partialTail.delete(key);
+}
+
 /** 書き残しがあるか（テストと、閉じる前の判定に使う）。 */
 export function hasPendingWrites() {
   return pending.size > 0 || draining != null;
@@ -470,6 +538,7 @@ export async function remove(key) {
   lastWritten.delete(key);
   lastJson.delete(key);
   partialKeys.delete(key);
+  partialTail.delete(key);
   try {
     if (useIdb) {
       if (RECORD_COLLECTIONS[key]) {
@@ -516,6 +585,7 @@ export async function importAll(payload) {
     // 取り込む配列は「全部」なので、一部読み込みの印を外して
     // 古いレコードがちゃんと消えるようにする（外し忘れると孤児が残る）。
     partialKeys.delete(key);
+    partialTail.delete(key);
     // eslint-disable-next-line no-await-in-loop
     await writeNow(key, value);
     count += 1;

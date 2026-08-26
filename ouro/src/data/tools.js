@@ -174,6 +174,21 @@ export function toolById(id) {
   return TOOLS.find((t) => t.id === id) || null;
 }
 
+/**
+ * 会社としてこの道具を使ってよいか（新規）。
+ *
+ * **記録が無ければ「使ってよい」。** 接続の記録は最初は空なので、
+ * 「記録があるものだけ使える」にすると、初回から Web検索が止まってしまう。
+ * ユーザーが画面で明示的に解除した時だけ止める（オプトアウト）。
+ *
+ * これを入れるまで、接続の切り替えは実行に一切効いていなかった
+ * （runtime.js は社員個人の toolIds しか見ていなかった）。
+ */
+export function isToolEnabled(connections = [], toolId) {
+  const rec = connections.find((c) => c.toolId === toolId);
+  return rec ? rec.enabled !== false : true;
+}
+
 /** 接続数の上限に数える道具（社内の道具は数えない）。 */
 export function countableTools() {
   return TOOLS.filter((t) => !t.always);

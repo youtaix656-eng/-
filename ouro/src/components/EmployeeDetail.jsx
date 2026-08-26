@@ -8,8 +8,11 @@ import { PROVIDERS, providerById } from '../lib/providers/index.js';
 import { PERMISSIONS, permissionLabel } from '../lib/permissions.js';
 import { usd, relTime } from '../lib/format.js';
 import Portrait from './Portrait.jsx';
+import { useAllTasks } from './useAllTasks.js';
 
 export default function EmployeeDetail({ store, employeeId, go }) {
+  // 古い仕事も要る画面なので、残りを読み足す
+  useAllTasks(store);
   const emp = store.employees.find((e) => e.id === employeeId);
   if (!emp) return <div className="screen"><Empty>社員が見つかりません。</Empty></div>;
 

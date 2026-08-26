@@ -18,5 +18,11 @@ export function makeSettings() {
     monthlyCapUsd: 5,
     // 最後にバックアップを書き出した時刻。0 は一度も書き出していない。
     lastExportAt: 0,
+    // AI費用の積み上げ（USD）。
+    // **操作履歴から数え直さないこと。** 履歴は起動時に新しい400件しか読まないので、
+    // 数え直すと合計が実際より小さく出て、月の上限が効かなくなる。
+    costTotalUsd: 0,
+    costMonth: '', // 'YYYY-MM'
+    costMonthUsd: 0,
   };
 }

@@ -36,10 +36,34 @@ export function makeEntry({ actor, action, target, detail, cost = 0 }) {
   };
 }
 
-/** 追記して上限を超えた分だけ古いものを落とす。 */
-export function appendAudit(list = [], entry) {
+/**
+ * 追記する。上限を超えたら **古い方を落とすのではなく畳む**。
+ *
+ * 以前は超えた分を slice で捨てていた。畳む処理（foldAudit）は
+ * 「30日より古いもの」しか対象にしないので、30日以内に上限へ達すると
+ * 記録が畳まれる前に消えていた——「消すのではなく畳む」という約束と矛盾する。
+ * ここでは日付に関係なく、古い方から**日ごとにまとめて**枠を空ける。
+ * まとめた件数と費用は残るので、「いつ何件動かして、いくらかかったか」は失われない。
+ */
+export function appendAudit(list = [], entry, { fold = true } = {}) {
   const next = [...list, entry];
-  return next.length > AUDIT_LIMIT ? next.slice(next.length - AUDIT_LIMIT) : next;
+  if (next.length <= AUDIT_LIMIT) return next;
+
+  // **全件を手元に持っていない時は畳まない。**
+  // 一部だけ読み込んでいる間はディスクのレコードを消さない決まりなので、
+  // ここで畳むと「まとめ」と「畳んだ元」が両方ディスクに残り、費用が二重に数えられる。
+  // 手元の配列から古い分を外すだけにする（ディスクには残っているので失われない）。
+  if (!fold) return next.slice(next.length - AUDIT_LIMIT);
+
+  // 古い方の3割を畳んで枠を作る（毎回1件ずつ畳むと、そのたびに走って重い）
+  const foldCount = Math.max(1, Math.floor(AUDIT_LIMIT * 0.3));
+  const old = next.slice(0, foldCount);
+  const keep = next.slice(foldCount);
+  const { list: folded } = foldAudit(old, { now: Date.now(), olderThan: 0 });
+  const merged = [...folded, ...keep];
+
+  // 畳んでも入りきらない時だけ、やむを得ず古い方を落とす
+  return merged.length > AUDIT_LIMIT ? merged.slice(merged.length - AUDIT_LIMIT) : merged;
 }
 
 // ── 古い記録を畳む（新項目08）──
@@ -89,7 +113,10 @@ export function foldAudit(list = [], { now = Date.now(), olderThan = FOLD_AFTER_
       .map(([a, n]) => `${actionLabel(a)}${n}`)
       .join('・');
     return {
-      id: `fold_${day}`,
+      // **日付だけの id にしないこと。** 上限に達するたびに畳むので、
+      // 同じ日の「まとめ」が何度もできる。id が重なると、
+      // 読み直しの突き合わせで片方が落ちたり、一覧の key が重複する。
+      id: `fold_${day}_${v.at}_${v.count}`,
       at: v.at,
       actor: 'user',
       action: FOLD_ACTION,

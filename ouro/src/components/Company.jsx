@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Card, Row, SectionTitle, Stat, Spark } from './ui.jsx';
 import { cycleStats, growthSeries } from '../lib/cycle.js';
 import { verifiedRate } from '../lib/knowledge.js';
-import { totalCost } from '../lib/audit.js';
 import { usd, relTime } from '../lib/format.js';
 import { planById, connectionLimit } from '../data/plans.js';
 import { availableProviders } from '../lib/providers/index.js';
@@ -50,7 +49,7 @@ export default function Company({ store, go }) {
         <Stat value={newWeek} label="今週の新規知識" />
         <Stat value={`${utilization}%`} label="社員稼働率" />
         <Stat value={`${verifiedRate(knowledge)}%`} label="検証済み" />
-        <Stat value={usd(totalCost(audit))} label="累計AI費用" />
+        <Stat value={usd(Number(store.settings.costTotalUsd) || 0)} label="累計AI費用" />
         <Stat value={deals.length} label="案件" />
       </div>
 

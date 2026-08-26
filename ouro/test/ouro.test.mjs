@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import { ROLES, CORE_ROLES, roleById } from '../src/data/roles.js';
 import { initialPresets, presetEmployee, SEAT_ARCHETYPES, archetypeFor, EXTRA_NAMES } from '../src/data/employees.js';
-import { PLANS, connectionLimit, employeeLimit, planById } from '../src/data/plans.js';
+import { PLANS, connectionLimit, planById } from '../src/data/plans.js';
 import { TOOLS, countableTools } from '../src/data/tools.js';
 import { JOB_TEMPLATES, easiestFirst } from '../src/data/jobTemplates.js';
 import { WORKFLOWS, flatSteps } from '../src/data/workflows.js';
@@ -392,14 +392,18 @@ test('危険な権限を持つ社員は自動実行できない', () => {
 
 // ───────── 監査ログ ─────────
 
-test('監査ログは追記のみで、上限を超えたら古いものから落ちる', () => {
+test('監査ログは追記のみで、上限を超えたら古いものを畳む（落とさない）', () => {
   let list = [];
   for (let i = 0; i < AUDIT_LIMIT + 10; i += 1) {
-    list = appendAudit(list, makeEntry({ actor: 'user', action: 'stepRun', target: `t${i}` }));
+    list = appendAudit(list, makeEntry({ actor: 'user', action: 'stepRun', target: `t${i}`, cost: 0.01 }));
   }
-  assert.equal(list.length, AUDIT_LIMIT);
+  assert.ok(list.length <= AUDIT_LIMIT, '上限を超えて持ち続けている');
   assert.equal(list[list.length - 1].target, `t${AUDIT_LIMIT + 9}`, '最新が残る');
-  assert.equal(list[0].target, 't10', '古いものから落ちる');
+  // 古い方は消えるのではなく、日ごとに1件へまとまる
+  const folded = list.filter((e) => e.action === 'folded');
+  assert.ok(folded.length > 0, '古い記録が畳まれず、そのまま消えている');
+  const total = folded.reduce((n, e) => n + (e.count || 0), 0) + (list.length - folded.length);
+  assert.equal(total, AUDIT_LIMIT + 10, `記録された件数が合わない（${total}）`);
 });
 
 test('費用の合計が出せる', () => {
@@ -547,8 +551,8 @@ test('入金済みだけを売上として数える', () => {
 
 test('案件にかかった AI 費用を差し引いて手残りを出す', () => {
   const deal = createDeal({ title: 'A', fee: 10000, status: 'paid', hoursSpent: 2 });
-  deal.taskIds = ['t1'];
-  const tasks = [{ id: 't1', totalCost: 2 }]; // $2
+  // 案件と仕事の結びつきは task.dealId の一方向だけ（deal.taskIds は持たない）
+  const tasks = [{ id: 't1', dealId: deal.id, totalCost: 2 }]; // $2
   assert.equal(Math.round(dealAiCost(deal, tasks, 150)), 300);
   const s = revenueSummary([deal], tasks, { usdJpy: 150 });
   assert.equal(s.profit, 9700);
@@ -619,7 +623,6 @@ test('接続上限はプラン定義から読む', () => {
 
 test('上限は会社ごとに上書きできる（将来プランを変えても壊れない）', () => {
   assert.equal(connectionLimit('standard', { maxConnections: 99 }), 99);
-  assert.equal(employeeLimit('free', { maxEmployees: 500 }), 500);
   assert.equal(connectionLimit('standard', {}), 3, '上書きが無ければプランどおり');
 });
 

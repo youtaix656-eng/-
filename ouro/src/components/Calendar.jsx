@@ -21,8 +21,11 @@ import {
 } from '../lib/schedule.js';
 import { formatMoney, DEAL_STATUS } from '../lib/revenue.js';
 import { usd, relTime } from '../lib/format.js';
+import { useAllTasks } from './useAllTasks.js';
 
 export default function Calendar({ store, go, toast }) {
+  // 古い仕事も要る画面なので、残りを読み足す
+  useAllTasks(store);
   const today = startOfDay(Date.now());
   const [cursor, setCursor] = useState(() => {
     const d = new Date();

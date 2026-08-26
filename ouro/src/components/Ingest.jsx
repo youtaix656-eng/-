@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { Card, Field, Empty } from './ui.jsx';
-import { INGEST_KINDS, ingestOne, detectKind, youtubeId, fileToBase64, MAX_PDF_BYTES } from '../lib/ingest.js';
+import { INGEST_KINDS, ingestOne, detectKind, youtubeId, MAX_TEXT_BYTES, MAX_TEXT_CHARS } from '../lib/ingest.js';
 import { CATEGORIES } from '../lib/knowledge.js';
 
 export default function Ingest({ store, go, toast }) {
@@ -27,21 +27,23 @@ export default function Ingest({ store, go, toast }) {
 
   const onFile = async (file) => {
     if (!file) return;
-    if (file.size > MAX_PDF_BYTES) {
-      toast('ファイルが大きすぎます（20MBまで）');
+    // 大きすぎるファイルは読まない（読むと端末が固まる）。
+    // 以前の上限は PDF の枝の中にあったので、テキストには効いていなかった。
+    if (file.size > MAX_TEXT_BYTES) {
+      toast(`ファイルが大きすぎます（${Math.round(MAX_TEXT_BYTES / 1024 / 1024)}MBまで）`);
       return;
     }
     if (file.type === 'application/pdf') {
-      // PDF はブラウザだけでは中身を取り出せない。ファイル名だけ控え、
-      // 本文は貼り付けか、Claude 接続時に社員へ渡す形にする。
+      // PDF の中身はブラウザだけでは取り出せない。
+      // **読み込むふりをしないこと。** 以前はここで base64 を作って捨てていたため、
+      // 大きなファイルで数秒固まるだけで、中身は1文字も入っていなかった。
       setTitle(file.name);
       setKind('pdf');
-      toast('PDFを受け取りました。本文を貼るか、社員に読ませてください。');
-      await fileToBase64(file); // 読み取り可能か確認するだけ
+      toast('PDFの自動読み取りは未対応です。本文をコピーして貼り付けてください。');
       return;
     }
     const content = await file.text();
-    setText(content.slice(0, 40000));
+    setText(content.slice(0, MAX_TEXT_CHARS));
     setTitle(file.name);
   };
 

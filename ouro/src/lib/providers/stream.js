@@ -62,10 +62,31 @@ export function throttleDelta(onDelta, ms = 90) {
 // エンジンごとに文言は違っても、HTTP の状態番号は共通なので、ここで1回だけ扱う。
 // **エンジン名で分岐しない**方針を守るため、判定はこの2つの関数だけに集める。
 
+/**
+ * 状態番号から「次に何をすればよいか」を1文で返す。
+ *
+ * 以前は英語のJSONがそのまま画面に出ていた。番号は分かっているのだから、
+ * **止まった人が自分で戻れる形**にして出す。生の本文は detail に残す。
+ */
+export function failureAdvice(status) {
+  if (status === 401 || status === 403) {
+    return 'APIキーが受け付けられませんでした。設定でキーを入れ直してください（期限切れ・コピー漏れが多いです）。';
+  }
+  if (status === 429) return '呼び出しが多すぎます。少し時間をおいてからやり直してください。';
+  if (status === 402) return 'エンジン側の残高・利用枠が足りないようです。契約状況を確認してください。';
+  if (status === 400 || status === 422) {
+    return '送った内容をエンジンが受け付けませんでした。依頼文を短くすると通ることがあります。';
+  }
+  if (status >= 500) return 'エンジン側が一時的に不調のようです。少し時間をおいてやり直してください。';
+  if (!status) return 'エンジンに届きませんでした。電波・通信環境を確認してください。';
+  return 'もう一度やり直してください。';
+}
+
 /** 応答から、状態番号つきのエラーを作る。 */
 export function httpError(name, res, detail = '') {
-  const e = new Error(`${name} 呼び出しに失敗しました（${res.status}）: ${String(detail).slice(0, 300)}`);
+  const e = new Error(`${name}：${failureAdvice(res.status)}（${res.status}）`);
   e.status = res.status;
+  e.detail = String(detail).slice(0, 300); // 生の本文は残す（調べる時のため）
   const after = res.headers && typeof res.headers.get === 'function' ? res.headers.get('retry-after') : null;
   const sec = Number(after);
   if (Number.isFinite(sec) && sec > 0) e.retryAfterMs = Math.min(sec * 1000, 20000);

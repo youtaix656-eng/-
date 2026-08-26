@@ -27,10 +27,38 @@ export function overMonthlyCap(settings = {}, spentThisMonth = 0) {
   return Number(spentThisMonth) >= cap;
 }
 
-/** その月の始まり（ミリ秒）。今月の合計を数えるのに使う。 */
+/** その月の始まり（ミリ秒）。 */
 export function monthStart(now = Date.now()) {
   const d = new Date(now);
   return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+}
+
+/** 'YYYY-MM'。月が変わったかを見るのに使う。 */
+export function monthKey(now = Date.now()) {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * 費用を積み上げた設定を返す（新規）。
+ * 月が変わったら今月ぶんを0に戻す。合計は戻さない。
+ */
+export function addCost(settings = {}, usd = 0, now = Date.now()) {
+  const amount = Number(usd) || 0;
+  if (amount <= 0) return settings;
+  const key = monthKey(now);
+  const sameMonth = settings.costMonth === key;
+  return {
+    ...settings,
+    costTotalUsd: (Number(settings.costTotalUsd) || 0) + amount,
+    costMonth: key,
+    costMonthUsd: (sameMonth ? Number(settings.costMonthUsd) || 0 : 0) + amount,
+  };
+}
+
+/** 今月これまでに使った額（月が変わっていれば0）。 */
+export function spentThisMonthOf(settings = {}, now = Date.now()) {
+  return settings.costMonth === monthKey(now) ? Number(settings.costMonthUsd) || 0 : 0;
 }
 
 // 「この操作は必ず人間の承認を通す」表。risk は表示の強さに使う。
