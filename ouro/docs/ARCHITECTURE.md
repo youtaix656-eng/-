@@ -232,6 +232,27 @@ Funnel = {
 
 ---
 
+### 6-3. 社員どうしの共有（`ouro:board` ほか）
+
+```js
+BoardPost = { id, text, kind:'share'|'blocked'|'decision'|'meeting'|'consult',
+              employeeId, employeeName, roleId, taskId, at }   // 30日で消える
+Meeting.materials  // 台帳・収益導線・掲示板から作った事前配布（AI費用ゼロ）
+Meeting.hasGuard   // 反対役（守り）が入っていたか
+Step.gap / gapChecked / supplement  // 引き継ぎ会（受け手が返した「足りない材料」）
+Approval.consult = { employeeId, prompt, kind, taskId, stepId, question }  // 1回だけ呼ぶもの
+```
+
+**社員が仕事の前に読むもの（`buildContext`）は6層**：
+知識 ／ 自分の記憶 ／ **掲示板** ／ **関係する仕事** ／ 引き継ぎ ／ この仕事の補足。
+後ろの2つを足すまで、別の仕事にいる社員が何をしているかは誰も知らなかった。
+
+- 共有のための仕組みは**AIを呼ばない**（在席・朝会・掲示板・関係する仕事・会議の材料）
+- AIを呼ぶのは会議（人数×2＋1回）と相談（1回）だけ。**1回だけのものも `askOnce` で承認を通す**
+- 掲示板の切り詰めは `memory.trimHead`（先頭＝新しい方を残す）
+
+---
+
 ## 7. Knowledge Base 設計
 
 ```js

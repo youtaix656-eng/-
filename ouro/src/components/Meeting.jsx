@@ -3,7 +3,9 @@
 
 import { useState } from 'react';
 import { Card, Field, SectionTitle, Row, Empty, Doc, Bar } from './ui.jsx';
-import { MEETING_PHASES, meetingProgress, estimatedCalls } from '../lib/meeting.js';
+import { MEETING_PHASES, meetingProgress, estimatedCalls, hasGuard, GUARD_ROLE_IDS } from '../lib/meeting.js';
+import { weeklyTopic } from '../lib/briefing.js';
+import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
 
 const TOPICS = [
@@ -14,6 +16,7 @@ const TOPICS = [
 
 export default function Meeting({ store, go }) {
   const [topic, setTopic] = useState('');
+  const [starting, setStarting] = useState(false);
   const [picked, setPicked] = useState(() =>
     ['researcher', 'analyzer', 'strategist', 'reviewer']
       .map((r) => store.activeEmployees.find((e) => e.roleId === r))
@@ -21,11 +24,28 @@ export default function Meeting({ store, go }) {
       .map((e) => e.id)
   );
 
-  const start = () => {
-    if (!topic.trim() || picked.length < 2) return;
-    const mtg = store.startMeeting({ topic, employeeIds: picked });
-    go('meetingDetail', mtg.id);
-    store.runMeeting(mtg.id);
+  const pickedPeople = picked
+    .map((id) => store.activeEmployees.find((e) => e.id === id))
+    .filter(Boolean);
+  // **全員が賛成する会議は、開いた意味がない。** 守り役が入っているか確かめる。
+  const guarded = hasGuard(pickedPeople);
+  const guardCandidates = store.activeEmployees.filter(
+    (e) => GUARD_ROLE_IDS.includes(e.roleId) && !picked.includes(e.id)
+  );
+
+  // **startMeeting は非同期**（材料を組み立てる所を後から読むため）。
+  // await を忘れると mtg が Promise になり、会議が始まらない（実際に踏んだ）。
+  const start = async (kind = 'free', useTopic = topic) => {
+    if (!useTopic.trim() || picked.length < 2 || starting) return;
+    setStarting(true);
+    try {
+      const mtg = await store.startMeeting({ topic: useTopic, employeeIds: picked, kind });
+      if (!mtg) return;
+      go('meetingDetail', mtg.id);
+      store.runMeeting(mtg.id);
+    } finally {
+      setStarting(false);
+    }
   };
 
   return (
@@ -44,6 +64,15 @@ export default function Meeting({ store, go }) {
             style={{ minHeight: 84 }}
           />
         </Field>
+        <button
+          type="button"
+          className="btn small block"
+          style={{ marginBottom: 10 }}
+          onClick={() => start('weekly', weeklyTopic())}
+          disabled={picked.length < 2 || starting}
+        >
+          ▤ 今週の振り返り会を開く（台帳と数字を全員に配ります）
+        </button>
         <div className="chips" style={{ marginBottom: 14 }}>
           {TOPICS.map((t) => (
             <button key={t} type="button" className="chip" onClick={() => setTopic(t)}>
@@ -70,14 +99,44 @@ export default function Meeting({ store, go }) {
           </div>
         </Field>
 
+        {/* 反対役（守り）がいない会議は、賛成が並ぶだけで終わる。
+            止めはしないが、必ず知らせる。 */}
+        {picked.length >= 2 && !guarded && (
+          <div className="card tight" style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 14 }}>⚠ 反対役がいません</div>
+            <div className="muted" style={{ marginTop: 4 }}>
+              全員が賛成する会議は、開いた意味がありません。
+              危ういところを指摘する役（レビュアー・分析ガバナンス・セキュリティ）を1人入れてください。
+            </div>
+            {guardCandidates.length > 0 && (
+              <div className="chips" style={{ marginTop: 8 }}>
+                {guardCandidates.slice(0, 4).map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    className="chip"
+                    onClick={() => setPicked([...picked, e.id])}
+                  >
+                    ＋ {e.shortName}（{roleById(e.roleId)?.name}）
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           type="button"
           className="btn primary block"
-          onClick={start}
-          disabled={!topic.trim() || picked.length < 2}
+          onClick={() => start('free')}
+          disabled={!topic.trim() || picked.length < 2 || starting}
         >
           会議をはじめる（AIを約{estimatedCalls(picked.length)}回呼びます）
         </button>
+        <p className="muted" style={{ textAlign: 'center', marginBottom: 0 }}>
+          会議はいちばん費用がかかります。まず「チーム」の掲示板・朝会・ひとりに聞く
+          （どれもAI 0〜1回）で足りないか確かめてください。
+        </p>
       </Card>
 
       <SectionTitle>これまでの会議</SectionTitle>
@@ -107,7 +166,7 @@ const MEETING_STATUS = {
   cancelled: '中止',
 };
 
-export function MeetingDetail({ store, meetingId }) {
+export function MeetingDetail({ store, meetingId, go }) {
   const mtg = store.meetings.find((m) => m.id === meetingId);
   const [note, setNote] = useState('');
   if (!mtg) return <div className="screen"><Empty>会議が見つかりません。</Empty></div>;
@@ -129,6 +188,17 @@ export function MeetingDetail({ store, meetingId }) {
           </p>
         )}
       </Card>
+
+      {mtg.materials && (
+        <details style={{ marginBottom: 12 }}>
+          <summary className="muted" style={{ cursor: 'pointer' }}>
+            全員に配った材料を見る（この会議は同じ材料を読んでいます）
+          </summary>
+          <div className="card tight" style={{ marginTop: 8 }}>
+            <Doc text={mtg.materials} fold={0} />
+          </div>
+        </details>
+      )}
 
       {/* 会議も途中でやめられる。止めればその先の利用料はかからない。 */}
       {busy && (
@@ -167,7 +237,36 @@ export function MeetingDetail({ store, meetingId }) {
             <p className="muted" style={{ marginTop: 0 }}>
               決めるのはあなたです。会議はそのための材料です。
             </p>
+            {mtg.hasGuard === false && (
+              <p className="muted">
+                ⚠ この会議には反対役がいませんでした。賛成が並んでいないか、ご自身で確かめてください。
+              </p>
+            )}
             <Doc text={mtg.conclusion} />
+            <div className="btn-row" style={{ marginTop: 10 }}>
+              {!mtg.knowledgeId ? (
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={() => {
+                    const k = store.saveMeetingAsKnowledge(mtg.id);
+                    if (k) go('knowledgeDetail', k.id);
+                  }}
+                >
+                  結論を知識として残す
+                </button>
+              ) : (
+                <button type="button" className="btn small" onClick={() => go('knowledgeDetail', mtg.knowledgeId)}>
+                  知識として見る
+                </button>
+              )}
+              <button type="button" className="btn small ghost" onClick={() => go('team')}>
+                掲示板を見る
+              </button>
+            </div>
+            <p className="muted" style={{ marginBottom: 0 }}>
+              決まったことは社内掲示板にも載りました。次に動く社員が読んでから仕事をします。
+            </p>
           </Card>
         </>
       )}

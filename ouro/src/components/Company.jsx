@@ -68,6 +68,13 @@ export default function Company({ store, go }) {
 
       <SectionTitle>会社の管理</SectionTitle>
       <Row
+        glyph="◍"
+        title="チーム"
+        sub="誰が何をしているか・朝会・社内掲示板（AI費用ゼロ）"
+        preload="team"
+        onClick={() => go('team')}
+      />
+      <Row
         glyph="◎"
         title="収益導線"
         sub="どこで人が減っているかを見る（数字は端末内だけ）"

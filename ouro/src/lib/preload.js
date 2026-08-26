@@ -16,6 +16,7 @@ export const LOADERS = {
   meeting: () => import('../components/Meeting.jsx'),
   meetingDetail: () => import('../components/Meeting.jsx'),
   company: () => import('../components/Company.jsx'),
+  team: () => import('../components/Team.jsx'),
   ledger: () => import('../components/Ledger.jsx'),
   funnel: () => import('../components/Funnel.jsx'),
   rules: () => import('../components/Rules.jsx'),

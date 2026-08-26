@@ -27,6 +27,7 @@ const MeetingDetail = lazy(() => LOADERS.meetingDetail().then((m) => ({ default:
 // 会社は下部ナビではなく常設バーから開く画面なので、押した時に読む。
 // バー（ボタン）は即時、画面は lazy。指が触れた時点で先読みされる。
 const Company = lazy(LOADERS.company);
+const Team = lazy(LOADERS.team);
 const Ledger = lazy(LOADERS.ledger);
 const Funnel = lazy(LOADERS.funnel);
 const Rules = lazy(LOADERS.rules);
@@ -68,6 +69,7 @@ const TITLES = {
   ingest: '情報を追加',
   meeting: 'AI会議',
   meetingDetail: 'AI会議',
+  team: 'チーム',
   ledger: '仕事台帳',
   funnel: '収益導線',
   rules: '会社のルール',
@@ -147,7 +149,7 @@ export default function App() {
       () => {
         preloadMany(['toc', 'calendar', 'task', 'employee']);
         // さらに空きがあれば、会社バーから開く画面も
-        idle(() => preloadMany(['company', 'approvals', 'ledger', 'funnel', 'settings', 'characters', 'connect']), { timeout: 8000 });
+        idle(() => preloadMany(['company', 'team', 'approvals', 'ledger', 'funnel', 'settings', 'characters', 'connect']), { timeout: 8000 });
       },
       { timeout: 4000 }
     );
@@ -218,6 +220,7 @@ export default function App() {
         {view === 'ingest' && <Ingest store={store} go={go} toast={toast} />}
         {view === 'meeting' && <Meeting store={store} go={go} />}
         {view === 'meetingDetail' && <MeetingDetail store={store} meetingId={arg} go={go} />}
+        {view === 'team' && <Team store={store} go={go} toast={toast} />}
         {view === 'ledger' && <Ledger store={store} go={go} toast={toast} />}
         {view === 'funnel' && <Funnel store={store} go={go} toast={toast} />}
         {view === 'rules' && <Rules store={store} toast={toast} />}

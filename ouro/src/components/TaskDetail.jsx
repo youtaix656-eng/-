@@ -2,7 +2,15 @@
 
 import { useState } from 'react';
 import { Card, Doc, Empty, Bar, SectionTitle, Field } from './ui.jsx';
-import { TASK_STATUS, taskProgress, nextStep, assembleResult, isRunnable, finalOutput } from '../lib/workflow.js';
+import {
+  TASK_STATUS,
+  taskProgress,
+  nextStep,
+  assembleResult,
+  isRunnable,
+  finalOutput,
+  redoCount,
+} from '../lib/workflow.js';
 import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
 import { useAllTasks } from './useAllTasks.js';
@@ -128,6 +136,12 @@ export default function TaskDetail({ store, taskId, go }) {
                     <div className="muted">受け取りを待っています</div>
                   )}
                 </div>
+              )}
+              {/* 引き継ぎ会：受け取った側が「材料が足りない」と言える場（1往復だけ）。
+                  **終わった手順でも聞ける。** 実行はひと続きで走るので、
+                  「まだ動いていない手順」だけに限ると、押せる瞬間がほとんど無い。 */}
+              {s.input && s.kind !== 'check' && s.status !== 'running' && (
+                <HandoffReview task={task} step={s} store={store} />
               )}
               {s.output && (
                 <>
@@ -647,6 +661,96 @@ function TeachButton({ task, store }) {
       <p className="muted" style={{ marginBottom: 0 }}>
         全員に守らせたいことなら、会社 →「会社のルール」に書いてください。
       </p>
+    </div>
+  );
+}
+
+/**
+ * 引き継ぎ会（新規）。
+ *
+ * これまでの引き継ぎは一方向で、受け取った側は「材料が足りない」と言えなかった。
+ * **1往復だけ**にする（無限に往復させると費用が読めなくなる）。
+ */
+function HandoffReview({ task, step, store }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const run = async (fn, done) => {
+    setBusy(true);
+    try {
+      const r = await fn();
+      // **何も返ってこなかった時を「できた」にしない。**
+      // 担当が見つからない等で何もしていないのに「確認しました」と出る。
+      if (!r) setMsg('この手順では聞けませんでした。');
+      else if (r.queued) setMsg('承認が要ります。承認画面から進めてください。');
+      else if (r.error) setMsg(`聞けませんでした：${r.error}`);
+      else setMsg(done);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 「なし」と返ってきた時は、足りているのだから何も出さない
+  if (step.gapChecked && !step.gap) {
+    return <div className="muted" style={{ marginTop: 6 }}>◇ 受け取った材料は足りていました。</div>;
+  }
+
+  if (!step.gap) {
+    return (
+      <div style={{ marginTop: 6 }}>
+        <button
+          type="button"
+          className="btn ghost small"
+          disabled={busy}
+          onClick={() =>
+            run(() => store.askHandoffGap(task.id, step.id), '確認しました')
+          }
+        >
+          {busy ? '聞いています…' : '受け取る前に「材料が足りているか」を聞く（AI1回）'}
+        </button>
+        {msg && <div className="muted" style={{ marginTop: 4 }}>{msg}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card tight" style={{ marginTop: 6 }}>
+      <div className="muted" style={{ marginBottom: 4 }}>◇ 受け取った側からの返事</div>
+      <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{step.gap}</div>
+      {!step.supplement && (
+        <button
+          type="button"
+          className="btn small"
+          style={{ marginTop: 8 }}
+          disabled={busy}
+          onClick={() => run(() => store.supplementHandoff(task.id, step.id), '補ってもらいました')}
+        >
+          {busy ? '聞いています…' : '前の担当に補ってもらう（AI1回）'}
+        </button>
+      )}
+      {step.supplement && (
+        <>
+          <div className="muted" style={{ marginTop: 8 }}>
+            ✓ 補われた材料を、この手順の入力に足しました。
+          </div>
+          {step.status === 'done' && (
+            <button
+              type="button"
+              className="btn small primary"
+              style={{ marginTop: 8 }}
+              disabled={busy}
+              onClick={() => {
+                const n = redoCount(task, step.id);
+                if (!window.confirm(`この手順からやり直します。${n}件の手順がもう一度動き、そのぶんAIの利用料がかかります。よろしいですか？`)) return;
+                store.redoStep(task.id, step.id);
+              }}
+            >
+              この手順からやり直す（{redoCount(task, step.id)}件）
+            </button>
+          )}
+        </>
+      )}
+      {msg && <div className="muted" style={{ marginTop: 4 }}>{msg}</div>}
     </div>
   );
 }

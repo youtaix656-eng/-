@@ -1,7 +1,7 @@
 // AI社員の画面。主要6役職を円環で、追加役職はサブメンバー一覧で見せる。
 // 役職を選ぶと、その役職の**ジャンルごとの3席**が並ぶ。
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import OrgMap from './OrgMap.jsx';
 import { Card, Row, SectionTitle, Empty, Action } from './ui.jsx';
 import { ROLES, roleById, DEPARTMENTS, rolesOfGroup, ROLE_GROUPS } from '../data/roles.js';
@@ -9,9 +9,15 @@ import Portrait from './Portrait.jsx';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { seatsOf } from '../lib/seats.js';
 import { relTime } from '../lib/format.js';
+import { buildPresence, presenceState } from '../lib/presence.js';
 
 export default function Employees({ store, go, preset = {} }) {
   const { activeEmployees } = store;
+  // いま誰が動いているか（lib/presence.js が単一の正。AIは呼ばない）
+  const presence = useMemo(
+    () => new Map(buildPresence(activeEmployees, store.tasks).map((p) => [p.employee.id, p])),
+    [activeEmployees, store.tasks]
+  );
   const [roleId, setRoleId] = useState(preset.roleId || 'researcher');
   const [genreId, setGenreId] = useState(preset.genreId || DEFAULT_GENRE_ID);
   const [view, setView] = useState('map'); // 'map' | 'dept'
@@ -77,9 +83,7 @@ export default function Employees({ store, go, preset = {} }) {
                 key={e.id}
                 avatar={<Portrait employee={e} size={44} frame={false} />}
                 title={`${e.shortName}　${e.title}`}
-                sub={`${e.strength || ''}・仕事${e.stats?.tasks || 0}件・${
-                  e.stats?.lastActiveAt ? relTime(e.stats.lastActiveAt) : '未稼働'
-                }`}
+                sub={presenceSub(presence.get(e.id), e)}
                 onClick={() => go('employee', e.id)}
               />
             ))
@@ -193,4 +197,16 @@ export default function Employees({ store, go, preset = {} }) {
 function genreLabel(genres, genreId) {
   const g = genres.find((x) => x.id === (genreId || DEFAULT_GENRE_ID));
   return g ? g.name : '汎用';
+}
+
+/**
+ * 席に出す1行。**いま何をしているかを先に出す**（実績はその次）。
+ * 「誰が動いているか」が一目で分かると、会議を開かずに済む場面が増える。
+ */
+function presenceSub(p, employee) {
+  const last = employee.stats?.lastActiveAt ? relTime(employee.stats.lastActiveAt) : '未稼働';
+  const tail = `仕事${employee.stats?.tasks || 0}件・${last}`;
+  if (!p || p.state === 'idle') return `${employee.strength || ''}・${tail}`;
+  const st = presenceState(p.state);
+  return `${st.glyph} ${st.name}${p.task ? `「${p.task.title}」` : ''}・${tail}`;
 }

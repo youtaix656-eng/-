@@ -21,6 +21,17 @@ export const ACTIONS = {
   connectionChanged: '道具の接続を変えた',
   dealChanged: '案件を更新した',
   meetingHeld: '会議を開いた',
+  // 台帳・ルール・導線・チーム（あとから足したもの）
+  taskHeld: '保留にした',
+  taskResumed: '保留を解いた',
+  taskRetried: 'やり直した',
+  decisionApproved: '判断した（進める）',
+  decisionRejected: '判断した（見送る）',
+  employeeTaught: '社員に覚えさせた',
+  ruleAdded: '会社のルールを足した',
+  funnelEntry: '導線の数字を入れた',
+  standupHeld: '朝会を開いた',
+  consultAnswered: '相談に答えた',
   folded: 'まとめた記録',
 };
 

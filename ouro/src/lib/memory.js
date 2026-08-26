@@ -93,6 +93,8 @@ export const CONTEXT_LIMITS = {
   knowledge: 1600, // 会社の知識（要約の集まり）
   inherited: 6000, // 前の担当からの引き継ぎ
   taskContext: 2000, // この仕事の補足
+  board: 900, // 社内で共有されていること
+  related: 500, // 関係する仕事
 };
 
 /** 末尾を残して切り詰める。切ったことが分かる印を頭に付ける。 */
@@ -102,7 +104,22 @@ export function trimTail(text, limit) {
   return `（前半は省略しています。以下は末尾 ${limit} 文字）\n…${t.slice(t.length - limit)}`;
 }
 
-export function buildContext({ employee, task, knowledgeList = [], inherited = '' }) {
+/**
+ * 社員が仕事の前に読むもの。
+ *
+ * 以前はここに4つしか無かった（知識・自分の記憶・引き継ぎ・この仕事の補足）ので、
+ * **別の仕事にいる社員が何をしているかを誰も知らなかった**。
+ * 掲示板（社内で共有されていること）と、関係する仕事の2つを足してある。
+ * どちらも AI を呼ばずに作れるので、費用は入力ぶんだけ。
+ */
+/** 先頭を残して切り詰める（新しいものが先頭に並ぶもの用）。 */
+export function trimHead(text, limit) {
+  const t = String(text || '');
+  if (t.length <= limit) return t;
+  return `${t.slice(0, limit)}\n…（古いぶんは省略しています）`;
+}
+
+export function buildContext({ employee, task, knowledgeList = [], inherited = '', boardText = '', relatedText = '' }) {
   const layers = [];
   const parts = [];
 
@@ -121,6 +138,18 @@ export function buildContext({ employee, task, knowledgeList = [], inherited = '
   if (notes.length) {
     layers.push({ layer: 'self', count: notes.length });
     parts.push(['## あなた自身の記憶', ...notes.slice(-5).map((n) => `- ${n.text || n}`)].join('\n'));
+  }
+
+  if (boardText) {
+    layers.push({ layer: 'board', count: 1 });
+    // **掲示板は先頭が新しい。** trimTail（末尾を残す）で切ると、
+    // 新しい掲示と見出しごと落ちて、いちばん読ませたいものが消える。
+    parts.push(trimHead(boardText, CONTEXT_LIMITS.board));
+  }
+
+  if (relatedText) {
+    layers.push({ layer: 'related', count: 1 });
+    parts.push(trimTail(relatedText, CONTEXT_LIMITS.related));
   }
 
   if (inherited) {

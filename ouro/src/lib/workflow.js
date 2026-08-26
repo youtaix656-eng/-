@@ -354,3 +354,54 @@ export function resumeTask(task) {
 export function isRunnable(task) {
   return Boolean(task) && !['on_hold', 'cancelled', 'done'].includes(task.status);
 }
+
+/**
+ * その手順からやり直す（新規）。
+ *
+ * 引き継ぎの確認で「材料が足りなかった」と分かっても、その手順が既に終わっていると
+ * 直しようがなかった。補った材料を活かすために、**その手順と、それより後**を
+ * 待機に戻す（後ろの手順の入力は、この手順の出力から作られているため）。
+ *
+ * やり直す範囲ぶんのAI費用がもう一度かかるので、押す前に画面で件数を伝えること。
+ */
+export function redoFrom(task, stepId) {
+  const steps = task.steps || [];
+  const idx = steps.findIndex((s) => s.id === stepId);
+  if (idx < 0) return task;
+  const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
+  const from = g(steps[idx]);
+  const next = steps.map((s) =>
+    g(s) >= from
+      ? {
+          ...s,
+          status: 'pending',
+          output: '',
+          error: null,
+          startedAt: null,
+          finishedAt: null,
+          // **cost は消さない。** 既に払ったぶんなので、消すと案件の
+          // AI費用が実際より少なく見える（retryFailed も消していない）。
+          citations: [],
+        }
+      : s
+  );
+  return {
+    ...task,
+    steps: next,
+    status: 'queued',
+    finishedAt: null,
+    // 提出物が変わるので、拾い直すために判断は白紙に戻す
+    decisions: [],
+    totalCost: next.reduce((sum, s) => sum + (s.cost || 0), 0),
+  };
+}
+
+/** その手順からやり直すと、いくつの手順が動くか（費用を伝えるため）。 */
+export function redoCount(task, stepId) {
+  const steps = task.steps || [];
+  const idx = steps.findIndex((s) => s.id === stepId);
+  if (idx < 0) return 0;
+  const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
+  const from = g(steps[idx]);
+  return steps.filter((s) => g(s) >= from).length;
+}

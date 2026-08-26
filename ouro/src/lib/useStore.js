@@ -17,6 +17,7 @@ import {
   nextGroup,
   assembleResult,
   retryFailed,
+  redoFrom,
   finalOutput,
   holdTask as holdTaskFn,
   resumeTask as resumeTaskFn,
@@ -29,11 +30,27 @@ import { decisionsFrom, decideDecision } from './decisions.js';
 import { addNote, removeNote, notesOf } from './memory.js';
 import { normalizeRules, addRule, removeRule } from './rules.js';
 import { makeFunnel, normalizeFunnel } from './funnel.js';
+
+// 朝会・会議の材料・相談・関係する仕事は、**押した時にだけ**要る。
+// 起動時に読む量を増やさないよう、使う場所で読み込む（項目01と同じ考え方）。
+const loadTeamwork = () =>
+  Promise.all([
+    import('./board.js'),
+    import('./meeting.js'),
+    import('./related.js'),
+    import('./standup.js'),
+    import('./briefing.js'),
+    import('./consult.js'),
+  ]).then(([board, meeting, related, standup, briefing, consult]) => ({
+    ...board,
+    ...meeting,
+    ...related,
+    ...standup,
+    ...briefing,
+    ...consult,
+  }));
 import { checkAction, addCost, spentThisMonthOf } from './permissions.js';
 import { createDeal } from './revenue.js';
-import {
-  createMeeting, addRound, opinionPrompt, rebuttalPrompt, synthesisPrompt, estimatedCalls,
-} from './meeting.js';
 import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
 import { providerById } from './providers/index.js';
@@ -85,6 +102,8 @@ const REST_KEYS = [
   KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit,
   // 収益導線の数字。ホームは「詰まっている所」を1行出すだけなので後回しでよい。
   KEYS.funnel,
+  // 社内掲示板。仕事の実行時に読むので、実行より前に揃っていればよい。
+  KEYS.board,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -105,6 +124,7 @@ const EMPTY = {
   genres: [],
   events: [],
   funnel: makeFunnel(),
+  board: [],
   settings: makeSettings(),
   secrets: {},
 };
@@ -387,6 +407,33 @@ export function useStore() {
     }
     // 新項目07：記録として積むだけなので急がない。まとめて書く。
     save(KEYS.audit, next, 'low');
+  }, []);
+
+  // ---- 社内掲示板（社員どうしの共通記憶）----
+  //
+  // **30日で消える。** 溜めるためではなく「新しいものだけが見える」ための場所。
+  // 保存の前に必ず古いものを落とす（放っておくと読まれない掲示板になる）。
+  const addBoardPost = useCallback(async (post) => {
+    const { makePost, addPost, prunePosts } = await loadTeamwork();
+    const made = makePost(post);
+    if (!made.text) return null;
+    const next = prunePosts(addPost(stateRef.current.board, made));
+    stateRef.current = { ...stateRef.current, board: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.board);
+    // 読み込みが済むまで保存しない（空の配列で上書きしないため）
+    if (hydratedRef.current) save(KEYS.board, next, 'low');
+    return made;
+  }, []);
+
+  const removeBoardPost = useCallback(async (id) => {
+    const { removePost } = await loadTeamwork();
+    const next = removePost(stateRef.current.board, id);
+    stateRef.current = { ...stateRef.current, board: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.board);
+    if (hydratedRef.current) save(KEYS.board, next, 'low');
+    return next;
   }, []);
 
   /**
@@ -858,6 +905,12 @@ export function useStore() {
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
       abortRef.current = controller;
 
+      // 社員どうしの共通記憶（掲示板）と、関係する仕事。
+      // どちらも AI を呼ばずに作れるので、1つのかたまりにつき1回だけ組み立てる。
+      const tw = await loadTeamwork();
+      const boardText = tw.boardPrompt(s.board, { exceptTaskId: task.id });
+      const relatedText = tw.relatedPrompt(tw.relatedTasks(task, s.tasks));
+
       const results = await Promise.all(
         assigned.map(async ({ step, employee }) => {
           perf.mark(`run:${step.id}`);
@@ -872,6 +925,8 @@ export function useStore() {
               secrets: s.secrets,
               settings: s.settings,
               connections: s.connections,
+              boardText,
+              relatedText,
               signal: controller ? controller.signal : undefined,
               // 受け取った先から画面へ出す。ここでは保存しない。
               onDelta: (piece) =>
@@ -931,6 +986,22 @@ export function useStore() {
           );
         }
       }
+      // 完了したら「他の人が知っておくべきこと」を1行だけ掲示板へ回す（AI費用ゼロ）。
+      // 拾えなければ何も出さない——中身の無い掲示は、読まれない掲示板を作るだけ。
+      for (const { step, employee, result } of results) {
+        if (result.error || step.kind === 'check') continue;
+        const line = tw.extractShare(result.text);
+        if (!line) continue;
+        addBoardPost({
+          text: line,
+          kind: 'share',
+          employeeId: employee.id,
+          employeeName: employee.name,
+          roleId: employee.roleId,
+          taskId: task.id,
+        });
+      }
+
       // 完了したら、提出物の③から「あなたの判断が要ること」を拾う（新規）。
       // AIをもう一度呼ばないので費用はかからない。拾えなければ空のまま。
       if (updated.status === 'done' && !(updated.decisions || []).length) {
@@ -1094,6 +1165,12 @@ export function useStore() {
     [put]
   );
 
+  // 1回だけAIを呼ぶもの（相談・引き継ぎの確認）の実体。
+  // 定義順の都合で ref に載せる（decideApproval より後ろで代入する）。
+  const runConsultRef = useRef(async () => null);
+  // askOnce も定義順の都合で ref に載せる（朝会から呼ぶため）
+  const askOnceRef = useRef(async () => null);
+
   // ---- 承認 ----
   const decideApproval = useCallback(
     async (id, ok) => {
@@ -1105,6 +1182,13 @@ export function useStore() {
         s.approvals.map((a) => (a.id === id ? { ...a, status: ok ? 'granted' : 'denied', decidedAt: Date.now() } : a))
       );
       log({ actor: 'user', action: ok ? 'approvalGranted' : 'approvalDenied', target: apv.label });
+
+      // 1回だけ呼ぶもの（相談・引き継ぎの確認）。
+      // 仕事・会議と同じく、費用の出る実行は必ずここを通す。
+      if (apv.consult) {
+        if (ok) await runConsultRef.current(apv.consult);
+        return;
+      }
 
       // 会議の承認（仕事と同じ扱い）。
       // **patchMeeting / runMeeting をここで直接呼ばないこと。**
@@ -1222,14 +1306,27 @@ export function useStore() {
 
   // ---- AI会議 ----
   const startMeeting = useCallback(
-    ({ topic, employeeIds }) => {
-      const emps = stateRef.current.employees.filter((e) => employeeIds.includes(e.id));
-      const mtg = createMeeting({ topic, employees: emps });
-      put(KEYS.meetings, [mtg, ...stateRef.current.meetings]);
+    async ({ topic, employeeIds, kind = 'free' }) => {
+      const s = stateRef.current;
+      const emps = s.employees.filter((e) => employeeIds.includes(e.id));
+      // 事前配布：台帳・収益導線・掲示板から材料を作って全員に配る（AI費用ゼロ）。
+      const { buildBriefing, createMeeting } = await loadTeamwork();
+      const materials = buildBriefing({ tasks: s.tasks, deals: s.deals, funnel: s.funnel, board: s.board });
+      const mtg = createMeeting({ topic, employees: emps, materials, kind });
+      put(KEYS.meetings, [mtg, ...s.meetings]);
       log({ actor: 'user', action: 'meetingHeld', target: topic });
       return mtg;
     },
     [put, log]
+  );
+
+  /** 週次レビュー会（議題と「答え方」が決まっている会議）。 */
+  const startWeeklyReview = useCallback(
+    async (employeeIds) => {
+      const { weeklyTopic } = await loadTeamwork();
+      return startMeeting({ topic: weeklyTopic(), employeeIds, kind: 'weekly' });
+    },
+    [startMeeting]
   );
 
   const patchMeeting = useCallback(
@@ -1247,6 +1344,7 @@ export function useStore() {
       // 会議は Ouro でいちばん費用の出る操作（意見＋反論＋統合で人数×2＋1回）。
       // **仕事と同じく、必ず1度ユーザー承認を通す。**
       // ここを飛ばしていたため、高い方だけが素通りしていた。
+      const { estimatedCalls } = await loadTeamwork();
       const willCost = Object.keys(s.secrets).length > 0;
       if (willCost && !mtg.costApproved) {
         const chairFor = parts.find((e) => e.id === mtg.chairId) || parts[0];
@@ -1280,6 +1378,8 @@ export function useStore() {
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
       abortRef.current = controller;
 
+      const { weeklyPrompt, opinionPrompt, rebuttalPrompt, synthesisPrompt, addRound, meetingTakeaways } = await loadTeamwork();
+
       const ask = async (employee, prompt) => {
         const pseudoTask = { request: mtg.topic, title: mtg.topic, context: '' };
         try {
@@ -1306,7 +1406,7 @@ export function useStore() {
       patchMeeting(mtg);
       const opinions = await Promise.all(
         parts.map((emp) =>
-          ask(emp, opinionPrompt(mtg.topic, mtg.interventions)).then((r) => ({ emp, r }))
+          ask(emp, opinionPrompt(mtg.topic, mtg.interventions, mtg.materials, mtg.kind === 'weekly' ? weeklyPrompt() : '')).then((r) => ({ emp, r }))
         )
       );
       for (const { emp, r } of opinions) {
@@ -1320,7 +1420,7 @@ export function useStore() {
       const opinionRounds = mtg.rounds.filter((r) => r.phase === 'opinion');
       const rebuttals = await Promise.all(
         parts.map((emp) =>
-          ask(emp, rebuttalPrompt(mtg.topic, opinionRounds.filter((r) => r.employeeId !== emp.id)))
+          ask(emp, rebuttalPrompt(mtg.topic, opinionRounds.filter((r) => r.employeeId !== emp.id), mtg.materials))
             .then((r) => ({ emp, r }))
         )
       );
@@ -1333,7 +1433,7 @@ export function useStore() {
       mtg = { ...mtg, phase: 'synthesis' };
       const chair = parts.find((e) => e.id === mtg.chairId) || parts[0];
       if (chair) {
-        const r = await ask(chair, synthesisPrompt(mtg.topic, mtg.rounds, mtg.interventions));
+        const r = await ask(chair, synthesisPrompt(mtg.topic, mtg.rounds, mtg.interventions, mtg.materials));
         mtg = addRound(mtg, { phase: 'synthesis', employeeId: chair.id, employeeName: chair.name, ...r });
         mtg = { ...mtg, conclusion: r.text };
       }
@@ -1350,13 +1450,28 @@ export function useStore() {
         detail: '結論を出した',
         cost: mtg.totalCost,
       });
+
+      // **会議の結論を会議の中で閉じさせない。**
+      // 決まったことを掲示板へ回すと、次に動く社員が読む（AI費用ゼロ）。
+      if (!stopped) {
+        for (const line of meetingTakeaways(mtg)) {
+          addBoardPost({
+            text: line,
+            kind: 'meeting',
+            employeeId: chair ? chair.id : null,
+            employeeName: chair ? chair.name : '議長',
+            roleId: chair ? chair.roleId : null,
+          });
+        }
+      }
       return mtg;
     },
-    [patchMeeting, log, put, spentThisMonth]
+    [patchMeeting, log, put, spentThisMonth, addBoardPost]
   );
 
   // 承認画面から会議を始められるようにしておく（定義順の都合で ref に載せる）
   runMeetingRef.current = runMeeting;
+
 
   // ---- 設定・接続・キー ----
   const updateSettings = useCallback(
@@ -1390,6 +1505,281 @@ export function useStore() {
   const updateCompany = useCallback(
     (patch) => put(KEYS.company, { ...stateRef.current.company, ...patch }),
     [put]
+  );
+
+  // ---- 朝会（AIを呼ばない）----
+  //
+  // **人数ぶんAIを呼ばない。** 18人いれば18回になり、会議より高くつく。
+  // 中身は仕事から機械的に作る＝費用ゼロ。まとめの一言だけ書記1人に頼める。
+  const holdStandup = useCallback(
+    async ({ withSummary = false } = {}) => {
+      const s = stateRef.current;
+      const { buildStandup, standupSummaryPrompt } = await loadTeamwork();
+      const standup = buildStandup({ tasks: s.tasks, employees: s.employees.filter((e) => !e.archivedAt) });
+      updateSettings({ lastStandupAt: Date.now() });
+      log({ actor: 'user', action: 'standupHeld', target: `${standup.counts.people}人ぶん` });
+      if (!withSummary) return { standup, summary: '' };
+
+      // 書記役（オーガナイザー → いなければ誰でも1人）に1回だけ頼む
+      const scribe =
+        s.employees.find((e) => !e.archivedAt && e.roleId === 'organizer') ||
+        s.employees.find((e) => !e.archivedAt) ||
+        null;
+      if (!scribe) return { standup, summary: '' };
+      // **askOnce を通すこと。** 直に runConsultRef を呼ぶと、
+      // 費用の出る実行なのに承認も今月の上限も効かない。
+      const res = await askOnceRef.current({
+        employeeId: scribe.id,
+        prompt: standupSummaryPrompt(standup),
+        kind: 'standup',
+        label: `${scribe.name} が今日の朝会をまとめます（AIを1回呼びます）`,
+      });
+      return { standup, summary: res && res.text ? res.text : '', queued: Boolean(res && res.queued) };
+    },
+    [updateSettings, log]
+  );
+
+  // ---- 1回だけAIを呼ぶ（相談・引き継ぎの確認）----
+  //
+  // 会議は「人数×2＋1回」でいちばん高い。会議を開くほどではない場面のために、
+  // **1回だけ**呼ぶ道を用意する。費用の出る実行なので、仕事・会議と同じ承認を通す。
+  const askOnce = useCallback(
+    async ({ employeeId, prompt, kind = 'consult', taskId = null, stepId = null, label = '', question = '' }) => {
+      const s = stateRef.current;
+      const employee = s.employees.find((e) => e.id === employeeId);
+      if (!employee) return null;
+      const payload = { employeeId, prompt, kind, taskId, stepId, label, question };
+
+      const willCost = Object.keys(s.secrets).length > 0;
+      if (willCost) {
+        const check = checkAction({
+          employee,
+          action: 'costly',
+          settings: s.settings,
+          spentThisMonth: spentThisMonth(),
+        });
+        if (check.needsApproval) {
+          const approval = {
+            id: newId('apv'),
+            taskId,
+            employeeId,
+            action: 'costly',
+            label: label || `${employee.name} に1つ聞きます（AIを1回呼びます）`,
+            risk: check.risk,
+            status: 'pending',
+            createdAt: Date.now(),
+            consult: payload,
+          };
+          put(KEYS.approvals, [approval, ...s.approvals]);
+          log({ actor: employeeId, action: 'approvalRequested', target: approval.label });
+          return { queued: true, approvalId: approval.id };
+        }
+      }
+      return runConsultRef.current(payload);
+    },
+    [put, log, spentThisMonth]
+  );
+  askOnceRef.current = askOnce;
+
+  // 実体。承認を通ったあと（または承認が要らないとき）にここへ来る。
+  runConsultRef.current = async ({ employeeId, prompt, kind, taskId, stepId, question }) => {
+    const s = stateRef.current;
+    const employee = s.employees.find((e) => e.id === employeeId);
+    if (!employee) return null;
+    setBusy({ taskId: taskId || null, consult: true });
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    abortRef.current = controller;
+    let res;
+    try {
+      res = await runStep({
+        employee,
+        company: s.company,
+        task: { request: question || prompt, title: question || '相談', context: '', spec: {} },
+        step: { instruction: prompt, needs: [] },
+        knowledgeList: s.knowledge,
+        secrets: s.secrets,
+        settings: s.settings,
+        connections: s.connections,
+        boardText: (await loadTeamwork()).boardPrompt(s.board, { exceptTaskId: taskId }),
+        signal: controller ? controller.signal : undefined,
+      });
+    } catch (e) {
+      res = { text: '', error: e.message || String(e), cost: 0 };
+    }
+    abortRef.current = null;
+    setBusy(null);
+
+    log({
+      actor: employee.id,
+      action: res.error ? 'stepFailed' : 'consultAnswered',
+      target: question || kind,
+      detail: res.error || `${res.providerName || 'ローカル'} / ${res.model || '—'}`,
+      cost: res.cost || 0,
+    });
+    if (res.error) return { text: '', error: res.error };
+
+    const { trimAnswer } = await loadTeamwork();
+    const text = kind === 'consult' ? trimAnswer(res.text) : res.text;
+
+    if (kind === 'consult') {
+      addBoardPost({
+        text: `${question ? `${question} → ` : ''}${text}`.slice(0, 200),
+        kind: 'consult',
+        employeeId: employee.id,
+        employeeName: employee.name,
+        roleId: employee.roleId,
+        taskId,
+      });
+    }
+    if (kind === 'standup') {
+      addBoardPost({
+        text,
+        kind: 'share',
+        employeeId: employee.id,
+        employeeName: employee.name,
+        roleId: employee.roleId,
+      });
+    }
+    if ((kind === 'gap' || kind === 'supplement') && taskId && stepId) {
+      const { isNothing } = await loadTeamwork();
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (task) {
+        const steps = (task.steps || []).map((x) =>
+          x.id === stepId
+            ? kind === 'gap'
+              ? // **「なし」を足りないものとして持たない。**
+                // 持つと「補ってもらう」が出てしまい、要らない1回ぶん課金される。
+                { ...x, gap: isNothing(text) ? '' : text, gapChecked: true, gapAt: Date.now() }
+              : // 補ってもらった材料は、受け手の入力の末尾に足す（元の材料は消さない）
+                { ...x, input: `${x.input || ''}\n\n## 追加で補われた材料\n${text}`.trim(), supplement: text }
+            : x
+        );
+        patchTask({ ...task, steps });
+      }
+    }
+    return { text, cost: res.cost || 0 };
+  };
+
+  /** 他の担当に3行だけ聞く（会議を開くほどではない時）。 */
+  const consultEmployee = useCallback(
+    async ({ employeeId, question, taskId = null }) => {
+      const s = stateRef.current;
+      const employee = s.employees.find((e) => e.id === employeeId);
+      if (!employee || !String(question || '').trim()) return null;
+      const { buildBriefing, consultPrompt } = await loadTeamwork();
+      const brief = buildBriefing({ tasks: s.tasks, deals: s.deals, funnel: s.funnel, board: s.board });
+      return askOnce({
+        employeeId,
+        prompt: consultPrompt(question, brief),
+        kind: 'consult',
+        taskId,
+        question: String(question).slice(0, 200),
+        label: `${employee.name} に1つ聞きます（AIを1回呼びます）`,
+      });
+    },
+    [askOnce]
+  );
+
+  /** 引き継ぎ会：受け取った側に「足りない材料」を聞く（1回）。 */
+  const askHandoffGap = useCallback(
+    async (taskId, stepId) => {
+      const s = stateRef.current;
+      const { gapPrompt } = await loadTeamwork();
+      const task = s.tasks.find((t) => t.id === taskId);
+      const step = task && (task.steps || []).find((x) => x.id === stepId);
+      if (!task || !step || !step.employeeId) return null;
+      const emp = s.employees.find((e) => e.id === step.employeeId);
+      return askOnce({
+        employeeId: step.employeeId,
+        prompt: gapPrompt(step.instruction, step.input),
+        kind: 'gap',
+        taskId,
+        stepId,
+        label: `${emp ? emp.name : '担当'} に「材料が足りているか」を聞きます（AIを1回呼びます）`,
+      });
+    },
+    [askOnce]
+  );
+
+  /** その手順からやり直す（補った材料を活かすため）。 */
+  const redoStep = useCallback(
+    async (taskId, stepId) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const next = redoFrom(task, stepId);
+      if (next === task) return task;
+      patchTask(next);
+      log({ actor: 'user', action: 'taskRetried', target: task.title, detail: 'この手順からやり直し' });
+      return runTask(taskId);
+    },
+    [patchTask, log, runTask]
+  );
+
+  /**
+   * 会議の結論を知識にする（新規）。
+   * これまで結論は会議の中で閉じていて、次の仕事で誰も使わなかった。
+   * 出典は会議そのもの（AI生成ではなく、社内で出た結論だと分かるようにする）。
+   */
+  const saveMeetingAsKnowledge = useCallback(
+    (meetingId) => {
+      const s = stateRef.current;
+      const mtg = s.meetings.find((m) => m.id === meetingId);
+      if (!mtg || !String(mtg.conclusion || '').trim()) return null;
+      const chair = s.employees.find((e) => e.id === mtg.chairId) || s.employees[0] || null;
+      const source = makeSource({
+        type: 'meeting',
+        title: `社内会議「${mtg.topic}」`,
+        excerpt: `${new Date(mtg.createdAt).toLocaleDateString('ja-JP')}／参加 ${mtg.participantIds.length}人`,
+        addedBy: chair ? chair.id : 'user',
+        trust: 50,
+      });
+      // **createKnowledge は { knowledge, extraSources } を返す。**
+      // 直に受け取ると id が undefined になり、開いた先で「知識が見つかりません」になる。
+      const { title, summary } = distill(mtg.conclusion, `会議の結論：${mtg.topic}`);
+      const { knowledge } = createKnowledge({
+        title: title || `会議の結論：${mtg.topic}`.slice(0, 80),
+        summary,
+        body: mtg.conclusion,
+        category: '戦略',
+        tags: [],
+        origin: 'meeting',
+        sourceIds: [source.id],
+        employeeId: chair ? chair.id : null,
+        departmentId: chair ? chair.departmentId : null,
+      });
+      put(KEYS.sources, [source, ...s.sources]);
+      put(KEYS.knowledge, [knowledge, ...s.knowledge]);
+      put(KEYS.meetings, s.meetings.map((m) => (m.id === mtg.id ? { ...m, knowledgeId: knowledge.id } : m)));
+      log({ actor: chair ? chair.id : 'user', action: 'knowledgeCreated', target: knowledge.title });
+      return knowledge;
+    },
+    [put, log]
+  );
+
+  /** 引き継ぎ会：渡した側に補ってもらう（1回）。 */
+  const supplementHandoff = useCallback(
+    async (taskId, stepId) => {
+      const s = stateRef.current;
+      const { supplementPrompt } = await loadTeamwork();
+      const task = s.tasks.find((t) => t.id === taskId);
+      const steps = task ? task.steps || [] : [];
+      const idx = steps.findIndex((x) => x.id === stepId);
+      const step = idx >= 0 ? steps[idx] : null;
+      if (!task || !step || !step.gap) return null;
+      // 渡した側＝この手順より前で、出力を出している最後の手順
+      const giver = [...steps.slice(0, idx)].reverse().find((x) => x.output && x.employeeId);
+      if (!giver) return null;
+      const emp = s.employees.find((e) => e.id === giver.employeeId);
+      return askOnce({
+        employeeId: giver.employeeId,
+        prompt: supplementPrompt(step.gap, giver.output),
+        kind: 'supplement',
+        taskId,
+        stepId,
+        label: `${emp ? emp.name : '前の担当'} に足りない材料を補ってもらいます（AIを1回呼びます）`,
+      });
+    },
+    [askOnce]
   );
 
   /**
@@ -1474,6 +1864,15 @@ export function useStore() {
     deleteDeal,
     // 会議
     startMeeting,
+    startWeeklyReview,
+    holdStandup,
+    consultEmployee,
+    askHandoffGap,
+    supplementHandoff,
+    saveMeetingAsKnowledge,
+    redoStep,
+    addBoardPost,
+    removeBoardPost,
     runMeeting,
     patchMeeting,
     // 設定

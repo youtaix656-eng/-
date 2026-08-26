@@ -41,6 +41,7 @@ export const KEYS = {
   genres: 'ouro:genres',
   events: 'ouro:events',
   funnel: 'ouro:funnel', // 収益導線（週ごとの数字）
+  board: 'ouro:board',   // 社内掲示板（社員どうしの共通記憶・30日で消える）
   settings: 'ouro:settings',
   secrets: 'ouro:secrets', // APIキー。書き出しには絶対に含めない
   seeded: 'ouro:seeded',

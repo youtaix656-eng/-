@@ -26,6 +26,8 @@ export const SOURCE_TYPES = {
   audio: '音声',
   ai: 'AI生成',
   user: 'ユーザーの指示',
+  // 社内会議で出た結論。外から取ったものでも、AIが1人で書いたものでもない。
+  meeting: '社内会議',
 };
 
 export const ORIGINS = {
@@ -37,6 +39,9 @@ export const ORIGINS = {
   // AI生成として残すと、その土台に穴があく。
   template: '仕事の型（AI未使用）',
   user: '自分で書いた',
+  // 複数の社員が意見と反論を出し合ったうえでの結論。
+  // AI1人の生成と同じ扱いにすると、どう作られたものか分からなくなる。
+  meeting: '社内会議の結論',
 };
 
 export function makeSource({ type = 'note', title = '', url = '', excerpt = '', addedBy = 'user', trust = 50 }) {
