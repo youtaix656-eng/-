@@ -17,6 +17,11 @@ import {
   wuxingElements,
   zangTable,
   meridianById,
+  muPoints,
+  shuPoints,
+  extraMeridianPoints,
+  confusablePoints,
+  meridianNameById,
 } from '../data/knowledgeBase.js';
 import { KEIKETSU_CARDS } from '../data/keiketsuCards.js';
 
@@ -220,6 +225,76 @@ function genKeiketsuLocation() {
   });
 }
 
+// 経絡 → 募穴
+function genMeridianToMu() {
+  const m = meridians[Math.floor(Math.random() * meridians.length)];
+  const correct = muPoints[m.id];
+  const distractors = sample(Object.values(muPoints), 3, [correct]);
+  if (distractors.length < 3) return null;
+  return assemble({
+    subject: '経絡経穴概論',
+    question: `${m.name}の募穴はどれか。`,
+    correct,
+    distractors,
+    explanation: `${m.name}の募穴は「${correct}」である。${SRC_NOTE}`,
+    tags: ['募穴'],
+  });
+}
+
+// 経絡 → 背部兪穴
+function genMeridianToShu() {
+  const m = meridians[Math.floor(Math.random() * meridians.length)];
+  const correct = shuPoints[m.id];
+  const distractors = sample(Object.values(shuPoints), 3, [correct]);
+  if (distractors.length < 3) return null;
+  return assemble({
+    subject: '経絡経穴概論',
+    question: `${m.name}の背部兪穴はどれか。`,
+    correct,
+    distractors,
+    explanation: `${m.name}の背部兪穴は「${correct}」である（足の太陽膀胱経上にある）。${SRC_NOTE}`,
+    tags: ['兪穴'],
+  });
+}
+
+// 紛らわしい経穴（同字・同音）の鑑別。両穴の経絡が異なる組み合わせのみ対象にする
+// （頭竅陰⇔足竅陰のように同じ経絡に属する組は「どちらの経絡か」を問う形式にできないため除外）。
+const CONFUSABLE_CROSS_MERIDIAN = confusablePoints.filter((c) => c.aMeridian !== c.bMeridian);
+function genConfusablePoint() {
+  if (CONFUSABLE_CROSS_MERIDIAN.length === 0) return null;
+  const c = CONFUSABLE_CROSS_MERIDIAN[Math.floor(Math.random() * CONFUSABLE_CROSS_MERIDIAN.length)];
+  const correctName = meridianNameById(c.aMeridian);
+  const wrongName = meridianNameById(c.bMeridian);
+  const pool = [...meridians.map((x) => x.name), '任脈', '督脈'];
+  const extra = sample(pool, 2, [correctName, wrongName]);
+  const distractors = [wrongName, ...extra];
+  if (distractors.length < 3) return null;
+  return assemble({
+    subject: '経絡経穴概論',
+    question: `「${c.a}」と「${c.b}」は字面が紛らわしいが、「${c.a}」が属する経絡はどれか。`,
+    correct: correctName,
+    distractors,
+    explanation: `「${c.a}」は${correctName}に属する。混同しやすい「${c.b}」は${wrongName}に属する。${SRC_NOTE}`,
+    tags: ['紛らわしい経穴', c.a, c.b],
+  });
+}
+
+// 独自の経穴を持たない6奇経（衝脈・帯脈・陽蹻脈・陰蹻脈・陽維脈・陰維脈）の所属穴数
+const EXTRA_MERIDIAN_COUNTS = [...new Set(extraMeridianPoints.map((x) => x.count))];
+function genExtraMeridianCount() {
+  const e = extraMeridianPoints[Math.floor(Math.random() * extraMeridianPoints.length)];
+  const distractors = sample(EXTRA_MERIDIAN_COUNTS, 3, [e.count]).map(String);
+  if (distractors.length < 3) return null;
+  return assemble({
+    subject: '経絡経穴概論',
+    question: `${e.name}に属する経穴は左右合わせて何穴か。`,
+    correct: String(e.count),
+    distractors,
+    explanation: `${e.name}の所属経穴は${e.points}で、計${e.count}穴である。${e.note ? e.note + ' ' : ''}${SRC_NOTE}`,
+    tags: ['奇経八脈', e.name],
+  });
+}
+
 export const GENERATORS = {
   pointToMeridian: { label: '経穴→経絡', fn: genPointToMeridian },
   meridianToYuan: { label: '経絡→原穴', fn: genMeridianToYuan },
@@ -230,6 +305,10 @@ export const GENERATORS = {
   zangTable: { label: '五臓色体表', fn: genZangTable },
   keiketsuMeridian: { label: '経穴カード→経絡', fn: genKeiketsuMeridian },
   keiketsuLocation: { label: '経穴カード→取穴部位', fn: genKeiketsuLocation },
+  meridianToMu: { label: '経絡→募穴', fn: genMeridianToMu },
+  meridianToShu: { label: '経絡→背部兪穴', fn: genMeridianToShu },
+  confusablePoint: { label: '紛らわしい経穴の鑑別', fn: genConfusablePoint },
+  extraMeridianCount: { label: '奇経八脈の所属穴数', fn: genExtraMeridianCount },
 };
 
 // 指定タイプから count 問を生成し、重複問題文を避ける

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { generateQuestions, generateVariants, GENERATORS } from '../src/lib/generator.js';
 import { yuanPoints, meridians } from '../src/data/knowledgeBase.js';
 import { KEIKETSU_CARDS } from '../src/data/keiketsuCards.js';
+import { muPoints, shuPoints, extraMeridianPoints, confusablePoints, meridianNameById } from '../src/data/knowledgeBase.js';
 
 test('生成した問題は必要な項目を備える', () => {
   const qs = generateQuestions({ count: 8 });
@@ -82,6 +83,84 @@ test('keiketsuCards.jsの全カードにsourceIds配列がある', () => {
   KEIKETSU_CARDS.forEach((c) => {
     assert.ok(Array.isArray(c.sourceIds), `${c.name} に sourceIds が無い`);
   });
+});
+
+test('経絡→募穴の生成はknowledgeBase.jsと正解が一致し、選択肢に重複がない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.meridianToMu.fn();
+    assert.ok(q);
+    const entry = Object.entries(muPoints).find(([, p]) => q.choices[q.answer] === p);
+    assert.ok(entry, '正解の募穴がmuPointsに存在する');
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('経絡→背部兪穴の生成はknowledgeBase.jsと正解が一致し、選択肢に重複がない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.meridianToShu.fn();
+    assert.ok(q);
+    const entry = Object.entries(shuPoints).find(([, p]) => q.choices[q.answer] === p);
+    assert.ok(entry, '正解の兪穴がshuPointsに存在する');
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('紛らわしい経穴の鑑別は、正解と誤答が異なる経絡になり選択肢が重複しない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.confusablePoint.fn();
+    assert.ok(q);
+    assert.equal(new Set(q.choices).size, q.choices.length);
+    // 正解の経絡名は選択肢の中で1つだけ
+    assert.equal(q.choices.filter((c) => c === q.choices[q.answer]).length, 1);
+  }
+});
+
+test('奇経八脈の所属穴数の生成はknowledgeBase.jsと正解が一致し、選択肢に重複がない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.extraMeridianCount.fn();
+    assert.ok(q);
+    const e = extraMeridianPoints.find((x) => q.question.includes(x.name));
+    assert.ok(e, '奇経名が設問に含まれる');
+    assert.equal(q.choices[q.answer], String(e.count));
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('knowledgeBase.js: muPoints/shuPointsは12経すべてを網羅し値が重複しない', () => {
+  const meridianIds = ['LU', 'LI', 'ST', 'SP', 'HT', 'SI', 'BL', 'KI', 'PC', 'TE', 'GB', 'LR'];
+  for (const id of meridianIds) {
+    assert.ok(muPoints[id], `muPointsに${id}が無い`);
+    assert.ok(shuPoints[id], `shuPointsに${id}が無い`);
+  }
+  assert.equal(new Set(Object.values(muPoints)).size, meridianIds.length);
+  assert.equal(new Set(Object.values(shuPoints)).size, meridianIds.length);
+});
+
+test('knowledgeBase.js: extraMeridianPointsは6奇経すべてを持つ', () => {
+  const ids = extraMeridianPoints.map((e) => e.id);
+  assert.deepEqual(ids.sort(), ['chong', 'dai', 'yangqiao', 'yangwei', 'yinqiao', 'yinwei'].sort());
+  extraMeridianPoints.forEach((e) => {
+    assert.ok(e.name && e.points && typeof e.count === 'number');
+  });
+});
+
+test('knowledgeBase.js: confusablePointsは全件が異なる経絡ID・名称の組で、meridianNameByIdで解決できる', () => {
+  // 教科書p.239の同経同字2組+異経同字4組+同音異字17組。ただし同音異字のうち2組は
+  // 3穴セット（少海/小海/照海、承漿/少商/少衝）のためペアに分解すると19組になり、
+  // 合計は 2+4+19=25 組。
+  assert.equal(confusablePoints.length, 25);
+  confusablePoints.forEach((c) => {
+    assert.ok(c.a && c.b && c.a !== c.b);
+    assert.ok(meridianNameById(c.aMeridian));
+    assert.ok(meridianNameById(c.bMeridian));
+  });
+});
+
+test('meridianNameById: GV/CVを含む正しい名称を返す', () => {
+  assert.equal(meridianNameById('GV'), '督脈');
+  assert.equal(meridianNameById('CV'), '任脈');
+  assert.equal(meridianNameById('LU'), '手の太陰肺経');
+  assert.equal(meridianNameById('xx'), 'xx');
 });
 
 test('○×変形は正誤が整合する', () => {

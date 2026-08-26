@@ -39,6 +39,17 @@ test('centerCandidates: ユーザー語とおすすめを返す', () => {
   assert.ok(Array.isArray(c.suggested));
 });
 
+test('KBデータ：経絡経穴概論の新規追加分がキーワードで引ける', () => {
+  assert.ok(comparisonsForKeyword('奇経八脈').some((c) => c.id === 'kk-kikei-shozoku'));
+  assert.ok(comparisonsForKeyword('良導絡').some((c) => c.id === 'kk-teishousha'));
+  assert.ok(comparisonsForKeyword('紛らわしい経穴').length >= 2);
+  assert.ok(comparisonsForKeyword('別説').some((c) => c.id === 'kk-nisetsu'));
+  assert.ok(numbersForKeyword('陽池').some((n) => n.id === 'n-kk-toji-tensei'));
+  assert.ok(numbersForKeyword('奇経八脈').some((n) => n.id === 'n-kk-kikei-kazu'));
+  assert.ok(numbersForKeyword('募穴').some((n) => n.id === 'n-kk-boketsu-ichiran'));
+  assert.ok(numbersForKeyword('兪穴').some((n) => n.id === 'n-kk-shuketsu-ichiran'));
+});
+
 test('branchesOf / radialLayout: ブランチに種類と座標が付く', () => {
   const mm = mindmapFor('原穴', Q, links);
   const br = branchesOf(mm);
