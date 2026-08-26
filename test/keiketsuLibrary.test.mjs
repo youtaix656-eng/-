@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makePage, addPage, removePage, searchPages, snippetFor } from '../src/lib/keiketsuLibrary.js';
+import { makePage, addPage, removePage, searchPages, snippetFor, buildSearchPrompt } from '../src/lib/keiketsuLibrary.js';
 
 test('makePageはtitle・textをtrimし、無題の既定値を持つ', () => {
   const p = makePage({ title: '  合谷 P12  ', text: '  本文  ' });
@@ -53,4 +53,41 @@ test('snippetForはクエリが空・不一致でも例外を投げない', () =
   assert.equal(typeof snippetFor('本文', ''), 'string');
   assert.equal(typeof snippetFor('本文', '該当なし'), 'string');
   assert.equal(snippetFor('', 'x'), '');
+});
+
+test('buildSearchPrompt: 本文が差し込まれ、原文保護の厳守事項・照合表の指示が含まれる', () => {
+  const pages = [makePage({ title: '合谷 P12', text: '合谷はLI4、手陽明大腸経の原穴。' })];
+  const prompt = buildSearchPrompt(pages);
+  assert.ok(prompt.includes('合谷 P12'));
+  assert.ok(prompt.includes('合谷はLI4、手陽明大腸経の原穴。'));
+  assert.ok(prompt.includes('照合表'));
+  assert.ok(prompt.includes('数字・単位'));
+  assert.ok(prompt.includes('推測・記憶で補わない'));
+});
+
+test('buildSearchPrompt: イラストを変更しない指示と、一穴ごとのイラスト欄の指示が含まれる', () => {
+  const prompt = buildSearchPrompt([makePage({ title: 'x', text: 'y' })]);
+  assert.ok(prompt.includes('図・イラスト'));
+  assert.ok(prompt.includes('内容は変更しない'));
+  assert.ok(prompt.includes('本文に図の記載なし'));
+  assert.ok(prompt.includes('イラスト」欄を設け'));
+});
+
+test('buildSearchPrompt: 複数ページはタイトルごとに区切って連結される', () => {
+  const pages = [
+    makePage({ title: 'ページA', text: '本文A' }),
+    makePage({ title: 'ページB', text: '本文B' }),
+  ];
+  const prompt = buildSearchPrompt(pages);
+  const idxA = prompt.indexOf('ページA');
+  const idxB = prompt.indexOf('ページB');
+  assert.ok(idxA !== -1 && idxB !== -1 && idxA < idxB);
+  assert.ok(prompt.includes('本文A'));
+  assert.ok(prompt.includes('本文B'));
+});
+
+test('buildSearchPrompt: 材料が0件でもテンプレートは崩れず未登録の旨を示す', () => {
+  const prompt = buildSearchPrompt([]);
+  assert.ok(prompt.includes('教科書材料が未登録です'));
+  assert.ok(prompt.includes('照合表'));
 });
