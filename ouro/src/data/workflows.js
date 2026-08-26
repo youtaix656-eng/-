@@ -81,6 +81,42 @@ export const WORKFLOWS = [
     steps: [],
     example: '短い質問',
   },
+  {
+    id: 'spread',
+    name: 'SNSへ横展開',
+    reading: 'えすえぬえすへおうてんかい',
+    glyph: '◍',
+    desc: '1本の材料から、切り口を変えた投稿へ分ける',
+    steps: ['analyzer', 'creator', 'reviewer'],
+    example: 'この記事から、切り口の違うX投稿を5本作って',
+  },
+  {
+    id: 'letter',
+    name: '配信文をつくる',
+    reading: 'はいしんぶんをつくる',
+    glyph: '✉',
+    desc: '読み手と悩みから、送る文の叩き台を作る',
+    steps: ['analyzer', 'writer', 'reviewer'],
+    example: '登録してくれた人へ送る1通目を書いて',
+  },
+  {
+    id: 'numbers',
+    name: '数字を読む',
+    reading: 'すうじをよむ',
+    glyph: '⊿',
+    desc: '結果 → 変化 → 仮説 → 次の改善（3つまで）',
+    steps: ['analytics', 'strategist'],
+    example: '今週の数字を見て、次に何を直すか決めて',
+  },
+  {
+    id: 'sort_work',
+    name: '仕事の棚卸し',
+    reading: 'しごとのたなおろし',
+    glyph: '▦',
+    desc: '自分の作業を A（任せられる）/ B（下準備だけ）/ C（自分でやる）へ仕分ける',
+    steps: ['organizer', 'strategist'],
+    example: '私がやっている作業を書き出したので、任せられるものを選んで',
+  },
 ];
 
 export function workflowById(id) {

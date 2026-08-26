@@ -172,11 +172,13 @@ Task = {
   // 台帳で人が手で持つ3つ。ここ以外に台帳用の表を作らない
   dueAt, nextAction, holdReason, heldFrom,
   spec: { deliverable, doneWhen, materials, constraints },  // 受付のときの条件（任意）
+  checkUnstaffed,               // 完成条件はあるが、確かめる担当が未雇用だった
   decisions: [ { id, text, state:'open'|'approved'|'rejected', note, decidedAt } ],
   result: { knowledgeIds, sourceIds }   // 本文は持たない（assembleResult で組み立てる）
 }
 Step = {
   id, roleId, employeeId, instruction, status,
+  kind: 'work' | 'check',       // check = 完成条件を確かめるだけの手順（提出物ではない）
   input,                        // 前ステップからの引き継ぎ
   output, providerId, model, usage, startedAt, finishedAt, error
 }
@@ -194,6 +196,39 @@ Workflow = { id, name, description, steps: [{ roleId, instruction }] }
   全手順を連ねた `assembleResult` からは拾わない
 - 台帳（`lib/ledger.js` / `Ledger.jsx`）は Task から**毎回導くビュー**。
   台帳側にレコードを持たない
+- 完成条件（`spec.doneWhen`）があると `lib/checks.js` が `kind:'check'` の手順を
+  **必ず単独で最後**に足す（番号は「残っている番号の最大＋1」。承認と同じく maxSteps で切らない）
+
+---
+
+### 6-1. 会社のルールと、社員の記憶
+
+```js
+Company.rules = {
+  purpose, audience, product, tone,   // この会社について
+  added: [ '守らせたいこと', ... ],     // 使う→失敗→1行足す、で育てる
+  updatedAt,
+}
+Employee.memory.notes = [ { id, text, at, taskId } ]  // その社員にだけ効かせること
+```
+
+- `lib/rules.js` の `FIXED_RULES`（5行）は**足せるが外せない**。必ず先に読ませる
+- 全員に効かせたいことは `company.rules`、1人に効かせたいことは `memory.notes`
+- プロンプトに入る `memory.notes` は新しい5件だけ（`buildContext`）
+
+### 6-2. 収益導線（`ouro:funnel`）
+
+```js
+Funnel = {
+  labels: { [stageId]: '呼び名' },      // 段の数と順番は変えない
+  entries: [ { id, weekStart, values: {reach, read, lead, sale}, note } ],
+  updatedAt,
+}
+```
+
+- **これは配列ではなくオブジェクト。** 起動時の読み込みで `asArray` に通さないこと
+- 詰まっている所は自分の数字の中の相対で決める（手元に無い基準を持たない）
+- 書き込み側は `lib/funnelInput.js`（起動時に読ませない）
 
 ---
 

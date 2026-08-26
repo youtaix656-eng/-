@@ -1,6 +1,8 @@
 // 社員1人の詳細。プロフィール・役割・能力・仕事・使用AI・道具・権限・実績。
 
+import { useState } from 'react';
 import { Card, Field, SectionTitle, Row, Empty } from './ui.jsx';
+import { notesOf } from '../lib/memory.js';
 import { roleById, departmentById } from '../data/roles.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { TOOLS, toolById } from '../data/tools.js';
@@ -209,6 +211,8 @@ export default function EmployeeDetail({ store, employeeId, go }) {
         </p>
       </Card>
 
+      <TeachCard employee={emp} store={store} />
+
       <SectionTitle>この社員の仕事</SectionTitle>
       {myTasks.length ? (
         myTasks.slice(0, 8).map((t) => (
@@ -236,5 +240,66 @@ export default function EmployeeDetail({ store, employeeId, go }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * この社員に覚えさせたこと（改善ログ）。
+ *
+ * 会社全体のルールは「会社のルール」の画面、
+ * **この社員にだけ効かせたいこと**はここ、と分ける。
+ * 次にこの社員が動くとき、必ず読んでから書き始める。
+ */
+function TeachCard({ employee, store }) {
+  const notes = notesOf(employee);
+  const [draft, setDraft] = useState('');
+  return (
+    <Card glyph="◈" title={`覚えさせたこと（${notes.length}）`}>
+      <p className="muted" style={{ marginTop: -6 }}>
+        直してほしい所を1行だけ書きます。次からこの社員は、これを読んでから仕事をします。
+        （例：見出しは1つ200字まで／同じ書き出しを続けて使わない）
+      </p>
+      <div className="btn-row" style={{ marginBottom: 8 }}>
+        <input
+          className="input"
+          style={{ flex: 1 }}
+          value={draft}
+          placeholder="次からはこうしてほしい、を1行で"
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn primary"
+          disabled={!draft.trim()}
+          onClick={() => {
+            store.teachEmployee(employee.id, draft);
+            setDraft('');
+          }}
+        >
+          覚えさせる
+        </button>
+      </div>
+      {!notes.length && <p className="muted" style={{ marginBottom: 0 }}>まだありません。</p>}
+      {notes
+        .slice()
+        .reverse()
+        .map((n) => (
+          <div key={n.id} className="card tight" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ flex: 1, fontSize: 13.5 }}>{n.text}</span>
+            <button
+              type="button"
+              className="btn ghost small"
+              onClick={() => store.forgetEmployeeNote(employee.id, n.id)}
+            >
+              忘れさせる
+            </button>
+          </div>
+        ))}
+      {notes.length > 5 && (
+        <p className="muted" style={{ marginBottom: 0 }}>
+          ※ 仕事のときに読ませるのは、新しい5件です。
+        </p>
+      )}
+    </Card>
   );
 }

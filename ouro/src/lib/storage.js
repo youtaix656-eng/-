@@ -40,6 +40,7 @@ export const KEYS = {
   connections: 'ouro:connections',
   genres: 'ouro:genres',
   events: 'ouro:events',
+  funnel: 'ouro:funnel', // 収益導線（週ごとの数字）
   settings: 'ouro:settings',
   secrets: 'ouro:secrets', // APIキー。書き出しには絶対に含めない
   seeded: 'ouro:seeded',

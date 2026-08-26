@@ -7,6 +7,7 @@ import { newId } from './id.js';
 import { planSteps, titleFor, detectNeeds } from './dispatcher.js';
 import { roleById } from '../data/roles.js';
 import { buildHandoff } from './handoff.js';
+import { parseChecklist, checkInstruction } from './checks.js';
 
 export const TASK_STATUS = {
   draft: '下書き',
@@ -75,16 +76,34 @@ export function createTask({
   // 1人も在籍していないときは絞り込めないので、元の計画のまま進める
   const chosen = staffed.length ? staffed : assigned;
 
-  const steps = chosen.map(({ p, employee }, i) => {
+  // 完成条件が書かれていたら、**最後にそれを1つずつ確かめる手順**を足す。
+  // 承認と同じ理由で maxSteps では切り落とさない
+  //（「上限に達したので完成の確認を省いた」が起きてはいけない）。
+  const checkItems = parseChecklist(doneWhen);
+  const checker = checkItems.length && assign ? assign('reviewer', chosen.length) : null;
+  const withCheck = checker
+    ? [...chosen, { p: { roleId: 'reviewer', instruction: checkInstruction(checkItems), kind: 'check' }, employee: checker }]
+    : chosen;
+
+  // 確認の手順は**必ず単独で最後**。番号を i（並び順）にすると、
+  // 前の手順と同じ番号になって「同時に走る」扱いになり、
+  // まだ出来ていない成果物を確認してしまう（未雇用の役職を外すと番号が飛ぶため）。
+  const planGroups = chosen.map(({ p }, i) => (Number.isInteger(p.group) ? p.group : i));
+  const checkGroup = planGroups.length ? Math.max(...planGroups) + 1 : 0;
+
+  const steps = withCheck.map(({ p, employee }, i) => {
     return {
       id: newId('step'),
       order: i,
       // 新項目22：同じ group の手順は同時に走る。指定が無ければ1手順=1group（＝順番どおり）。
-      group: Number.isInteger(p.group) ? p.group : i,
+      group: p.kind === 'check' ? checkGroup : Number.isInteger(p.group) ? p.group : i,
       roleId: p.roleId,
       employeeId: employee ? employee.id : null,
       employeeName: employee ? employee.name : null,
       instruction: p.instruction,
+      // 'check' は完成条件を確かめるだけの手順。提出物ではないので、
+      // 回答の枠（5項目）も掛けないし、提出物にも混ぜない。
+      kind: p.kind || 'work',
       // 道具が要るのは最初の調査ステップだけ（毎ステップ検索するとコストが跳ねる）
       needs: i === 0 ? needs : [],
       status: 'pending',
@@ -118,6 +137,8 @@ export function createTask({
     spec: { deliverable: String(deliverableSpec || ''), doneWhen: String(doneWhen || ''), materials: String(materials || ''), constraints: String(constraints || '') },
     // 成果物から拾った「あなたの判断が要ること」（完了時に1度だけ作る）
     decisions: [],
+    // 完成条件は書かれているのに、確かめる担当（レビュアー）が未雇用だった
+    checkUnstaffed: Boolean(checkItems.length && !checker),
     unstaffedRoles, // 向いているが未雇用だった役職
     missingApprovers, // そのうち「承認役」だったもの（確認を通せていない印）
     createdAt: Date.now(),
@@ -258,6 +279,7 @@ export function assembleResult(task) {
   const parts = [];
   for (const s of task.steps || []) {
     if (s.status !== 'done' || !s.output) continue;
+    if (s.kind === 'check') continue; // 完成の確認は別に見せる
     parts.push(`## ${s.employeeName || s.roleId}\n\n${s.output}`);
   }
   return parts.join('\n\n---\n\n');
@@ -273,7 +295,8 @@ export function assembleResult(task) {
  */
 export function finalOutput(task) {
   const steps = (task && task.steps) || [];
-  const done = steps.filter((s) => s.status === 'done' && s.output);
+  // 完成の確認は提出物ではない（○×の並びなので、ここから見出しを探さない）
+  const done = steps.filter((s) => s.status === 'done' && s.output && s.kind !== 'check');
   if (!done.length) return '';
   const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
   let best = done[0];
