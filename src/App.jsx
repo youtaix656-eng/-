@@ -465,6 +465,7 @@ export default function App() {
             onToast={showToast}
             reviewPreset={audioReview}
             onConsumePreset={() => setAudioReview(false)}
+            onNavigate={setView}
           />
         );
       case 'exam':

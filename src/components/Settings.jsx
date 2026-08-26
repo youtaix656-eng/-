@@ -11,6 +11,7 @@ import {
 import SyncQR from './SyncQR.jsx';
 import SyncScan from './SyncScan.jsx';
 import CloudBackup from './CloudBackup.jsx';
+import VoiceClone from './VoiceClone.jsx';
 import P2PTransfer from './P2PTransfer.jsx';
 import FileBackupCard from './FileBackupCard.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
@@ -35,6 +36,8 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     markBackedUp,
     importBackup,
     summarizeOldHistory,
+    voiceCloneApiKey,
+    saveVoiceCloneApiKey,
   } = store;
 
   const HISTORY_SUMMARY_CUTOFF_DAYS = 90;
@@ -259,6 +262,16 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         importBackup={importBackup}
         cloudSyncStatus={store.cloudSyncStatus}
         syncCloudNow={store.syncCloudNow}
+      />
+
+      {/* ===== ボイスクローン（BYOK・任意／プライバシー方針の例外） ===== */}
+      <div className="section-label">🎤 音声学習の声（ボイスクローン・任意）</div>
+      <VoiceClone
+        settings={settings}
+        updateSettings={updateSettings}
+        apiKey={voiceCloneApiKey}
+        onSaveApiKey={saveVoiceCloneApiKey}
+        onToast={onToast}
       />
 
       {/* ===== 問題データのインポート ===== */}

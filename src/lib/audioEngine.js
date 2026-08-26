@@ -9,7 +9,7 @@
 //    Web Speech API が停止する（アプリ内での画面遷移のみ継続可能）。
 
 import { useSyncExternalStore } from 'react';
-import { speak, cancelSpeech, wait } from './speech.js';
+import { speak, cancelSpeech, wait, speakCloned, cancelClonedSpeech } from './speech.js';
 
 const listeners = new Set();
 let state = {
@@ -24,7 +24,9 @@ let state = {
 };
 
 let plan = []; // [{ steps:[{phase, say?, wait?(ms), waitGap?:true|'cap2'}], display }]
-const settings = { rate: 1, pitch: 1, gapSeconds: 2, voice: null, loop: false };
+const settings = { rate: 1, pitch: 1, gapSeconds: 2, voice: null, loop: false, cloneVoice: null };
+// cloneVoice: { apiKey, voiceId } | null。設定されていればブラウザのspeechSynthesisの
+// 代わりにボイスクローン（BYOK・ElevenLabs）で読み上げる（AudioMode.jsxのトグルで切替）。
 
 let abort = null;
 let running = false;
@@ -158,7 +160,13 @@ async function playOne(item, signal) {
   for (const step of steps) {
     if (signal.aborted) return;
     if (step.phase) emit({ phase: step.phase });
-    if (step.say) await speak(step.say, { rate: settings.rate, pitch: settings.pitch, voice: settings.voice, signal });
+    if (step.say) {
+      if (settings.cloneVoice?.apiKey && settings.cloneVoice?.voiceId) {
+        await speakCloned(step.say, { apiKey: settings.cloneVoice.apiKey, voiceId: settings.cloneVoice.voiceId, signal });
+      } else {
+        await speak(step.say, { rate: settings.rate, pitch: settings.pitch, voice: settings.voice, signal });
+      }
+    }
     if (step.wait) await wait(step.wait, signal);
     if (step.waitGap) {
       const g = step.waitGap === 'cap2' ? Math.min(settings.gapSeconds, 2) : settings.gapSeconds;
@@ -212,6 +220,7 @@ export function stop() {
   running = false;
   if (abort) abort.abort();
   cancelSpeech();
+  cancelClonedSpeech();
   emit({ playing: false });
 }
 

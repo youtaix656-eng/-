@@ -77,6 +77,15 @@ export function useStore() {
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
   const [cloudAutoSyncToast, setCloudAutoSyncToast] = useState(0); // クラウド自動同期で他端末の進捗を取り込んだ回数
   const [cloudSyncStatus, setCloudSyncStatus] = useState(null); // { ok, at, pulled, error } | null（CloudBackup.jsxの状態表示用）
+  // ボイスクローン用APIキー（BYOK）。secretのため settings とは別保存＝バックアップ/同期対象外。
+  const [voiceCloneApiKey, setVoiceCloneApiKeyState] = useState('');
+  useEffect(() => {
+    storage.loadVoiceCloneSecret().then((v) => setVoiceCloneApiKeyState(v.apiKey || ''));
+  }, []);
+  const saveVoiceCloneApiKey = useCallback((apiKey) => {
+    setVoiceCloneApiKeyState(apiKey);
+    storage.saveVoiceCloneSecret({ apiKey });
+  }, []);
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
   useEffect(() => {
@@ -1021,6 +1030,8 @@ export function useStore() {
     clearCloudAutoSyncToast,
     cloudSyncStatus,
     syncCloudNow,
+    voiceCloneApiKey,
+    saveVoiceCloneApiKey,
     settings,
     reviewQuestions,
     dueReviewQuestions,
