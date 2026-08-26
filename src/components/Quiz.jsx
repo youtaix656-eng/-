@@ -366,12 +366,12 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
           </label>
 
           <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
-            <label>忘却リスクの下限（{minRisk === 0 ? '指定なし' : `${minRisk}%以上だけ`}）</label>
-            <input type="range" min="0" max="90" step="10" value={minRisk} onChange={(e) => setMinRisk(Number(e.target.value))} />
+            <label htmlFor="quiz-min-risk">忘却リスクの下限（{minRisk === 0 ? '指定なし' : `${minRisk}%以上だけ`}）</label>
+            <input id="quiz-min-risk" type="range" min="0" max="90" step="10" value={minRisk} onChange={(e) => setMinRisk(Number(e.target.value))} />
           </div>
           <div className="field" style={{ marginTop: 8 }}>
-            <label>誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
-            <input type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => setMinWrong(Number(e.target.value))} />
+            <label htmlFor="quiz-min-wrong">誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
+            <input id="quiz-min-wrong" type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => setMinWrong(Number(e.target.value))} />
           </div>
 
           <div className="review-count">

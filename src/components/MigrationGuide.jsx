@@ -86,43 +86,57 @@ export default function MigrationGuide({ store, onToast }) {
         </p>
       </div>
 
-      <div className="section-label">① QRコードで受け渡し{recommendation.id === 'qr' || recommendation.id === 'qr-multi' ? '（おすすめ）' : ''}</div>
-      <p className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
-        進捗・設定だけを、その場でサッと渡す方法。データが大きい時は自動でQRを複数枚に分けて連続表示します。
-      </p>
-      <SyncQR store={store} onToast={onToast} />
-      <SyncScan onToast={onToast} />
+      {/* おすすめ以外は折りたたみ、迷わず本命の方法から試せるようにする（開閉はブラウザ標準のdetails/summaryで実装、
+          押しやすさ・キーボード操作・スクリーンリーダーでの読み上げも標準機能でまかなえる）。 */}
+      <details open={recommendation.id === 'qr' || recommendation.id === 'qr-multi'}>
+        <summary className="section-label migration-summary">
+          ① QRコードで受け渡し{recommendation.id === 'qr' || recommendation.id === 'qr-multi' ? '（おすすめ）' : ''}
+        </summary>
+        <p className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
+          進捗・設定だけを、その場でサッと渡す方法。データが大きい時は自動でQRを複数枚に分けて連続表示します。
+        </p>
+        <SyncQR store={store} onToast={onToast} />
+        <SyncScan onToast={onToast} />
+      </details>
 
-      <div className="section-label">
-        ② バックアップファイル・共有{recommendation.id === 'share' || recommendation.id === 'file' ? '（おすすめ）' : ''}
-      </div>
-      <p className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
-        問題データも含めた全体を1つのファイルにして持ち運ぶ方法。対応端末では共有ボタンでAirDrop・LINE・Google
-        Driveなどへ直接渡せます。
-      </p>
-      <FileBackupCard
-        settings={settings}
-        updateSettings={updateSettings}
-        markBackedUp={markBackedUp}
-        importBackup={importBackup}
-        onToast={onToast}
-      />
+      <details open={recommendation.id === 'share' || recommendation.id === 'file'}>
+        <summary className="section-label migration-summary">
+          ② バックアップファイル・共有{recommendation.id === 'share' || recommendation.id === 'file' ? '（おすすめ）' : ''}
+        </summary>
+        <p className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
+          問題データも含めた全体を1つのファイルにして持ち運ぶ方法。対応端末では共有ボタンでAirDrop・LINE・Google
+          Driveなどへ直接渡せます。
+        </p>
+        <FileBackupCard
+          settings={settings}
+          updateSettings={updateSettings}
+          markBackedUp={markBackedUp}
+          importBackup={importBackup}
+          onToast={onToast}
+        />
+      </details>
 
-      <div className="section-label">③ Googleドライブ連携（任意）</div>
-      <CloudBackup
-        settings={settings}
-        updateSettings={updateSettings}
-        onToast={onToast}
-        importBackup={importBackup}
-        cloudSyncStatus={store.cloudSyncStatus}
-        syncCloudNow={store.syncCloudNow}
-      />
+      <details open={!!settings.googleDriveAutoSync}>
+        <summary className="section-label migration-summary">③ Googleドライブ連携（任意）</summary>
+        <CloudBackup
+          settings={settings}
+          updateSettings={updateSettings}
+          onToast={onToast}
+          importBackup={importBackup}
+          cloudSyncStatus={store.cloudSyncStatus}
+          syncCloudNow={store.syncCloudNow}
+        />
+      </details>
 
-      <div className="section-label">④ WebRTCで直接転送{recommendation.id === 'webrtc' ? '（おすすめ）' : ''}</div>
-      <p className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
-        共有ボタンやQRが使いにくい環境でも、容量の制限なく端末同士を直接つないで転送できます。
-      </p>
-      <P2PTransfer store={store} onToast={onToast} />
+      <details open={recommendation.id === 'webrtc'}>
+        <summary className="section-label migration-summary">
+          ④ WebRTCで直接転送{recommendation.id === 'webrtc' ? '（おすすめ）' : ''}
+        </summary>
+        <p className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
+          共有ボタンやQRが使いにくい環境でも、容量の制限なく端末同士を直接つないで転送できます。
+        </p>
+        <P2PTransfer store={store} onToast={onToast} />
+      </details>
     </div>
   );
 }

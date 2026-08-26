@@ -73,7 +73,7 @@ const featureRegistry = [
   { id: 'tools', title: '問題ツール（自動生成・誤りチェック）', icon: '🧪', category: '取り込み・作問支援', view: 'tools', desc: '経穴マスタから問題を自動生成。既存問題の形式・重複・矛盾・経穴×経絡の誤りを点検（runAllChecks）。', tags: ['自動生成', '誤りチェック'] },
 
   // ---- 設定・その他 ----
-  { id: 'settings', title: '設定・問題データ管理', icon: '⚙️', category: '設定・その他', view: 'settings', desc: 'CSV / JSON のインポート、音声設定、データ管理。問題データとは別に、自分の解答履歴（学習ログ）だけをCSVで書き出す機能もあり、表計算ソフトでの独自分析に使える。', tags: ['設定', '学習ログ', 'CSV書き出し'] },
+  { id: 'settings', title: '設定・問題データ管理', icon: '⚙️', category: '設定・その他', view: 'settings', desc: 'CSV / JSON のインポート、音声設定、データ管理。問題データとは別に、自分の解答履歴（学習ログ）だけをCSVで書き出す機能もあり、表計算ソフトでの独自分析に使える。解答履歴が増えすぎた場合は、直近90日より前を「日付・科目・正誤ごとの件数」に要約して端末のストレージを軽量化するオプションもある（任意・要約後は個々の問題までは遡れない）。', tags: ['設定', '学習ログ', 'CSV書き出し', '履歴の軽量化'] },
   { id: 'errorlog', title: 'エラーログ', icon: '🪵', category: '設定・その他', view: 'settings', sub: true, desc: '端末内エラーの閲覧・消去（外部送信なし、設定画面内）。', tags: ['エラーログ'] },
   { id: 'syncqr', title: 'QRで端末移行', icon: '📱', category: '設定・その他', view: 'settings', sub: true, desc: '進捗・設定をQR/URLで別端末へ受け渡し。大きい時は圧縮＋自動でQRを複数枚に分割して連続表示（テキストのコピー＆ペーストでも可）、履歴の要約による軽量化オプションあり（設定画面内）。', tags: ['QR', '機種変更', '移行'] },
   { id: 'sharebackup', title: 'バックアップの共有', icon: '📤', category: '設定・その他', view: 'settings', sub: true, desc: 'バックアップファイルをWeb Share API対応端末でAirDrop/LINE/Google Drive等の共有シートへ直接渡す（設定画面内）。', tags: ['共有', '機種変更'] },

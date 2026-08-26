@@ -4,7 +4,7 @@ import { estimateLevel } from '../lib/learnerLevel.js';
 import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
-import { loadQuizProgress, clearQuizProgress } from '../lib/storage.js';
+import { loadQuizProgress, clearQuizProgress, loadSyncMeta } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import {
   detectBrokenYesterday,
@@ -58,8 +58,19 @@ function timeAgoJa(at) {
   return `${Math.floor(hour / 24)}日前`;
 }
 
+const SYNC_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
+
 export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz }) {
   const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus } = store;
+
+  // 直近の同期試行が失敗続きでも、実際に最後に成功したのがいつかを別途持っておく
+  // （cloudSyncStatusは直近1回の結果しか持たないため）。syncMetaは同期が成功した時だけ
+  // 更新されるので、そのまま「最後に成功した時刻」として使える。
+  const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState(null);
+  useEffect(() => {
+    if (!settings.googleDriveAutoSync) return;
+    loadSyncMeta().then((m) => setLastSuccessfulSyncAt(m?.updatedAt || null));
+  }, [settings.googleDriveAutoSync, cloudSyncStatus]);
   const overall = overallStats(history);
   const level = estimateLevel({ srs, history });
   const focusSubjects = useMemo(() => {
@@ -148,27 +159,38 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
         </button>
       )}
 
-      {/* クラウド自動同期の状態を軽く見える化（常に最新かどうかの安心材料。詳細は設定画面） */}
-      {settings.googleDriveAutoSync && (
-        <button
-          className="inline-note"
-          onClick={() => onNavigate('settings')}
-          style={{
-            display: 'block', width: '100%', textAlign: 'left', marginBottom: 10,
-            padding: '4px 2px', background: 'none', border: 'none',
-          }}
-        >
-          {!cloudSyncStatus ? (
-            '☁️ 同期を準備しています…'
-          ) : cloudSyncStatus.ok ? (
-            `☁️ 最新の状態に同期済み（${timeAgoJa(cloudSyncStatus.at)}）`
-          ) : cloudSyncStatus.needsRelogin ? (
-            '☁️ 再ログインが必要です（タップして設定へ）'
-          ) : (
-            `☁️ 同期に失敗しました（${timeAgoJa(cloudSyncStatus.at)}・自動で再試行します）`
-          )}
-        </button>
-      )}
+      {/* クラウド自動同期の状態を軽く見える化（常に最新かどうかの安心材料。詳細は設定画面）。
+          直近の試行が失敗していても、最後に「成功した」時刻からまだ日が浅ければ静かに
+          再試行に任せる。3日以上成功していない場合だけ、見た目を強めて気づきやすくする
+          （毎回の一時的な失敗をいちいち赤字にすると、かえって見なくなってしまうため）。 */}
+      {settings.googleDriveAutoSync && (() => {
+        const longFailure = !cloudSyncStatus?.ok && lastSuccessfulSyncAt != null
+          && Date.now() - lastSuccessfulSyncAt > SYNC_STALE_MS;
+        return (
+          <button
+            className="inline-note"
+            onClick={() => onNavigate('settings')}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', marginBottom: 10,
+              padding: '4px 2px', background: 'none', border: 'none',
+              color: longFailure ? 'var(--wrong, #c62828)' : undefined,
+              fontWeight: longFailure ? 700 : undefined,
+            }}
+          >
+            {!cloudSyncStatus ? (
+              '☁️ 同期を準備しています…'
+            ) : cloudSyncStatus.ok ? (
+              `☁️ 最新の状態に同期済み（${timeAgoJa(cloudSyncStatus.at)}）`
+            ) : cloudSyncStatus.needsRelogin ? (
+              '⚠️ 再ログインが必要です（タップして設定へ）'
+            ) : longFailure ? (
+              `⚠️ ${timeAgoJa(lastSuccessfulSyncAt)}から同期できていません（タップして確認）`
+            ) : (
+              `☁️ 同期に失敗しました（${timeAgoJa(cloudSyncStatus.at)}・自動で再試行します）`
+            )}
+          </button>
+        );
+      })()}
 
       <button
         className="level-badge"

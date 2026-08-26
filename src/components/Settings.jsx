@@ -34,7 +34,24 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     restoreSamples,
     markBackedUp,
     importBackup,
+    summarizeOldHistory,
   } = store;
+
+  const HISTORY_SUMMARY_CUTOFF_DAYS = 90;
+  const doSummarizeOldHistory = () => {
+    if (
+      !confirm(
+        `解答履歴のうち直近${HISTORY_SUMMARY_CUTOFF_DAYS}日より前の分を、「日付・科目・正誤ごとの件数」にまとめて軽量化します。` +
+          '要約後は、古い方の履歴について1問ごとの詳細（どの問題を間違えたか等）には戻せません。よろしいですか？'
+      )
+    ) return;
+    const { before, after } = summarizeOldHistory();
+    onToast?.(
+      before === after
+        ? '要約できる古い履歴はありませんでした（直近90日以内のみ）'
+        : `解答履歴を${before}件→${after}件に軽量化しました`
+    );
+  };
 
   const fileRef = useRef(null);
   const [importMode, setImportMode] = useState('append'); // append | replace
@@ -106,8 +123,9 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       <div className="section-label">試験日・学習リマインド</div>
       <div className="card">
         <div className="field">
-          <label>試験日</label>
+          <label htmlFor="settings-exam-date">試験日</label>
           <input
+            id="settings-exam-date"
             type="date"
             value={settings.examDate || ''}
             onChange={(e) => updateSettings({ examDate: e.target.value })}
@@ -136,9 +154,10 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           <div className="hint">ハリオ先生の「今日の進捗」表示（ホーム画面）で使う1日のノルマです。</div>
         </div>
         <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
-          <label>基礎タスクの比率（3分の2バッファ術）</label>
+          <label htmlFor="settings-buffer-ratio">基礎タスクの比率（3分の2バッファ術）</label>
           <div className="range-row">
             <input
+              id="settings-buffer-ratio"
               type="range"
               min="40"
               max="80"
@@ -411,13 +430,26 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         </button>
       </div>
 
+      <div className="section-label">解答履歴の軽量化（任意）</div>
+      <div className="card">
+        <p className="inline-note" style={{ marginBottom: 10 }}>
+          解答履歴（現在{history.length}件）は追記され続けるため、端末のストレージが気になる場合は、
+          直近{HISTORY_SUMMARY_CUTOFF_DAYS}日より前の分を「日付・科目・正誤ごとの件数」に要約して
+          軽量化できます。直近{HISTORY_SUMMARY_CUTOFF_DAYS}日分と、要約後の件数はそのまま残ります。
+          <br />※ 要約すると、古い方の履歴は1問ごとの詳細（どの問題だったか）が失われます。
+          先に上のCSV書き出しで控えを残すことをおすすめします。
+        </p>
+        <button className="btn" onClick={doSummarizeOldHistory}>🗜️ 古い履歴を要約して軽量化する</button>
+      </div>
+
       {/* ===== 音声設定 ===== */}
       <div className="section-label">音声設定</div>
       <div className="card">
         <div className="field">
-          <label>読み上げ速度</label>
+          <label htmlFor="settings-speech-rate">読み上げ速度</label>
           <div className="range-row">
             <input
+              id="settings-speech-rate"
               type="range"
               min="0.5"
               max="2"
@@ -430,9 +462,10 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         </div>
 
         <div className="field">
-          <label>問題文と正解の「間」</label>
+          <label htmlFor="settings-gap-seconds">問題文と正解の「間」</label>
           <div className="range-row">
             <input
+              id="settings-gap-seconds"
               type="range"
               min="0"
               max="10"
