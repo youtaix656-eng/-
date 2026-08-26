@@ -217,9 +217,18 @@ export function distill(text = '', preferredTitle = '') {
     (heading ? heading.replace(/^#{1,3}\s+/, '').slice(0, 60) : '') ||
     '成果';
 
-  // 注意書き（⚠・※）、見出し、箇条書き、括弧だけの補足は要約に混ぜない
+  // 一覧に出る1行の要約なので、**文になっていない行は拾わない**。
+  // 注意書き（⚠・※）、見出し、箇条書き（記号・番号つきの両方）、
+  // 表の行、引用、括弧だけの補足を外す。
+  // ※ 番号つき（「1. 一次情報が…」）を外していなかったため、
+  //   箇条書きの途中が知識カードの要約になっていた。
   const isNoise = (l) =>
-    /^[⚠※]/.test(l) || /^#{1,3}\s/.test(l) || /^[-*・>]/.test(l) || /^[　\s]*[（(]/.test(l);
+    /^[⚠※]/.test(l) ||
+    /^#{1,3}\s/.test(l) ||
+    /^[-*・>＞|｜]/.test(l) ||
+    /^[0-9０-９]+\s*[.．)）、]/.test(l) ||
+    /^[（(]/.test(l) ||
+    /^[　\s]*[（(]/.test(l);
   const firstBody = lines.find((l) => !isNoise(l) && l.length > 10);
   const summary = (firstBody || lines.find((l) => !isNoise(l)) || lines[0] || '').slice(0, 240);
 
