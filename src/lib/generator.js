@@ -18,6 +18,7 @@ import {
   zangTable,
   meridianById,
 } from '../data/knowledgeBase.js';
+import { KEIKETSU_CARDS } from '../data/keiketsuCards.js';
 
 // ---- ユーティリティ ----
 function shuffle(arr) {
@@ -177,6 +178,48 @@ function genZangTable() {
   });
 }
 
+// 経穴カード（keiketsuCards.js）を使ったテンプレート。
+// 361穴へ拡充された時にそのまま件数だけ増えるよう、既存のフラッシュカードデータを
+// 直接参照する（generator.js 独自にデータを複製しない）。4択には最低4枚のカードが
+// 必要なため、拡充前の現状（5枚）でも動くが、万一3枚以下に減った場合は null を返す。
+function genKeiketsuMeridian() {
+  if (KEIKETSU_CARDS.length < 4) return null;
+  const c = KEIKETSU_CARDS[Math.floor(Math.random() * KEIKETSU_CARDS.length)];
+  // 複数の経穴が同じ経絡に属することがある（例：合谷・曲池はどちらも手陽明大腸経）ため、
+  // 重複ありの生配列から sample すると同じ経絡名が選択肢に2回入りうる。
+  // 経絡名を一意化してから distractors を選ぶ。
+  const meridianPool = [...new Set(KEIKETSU_CARDS.map((x) => x.meridian))];
+  const distractors = sample(meridianPool, 3, [c.meridian]);
+  if (distractors.length < 3) return null;
+  return assemble({
+    subject: '経絡経穴概論',
+    question: `経穴「${c.name}（${c.yomi}）」が属する経絡はどれか。`,
+    correct: c.meridian,
+    distractors,
+    explanation: `${c.name}は${c.meridian}に属する経穴である。${SRC_NOTE}`,
+    tags: ['経穴', '経絡', c.name],
+  });
+}
+
+function genKeiketsuLocation() {
+  if (KEIKETSU_CARDS.length < 4) return null;
+  const c = KEIKETSU_CARDS[Math.floor(Math.random() * KEIKETSU_CARDS.length)];
+  const distractors = sample(
+    KEIKETSU_CARDS.map((x) => x.location),
+    3,
+    [c.location]
+  );
+  if (distractors.length < 3) return null;
+  return assemble({
+    subject: '経絡経穴概論',
+    question: `経穴「${c.name}（${c.yomi}）」の取穴部位として正しいのはどれか。`,
+    correct: c.location,
+    distractors,
+    explanation: `${c.name}の取穴部位は「${c.location}」である。${SRC_NOTE}`,
+    tags: ['経穴', '取穴', c.name],
+  });
+}
+
 export const GENERATORS = {
   pointToMeridian: { label: '経穴→経絡', fn: genPointToMeridian },
   meridianToYuan: { label: '経絡→原穴', fn: genMeridianToYuan },
@@ -185,6 +228,8 @@ export const GENERATORS = {
   ke: { label: '五行・相剋', fn: genKe },
   zangElement: { label: '五臓→五行', fn: genZangElement },
   zangTable: { label: '五臓色体表', fn: genZangTable },
+  keiketsuMeridian: { label: '経穴カード→経絡', fn: genKeiketsuMeridian },
+  keiketsuLocation: { label: '経穴カード→取穴部位', fn: genKeiketsuLocation },
 };
 
 // 指定タイプから count 問を生成し、重複問題文を避ける
@@ -200,6 +245,7 @@ export function generateQuestions({ types, count = 10 } = {}) {
     guard += 1;
     const t = active[Math.floor(Math.random() * active.length)];
     const q = GENERATORS[t].fn();
+    if (!q) continue;
     const key = q.question + '::' + q.choices[q.answer];
     if (seen.has(key)) continue;
     seen.add(key);

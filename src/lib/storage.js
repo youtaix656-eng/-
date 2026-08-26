@@ -39,6 +39,8 @@ export const KEYS = {
   activity: 'shinkyu:activity', // 直近の閲覧履歴（画面・タイトル・ジャンル）
   numberOverrides: 'shinkyu:numberOverrides', // 数値ファクトの上書き（毎年変わる数値の一括更新）
   bookmarks: 'shinkyu:bookmarks', // ブックマーク（後で見直す問題・questionId→保存時刻）
+  keiketsuLibrary: 'shinkyu:keiketsuLibrary', // 経絡経穴の教科書材料（貼り付けた原文の置き場・検索用）
+  voiceCloneSecret: 'shinkyu:voiceCloneSecret', // ボイスクローン用の外部APIキー（BYOK・端末内のみ・バックアップ対象外）
   migrated: 'shinkyu:migrated',
   syncMeta: 'shinkyu:syncMeta', // クラウド自動同期用：進捗（srs/history/memos/links/examResults/settings）の最終更新時刻
 };
@@ -214,6 +216,22 @@ export const clearAudioProgress = () => remove(KEYS.audioProgress);
 export const loadExamResults = () => read(KEYS.examResults, []);
 export const saveExamResults = (r) => write(KEYS.examResults, r);
 
+// ---- 経絡経穴の教科書材料（貼り付けた原文の置き場） ----
+// keiketsuLibrary = [{ id, title, text, addedAt }]
+// ここに置くのは検索・後で問題化するための「原文の下書き置き場」であり、
+// 実際の経穴データ（keiketsuCards.js）はこの原文をもとに出典つきで手動整備する
+// （画面から直接、経穴の医療的事実を編集させる作りにはしない）。
+export const loadKeiketsuLibrary = () => read(KEYS.keiketsuLibrary, []);
+export const saveKeiketsuLibrary = (v) => write(KEYS.keiketsuLibrary, v);
+
+// ---- ボイスクローン用の外部APIキー（BYOK） ----
+// voiceCloneSecret = { apiKey }
+// APIキーは「バックアップ・QR・WebRTC・クラウド自動同期のいずれにも含めない」
+// （exportAll/importAll から意図的に除外）。他の設定と違い、漏れると第三者に
+// 課金・なりすまし音声生成をされ得る生きた認証情報のため、この端末にのみ置く。
+export const loadVoiceCloneSecret = () => read(KEYS.voiceCloneSecret, { apiKey: '' });
+export const saveVoiceCloneSecret = (v) => write(KEYS.voiceCloneSecret, v);
+
 // ---- クラウド自動同期用メタ（進捗の最終更新時刻。lib/progressMerge.jsのマージ判定に使う） ----
 // syncMeta = { updatedAt }（ミリ秒epoch）
 export const loadSyncMeta = () => read(KEYS.syncMeta, { updatedAt: 0 });
@@ -266,6 +284,8 @@ const DEFAULT_SETTINGS = {
   sessionNewRatio: 1, // 学習セッションの新規割合（0〜1、1=すべて新規）
   dailyGoal: 300, // 1日の目標問題数（ハリオ先生の「今日の進捗」表示に使用）
   reminder: { enabled: false, time: '07:00', lastNotified: '' }, // 毎日の学習リマインド通知
+  // ボイスクローン（音声学習の読み上げ声）。APIキー本体は含まない（voiceCloneSecretへ別保存）。
+  voiceClone: { enabled: false, voiceId: '', voiceName: '' },
   // ポモドーロタイマー（全画面上部）
   pomodoro: {
     enabled: false, // 上部バーを表示するか
@@ -311,6 +331,7 @@ export async function exportAll() {
     examResults: await loadExamResults(),
     settings: await read(KEYS.settings, {}),
     bookmarks: await loadBookmarks(),
+    keiketsuLibrary: await loadKeiketsuLibrary(),
     // 「前回の続きから」（一問一答・復習・模試・音声・学習セッション）も別端末へ引き継ぐ
     quizProgress: await loadQuizProgress(),
     reviewProgress: await loadReviewProgress(),
@@ -338,6 +359,7 @@ export async function importAll(data) {
   if (Array.isArray(data.examResults)) await saveExamResults(data.examResults);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
   if (data.bookmarks && typeof data.bookmarks === 'object') await saveBookmarks(data.bookmarks);
+  if (Array.isArray(data.keiketsuLibrary)) await saveKeiketsuLibrary(data.keiketsuLibrary);
   if (data.quizProgress && typeof data.quizProgress === 'object') await saveQuizProgress(data.quizProgress);
   if (data.reviewProgress && typeof data.reviewProgress === 'object') await saveReviewProgress(data.reviewProgress);
   if (data.examProgress && typeof data.examProgress === 'object') await saveExamProgress(data.examProgress);
