@@ -54,6 +54,7 @@ const AcupointTap = lazy(() => import('./components/AcupointTap.jsx'));
 const MnemonicQuiz = lazy(() => import('./components/MnemonicQuiz.jsx'));
 const KeiketsuReverseQuiz = lazy(() => import('./components/KeiketsuReverseQuiz.jsx'));
 const KeiketsuLibrary = lazy(() => import('./components/KeiketsuLibrary.jsx'));
+const KeizetsuIndex = lazy(() => import('./components/KeizetsuIndex.jsx'));
 
 function ViewLoading() {
   return (
@@ -558,6 +559,8 @@ export default function App() {
         return <KeiketsuReverseQuiz onNavigate={setView} />;
       case 'keiketsulibrary':
         return <KeiketsuLibrary onToast={showToast} onNavigate={setView} />;
+      case 'keizetsuindex':
+        return <KeizetsuIndex onNavigate={setView} />;
       case 'mnemonics':
         return <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} />;
       case 'mnemonicquiz':
