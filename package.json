@@ -11,7 +11,8 @@
     "test": "node --test",
     "validate": "node scripts/validate-content.mjs",
     "lint:theme": "node scripts/lint-theme.mjs",
-    "check:size": "node scripts/check-bundle-size.mjs"
+    "check:size": "node scripts/check-bundle-size.mjs",
+    "e2e:smoke": "node scripts/e2e-smoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.62.1",
     "vite": "^5.4.11"
   }
 }
