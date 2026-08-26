@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as storage from '../lib/storage.js';
-import { makePage, addPage, removePage, searchPages, snippetFor } from '../lib/keiketsuLibrary.js';
+import { makePage, addPage, removePage, searchPages, snippetFor, buildSearchPrompt } from '../lib/keiketsuLibrary.js';
 
 // 経絡経穴の教科書材料の置き場（検索可能な原文ライブラリ）。
 //
@@ -48,6 +48,15 @@ export default function KeiketsuLibrary({ onToast, onNavigate }) {
     onToast?.('削除しました');
   };
 
+  const copyPrompt = async (targetPages, label) => {
+    try {
+      await navigator.clipboard.writeText(buildSearchPrompt(targetPages));
+      onToast?.(`${label}をコピーしました。AIチャットに貼り付けて質問してください`);
+    } catch (e) {
+      onToast?.('コピーできませんでした');
+    }
+  };
+
   const results = useMemo(() => searchPages(pages, query), [pages, query]);
   const sorted = useMemo(() => [...results].sort((a, b) => b.addedAt - a.addedAt), [results]);
 
@@ -58,7 +67,9 @@ export default function KeiketsuLibrary({ onToast, onNavigate }) {
         経絡経穴の教科書ページを貼り付けて保存し、あとから検索できます。ここに置いた原文が
         自動で問題になるわけではありません（教科書の文章をそのまま出題プールに入れない方針のため）。
         貼り付けた内容を実際の経穴カード・一問一答へ反映してほしい時は、このページを開いた状態で
-        「この材料を教材化して」と伝えてください。
+        「この材料を教材化して」と伝えてください。AIチャットで検索したい時は、下の
+        「検索用プロンプトをコピー」を使ってください（数字・専門用語を勝手に変えないよう
+        指示済みの原文保護版プロンプトです）。
       </p>
 
       <div className="card">
@@ -93,6 +104,20 @@ export default function KeiketsuLibrary({ onToast, onNavigate }) {
           写真・PDFから文字を抽出した場合は、抽出画面の「コピー」で本文欄へ貼り付けてください。
         </p>
       </div>
+
+      <div className="btn-row" style={{ marginTop: 16 }}>
+        <button
+          className="btn accent"
+          onClick={() => copyPrompt(pages, '検索用プロンプト（全材料）')}
+          disabled={pages.length === 0}
+        >
+          📋 検索用プロンプトをコピー（全材料）
+        </button>
+      </div>
+      <p className="inline-note" style={{ marginTop: 4 }}>
+        保存した本文を差し込んだプロンプトをコピーします。AIチャット（Claude等）に貼り付けて
+        質問すると、数字・専門用語を勝手に変えず、答えの根拠を照合表つきで返すよう指示済みです。
+      </p>
 
       <div className="field" style={{ marginTop: 16 }}>
         <label htmlFor="keiketsu-lib-search">検索</label>
@@ -131,6 +156,9 @@ export default function KeiketsuLibrary({ onToast, onNavigate }) {
                 <div className="btn-row" style={{ marginTop: 8 }}>
                   <button className="btn sm" onClick={() => setOpenId(open ? null : p.id)}>
                     {open ? '閉じる' : '全文を見る'}
+                  </button>
+                  <button className="btn sm accent" onClick={() => copyPrompt([p], `「${p.title}」の検索用プロンプト`)}>
+                    📋 このページ用にコピー
                   </button>
                   <button className="btn sm danger" onClick={() => doRemove(p.id)}>🗑️ 削除</button>
                 </div>
