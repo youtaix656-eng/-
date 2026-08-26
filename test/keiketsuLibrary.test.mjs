@@ -65,6 +65,14 @@ test('buildSearchPrompt: 本文が差し込まれ、原文保護の厳守事項�
   assert.ok(prompt.includes('推測・記憶で補わない'));
 });
 
+test('buildSearchPrompt: イラストを変更しない指示と、一穴ごとのイラスト欄の指示が含まれる', () => {
+  const prompt = buildSearchPrompt([makePage({ title: 'x', text: 'y' })]);
+  assert.ok(prompt.includes('図・イラスト'));
+  assert.ok(prompt.includes('内容は変更しない'));
+  assert.ok(prompt.includes('本文に図の記載なし'));
+  assert.ok(prompt.includes('イラスト」欄を設け'));
+});
+
 test('buildSearchPrompt: 複数ページはタイトルごとに区切って連結される', () => {
   const pages = [
     makePage({ title: 'ページA', text: '本文A' }),
