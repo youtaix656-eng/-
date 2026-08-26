@@ -6,8 +6,12 @@
 
 import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE } from '../data/genres.js';
 
-/** 「1つの組（役職×ジャンル）に3席」の初期値。定数ではない（増席できる）。 */
-export const DEFAULT_SEATS_PER_ROLE = DEFAULT_SEATS_PER_GENRE;
+// 席数の呼び名は **seatsPerGenre に統一**する。
+// 以前は保存する項目名（company.seatsPerGenre）・読む側の変数名（seatsPerGenre）・
+// 定数名（DEFAULT_SEATS_PER_ROLE / DEFAULT_SEATS_PER_GENRE）の3通りに割れていて、
+// コメントは存在しない項目を指していた。数え方は「役職 × ジャンル の中」なので
+// seatsPerGenre が正しい。
+export { DEFAULT_SEATS_PER_GENRE };
 
 /**
  * 新しく席を増やすときの席番号。**組（役職×ジャンル）の中で**空いている番号を返す。

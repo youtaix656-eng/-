@@ -598,6 +598,34 @@ export async function storageEstimate() {
   }
 }
 
+/**
+ * この端末の保存領域を「消さないでほしい」とブラウザに頼む（新規）。
+ *
+ * Ouro はサーバーを持たず、すべてが端末の中にしかない。
+ * 既定のままだと、容量が逼迫した時にブラウザの判断で丸ごと消えることがある。
+ * 頼めるのは1回だけで十分、断られても何もしない（動作には影響しない）。
+ * **ネットワークには触れない。**
+ */
+export async function requestPersistent() {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage?.persist) return null;
+    if (await navigator.storage.persisted()) return true;
+    return await navigator.storage.persist();
+  } catch {
+    return null;
+  }
+}
+
+/** いま「消さない」設定になっているか。分からない端末では null。 */
+export async function isPersistent() {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage?.persisted) return null;
+    return await navigator.storage.persisted();
+  } catch {
+    return null;
+  }
+}
+
 /** 残りが少ないか（既定は9割を超えたら）。 */
 export function isStorageTight(est, threshold = 0.9) {
   return Boolean(est && est.ratio >= threshold);

@@ -31,6 +31,11 @@ export const SOURCE_TYPES = {
 export const ORIGINS = {
   external: '外部ソース',
   ai: 'AI生成',
+  // AIエンジンを1つも接続していない時に、ローカル社員（規則ベース・AIではない）が
+  // 組み立てた「仕事の型」。**これを 'ai' にしない。**
+  // 来歴を必ず区別するのがこのアプリの土台なので、AIが動いていないものを
+  // AI生成として残すと、その土台に穴があく。
+  template: '仕事の型（AI未使用）',
   user: '自分で書いた',
 };
 
@@ -57,13 +62,16 @@ export function createKnowledge(data = {}) {
   let sourceIds = [...(data.sourceIds || [])];
 
   if (!sourceIds.length) {
-    // 出典なしの知識は作らせない。AI生成なら「AI生成（未検証）」を自動で立てる。
+    // 出典なしの知識は作らせない。自動で立てる擬似ソースは来歴ごとに変える。
+    // template（AI未接続）を「AI生成」と名乗らせないこと。
     const auto = makeSource({
-      type: data.origin === 'user' ? 'note' : 'ai',
+      type: data.origin === 'user' ? 'note' : data.origin === 'template' ? 'note' : 'ai',
       title:
         data.origin === 'user'
           ? '自分で書いたメモ'
-          : `AI生成（未検証）${data.providerName ? ` / ${data.providerName}` : ''}`,
+          : data.origin === 'template'
+            ? '仕事の型（AIエンジン未接続のため、AIは動いていません）'
+            : `AI生成（未検証）${data.providerName ? ` / ${data.providerName}` : ''}`,
       excerpt: data.summary || '',
       addedBy: data.employeeId || 'user',
       trust: data.origin === 'user' ? 60 : 30,
@@ -133,6 +141,21 @@ export function searchKnowledge(list = [], query = '', opts = {}) {
       return hay.includes(q);
     })
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+/**
+ * その知識を消したときに、どの出典が行き場を失うかを返す（新規）。
+ *
+ * 出典は1回の仕事で最大13件できる。知識を消しても残していたため、
+ * どの画面にも出ないまま増え続けていた。
+ * **他の知識がまだ参照しているものは残す**（共有している出典を巻き添えにしない）。
+ */
+export function orphanSourceIds(removed, remaining = []) {
+  const mine = (removed && removed.sourceIds) || [];
+  if (!mine.length) return [];
+  const stillUsed = new Set();
+  for (const k of remaining) for (const id of k.sourceIds || []) stillUsed.add(id);
+  return mine.filter((id) => !stillUsed.has(id));
 }
 
 /** 使われた記録（知識の循環を数えるため）。 */

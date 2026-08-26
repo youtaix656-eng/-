@@ -5,17 +5,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KEYS, load, loadMany, save, exportAll, importAll, flushNow, isPartial, onExternalChange,
+  requestPersistent,
 } from './storage.js';
 import * as perf from './perf.js';
 import { afterPaint, whenIdle } from './idle.js';
 import { makeSettings } from './defaults.js';
-import { createTask, applyStepResult, nextGroup, assembleResult } from './workflow.js';
+
+import { createTask, applyStepResult, nextGroup, assembleResult, retryFailed } from './workflow.js';
 import { runStep, distill, extractUrls } from './runtime.js';
-import { createKnowledge, makeSource, markUsed, markVerified } from './knowledge.js';
-import { makeEntry, appendAudit, foldAudit } from './audit.js';
-import { checkAction } from './permissions.js';
+import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
+import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
+import { checkAction, monthStart } from './permissions.js';
 import { createDeal } from './revenue.js';
-import { createMeeting, addRound, opinionPrompt, rebuttalPrompt, synthesisPrompt } from './meeting.js';
+import {
+  createMeeting, addRound, opinionPrompt, rebuttalPrompt, synthesisPrompt, estimatedCalls,
+} from './meeting.js';
 import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
 import { providerById } from './providers/index.js';
@@ -109,6 +113,9 @@ export function useStore() {
   const foldedRef = useRef(false);
   // いま走っているAI実行の中止スイッチ（新項目20）
   const abortRef = useRef(null);
+  // 会議の実行は decideApproval より後で定義されるので、ref 経由で呼ぶ
+  // （承認したその場で会議を始めるため）
+  const runMeetingRef = useRef(() => {});
 
   useEffect(() => {
     let alive = true;
@@ -123,6 +130,10 @@ export function useStore() {
       // 以前は「保存してから読み直す」形だったため、18人の生成と13キーの
       // 書き込みが1フレームに集中して414ms固まっていた。
       if (!seeded) {
+        // サーバーを持たず端末の中だけにデータがあるので、
+        // 「容量が足りない時に消さないでほしい」とブラウザに頼んでおく。
+        // 断られても動作には影響しないので、結果は待たない。
+        requestPersistent().catch(() => {});
         const { seedAll } = await loadRoster();
         if (!alive) return;
         const fresh = seedAll();
@@ -154,7 +165,7 @@ export function useStore() {
       if (!alive) return;
       const next = {
         ...EMPTY,
-        company: first[KEYS.company] || null,
+        company: migrateCompany(first[KEYS.company]),
         employees: asArray(first[KEYS.employees]),
         tasks: asArray(first[KEYS.tasks]),
         knowledge: asArray(first[KEYS.knowledge]),
@@ -300,6 +311,15 @@ export function useStore() {
     });
     return stop;
   }, []);
+
+  /**
+   * 今月のAI費用（USD）。上限の判定に使う。
+   * 操作履歴に残っている費用の合計なので、会議も仕事も両方入る。
+   */
+  const spentThisMonth = useCallback(
+    () => totalCost(stateRef.current.audit, monthStart()),
+    []
+  );
 
   // 保存つきの更新。key に対応する値だけを書く。
   // ref を先に更新してから setState することで、同じ処理の中で続けて
@@ -556,7 +576,12 @@ export function useStore() {
       const willCost = Object.keys(s.secrets).length > 0;
       if (willCost && !task.costApproved) {
         for (const { step, employee } of assigned) {
-          const check = checkAction({ employee, action: 'costly', settings: s.settings });
+          const check = checkAction({
+            employee,
+            action: 'costly',
+            settings: s.settings,
+            spentThisMonth: spentThisMonth(),
+          });
           if (!check.needsApproval) continue;
           const approval = {
             id: newId('apv'),
@@ -674,7 +699,7 @@ export function useStore() {
 
       return updated;
     },
-    [put, log, patchTask, updateEmployee]
+    [put, log, patchTask, updateEmployee, spentThisMonth]
   );
 
   /** 実行中の仕事をやめる（新項目20）。 */
@@ -718,7 +743,8 @@ export function useStore() {
         body: text,
         category: categoryForRole(employee.roleId),
         tags: tagsFrom(task.request),
-        origin: 'ai',
+        // ローカル社員（AI未接続）の成果は AI生成ではない
+        origin: lastResult.offline ? 'template' : 'ai',
         sourceIds: newSources.map((x) => x.id),
         taskId: task.id,
         employeeId: employee.id,
@@ -731,7 +757,9 @@ export function useStore() {
       put(KEYS.knowledge, [knowledge, ...s.knowledge]);
       patchTask({
         ...task,
-        result: { ...task.result, text, knowledgeIds: [knowledge.id], sourceIds: allSources.map((x) => x.id) },
+        // 本文はここに持たない（知識の body と手順の出力に既にある）。
+        // 参照だけを残し、表示は assembleResult(task) で組み立てる。
+        result: { ...task.result, knowledgeIds: [knowledge.id], sourceIds: allSources.map((x) => x.id) },
       });
       log({ actor: employee.id, action: 'knowledgeCreated', target: knowledge.title });
       return knowledge;
@@ -754,6 +782,22 @@ export function useStore() {
     [runNextStep]
   );
 
+  /**
+   * 失敗した手順をやり直す（新規）。
+   * これまでは失敗すると行き止まりで、画面のボタンを押しても何も起きなかった。
+   */
+  const retryTask = useCallback(
+    async (taskId, stepId = null) => {
+      const t = stateRef.current.tasks.find((x) => x.id === taskId);
+      if (!t) return null;
+      const revived = retryFailed(t, stepId);
+      if (revived === t) return t;
+      patchTask(revived);
+      return runTask(taskId);
+    },
+    [patchTask, runTask]
+  );
+
   const deleteTask = useCallback(
     (id) => put(KEYS.tasks, stateRef.current.tasks.filter((t) => t.id !== id)),
     [put]
@@ -770,6 +814,19 @@ export function useStore() {
         s.approvals.map((a) => (a.id === id ? { ...a, status: ok ? 'granted' : 'denied', decidedAt: Date.now() } : a))
       );
       log({ actor: 'user', action: ok ? 'approvalGranted' : 'approvalDenied', target: apv.label });
+
+      // 会議の承認（仕事と同じ扱い）。
+      // **patchMeeting / runMeeting をここで直接呼ばないこと。**
+      // どちらもこの関数より後ろで定義されるので、依存配列に書いた時点で
+      // 「初期化前の変数にアクセスした」で起動が落ちる（実際に落とした）。
+      if (apv.meetingId) {
+        const mtg = s.meetings.find((m) => m.id === apv.meetingId);
+        if (!mtg) return;
+        const next = { ...mtg, costApproved: ok, status: ok ? 'queued' : 'cancelled' };
+        put(KEYS.meetings, s.meetings.map((m) => (m.id === mtg.id ? next : m)));
+        if (ok) await runMeetingRef.current(mtg.id);
+        return;
+      }
 
       const task = s.tasks.find((t) => t.id === apv.taskId);
       if (!task) return;
@@ -818,8 +875,18 @@ export function useStore() {
 
   const deleteKnowledge = useCallback(
     (id) => {
-      const k = stateRef.current.knowledge.find((x) => x.id === id);
-      put(KEYS.knowledge, stateRef.current.knowledge.filter((x) => x.id !== id));
+      const s = stateRef.current;
+      const k = s.knowledge.find((x) => x.id === id);
+      const rest = s.knowledge.filter((x) => x.id !== id);
+      put(KEYS.knowledge, rest);
+
+      // その知識**だけ**が参照していた出典を一緒に消す。
+      // 残しておくと、どの画面にも出ないまま増え続ける（1回の仕事で最大13件）。
+      // 他の知識がまだ参照しているものは残す。
+      const orphans = new Set(orphanSourceIds(k, rest));
+      if (orphans.size) {
+        put(KEYS.sources, s.sources.filter((src) => !orphans.has(src.id)));
+      }
       log({ actor: 'user', action: 'knowledgeDeleted', target: k ? k.title : id });
     },
     [put, log]
@@ -883,7 +950,42 @@ export function useStore() {
       let mtg = s.meetings.find((m) => m.id === meetingId);
       if (!mtg) return null;
       const parts = s.employees.filter((e) => mtg.participantIds.includes(e.id));
+
+      // 会議は Ouro でいちばん費用の出る操作（意見＋反論＋統合で人数×2＋1回）。
+      // **仕事と同じく、必ず1度ユーザー承認を通す。**
+      // ここを飛ばしていたため、高い方だけが素通りしていた。
+      const willCost = Object.keys(s.secrets).length > 0;
+      if (willCost && !mtg.costApproved) {
+        const chairFor = parts.find((e) => e.id === mtg.chairId) || parts[0];
+        const check = checkAction({
+          employee: chairFor || { name: '議長' },
+          action: 'costly',
+          settings: s.settings,
+          spentThisMonth: spentThisMonth(),
+        });
+        if (check.needsApproval) {
+          const approval = {
+            id: newId('apv'),
+            meetingId: mtg.id,
+            employeeId: chairFor ? chairFor.id : null,
+            action: 'costly',
+            label: `${parts.length}人でAI会議を開きます（AIを約${estimatedCalls(parts.length)}回呼びます）：${mtg.topic}`,
+            risk: check.risk,
+            status: 'pending',
+            createdAt: Date.now(),
+          };
+          put(KEYS.approvals, [approval, ...s.approvals]);
+          log({ actor: 'user', action: 'approvalRequested', target: mtg.topic });
+          mtg = { ...mtg, status: 'awaiting_approval' };
+          patchMeeting(mtg);
+          return mtg;
+        }
+      }
+
       setBusy({ meetingId });
+      // 会議も途中でやめられるようにする（仕事と同じ中断スイッチを使う）
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      abortRef.current = controller;
 
       const ask = async (employee, prompt) => {
         const pseudoTask = { request: mtg.topic, title: mtg.topic, context: '' };
@@ -896,6 +998,7 @@ export function useStore() {
             knowledgeList: s.knowledge,
             secrets: s.secrets,
             settings: s.settings,
+            signal: controller ? controller.signal : undefined,
           });
           return { text: r.text, providerId: r.providerId, model: r.model, cost: r.cost };
         } catch (e) {
@@ -941,8 +1044,10 @@ export function useStore() {
         mtg = { ...mtg, conclusion: r.text };
       }
 
-      mtg = { ...mtg, status: 'done', finishedAt: Date.now() };
+      const stopped = controller ? controller.signal.aborted : false;
+      mtg = { ...mtg, status: stopped ? 'cancelled' : 'done', finishedAt: Date.now() };
       patchMeeting(mtg);
+      abortRef.current = null;
       setBusy(null);
       log({
         actor: chair ? chair.id : 'user',
@@ -953,8 +1058,11 @@ export function useStore() {
       });
       return mtg;
     },
-    [patchMeeting, log]
+    [patchMeeting, log, put, spentThisMonth]
   );
+
+  // 承認画面から会議を始められるようにしておく（定義順の都合で ref に載せる）
+  runMeetingRef.current = runMeeting;
 
   // ---- 設定・接続・キー ----
   const updateSettings = useCallback(
@@ -992,7 +1100,13 @@ export function useStore() {
 
   const exportData = useCallback(async () => {
     await flushNow(); // 書き残しをバックアップに含めるため
-    return exportAll();
+    const out = await exportAll();
+    // 書き出した日を覚えておく（ホームの「そろそろ書き出しましょう」の判定に使う）
+    const settings = { ...stateRef.current.settings, lastExportAt: Date.now() };
+    stateRef.current = { ...stateRef.current, settings };
+    setState(stateRef.current);
+    save(KEYS.settings, settings);
+    return out;
   }, []);
   const importData = useCallback(async (payload) => {
     const n = await importAll(payload);
@@ -1027,6 +1141,7 @@ export function useStore() {
     newTask,
     runTask,
     runNextStep,
+    retryTask,
     deleteTask,
     patchTask,
     // 承認
@@ -1056,6 +1171,23 @@ export function useStore() {
 
 function keyName(key) {
   return String(key).replace(/^ouro:/, '');
+}
+
+/**
+ * 保存済みの会社データを、いまの項目名にそろえる。
+ *
+ * 席数の項目は seatsPerRole → seatsPerGenre に統一した
+ * （数え方は「役職 × ジャンル の中」なので、こちらが正しい）。
+ * 古い名前のまま保存されている端末を読んでも席数が消えないようにする。
+ */
+function migrateCompany(company) {
+  if (!company) return null;
+  if (company.seatsPerGenre != null) return company;
+  if (company.seatsPerRole != null) {
+    const { seatsPerRole, ...rest } = company;
+    return { ...rest, seatsPerGenre: seatsPerRole };
+  }
+  return company;
 }
 
 function categoryForRole(roleId) {

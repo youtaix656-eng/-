@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Card, Doc, Empty, Bar, SectionTitle, Field } from './ui.jsx';
-import { TASK_STATUS, taskProgress, nextStep } from '../lib/workflow.js';
+import { TASK_STATUS, taskProgress, nextStep, assembleResult } from '../lib/workflow.js';
 import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
 
@@ -16,6 +16,11 @@ export default function TaskDetail({ store, taskId, go }) {
   const busy = store.busy && store.busy.taskId === task.id;
   const live = store.live && store.live.taskId === task.id ? store.live : null;
   const pending = nextStep(task);
+  // 失敗している間は「続きを実行する」を出さない。
+  // 出しても runTask が即座に抜けるので、押しても何も起きない行き止まりになる。
+  const failedSteps = (task.steps || []).filter((s) => s.status === 'failed');
+  // 提出物は保存せず、その場で組み立てる（同じ文章を二重に持たないため）
+  const deliverable = assembleResult(task);
   const knowledge = store.knowledge.filter((k) => k.taskId === task.id);
 
   return (
@@ -143,7 +148,7 @@ export default function TaskDetail({ store, taskId, go }) {
         })}
       </div>
 
-      {pending && task.status !== 'awaiting_approval' && (
+      {pending && task.status !== 'awaiting_approval' && task.status !== 'failed' && (
         <button
           type="button"
           className="btn block"
@@ -153,6 +158,22 @@ export default function TaskDetail({ store, taskId, go }) {
         >
           {busy ? <><span className="spinner" /> 実行中…</> : '続きを実行する'}
         </button>
+      )}
+
+      {/* 失敗した仕事はここからやり直す（押しても何も起きないボタンを出さない） */}
+      {task.status === 'failed' && !busy && (
+        <Card glyph="⚠" title="途中で止まりました">
+          <p className="muted" style={{ marginTop: 0 }}>
+            {failedSteps[0]?.error || '実行に失敗しました。'}
+          </p>
+          <p className="muted">
+            失敗した所からやり直します。すでに終わった手順はもう一度実行しないので、
+            そのぶんの費用はかかりません。
+          </p>
+          <button type="button" className="btn primary block" onClick={() => store.retryTask(task.id)}>
+            失敗した所からやり直す
+          </button>
+        </Card>
       )}
 
       {/* 新項目20：実行を途中でやめられるようにする。
@@ -172,13 +193,13 @@ export default function TaskDetail({ store, taskId, go }) {
         <>
           <SectionTitle>会社としての提出物</SectionTitle>
           <Card>
-            <Doc text={task.result?.text || ''} />
+            <Doc text={deliverable} />
             <div className="btn-row" style={{ marginTop: 10 }}>
               <button
                 type="button"
                 className="btn small"
                 onClick={() => {
-                  navigator.clipboard?.writeText(task.result?.text || '');
+                  navigator.clipboard?.writeText(deliverable);
                 }}
               >
                 コピー
@@ -215,7 +236,7 @@ export default function TaskDetail({ store, taskId, go }) {
               onClick={() => {
                 const t = store.newTask({
                   request: followUp,
-                  context: `前の仕事「${task.title}」の結果を踏まえてください。\n\n${(task.result?.text || '').slice(0, 3000)}`,
+                  context: `前の仕事「${task.title}」の結果を踏まえてください。\n\n${deliverable.slice(0, 3000)}`,
                   dealId: task.dealId,
                 });
                 setFollowUp('');

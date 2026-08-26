@@ -6,6 +6,7 @@ import { Card, Row, Stat, SectionTitle, Empty, Bar, Spark } from './ui.jsx';
 import { relTime, usd } from '../lib/format.js';
 import { taskProgress, TASK_STATUS } from '../lib/workflow.js';
 import { cycleStats, weakestStage, growthSeries } from '../lib/cycle.js';
+import { backupReminder } from '../lib/backup.js';
 import { verifiedRate } from '../lib/knowledge.js';
 import { revenueSummary, formatMoney } from '../lib/revenue.js';
 import { roleById } from '../data/roles.js';
@@ -42,6 +43,10 @@ export default function Home({ store, go }) {
   const money = revenueSummary(deals, tasks, { usdJpy: store.settings.usdJpy });
   const engines = availableProviders(secrets).filter((p) => p.needsKey);
   const spent = audit.reduce((s, e) => s + (e.cost || 0), 0);
+  const remind = backupReminder({
+    lastExportAt: store.settings.lastExportAt,
+    items: knowledge.length + deals.length,
+  });
 
   return (
     <div className="screen fade-in">
@@ -66,6 +71,20 @@ export default function Home({ store, go }) {
           </p>
           <button type="button" className="btn block" onClick={() => go('settings')}>
             エンジンを接続する
+          </button>
+        </Card>
+      )}
+
+      {/* 書き出しの促し —— サーバーが無いので、端末が壊れたら復旧手段はこれだけ。
+          判定は lib/backup.js（画面には条件を書かない）。 */}
+      {remind.show && (
+        <Card glyph="⇧" title="バックアップを取りましょう">
+          <p className="muted" style={{ marginTop: 0 }}>
+            {remind.reason}。このアプリのデータは端末の中だけにあります。
+            機種変更や、ブラウザのデータ消去で失わないよう、書き出して保管してください。
+          </p>
+          <button type="button" className="btn block" onClick={() => go('settings')}>
+            書き出す
           </button>
         </Card>
       )}
@@ -117,36 +136,16 @@ export default function Home({ store, go }) {
         </Empty>
       )}
 
-      {/* クイック操作 */}
-      <SectionTitle>クイック操作</SectionTitle>
+      {/* クイック操作 —— **下部ナビと会社バーから行けるものは置かない。**
+          常に見えている入口を重ねると、いちばん見てほしい「次にやること」が
+          下へ押し下がる。ここに足したくなったら、まずナビを見直すこと。 */}
+      <SectionTitle>ここからしか行けない操作</SectionTitle>
       <div className="btn-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <button type="button" className="btn" onClick={() => go('compose')}>
-          ✎ 依頼する
-        </button>
-        <button type="button" className="btn" onClick={() => go('hire')}>
-          ＋ 社員を雇う
-        </button>
-        <button type="button" className="btn" onClick={() => go('meeting')}>
-          ◎ AI会議
-        </button>
-        <button type="button" className="btn" onClick={() => go('ingest')}>
-          ⇩ 情報を追加
-        </button>
-        <button type="button" className="btn" onClick={() => go('knowledge')}>
-          ⌕ 知識を検索
-        </button>
-        <button type="button" className="btn" onClick={() => go('deals')}>
-          ¥ 案件・収益
-        </button>
-        <button type="button" className="btn" onClick={() => go('toc')}>
-          ▤ 目次で探す
-        </button>
-        <button type="button" className="btn" onClick={() => go('calendar')}>
-          ▦ 予定を見る
-        </button>
-        <button type="button" className="btn" onClick={() => go('characters')}>
-          ◍ キャラクター名鑑
-        </button>
+        {QUICK.map((q) => (
+          <button key={q.view} type="button" className="btn" onClick={() => go(q.view)}>
+            {q.label}
+          </button>
+        ))}
       </div>
 
       <UpcomingCard store={store} go={go} />
@@ -173,9 +172,7 @@ export default function Home({ store, go }) {
             まだ案件がありません。「案件・収益」から、元手ゼロで始められる仕事の型を選べます。
           </p>
         )}
-        <button type="button" className="btn small" onClick={() => go('deals')} style={{ marginTop: 8 }}>
-          案件を見る
-        </button>
+
       </Card>
 
       {/* 知識の循環 */}
@@ -258,6 +255,17 @@ function UpcomingCard({ store, go }) {
     </>
   );
 }
+
+// ホームのクイック操作。
+// **下部ナビ（ホーム／目次／社員／依頼／予定／知識）と、
+//   会社バーから開ける画面は入れない。** 重複した入口は迷いを増やすだけ。
+// 増やす前に「ナビか会社バーから行けないか」を必ず確かめること。
+const QUICK = [
+  { view: 'meeting', label: '◎ AI会議' },
+  { view: 'ingest', label: '⇩ 情報を追加' },
+  { view: 'hire', label: '＋ 社員を雇う' },
+  { view: 'deals', label: '¥ 案件・収益' },
+];
 
 /** 今の状態から、次にやるとよいことを2〜3件だけ出す。 */
 function suggestions({ tasks, knowledge, deals, engines }) {

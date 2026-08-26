@@ -9,6 +9,30 @@ export const PERMISSIONS = ['read', 'create', 'edit', 'send', 'delete', 'pay'];
 
 export const DEFAULT_PERMISSIONS = { read: true, create: true, edit: false, send: false, delete: false, pay: false };
 
+// ── 今月のAI費用の上限（新規）──
+//
+// 「毎回の確認を省く」を入れると承認が飛ぶが、**それでも上限だけは効かせる**。
+// 上限に達したら自動承認を止めて確認へ戻すので、気づかないうちに増え続けない。
+// 0 を入れると上限なし（自分で決めた人だけが外せる）。
+export const DEFAULT_MONTHLY_CAP_USD = 5;
+
+export function monthlyCap(settings = {}) {
+  const v = Number(settings.monthlyCapUsd);
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_MONTHLY_CAP_USD;
+}
+
+export function overMonthlyCap(settings = {}, spentThisMonth = 0) {
+  const cap = monthlyCap(settings);
+  if (cap <= 0) return false; // 0 ＝ 上限なし
+  return Number(spentThisMonth) >= cap;
+}
+
+/** その月の始まり（ミリ秒）。今月の合計を数えるのに使う。 */
+export function monthStart(now = Date.now()) {
+  const d = new Date(now);
+  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+}
+
 // 「この操作は必ず人間の承認を通す」表。risk は表示の強さに使う。
 export const REQUIRE_APPROVAL = {
   send: { label: 'メール・メッセージの送信', risk: 'high' },
@@ -29,7 +53,7 @@ export function hasPermission(employee, permission) {
  * 実行してよいか判定する。
  * @returns {{allowed:boolean, needsApproval:boolean, reason:string, risk:string}}
  */
-export function checkAction({ employee, action, settings = {} }) {
+export function checkAction({ employee, action, settings = {}, spentThisMonth = 0 }) {
   const rule = REQUIRE_APPROVAL[action];
 
   if (!rule) {
@@ -54,8 +78,18 @@ export function checkAction({ employee, action, settings = {} }) {
     };
   }
 
-  // コストのかかる実行だけは、設定で自動承認にできる（少額のため）
+  // コストのかかる実行だけは、設定で自動承認にできる（少額のため）。
+  // ただし **今月の上限に近づいたら、自動承認でも必ず確認へ戻す**。
+  // 自動承認を入れた瞬間に歯止めが無くなる状態を作らないため。
   if (action === 'costly' && settings.autoApproveCost) {
+    if (overMonthlyCap(settings, spentThisMonth)) {
+      return {
+        allowed: true,
+        needsApproval: true,
+        reason: `今月のAI費用の上限（$${monthlyCap(settings)}）に達しています`,
+        risk: 'high',
+      };
+    }
     return { allowed: true, needsApproval: false, reason: '設定で自動承認', risk: rule.risk };
   }
 

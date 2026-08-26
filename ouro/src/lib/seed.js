@@ -1,12 +1,13 @@
 // 初期データ。起動時に1度だけ「会社を設立」する。
 //
-// 1役職につき3席（seatsPerRole）が初期値。**定数ではない**ので
+// 1つの組（役職 × ジャンル）につき3席（seatsPerGenre）が初期値。**定数ではない**ので
 // あとから増席できる（hireEmployee({roleId, seat:4}) だけで足りる）。
 
 import { newId } from './id.js';
 import { DEPARTMENTS, ROLES } from '../data/roles.js';
 import { initialPresets, presetEmployee } from '../data/employees.js';
-import { nextSeat, DEFAULT_SEATS_PER_ROLE } from './seats.js';
+import { nextSeat } from './seats.js';
+import { DEFAULT_SEATS_PER_GENRE } from '../data/genres.js';
 import { makeSettings } from './defaults.js';
 import { DEFAULT_GENRE_ID } from '../data/genres.js';
 import { DEFAULT_PLAN_ID } from '../data/plans.js';
@@ -15,7 +16,7 @@ import { SCOPES } from './memory.js';
 
 // 席を数える処理と設定の初期値は、起動時に読まれる画面でも使うので別ファイルにある
 // （新項目04）。ここから読めるよう、そのまま出し直す。
-export { DEFAULT_SEATS_PER_ROLE, nextSeat, seatsOf, isGenreFull } from './seats.js';
+export { DEFAULT_SEATS_PER_GENRE, nextSeat, seatsOf, isGenreFull } from './seats.js';
 export { makeSettings };
 
 export function makeCompany(name = 'あなたのAI会社') {
@@ -25,7 +26,7 @@ export function makeCompany(name = 'あなたのAI会社') {
     ownerName: 'オーナー',
     foundedAt: Date.now(),
     planId: DEFAULT_PLAN_ID,
-    seatsPerRole: DEFAULT_SEATS_PER_ROLE, // 1組（役職×ジャンル）あたりの席数
+    seatsPerGenre: DEFAULT_SEATS_PER_GENRE, // 1組（役職×ジャンル）あたりの席数
     limitOverrides: {},
     motto: 'AIを使うのではなく、AIを雇う。',
   };
@@ -74,7 +75,7 @@ export function makeEmployee(preset, extra = {}) {
 /** 起動時の一式。 */
 export function seedAll(companyName) {
   const company = makeCompany(companyName);
-  const employees = initialPresets(company.seatsPerRole).map((p) => makeEmployee(p));
+  const employees = initialPresets(company.seatsPerGenre).map((p) => makeEmployee(p));
   return {
     company,
     departments: DEPARTMENTS.map((d) => ({ ...d })),

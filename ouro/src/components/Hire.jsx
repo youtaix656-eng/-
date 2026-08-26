@@ -30,7 +30,7 @@ export default function Hire({ store, initialRoleId, go }) {
     };
   }, []);
   const genres = allGenres(store.genres);
-  const seatsPerGenre = store.company?.seatsPerRole || 3;
+  const seatsPerGenre = store.company?.seatsPerGenre || 3;
 
   const limit = employeeLimit(store.company?.planId, store.company?.limitOverrides);
   const full = store.activeEmployees.length >= limit;

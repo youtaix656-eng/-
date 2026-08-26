@@ -186,7 +186,7 @@ export default function Toc({ store, go }) {
 function OrgIndex({ store, go }) {
   const [roleId, setRoleId] = useState('researcher');
   const genres = allGenres(store.genres);
-  const seatsPerGenre = store.company?.seatsPerRole || 3;
+  const seatsPerGenre = store.company?.seatsPerGenre || 3;
   const role = ROLES.find((r) => r.id === roleId);
 
   return (

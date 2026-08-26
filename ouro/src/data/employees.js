@@ -4,7 +4,7 @@
 //
 // 「1つの役職 × 3席」が初期構成（ジャンルは汎用）。同じ役職でも分野が違えば
 // 別の組として3席ずつ雇える（例：リサーチャー×医療で3人、リサーチャー×副業で3人）。
-// 席数は company.seatsPerGenre の初期値でしかなく、増席できる。
+// 席数は company.seatsPerGenre の初期値でしかなく、増席できる（4席目以降も雇える）。
 
 import { ROLES } from './roles.js';
 import { DEFAULT_GENRE_ID, DEFAULT_SEATS_PER_GENRE, genreById, allGenres } from './genres.js';
