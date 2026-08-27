@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Card, Field, SectionTitle, Row, Empty } from './ui.jsx';
-import { notesOf } from '../lib/memory.js';
+import { notesOf } from '../lib/notes.js';
 import { personalAttack, rephraseHint } from '../lib/guard.js';
 import { roleById, departmentById } from '../data/roles.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';

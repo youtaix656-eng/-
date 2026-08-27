@@ -206,47 +206,13 @@ export function buildContext({
     parts.push(`## この仕事の補足\n${trimTail(task.context, CONTEXT_LIMITS.taskContext)}`);
   }
 
-  return { text: parts.join('\n\n'), layers, knowledgeIds: rel.map((k) => k.id), hasUntrusted };
+  // 層ごとの文字数も残す。**読ませすぎは、入れた本人にしか見えない。**
+  // 「たくさん読ませたのに答えが雑になった」を後から追えるようにしておく。
+  const withChars = layers.map((l, i) => ({ ...l, chars: (parts[i] || '').length }));
+  const text = parts.join('\n\n');
+  return { text, layers: withChars, chars: text.length, knowledgeIds: rel.map((k) => k.id), hasUntrusted };
 }
 
-// ── 社員を育てる（改善ログ）──
-//
-// **ここは長いあいだ「読むだけ」だった。** buildContext は memory.notes を
-// 読んでいるのに、書き込む場所がコードのどこにも無く、いつも空のままだった。
-// 「①ミス → ②ルール化 → ③次回改善」を回すには、書く側が要る。
-//
-// 会社全体の決まりは lib/rules.js（company.rules）、
-// **この社員にだけ効かせたいこと**はここ、と分ける。
-
-export const MAX_NOTES = 20;
-export const MAX_NOTE_LEN = 120;
-
-export function makeNote(text, taskId = null) {
-  return {
-    id: `note_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-    text: String(text || '').trim().slice(0, MAX_NOTE_LEN),
-    at: Date.now(),
-    taskId,
-  };
-}
-
-/** 社員の記憶に1行足した結果を返す（社員そのものは変えない）。 */
-export function addNote(employee, text, taskId = null) {
-  const note = makeNote(text, taskId);
-  if (!note.text) return notesOf(employee);
-  const cur = notesOf(employee).filter((n) => (n.text || n) !== note.text);
-  // 古いものから落とす。プロンプトに入るのは末尾5件（buildContext）。
-  return [...cur, note].slice(-MAX_NOTES);
-}
-
-export function removeNote(employee, noteId) {
-  return notesOf(employee).filter((n) => n.id !== noteId);
-}
-
-export function notesOf(employee) {
-  const notes = (employee && employee.memory && employee.memory.notes) || [];
-  // 古い形（ただの文字列）にも id を付けて返すが、**呼ぶたびに変えてはいけない**。
-  // 変わると「忘れさせる」が一致せず何も起きないし、画面も毎回描き直しになる。
-  // 位置と中身から決まる id にする。
-  return notes.filter(Boolean).map((n, i) => (typeof n === 'string' ? { id: `legacy_${i}`, text: n, at: 0, taskId: null } : n));
-}
+// 社員の記憶（改善ログ）は `lib/notes.js` へ分けた（起動時に読む量を減らすため）。
+// これまでどおり `memory.js` からも読めるように再輸出しておく。
+export { MAX_NOTES, MAX_NOTE_LEN, makeNote, addNote, removeNote, notesOf } from './notes.js';

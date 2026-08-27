@@ -37,7 +37,7 @@ const dist = join(root, 'dist');
 // （目次・予定と同じ扱い。押す前に先読みするので待ちは実質ゼロ）。
 // 117.9KB → 115.8KB。**目安は上げずに下げている**——次に足すときも、
 // まず「起動時から外せるもの」を探すこと。
-const WARN_KB = 111;
+const WARN_KB = 110;
 const MAX_KB = 120;
 
 function eagerAssets(html) {

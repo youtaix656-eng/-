@@ -8,6 +8,7 @@ import { roleById } from '../data/roles.js';
 import { workflowById } from '../data/workflows.js';
 import { availableProviders } from '../lib/providers/index.js';
 import { estimateRun, estimateLine } from '../lib/estimate.js';
+import { reqReview, reqLine, hitLabel, REQ_FIELDS } from '../lib/req.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { suggestPlan, MIN_REQUEST } from '../lib/suggest.js';
 import Portrait from './Portrait.jsx';
@@ -343,6 +344,10 @@ export default function Compose({ store, preset = {}, go }) {
       </details>
       )}
 
+      {mode === 'manual' && request.trim().length >= MIN_REQUEST && (
+        <ReqCard request={request} spec={spec} setSpec={setSpec} />
+      )}
+
       {/* 新項目26：押した瞬間に待ちの見た目にする。二度押しで仕事が2つできるのを防ぐ。 */}
       {mode === 'manual' && (
         <Action
@@ -360,6 +365,61 @@ export default function Compose({ store, preset = {}, go }) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * 押す前に、要件で足りていないものを見せる。
+ *
+ * 作る側の値段はもう下がったので、詰まるのは上流。**曖昧なまま押すと、
+ * 薄い成果が返ってきて、作り直すぶんの料金がまた掛かる。**
+ * ただし**止めない**——薄いまま進むかどうかは人が決めること。
+ * AIは呼ばない（語の一致だけ）。
+ */
+function ReqCard({ request, spec, setSpec }) {
+  const [open, setOpen] = useState(false);
+  const review = reqReview({ request, spec });
+  if (review.level === 'good') return null;
+
+  return (
+    <Card glyph="◱" title={`要件（${review.count}／${review.total}）`}>
+      <p className="muted" style={{ marginTop: -6 }}>{reqLine(review)}</p>
+      {review.filled.map((f) => (
+        <p key={f.id} className="muted" style={{ fontSize: 12, margin: '2px 0' }}>
+          ✓ {f.label}{hitLabel(review, f.id) ? `（${hitLabel(review, f.id)}）` : ''}
+        </p>
+      ))}
+      {review.missing.map((f) => (
+        <p key={f.id} className="muted" style={{ fontSize: 12, margin: '2px 0' }}>
+          ・{f.label} — {f.why}
+        </p>
+      ))}
+      <button type="button" className="btn block" onClick={() => setOpen(!open)}>
+        {open ? '閉じる' : '足りないものを埋める'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          {review.missing.filter((f) => f.spec).map((f) => (
+            <Field key={f.id} label={f.label} hint={f.hint}>
+              <input
+                className="input"
+                value={spec[f.spec] || ''}
+                onChange={(e) => setSpec({ ...spec, [f.spec]: e.target.value })}
+              />
+            </Field>
+          ))}
+          {review.missing.some((f) => !f.spec) && (
+            <p className="muted" style={{ fontSize: 12.5 }}>
+              {review.missing.filter((f) => !f.spec).map((f) => f.label).join('・')}は、
+              上の依頼文に1行足してください（例：{review.missing.filter((f) => !f.spec)[0].hint}）。
+            </p>
+          )}
+        </div>
+      )}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        埋めなくても依頼できます。ここは関門ではなく、押す前に見えるようにしているだけです。
+      </p>
+    </Card>
   );
 }
 

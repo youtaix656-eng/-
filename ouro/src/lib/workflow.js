@@ -7,7 +7,7 @@ import { newId } from './id.js';
 import { planSteps, titleFor, detectNeeds } from './dispatcher.js';
 import { roleById } from '../data/roles.js';
 import { buildHandoff } from './handoff.js';
-import { parseChecklist, checkInstruction } from './checks.js';
+import { parseChecklist, checkInstruction, CHECK_ROLE_IDS } from './checks.js';
 
 export const TASK_STATUS = {
   draft: '下書き',
@@ -86,9 +86,22 @@ export function createTask({
   // 承認と同じ理由で maxSteps では切り落とさない
   //（「上限に達したので完成の確認を省いた」が起きてはいけない）。
   const checkItems = parseChecklist(doneWhen);
-  const checker = checkItems.length && assign ? assign('reviewer', chosen.length) : null;
+  // テスターが居ればテスターに、居なければレビュアーに。
+  // 役職 id をここに並べない（`checks.CHECK_ROLE_IDS` が単一の正）。
+  let checker = null;
+  let checkRoleId = CHECK_ROLE_IDS[CHECK_ROLE_IDS.length - 1];
+  if (checkItems.length && assign) {
+    for (const rid of CHECK_ROLE_IDS) {
+      const e = assign(rid, chosen.length);
+      if (e) {
+        checker = e;
+        checkRoleId = rid;
+        break;
+      }
+    }
+  }
   const withCheck = checker
-    ? [...chosen, { p: { roleId: 'reviewer', instruction: checkInstruction(checkItems), kind: 'check' }, employee: checker }]
+    ? [...chosen, { p: { roleId: checkRoleId, instruction: checkInstruction(checkItems), kind: 'check' }, employee: checker }]
     : chosen;
 
   // 確認の手順は**必ず単独で最後**。番号を i（並び順）にすると、
@@ -201,6 +214,8 @@ export function applyStepResult(task, stepId, result, handoffMode = 'compact') {
       cost: result.cost || 0,
       citations: result.citations || [],
       usedKnowledgeIds: result.usedKnowledgeIds || [],
+      layers: result.layers || [],
+      contextChars: result.contextChars || 0,
       finishedAt: Date.now(),
       error: result.error || (empty ? 'AIから空の応答が返りました' : null),
     };

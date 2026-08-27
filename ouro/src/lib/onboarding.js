@@ -8,7 +8,7 @@
 // 済んだものは自動で消え、7つ全部済むとこの案内自体が出なくなる。
 
 import { rulesFilled } from './rules.js';
-import { notesOf } from './memory.js';
+import { notesOf } from './notes.js';
 
 /**
  * @typedef {{id:string, day:number, title:string, why:string, view:string, arg?:any, label:string}} Step
