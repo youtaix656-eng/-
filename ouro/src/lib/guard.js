@@ -23,10 +23,23 @@ export const PROMISE_PATTERNS = [
  * @returns {{label:string, phrase:string}[]} 重複は畳む
  */
 export function checkPromises(text) {
+  return scan(text, PROMISE_PATTERNS).map(({ label, phrase }) => ({ label, phrase }));
+}
+
+/**
+ * 決まった数の型を順に当てる。
+ *
+ * **途中で return しないこと。** 分類ごとに上限で打ち切ると、
+ * 先の分類でいっぱいになった時に後ろの分類（人格否定など）が
+ * 一度も調べられないまま終わる。全部当ててから件数を絞る。
+ */
+const MAX_HITS = 12;
+
+function scan(text, patterns) {
   const src = String(text || '');
   const out = [];
   const seen = new Set();
-  for (const p of PROMISE_PATTERNS) {
+  for (const p of patterns) {
     const re = new RegExp(p.re.source, 'g');
     let m = re.exec(src);
     while (m) {
@@ -34,11 +47,86 @@ export function checkPromises(text) {
       const key = `${p.label}:${phrase}`;
       if (!seen.has(key)) {
         seen.add(key);
-        out.push({ label: p.label, phrase });
+        out.push({ label: p.label, phrase, why: p.why || '' });
       }
-      if (out.length >= 12) return out;
+      // 空文字に当たると進まないので、必ず1つ進める
+      if (m.index === re.lastIndex) re.lastIndex += 1;
       m = re.exec(src);
     }
   }
-  return out;
+  return out.slice(0, MAX_HITS);
+}
+
+// ── 人を傷つける表現の見張り（新規）──
+//
+// Ouro が作る文章は、SNS投稿・LINE文・メール案として**実在の人に届く**。
+// 加害が起きる経路はここしかない（AI社員は傷つかない）。
+//
+// 確約の見張りと同じ考え方で、**止めない・書き換えない**。
+// 誤検知で書けなくなる方が害が大きいので、「ここは見直す所です」と出すだけ。
+// 判定はAIを呼ばず、語の一致だけで行う（費用ゼロ）。
+
+export const RESPECT_PATTERNS = [
+  // 容姿・体型・年齢を、仕事と関係なく持ち出すもの
+  {
+    re: /(?:ぽっちゃり|デブ|ブス|ハゲ|チビ|太っ(?:た|てる)|痩せ(?:すぎ|てる))/g,
+    label: '体型・容姿への言及',
+    why: '本人が変えられないことを売り文句や評価に使わない。',
+  },
+  {
+    re: /(?:おばさん|おじさん|ババア|ジジイ|年寄り|若い子|女の子|男の子)(?![ぁ-んァ-ヶ]*(?:向け|世代))/g,
+    label: '年齢・性別の決めつけ',
+    why: '年齢や性別で人をひとまとめにしない。必要なら「40〜60代」のように事実で書く。',
+  },
+  {
+    re: /(?:女性らしい|男らしい|女だから|男だから|女性なら|主婦なら)/g,
+    label: '性別による決めつけ',
+    why: '性別から性格や役割を決めない。',
+  },
+  // 相手の判断を奪う書き方（押し売り）
+  {
+    re: /(?:今だけ|今しかない|今すぐ決め|決めないと損|やらないと損|後悔します)/g,
+    label: '急かして決めさせる書き方',
+    why: '考える時間を奪う書き方は、あとで信用を失う。',
+  },
+  // 人格を否定する言い方（社員への差し戻し・お客さんへの文の両方）
+  {
+    re: /(?:センスがない|レベルが低い|使えない|無能|話にならない|やる気がない|向いていない)/g,
+    label: '人格を否定する言い方',
+    why: '直すのは人ではなく成果物。「どこを・どう直すか」で書く。',
+  },
+  // 相手を下に見る言い方
+  {
+    re: /(?:〜?してあげ(?:ます|ました|る)|教えてあげ|やってあげ)/g,
+    label: '相手を下に見る言い方',
+    why: '「〜してあげる」は上下をつける。「〜します」で十分。',
+  },
+];
+
+/**
+ * 本文に含まれる「人を傷つけうる表現」を拾う。
+ * @returns {{label:string, phrase:string, why:string}[]}
+ */
+export function checkRespect(text) {
+  return scan(text, RESPECT_PATTERNS);
+}
+
+/**
+ * 社員への指示（覚えさせる1行）が、人格否定になっていないか。
+ *
+ * **ここがいちばん効く場所**だと思う——社員は傷つかないが、
+ * 「使えない」と書く癖は、そのまま人に向く癖になる。
+ * 止めはせず、行動で書き直すよう促すだけ。
+ */
+export function personalAttack(text) {
+  // **checkRespect の結果から探さない。** 件数の上限で落ちることがあるので、
+  // その型だけを直接当てる。
+  const p = RESPECT_PATTERNS.find((x) => x.label === '人格を否定する言い方');
+  const m = p ? new RegExp(p.re.source).exec(String(text || '')) : null;
+  return m ? { label: p.label, phrase: m[0].trim(), why: p.why } : null;
+}
+
+/** 言い換えの下書き（人が直す前提。そのまま使わせない）。 */
+export function rephraseHint(phrase) {
+  return `「${phrase}」ではなく、**何を・どう変えてほしいか**で書いてください（例：「見出しは1つ200字まで」）。`;
 }

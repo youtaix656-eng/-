@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Card, Field, SectionTitle, Row, Empty } from './ui.jsx';
 import { notesOf } from '../lib/memory.js';
+import { personalAttack, rephraseHint } from '../lib/guard.js';
 import { roleById, departmentById } from '../data/roles.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { TOOLS, toolById } from '../data/tools.js';
@@ -272,6 +273,9 @@ function TeachCard({ employee, store }) {
           className="btn primary"
           disabled={!draft.trim()}
           onClick={() => {
+            // 人格否定のまま覚えさせない（止めはせず、1度だけ書き直しを促す）
+            const hit = personalAttack(draft);
+            if (hit && !window.confirm(`${rephraseHint(hit.phrase)}\n\nこのまま覚えさせますか？`)) return;
             store.teachEmployee(employee.id, draft);
             setDraft('');
           }}

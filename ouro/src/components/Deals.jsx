@@ -9,6 +9,7 @@ import { JOB_TEMPLATES, easiestFirst, templateById } from '../data/jobTemplates.
 import { DEAL_STATUS, revenueSummary, upcomingDeals, formatMoney, dealAiCost } from '../lib/revenue.js';
 import { relTime } from '../lib/format.js';
 import { useAllTasks } from './useAllTasks.js';
+import { checkPersonal, CLIENT_HINT } from '../lib/privacy.js';
 
 export default function Deals({ store, go, toast, highlight = null }) {
   // 古い仕事も要る画面なので、残りを読み足す
@@ -85,9 +86,15 @@ export default function Deals({ store, go, toast, highlight = null }) {
           <Field label="案件名">
             <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
-          <Field label="依頼元（任意）">
-            <input className="input" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
+          <Field label="依頼元（任意）" hint={CLIENT_HINT}>
+            <input
+              className="input"
+              value={form.client}
+              placeholder="例：Aさん／〇〇整体院"
+              onChange={(e) => setForm({ ...form, client: e.target.value })}
+            />
           </Field>
+          <PersonalWarning text={`${form.client} ${form.notes}`} />
           <Field label="金額（円）">
             <input
               className="input"
@@ -307,6 +314,29 @@ export function DealDetail({ store, dealId, go }) {
           削除
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * お客さん個人を特定できるものが入っていないか（新規）。
+ *
+ * Ouro のデータは端末内にしか無いが、**書き出し（バックアップ）や CSV は
+ * 端末の外へ出る**。落とした時に取り返しがつかないのはここなので、
+ * 書いている最中に気づけるようにする。止めはしない。
+ */
+function PersonalWarning({ text }) {
+  const hits = checkPersonal(text);
+  if (!hits.length) return null;
+  return (
+    <div className="card tight" style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 14 }}>
+        ⚠ 個人を特定できるものが {hits.length} か所あります
+      </div>
+      <div className="muted" style={{ marginTop: 4 }}>
+        {hits.map((h) => `${h.phrase}（${h.label}）`).join('・')}
+      </div>
+      <div className="muted">{CLIENT_HINT}</div>
     </div>
   );
 }

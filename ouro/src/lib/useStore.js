@@ -18,6 +18,12 @@ import {
   assembleResult,
   retryFailed,
   redoFrom,
+  flagTask as flagTaskFn,
+  unflagTask,
+  isFlagged,
+  overRedoLimit,
+  resetRedoCount,
+  REDO_LIMIT,
   finalOutput,
   holdTask as holdTaskFn,
   resumeTask as resumeTaskFn,
@@ -855,6 +861,9 @@ export function useStore() {
     (taskId) => {
       const task = stateRef.current.tasks.find((t) => t.id === taskId);
       if (!task) return null;
+      // 印のせいで止めた仕事は、ここからは解かない（印を外す方から解く）。
+      // ここで解けてしまうと、印が付いたまま提出物の画面が戻ってくる。
+      if (isFlagged(task)) return task;
       const next = resumeTaskFn(task);
       if (next === task) return task;
       log({ actor: 'user', action: 'taskResumed', target: task.title });
@@ -872,6 +881,8 @@ export function useStore() {
     async (taskId, text, waive = false) => {
       const task = stateRef.current.tasks.find((t) => t.id === taskId);
       if (!task) return null;
+      // 外へ出せないと印を付けた仕事は、共有もしない（掲示板へ戻してしまうため）
+      if (isFlagged(task)) return task;
       const line = String(text || '').trim();
       if (!waive && !line) return task;
       if (line) {
@@ -1070,6 +1081,8 @@ export function useStore() {
       let sharedLine = updated.shared || '';
       for (const { step, employee, result } of results) {
         if (result.error || step.kind === 'check') continue;
+        // 外へ出せないと印を付けた仕事の中身は、掲示板にも回さない
+        if (isFlagged(updated)) continue;
         const line = tw.extractShare(result.text);
         if (!line) continue;
         sharedLine = sharedLine || line;
@@ -1115,7 +1128,8 @@ export function useStore() {
       // キーを入れる前に何度か試すたびに中身の無い知識が積まれ、
       // 件数・成長のグラフ・関連度の判定を薄めてしまうため。
       // 型そのものは仕事の中に残るので、必要なら結果画面から手で知識にできる。
-      if (updated.status === 'done') {
+      // 印の付いた仕事は知識にしない（加害的な文章を共通記憶にしない）
+      if (updated.status === 'done' && !isFlagged(updated)) {
         // **完成条件の確認（kind:'check'）を「成果」として扱わない。**
         // 確認の手順は ○× の並びを返すだけなので、これを元に知識を作ると
         // 担当も出典も来歴も、確認役のものになってしまう。
@@ -1210,6 +1224,8 @@ export function useStore() {
   saveTaskAsKnowledgeRef.current = (taskId) => {
     const t = stateRef.current.tasks.find((x) => x.id === taskId);
     if (!t) return null;
+    // 外へ出せないと印を付けた仕事は、手でも知識にできない
+    if (isFlagged(t)) return null;
     // 確認の手順は成果ではないので、担当としても選ばない
     const step = [...(t.steps || [])].reverse().find((x) => x.status === 'done' && x.output && x.kind !== 'check');
     if (!step) return null;
@@ -1811,11 +1827,70 @@ export function useStore() {
     [askOnce]
   );
 
+  /**
+   * この成果物は外へ出せない、と印を付ける（新規）。
+   * 印を付けたものは知識にも掲示板にも入らず、仕事は保留になる。
+   */
+  const flagTask = useCallback(
+    async (taskId, reason) => {
+      const s = stateRef.current;
+      const task = s.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+
+      // **印を付けるだけでは足りない。** 実行が終わった時点で、成果は既に
+      // 知識と掲示板に入っている。ここで実際に取り除かないと、
+      // 「知識にも掲示板にも入りません」という画面の説明が嘘になる。
+      const rest = s.knowledge.filter((k) => k.taskId !== taskId);
+      if (rest.length !== s.knowledge.length) {
+        const gone = s.knowledge.filter((k) => k.taskId === taskId);
+        put(KEYS.knowledge, rest);
+        // その知識だけが参照していた出典も一緒に消す（deleteKnowledge と同じ扱い）
+        const orphans = new Set(gone.flatMap((k) => orphanSourceIds(k, rest)));
+        if (orphans.size) put(KEYS.sources, s.sources.filter((src) => !orphans.has(src.id)));
+      }
+      const board = (s.board || []).filter((post) => post.taskId !== taskId);
+      if (board.length !== (s.board || []).length) {
+        stateRef.current = { ...stateRef.current, board };
+        setState(stateRef.current);
+        touchedRef.current.add(KEYS.board);
+        if (hydratedRef.current) save(KEYS.board, board, 'low');
+      }
+
+      const next = flagTaskFn(task, reason);
+      log({ actor: 'user', action: 'taskFlagged', target: task.title, detail: String(reason || '').slice(0, 120) });
+      // 共有の1行も取り下げる（掲示板から消したので、手元にも残さない）
+      return patchTask({ ...next, shared: '', shareWaived: true });
+    },
+    [patchTask, log, put]
+  );
+
+  const unflagTaskAction = useCallback(
+    (taskId) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      return patchTask(unflagTask(task));
+    },
+    [patchTask]
+  );
+
+  /** やり直しの回数を数え直す（「それでもやり直す」）。 */
+  const allowMoreRedo = useCallback(
+    (taskId) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      return patchTask(resetRedoCount(task));
+    },
+    [patchTask]
+  );
+
   /** その手順からやり直す（補った材料を活かすため）。 */
   const redoStep = useCallback(
     async (taskId, stepId) => {
       const task = stateRef.current.tasks.find((t) => t.id === taskId);
       if (!task) return null;
+      // **際限のない差し戻しは型として持たない。** 上限に達したら、
+      // 続ける前に人が見る（「それでもやり直す」で抜けられる）。
+      if (overRedoLimit(task)) return { blocked: true, redoLimit: REDO_LIMIT };
       const next = redoFrom(task, stepId);
       if (next === task) return task;
       patchTask(next);
@@ -1951,6 +2026,9 @@ export function useStore() {
     patchTask,
     setTaskMeta,
     shareTask,
+    flagTask,
+    unflagTask: unflagTaskAction,
+    allowMoreRedo,
     teachEmployee,
     forgetEmployeeNote,
     putFunnelEntry,

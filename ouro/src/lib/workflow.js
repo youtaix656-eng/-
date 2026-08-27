@@ -364,6 +364,31 @@ export function isRunnable(task) {
  *
  * やり直す範囲ぶんのAI費用がもう一度かかるので、押す前に画面で件数を伝えること。
  */
+/**
+ * やり直しの上限（新規）。
+ *
+ * **際限のない差し戻しは、人間の職場でも典型的なパワハラの形**なので、
+ * 型として持たない。3回やり直しているなら、指示の方に無理があるか、
+ * ここは人が直した方が早い、というどちらかである可能性が高い。
+ *
+ * 止めはするが、行き止まりにはしない——「それでもやり直す」で必ず抜けられる
+ * （抜けたら数え直す）。AI費用の歯止めにもなる。
+ */
+export const REDO_LIMIT = 3;
+
+export function redoCountOf(task) {
+  return Number((task && task.redoCount) || 0);
+}
+
+export function overRedoLimit(task) {
+  return redoCountOf(task) >= REDO_LIMIT;
+}
+
+/** 「それでもやり直す」で数え直す。 */
+export function resetRedoCount(task) {
+  return { ...task, redoCount: 0 };
+}
+
 export function redoFrom(task, stepId) {
   const steps = task.steps || [];
   const idx = steps.findIndex((s) => s.id === stepId);
@@ -392,8 +417,57 @@ export function redoFrom(task, stepId) {
     finishedAt: null,
     // 提出物が変わるので、拾い直すために判断は白紙に戻す
     decisions: [],
+    // 何度やり直したか。上限を超えたら、続ける前に人が見る（REDO_LIMIT）。
+    redoCount: redoCountOf(task) + 1,
     totalCost: next.reduce((sum, s) => sum + (s.cost || 0), 0),
   };
+}
+
+/**
+ * 「この成果物は外へ出せない」と印を付ける（新規）。
+ *
+ * 印を付けたものは、知識にも掲示板にも入れない——
+ * **加害的な文章を会社の共通記憶にしない**ため。
+ * 仕事は保留になり、理由が残る。
+ */
+export const FLAG_HOLD_PREFIX = '外へ出せない内容として止めました：';
+
+export function flagTask(task, reason = '') {
+  if (!task) return task;
+  return {
+    ...task,
+    flagged: { reason: String(reason || '').slice(0, 200), at: Date.now() },
+    status: task.status === 'cancelled' ? task.status : 'on_hold',
+    holdReason: `${FLAG_HOLD_PREFIX}${String(reason || '').slice(0, 120)}`,
+    heldFrom: task.status,
+    heldAt: Date.now(),
+  };
+}
+
+/**
+ * 印を外す。
+ *
+ * **保留も一緒に解く。** 印のせいで保留にしたのに印だけ外すと、
+ * 「外へ出せない内容として止めました」という理由だけが残った保留になり、
+ * 提出物の画面も出ないまま行き止まりになる（実際に踏んだ）。
+ * 自分で付けた保留（別の理由）は触らない。
+ */
+export function unflagTask(task) {
+  if (!task || !task.flagged) return task;
+  const byFlag = task.status === 'on_hold' && String(task.holdReason || '').startsWith(FLAG_HOLD_PREFIX);
+  if (!byFlag) return { ...task, flagged: null };
+  return {
+    ...task,
+    flagged: null,
+    status: task.heldFrom || 'done',
+    holdReason: '',
+    heldFrom: null,
+    heldAt: null,
+  };
+}
+
+export function isFlagged(task) {
+  return Boolean(task && task.flagged && task.flagged.at);
 }
 
 /** その手順からやり直すと、いくつの手順が動くか（費用を伝えるため）。 */

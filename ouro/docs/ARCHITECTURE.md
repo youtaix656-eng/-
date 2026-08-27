@@ -273,6 +273,25 @@ Pitfall = { id, roleId, roleName, text, taskTitle, employeeName, count, at }  //
 
 ---
 
+### 6-4. 加害を起こさない（`guard.js` / `privacy.js`）
+
+```js
+Task.flagged = { reason, at }   // 「外へ出せない」印。付けた時点で知識・掲示から取り除く
+Task.redoCount                  // やり直した回数（REDO_LIMIT=3 で一度止める）
+```
+
+- 見張りは **止めない・書き換えない**。`checkPromises`（確約）／`checkRespect`（傷つけうる表現）／
+  `checkPersonal`（個人を特定できるもの）はどれも判定を返すだけ
+- **分類ごとに件数で打ち切らない**（後ろの分類が一度も当たらなくなる）。
+  `personalAttack` はその型を直接当てる
+- **後読み（lookbehind）を使わない**（古い Safari で構文エラー→チャンクごと読めなくなる）
+- `flagTask` は印を付けるだけでなく、**知識・孤児の出典・掲示・共有の1行を実際に消す**。
+  印が付いている間は共有も知識化もできず、`resumeTask` からは解けない
+- `FIXED_RULES` に「人ではなく成果物を指す」「個人を特定できるものは書かない」の2行。
+  **足したルールでは外せない**
+
+---
+
 ## 7. Knowledge Base 設計
 
 ```js

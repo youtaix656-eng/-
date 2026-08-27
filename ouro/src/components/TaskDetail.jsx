@@ -15,7 +15,9 @@ import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
 import { useAllTasks } from './useAllTasks.js';
 import { openDecisions } from '../lib/decisions.js';
-import { checkPromises } from '../lib/guard.js';
+import { checkPromises, checkRespect, personalAttack, rephraseHint } from '../lib/guard.js';
+import { checkPersonal } from '../lib/privacy.js';
+import { isFlagged, overRedoLimit, REDO_LIMIT } from '../lib/workflow.js';
 import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js';
 import { ticketOf, dueStateOf, DUE_LABELS, needsShare } from '../lib/ledger.js';
 import { checkSummary } from '../lib/checks.js';
@@ -60,6 +62,8 @@ export default function TaskDetail({ store, taskId, go }) {
       <LedgerCard task={task} store={store} meta={meta} setMeta={setMeta} />
 
       {openDecisions(task).length > 0 && <DecisionCard task={task} store={store} />}
+
+      <FlaggedCard task={task} store={store} />
 
       <ShareCard task={task} store={store} go={go} />
 
@@ -251,6 +255,7 @@ export default function TaskDetail({ store, taskId, go }) {
                 </button>
               )}
               <TeachButton task={task} store={store} />
+              <FlagButton task={task} store={store} />
               {!knowledge[0] && isTemplate && (
                 <button
                   type="button"
@@ -377,9 +382,13 @@ function LedgerCard({ task, store, meta, setMeta }) {
               期限・次の対応を書く
             </button>
             {task.status === 'on_hold' ? (
-              <button type="button" className="btn small primary" onClick={() => store.resumeTask(task.id)}>
-                保留を解く
-              </button>
+              // 印のせいで止まっている時は、ここからは解かない
+              // （印を外す方から解く。印だけ残った状態を作らないため）
+              isFlagged(task) ? null : (
+                <button type="button" className="btn small primary" onClick={() => store.resumeTask(task.id)}>
+                  保留を解く
+                </button>
+              )
             ) : (
               task.status !== 'done' &&
               task.status !== 'cancelled' && (
@@ -493,22 +502,111 @@ function Highlights({ text }) {
   );
 }
 
-/** 外へ出す前に、約束になっている表現を知らせる（止めはしない）。 */
+/**
+ * 外へ出す前の見張り（止めはしない・書き換えもしない）。
+ *   ・約束になっている表現（価格・納期・効果）
+ *   ・人を傷つけうる表現（容姿・年齢・性別・急かし・人格否定）
+ *   ・お客さん個人を特定できるもの（連絡先・住所）
+ * どれも AI を呼ばずに、語の一致だけで見ている。
+ */
 function PromiseWarning({ text }) {
-  const hits = checkPromises(text);
-  if (!hits.length) return null;
+  const promises = checkPromises(text);
+  const respect = checkRespect(text);
+  const personal = checkPersonal(text);
+  const total = promises.length + respect.length + personal.length;
+  if (!total) return null;
   return (
     <Card glyph="⚠" title="外へ出す前に確かめてください">
+      {promises.length > 0 && (
+        <>
+          <p className="muted" style={{ marginTop: -6 }}>
+            <strong style={{ color: '#fff' }}>約束</strong>になる表現が {promises.length} か所。
+            価格・納期・効果の確約は、AIではなくあなたが引き受けるところです。
+          </p>
+          <div className="chips" style={{ marginBottom: 10 }}>
+            {promises.map((h) => (
+              <span key={`p:${h.label}:${h.phrase}`} className="chip">
+                {h.phrase}（{h.label}）
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+      {respect.length > 0 && (
+        <>
+          <p className="muted">
+            <strong style={{ color: '#fff' }}>人を傷つけうる表現</strong>が {respect.length} か所。
+            この文章は実在の人に届きます。
+          </p>
+          {respect.map((h) => (
+            <div key={`r:${h.label}:${h.phrase}`} className="card tight" style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 14 }}>
+                「{h.phrase}」<span className="muted">（{h.label}）</span>
+              </div>
+              <div className="muted">{h.why}</div>
+            </div>
+          ))}
+        </>
+      )}
+      {personal.length > 0 && (
+        <>
+          <p className="muted">
+            <strong style={{ color: '#fff' }}>お客さん個人を特定できるもの</strong>が {personal.length} か所。
+            書き出し（バックアップ）やCSVは端末の外へ出ます。呼び名だけにしてください。
+          </p>
+          <div className="chips" style={{ marginBottom: 6 }}>
+            {personal.map((h) => (
+              <span key={`x:${h.label}:${h.phrase}`} className="chip">
+                {h.phrase}（{h.label}）
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * 「この成果物は外へ出せない」。
+ *
+ * **見張りのカードの中に置かないこと。** 見張りは決まった語に当たった時しか
+ * 出ないので、その中に入れると、決まった語に当たらない加害を止められなくなる。
+ * 提出物があれば必ず押せる場所に置く。
+ */
+function FlagButton({ task, store }) {
+  if (!task || !store || isFlagged(task)) return null;
+  return (
+    <button
+      type="button"
+      className="btn small ghost"
+      onClick={() => {
+        const reason = window.prompt('どこが問題か、ひと言で書いてください（記録に残ります）');
+        if (reason === null || !reason.trim()) return;
+        store.flagTask(task.id, reason.trim());
+      }}
+    >
+      この成果物は外へ出せない
+    </button>
+  );
+}
+
+/** 外へ出せないと印を付けた仕事。知識にも掲示板にも入らない。 */
+function FlaggedCard({ task, store }) {
+  if (!isFlagged(task)) return null;
+  return (
+    <Card glyph="⛔" title="外へ出せない内容として止めています">
       <p className="muted" style={{ marginTop: -6 }}>
-        この文章には「約束」になる表現が {hits.length} か所あります。
-        価格・納期・効果の確約は、AIではなくあなたが引き受けるところです。
+        理由：{task.flagged.reason || '（未記入）'}
       </p>
-      <div className="chips">
-        {hits.map((h) => (
-          <span key={`${h.label}:${h.phrase}`} className="chip">
-            {h.phrase}（{h.label}）
-          </span>
-        ))}
+      <p className="muted">
+        この仕事の中身は<strong style={{ color: '#fff' }}>知識にも掲示板にも入りません</strong>。
+        加害的な文章が会社の共通記憶に残らないようにするためです。
+      </p>
+      <div className="btn-row">
+        <button type="button" className="btn small ghost" onClick={() => store.unflagTask(task.id)}>
+          印を外す
+        </button>
       </div>
     </Card>
   );
@@ -649,6 +747,11 @@ function TeachButton({ task, store }) {
           className="btn small primary"
           disabled={!text.trim() || !who}
           onClick={() => {
+            // **ここがいちばん効く場所。** 社員は傷つかないが、
+            // 「使えない」と書く癖は、そのまま人に向く癖になる。
+            // 止めはせず、行動で書き直すよう1度だけ促す。
+            const hit = personalAttack(text);
+            if (hit && !window.confirm(`${rephraseHint(hit.phrase)}\n\nこのまま覚えさせますか？`)) return;
             store.teachEmployee(who, text, task.id);
             setText('');
             setOpen(false);
@@ -741,14 +844,34 @@ function HandoffReview({ task, step, store }) {
               className="btn small primary"
               style={{ marginTop: 8 }}
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 const n = redoCount(task, step.id);
                 if (!window.confirm(`この手順からやり直します。${n}件の手順がもう一度動き、そのぶんAIの利用料がかかります。よろしいですか？`)) return;
-                store.redoStep(task.id, step.id);
+                const r = await store.redoStep(task.id, step.id);
+                // **際限のない差し戻しは型として持たない。**
+                // ただし行き止まりにもしない——「それでもやり直す」で必ず抜けられる。
+                if (r && r.blocked) {
+                  const go = window.confirm(
+                    `この仕事はもう${REDO_LIMIT}回やり直しています。\n\n` +
+                      '指示の方に無理があるか、ここは自分で直した方が早いかもしれません。\n' +
+                      'それでもやり直しますか？'
+                  );
+                  if (go) {
+                    store.allowMoreRedo(task.id);
+                    setMsg(`やり直しの回数を数え直しました。もう一度押してください。`);
+                  } else {
+                    setMsg(`${REDO_LIMIT}回やり直しています。指示を見直すか、自分で直す方が早いかもしれません。`);
+                  }
+                }
               }}
             >
               この手順からやり直す（{redoCount(task, step.id)}件）
             </button>
+          )}
+          {overRedoLimit(task) && (
+            <div className="muted" style={{ marginTop: 4 }}>
+              ※ この仕事は{REDO_LIMIT}回やり直しています。
+            </div>
           )}
         </>
       )}
