@@ -55,6 +55,7 @@ const MnemonicQuiz = lazy(() => import('./components/MnemonicQuiz.jsx'));
 const KeiketsuReverseQuiz = lazy(() => import('./components/KeiketsuReverseQuiz.jsx'));
 const KeiketsuLibrary = lazy(() => import('./components/KeiketsuLibrary.jsx'));
 const KeizetsuIndex = lazy(() => import('./components/KeizetsuIndex.jsx'));
+const KeizetsuTextbook = lazy(() => import('./components/KeizetsuTextbook.jsx'));
 
 function ViewLoading() {
   return (
@@ -561,6 +562,8 @@ export default function App() {
         return <KeiketsuLibrary onToast={showToast} onNavigate={setView} />;
       case 'keizetsuindex':
         return <KeizetsuIndex onNavigate={setView} />;
+      case 'keizetsutextbook':
+        return <KeizetsuTextbook store={store} onNavigate={setView} />;
       case 'mnemonics':
         return <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} />;
       case 'mnemonicquiz':

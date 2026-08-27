@@ -3646,3 +3646,19 @@ code.block {
 .kz-table th { background: #f1f5f9; width: 96px; font-weight: 700; color: #111111; white-space: nowrap; }
 .kz-table td { color: #111111; line-height: 1.6; }
 .kz-hit { background: #fde68a; color: #111111 !important; }
+.inline-note-dark { font-size: 12px; color: #444444; line-height: 1.6; margin: 4px 0; }
+
+/* 経絡経穴 教科書目次（ページ順） */
+.kz-tb-section { padding: 0; overflow: hidden; }
+.kz-tb-head {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+  background: none; border: none; cursor: pointer; padding: 14px 16px; font: inherit; color: #111111;
+}
+.kz-tb-pages { flex: 0 0 auto; font-size: 11px; font-weight: 800; color: #555555; white-space: nowrap; }
+.kz-tb-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; }
+.kz-freq { flex: 0 0 auto; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.kz-freq-hot { background: #fee2e2; color: #b91c1c; }
+.kz-freq-warm { background: #ffedd5; color: #9a3412; }
+.kz-freq-cool { background: #fef9c3; color: #854d0e; }
+.kz-freq-none { background: #f1f5f9; color: #64748b; }
+.kz-tb-section .kz-page-body { padding: 0 16px 16px; }
