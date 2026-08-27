@@ -87,6 +87,9 @@ export default function Compose({ store, preset = {}, go }) {
       workflowId: wf,
       employeeId: 'employeeId' in v ? v.employeeId : employeeId,
       dealId: 'dealId' in v ? v.dealId : dealId,
+      // 事業から依頼した時の紐づけ。**提案では推測しない**
+      // （呼び出し元が決めているものを推測で上書きしない、と同じ理由）。
+      ventureId: preset.ventureId || null,
       context,
       genreId: 'genreId' in v ? v.genreId : genreId,
       dueAt: spec.dueAt ? new Date(spec.dueAt).getTime() : null,

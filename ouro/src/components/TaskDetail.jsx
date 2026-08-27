@@ -15,13 +15,12 @@ import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
 import { useAllTasks } from './useAllTasks.js';
 import { openDecisions } from '../lib/decisions.js';
-import { checkPromises, checkRespect, personalAttack, rephraseHint } from '../lib/guard.js';
-import { checkPersonal } from '../lib/privacy.js';
+import { personalAttack, rephraseHint } from '../lib/guard.js';
+import { prepublishChecks, prepublishLine } from '../lib/prepublish.js';
 import { isFlagged, overRedoLimit, REDO_LIMIT } from '../lib/workflow.js';
 import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js';
 import { ticketOf, dueStateOf, DUE_LABELS, needsShare } from '../lib/ledger.js';
 import { checkSummary } from '../lib/checks.js';
-import { similarOpenings } from '../lib/opening.js';
 
 export default function TaskDetail({ store, taskId, go }) {
   // 古い仕事も要る画面なので、残りを読み足す
@@ -233,8 +232,7 @@ export default function TaskDetail({ store, taskId, go }) {
         <>
           <SectionTitle>会社としての提出物</SectionTitle>
           <CheckCard task={task} />
-          <PromiseWarning text={deliverable} />
-          <SameOpeningWarning task={task} store={store} go={go} />
+          <PrePublishCard task={task} text={deliverable} store={store} go={go} />
           <Card>
             {/* 見出しは「提出物を書いた手順」の本文から拾う（連結文からは拾わない） */}
             <Highlights text={finalOutput(task)} />
@@ -503,66 +501,59 @@ function Highlights({ text }) {
 }
 
 /**
- * 外へ出す前の見張り（止めはしない・書き換えもしない）。
- *   ・約束になっている表現（価格・納期・効果）
- *   ・人を傷つけうる表現（容姿・年齢・性別・急かし・人格否定）
- *   ・お客さん個人を特定できるもの（連絡先・住所）
- * どれも AI を呼ばずに、語の一致だけで見ている。
+ * 出す前チェック（1枚）。
+ *
+ * 見張りは前からあったが、**画面のあちこちにバラバラに出ていた**ので、
+ * 出す直前にどれを見たのか分からなかった。判定は lib/prepublish.js が単一の正。
+ *   ・お客さんの氏名・連絡先（ここだけ止める）
+ *   ・完成条件／確約（価格・納期・効果）／人ではなく成果物を指しているか
+ *   ・書き出しが前と同じでないか／結論から書けているか
+ * どれも AI を呼ばずに、語の一致だけで見ている。**当たらなかった時も出す**
+ * （出ない時だけ静かだと、確かめたのか忘れたのか分からない）。
  */
-function PromiseWarning({ text }) {
-  const promises = checkPromises(text);
-  const respect = checkRespect(text);
-  const personal = checkPersonal(text);
-  const total = promises.length + respect.length + personal.length;
-  if (!total) return null;
+function PrePublishCard({ task, text, store, go }) {
+  const past = (store.knowledge || [])
+    .filter((k) => k.taskId && k.taskId !== task.id && k.body)
+    .slice(0, 30)
+    .map((k) => ({ id: k.id, title: k.title, text: k.body }));
+  const result = prepublishChecks({ text, task, past });
+  const shown = result.items.filter((i) => i.level !== 'skip');
+
   return (
-    <Card glyph="⚠" title="外へ出す前に確かめてください">
-      {promises.length > 0 && (
-        <>
-          <p className="muted" style={{ marginTop: -6 }}>
-            <strong style={{ color: '#fff' }}>約束</strong>になる表現が {promises.length} か所。
-            価格・納期・効果の確約は、AIではなくあなたが引き受けるところです。
-          </p>
-          <div className="chips" style={{ marginBottom: 10 }}>
-            {promises.map((h) => (
-              <span key={`p:${h.label}:${h.phrase}`} className="chip">
-                {h.phrase}（{h.label}）
-              </span>
-            ))}
-          </div>
-        </>
-      )}
-      {respect.length > 0 && (
-        <>
-          <p className="muted">
-            <strong style={{ color: '#fff' }}>人を傷つけうる表現</strong>が {respect.length} か所。
-            この文章は実在の人に届きます。
-          </p>
-          {respect.map((h) => (
-            <div key={`r:${h.label}:${h.phrase}`} className="card tight" style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 14 }}>
-                「{h.phrase}」<span className="muted">（{h.label}）</span>
+    <Card glyph={result.blocked ? '⛔' : result.worst === 'warn' ? '⚠' : '✓'} title="出す前チェック">
+      <p className="muted" style={{ marginTop: -6 }}>{prepublishLine(result)}</p>
+      {shown.map((i) => (
+        <div key={i.id} className="today-item">
+          <span className="rune">{i.level === 'stop' ? '⛔' : i.level === 'warn' ? '⚠' : '✓'}</span>
+          <div className="ti-body">
+            <div className="ti-label">{i.title}</div>
+            <div className="ti-why">{i.level === 'ok' ? i.ok : i.ng}</div>
+            {i.hits.length > 0 && (
+              <div className="chips" style={{ marginTop: 6 }}>
+                {i.hits.map((h, n) => (
+                  i.id === 'opening' && h.id ? (
+                    <button
+                      key={h.id}
+                      type="button"
+                      className="chip"
+                      onClick={() => go('knowledgeDetail', h.id)}
+                    >
+                      {h.phrase}（{h.label}）
+                    </button>
+                  ) : (
+                    <span key={`${i.id}:${h.phrase}:${n}`} className="chip">
+                      {h.phrase}（{h.label}）
+                    </span>
+                  )
+                ))}
               </div>
-              <div className="muted">{h.why}</div>
-            </div>
-          ))}
-        </>
-      )}
-      {personal.length > 0 && (
-        <>
-          <p className="muted">
-            <strong style={{ color: '#fff' }}>お客さん個人を特定できるもの</strong>が {personal.length} か所。
-            書き出し（バックアップ）やCSVは端末の外へ出ます。呼び名だけにしてください。
-          </p>
-          <div className="chips" style={{ marginBottom: 6 }}>
-            {personal.map((h) => (
-              <span key={`x:${h.label}:${h.phrase}`} className="chip">
-                {h.phrase}（{h.label}）
-              </span>
-            ))}
+            )}
           </div>
-        </>
-      )}
+        </div>
+      ))}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        止めるのは個人情報だけです。ほかは「ここは見直す所」と伝えるだけで、書けなくはしません。
+      </p>
     </Card>
   );
 }
@@ -667,38 +658,6 @@ function CheckCard({ task }) {
           直すところが分かっているので、「追加で聞く」から直させると早いです。
         </p>
       )}
-    </Card>
-  );
-}
-
-/** 書き出しが過去の成果物とそっくりでないか（AIは呼ばない）。 */
-function SameOpeningWarning({ task, store, go }) {
-  // **比べるものをそろえる。** 知識の body は全手順を連ねた文なので、
-  // その書き出しは「最初の手順」の冒頭。こちらも同じ形で取り出さないと、
-  // 別の層どうしを比べることになり、本当に似ているものを見落とす。
-  const text = assembleResult(task);
-  const past = (store.knowledge || [])
-    .filter((k) => k.taskId && k.taskId !== task.id && k.body)
-    .slice(0, 30)
-    .map((k) => ({ id: k.id, title: k.title, text: k.body }));
-  const hits = similarOpenings(text, past);
-  if (!hits.length) return null;
-  return (
-    <Card glyph="≡" title="書き出しが前のものとそっくりです">
-      <p className="muted" style={{ marginTop: -6 }}>
-        中身は違っても、入口が同じだと読み手には同じものに見えます。冒頭だけ変えると効きます。
-      </p>
-      {hits.map((h) => (
-        <button
-          key={h.id}
-          type="button"
-          className="btn ghost small block"
-          style={{ marginBottom: 6 }}
-          onClick={() => go('knowledgeDetail', h.id)}
-        >
-          {h.title}（{Math.round(h.score * 100)}% 一致）
-        </button>
-      ))}
     </Card>
   );
 }

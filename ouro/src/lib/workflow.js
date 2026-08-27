@@ -52,6 +52,9 @@ export function createTask({
   forceRoles = null,
   maxSteps = 4,
   dealId = null,
+  // 事業（1つの事業の器）。**結びつきはこの片方向だけ**
+  // （事業の側に taskIds を持たない。持つと誰も更新しない列になる）。
+  ventureId = null,
   context = '',
   assign,
   // 受付のときに決まっていることがあれば預かる（全部あとから足せる）。
@@ -129,6 +132,7 @@ export function createTask({
     steps,
     currentStep: 0,
     dealId,
+    ventureId,
     // ── 台帳の3列。ここだけは人が手で持つ（lib/ledger.js のコメント参照） ──
     dueAt: dueAt || null,
     nextAction: '',

@@ -1624,3 +1624,50 @@ select {
 .sg-why li {
   margin-bottom: 3px;
 }
+
+/* ── 事業：今日やること・発信ログの1行 ── */
+.today-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.today-item:last-of-type {
+  border-bottom: 0;
+}
+
+.today-item .ti-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.today-item .ti-label {
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+}
+
+.today-item.done .ti-label {
+  color: var(--ink-3);
+}
+
+.today-item .ti-why {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.6;
+}
+
+.post-row {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.post-row:last-of-type {
+  border-bottom: 0;
+}
+
+.post-row .p-title {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}

@@ -13,6 +13,10 @@ export const INGEST_KINDS = [
   { id: 'pdf', name: 'PDF', glyph: '▤', needsUrl: false, hint: '本文をコピーして貼る（PDFの自動読み取りは未対応）' },
   { id: 'note', name: 'メモ', glyph: '✍', needsUrl: false, hint: '自分の言葉で書く' },
   { id: 'audio', name: '音声メモ', glyph: '◍', needsUrl: false, hint: '文字起こしを貼る' },
+  // APIキーが無いとき、Claude などの会話で書かせたものを貼る口（docs/PROMPT.md）。
+  // **メモと同じ扱いにしない。** メモは来歴 'user'（自分で書いた）になるので、
+  // AIに書かせたものを貼ると「誰が書いたか」が分からなくなる。
+  { id: 'ai', name: 'AIに書かせたもの', glyph: '✦', needsUrl: false, hint: '別のAIの会話で作った文章を貼る（来歴はAI生成になります）' },
 ];
 
 export function detectKind(url = '') {
@@ -33,8 +37,13 @@ export function youtubeId(url = '') {
 
 /**
  * 取り込み1件を「出典 + 知識」に変える。
- * origin は必ず 'external'（外部由来）か 'user'（自分で書いた）になる。
- * AI が触っていない生の取り込みを 'ai' にしない。
+ *
+ * 来歴（origin）は3つに分かれる：
+ *   'user'     … メモ・音声メモ（自分で書いた）
+ *   'ai'       … 別のAIの会話で書かせたもの（kind:'ai'。中身は検証されていない）
+ *   'external' … Web・YouTube・PDF（外部由来）
+ * **Ouro の中でAIが動いていないものを 'ai' と偽らない**——'ai' になるのは
+ * ユーザーが自分で「AIに書かせた」と選んだ時だけ。
  */
 export function ingestOne({ kind = 'note', url = '', title = '', text = '', tags = [], category = 'メモ' }) {
   const k = kind || detectKind(url);
@@ -44,7 +53,7 @@ export function ingestOne({ kind = 'note', url = '', title = '', text = '', tags
     url,
     excerpt: text,
     addedBy: 'user',
-    trust: k === 'note' ? 60 : 50,
+    trust: trustOf(k),
   });
 
   const { knowledge } = createKnowledge({
@@ -53,12 +62,26 @@ export function ingestOne({ kind = 'note', url = '', title = '', text = '', tags
     body: text,
     category,
     tags,
-    origin: k === 'note' || k === 'audio' ? 'user' : 'external',
+    origin: originOf(k),
     sourceIds: [source.id],
-    trust: k === 'note' ? 60 : 50,
+    trust: trustOf(k),
   });
 
   return { source, knowledge };
+}
+
+/** 取り込みの種類 → 来歴。ここが単一の正。 */
+export function originOf(kind) {
+  if (kind === 'ai') return 'ai';
+  if (kind === 'note' || kind === 'audio') return 'user';
+  return 'external';
+}
+
+/** 確からしさの初期値。AIに書かせたものはいちばん低い（出典が無いため）。 */
+export function trustOf(kind) {
+  if (kind === 'ai') return 30;
+  if (kind === 'note') return 60;
+  return 50;
 }
 
 function firstSentences(text = '', limit = 200) {

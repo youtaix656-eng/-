@@ -9,7 +9,6 @@ import { useStore } from './lib/useStore.js';
 import * as perf from './lib/perf.js';
 import { LOADERS, preloadView, preloadMany } from './lib/preload.js';
 import { useToast, Skeleton } from './components/ui.jsx';
-import Splash from './components/Splash.jsx';
 import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
@@ -29,6 +28,8 @@ const Company = lazy(LOADERS.company);
 const Team = lazy(LOADERS.team);
 const Ledger = lazy(LOADERS.ledger);
 const Funnel = lazy(LOADERS.funnel);
+const Ventures = lazy(LOADERS.ventures);
+const VentureDetail = lazy(() => LOADERS.venture().then((m) => ({ default: m.VentureDetail })));
 const Rules = lazy(LOADERS.rules);
 const Deals = lazy(LOADERS.deals);
 const DealDetail = lazy(() => LOADERS.deal().then((m) => ({ default: m.DealDetail })));
@@ -38,6 +39,8 @@ const AuditView = lazy(LOADERS.audit);
 const Settings = lazy(LOADERS.settings);
 // 新項目01：下部ナビにあるが起動直後には要らないので、後から読む
 // （目次・予定と同じ扱い。押す前に先読みするので待ちは実質ゼロ）
+// 初回だけ出る画面。起動時に読む束から外す（2回目以降は一度も読まない）。
+const Splash = lazy(() => import('./components/Splash.jsx'));
 const Compose = lazy(LOADERS.compose);
 const Calendar = lazy(LOADERS.calendar);
 const Toc = lazy(LOADERS.toc);
@@ -73,6 +76,8 @@ const TITLES = {
   team: 'チーム',
   ledger: '仕事台帳',
   funnel: '収益導線',
+  ventures: '事業',
+  venture: '事業',
   rules: '会社のルール',
   deals: '案件・収益',
   deal: '案件',
@@ -175,7 +180,11 @@ export default function App() {
   }
 
   if (!store.settings.splashSeen) {
-    return <Splash onStart={() => store.updateSettings({ splashSeen: true })} />;
+    return (
+      <Suspense fallback={<div className="splash"><span className="spinner" /></div>}>
+        <Splash onStart={() => store.updateSettings({ splashSeen: true })} />
+      </Suspense>
+    );
   }
 
   const isTab = NAV.some((n) => n.id === view);
@@ -224,6 +233,8 @@ export default function App() {
         {view === 'team' && <Team store={store} go={go} toast={toast} />}
         {view === 'ledger' && <Ledger store={store} go={go} toast={toast} />}
         {view === 'funnel' && <Funnel store={store} go={go} toast={toast} />}
+        {view === 'ventures' && <Ventures store={store} go={go} toast={toast} />}
+        {view === 'venture' && <VentureDetail store={store} ventureId={arg} go={go} toast={toast} />}
         {view === 'rules' && <Rules store={store} toast={toast} />}
         {view === 'deals' && <Deals store={store} go={go} toast={toast} highlight={arg && arg.templateId} />}
         {view === 'deal' && <DealDetail store={store} dealId={arg} go={go} />}

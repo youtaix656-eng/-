@@ -119,6 +119,8 @@ AI社員の成果物を「案件」に紐づけ、売上・見込み・時給換
 | `ouro:approvals` | Approval[] | 承認待ち |
 | `ouro:audit` | AuditEntry[] | 監査ログ（上限 2000 件で古い順に間引き） |
 | `ouro:connections` | Connection[] | 外部サービス接続 |
+| `ouro:ventures` | Venture[] | 事業（実行中は1つだけ・起動時に読む） |
+| `ouro:posts` | Post[] | 発信ログ（出したものと反応・上限500件） |
 | `ouro:secrets` | {providerId: apiKey} | APIキー（端末内のみ・書き出し対象外） |
 | `ouro:settings` | Settings | 表示・既定モデル・自動実行 |
 
@@ -306,6 +308,65 @@ suggestPlan({ request, assign, customGenres, deals, fixed })
 - `ok:false`（依頼が短い）のときは中身を持たせない。画面は「自分で決める」だけ出す
 - `staffedCount === 0` の提案は実行させない（最初の手順で必ず失敗するため）
 - 提案から実行しても、費用の承認・今月の上限は今までどおり通る
+
+---
+
+### 6-6. 事業（`ouro:ventures` / `lib/venture.js`）
+
+```js
+Venture = {
+  id, title, hypothesis, who, what,
+  priceJpy, goalMonthlyJpy, days,          // 逆算とやめる基準に使う
+  state,                                    // idea | running | paused | stopped | keep
+  startedAt,                                // running にした時だけ立つ
+  verdict: { metric, target, decidedAt, decision },
+  createdAt, updatedAt,
+}
+```
+
+- **結びつきは片方向だけ**：`task.ventureId` / `deal.ventureId`。
+  事業の側に `taskIds` を**持たない**（`deal.taskIds` が誰にも更新されず、
+  AI費用が常に¥0に見えていた失敗を繰り返さないため）。
+- **`state:'running'` は1つだけ**（`canStart`）。2つめは断るだけで、勝手に入れ替えない。
+- `ventureStats()` は仕事と案件の側から数える。案件に紐づかない仕事のAI費用も、
+  その事業のコストとして足す。
+
+```js
+targetPlan({ venture, entry, funnel })
+// → { price, goal, needBuyers, rows:[{stageId, need, now, rate, gap}], unknown[], ready }
+```
+
+- 後ろ（買ってもらう）から前へ、いまの通過率で割り戻す。
+- **通過率が分からない段は `need: null`。** 1と置くと「前の段も同じ人数でよい」という嘘になる。
+
+```js
+verdictStatus(venture, funnel, now)
+// → { state: 'none'|'waiting'|'running'|'met'|'due'|'decided', target, current, left, day }
+applyDecision(venture, 'continue'|'stop'|'extend', extraDays)
+```
+
+- `met` は期間の途中でも基準に届いた状態（続けてよい）。`due` は期間が終わって未達（判断待ち）。
+- `extend` だけは判断を残さず `days` を伸ばす。**どれもAIを呼ばない。**
+
+```js
+todayPlan({ venture, posts, tasks, loaded, now })
+// → { items:[出す/作る/数える], next, day, total, left, practiceDays, doneCount }
+```
+
+- 3枠から増やさない。**カレンダーに複製しない**（毎回ここから導く）。
+- `practiceDays` は**通算**（連続ではない）。休んだ日があっても減らない。
+- `loaded:false`（発信ログがまだ読めていない）の間は、どれも「未」と言い切らない。
+
+### 6-7. 出す前チェック（`lib/prepublish.js`）
+
+```js
+prepublishChecks({ text, task, past })
+// → { items:[{id, title, level:'stop'|'warn'|'ok'|'skip', hits}], worst, blocked }
+```
+
+- 見張り（確約・言い方・個人情報・完成条件・書き出しの重なり・枠）の**単一の正**。
+- **`blocked` になるのは個人情報だけ。** ほかは知らせるだけで、書けなくはしない。
+- 当たらなかった項目も `level:'ok'` で返す（確かめたことが画面に残るように）。
 
 ---
 

@@ -9,7 +9,7 @@ import { CATEGORIES } from '../lib/knowledge.js';
 
 export default function Ingest({ store, go, toast, preset = {} }) {
   // 呼び出し元が本文の下書きを渡せる（掲示板から知識へ移すときなど）
-  const [kind, setKind] = useState(preset.text ? 'note' : 'web');
+  const [kind, setKind] = useState(preset.kind || (preset.text ? 'note' : 'web'));
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [text, setText] = useState(preset.text || '');
@@ -114,6 +114,15 @@ export default function Ingest({ store, go, toast, preset = {} }) {
               style={{ width: '100%', borderRadius: 10, filter: 'grayscale(1) contrast(1.1)', opacity: 0.9 }}
             />
           </div>
+        )}
+
+        {kind === 'ai' && (
+          <p className="muted" style={{ marginTop: -4 }}>
+            別のAIの会話（docs/PROMPT.md の貼り付け用プロンプトなど）で書かせた文章を、
+            <strong style={{ color: '#fff' }}>来歴「AI生成」</strong>として取り込みます。
+            メモとして貼ると「自分で書いた」になってしまうので、こちらを使ってください。
+            出典が付いていないので、確からしさは低めから始まります。
+          </p>
         )}
 
         <Field label="タイトル">

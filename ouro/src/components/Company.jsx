@@ -75,6 +75,13 @@ export default function Company({ store, go }) {
         onClick={() => go('team')}
       />
       <Row
+        glyph="⚑"
+        title="事業"
+        sub="いま何を売るのか・やめる基準・今日やる1つ"
+        preload="ventures"
+        onClick={() => go('ventures')}
+      />
+      <Row
         glyph="◎"
         title="収益導線"
         sub="どこで人が減っているかを見る（数字は端末内だけ）"

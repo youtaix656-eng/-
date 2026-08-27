@@ -86,6 +86,9 @@ function loadRoster() {
 const FIRST_KEYS = [
   KEYS.company, KEYS.settings, KEYS.employees, KEYS.tasks, KEYS.knowledge,
   KEYS.deals, KEYS.events, KEYS.genres, KEYS.approvals, KEYS.secrets,
+  // 事業（実行中は1つだけ）。ホームの「今日やる1つ」がここから出るので後回しにできない。
+  // 件数は多くても数十なので、最初のひと組に入れても起動は重くならない。
+  KEYS.ventures,
   // 道具を切ってあるかどうかは**実行の判定に使う**ので、後回しにできない。
   // 読み込み前は空＝「全部使える」になり、切ったはずの道具が使われてしまう。
   // 数件しか無いので、最初のひと組に入れても起動は重くならない。
@@ -114,6 +117,10 @@ const REST_KEYS = [
   KEYS.board,
   // つまずき集（役職別の失敗）。掲示板と同じく実行より前に揃っていればよい。
   KEYS.pitfalls,
+  // 発信ログ。事業の画面とホームの「今日やる1つ」で使う。
+  // **読み込みが済むまで「まだ出していない」と言い切らないこと**
+  // （空配列のまま判定すると、出した日でも「未」と出る）。
+  KEYS.posts,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -133,6 +140,8 @@ const EMPTY = {
   connections: [],
   genres: [],
   events: [],
+  ventures: [],
+  posts: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -221,20 +230,17 @@ export function useStore() {
       // ── 2回目以降：まず最初の画面に要るものだけ ──
       const first = await loadMany(FIRST_KEYS, FIRST_FALLBACKS, { [KEYS.tasks]: TASK_PAGE });
       if (!alive) return;
-      const next = {
-        ...EMPTY,
-        company: migrateCompany(first[KEYS.company]),
-        employees: asArray(first[KEYS.employees]),
-        tasks: asArray(first[KEYS.tasks]),
-        knowledge: asArray(first[KEYS.knowledge]),
-        deals: asArray(first[KEYS.deals]),
-        events: asArray(first[KEYS.events]),
-        genres: asArray(first[KEYS.genres]),
-        approvals: asArray(first[KEYS.approvals]),
-        connections: asArray(first[KEYS.connections]),
-        settings: { ...makeSettings(), ...(first[KEYS.settings] || {}) },
-        secrets: first[KEYS.secrets] || {},
-      };
+      // **FIRST_KEYS から作ること。** ここを手書きの一覧にしていたせいで、
+      // 新しいキー（事業）を FIRST_KEYS に足しても読み込まれず、
+      // 作った事業が再起動のたびに消えた（実際に踏んだ）。
+      // 特別扱いが要るのは会社・設定・APIキーの3つだけ。
+      const next = { ...EMPTY };
+      for (const key of FIRST_KEYS) {
+        if (key === KEYS.company) next.company = migrateCompany(first[key]);
+        else if (key === KEYS.settings) next.settings = { ...makeSettings(), ...(first[key] || {}) };
+        else if (key === KEYS.secrets) next.secrets = first[key] || {};
+        else next[keyName(key)] = asArray(first[key]);
+      }
       stateRef.current = next;
       setState(next);
       setReady(true);
@@ -734,6 +740,109 @@ export function useStore() {
     [put]
   );
 
+  // ---- 事業（ベンチャー）と発信ログ ----
+  //
+  // **どちらも動的 import で読む。** 起動時に読む量を増やさないため
+  // （venture.js は revenue.js を使うので、静的に書くと最初のひと束に混ざる）。
+  // 呼び出し側は await しなくてよい（画面の更新は put が行う）。
+
+  const addVenture = useCallback(
+    async (data) => {
+      const { makeVenture, canStart } = await import('./venture.js');
+      const made = makeVenture(data);
+      // 「実行中」で作ろうとした時も、選択と集中の錠を通す
+      if (made.state === 'running' && !canStart(stateRef.current.ventures, made.id).ok) {
+        made.state = 'idea';
+        made.startedAt = null;
+      }
+      put(KEYS.ventures, [made, ...stateRef.current.ventures]);
+      log({ actor: 'user', action: 'ventureCreated', target: made.title });
+      return made;
+    },
+    [put, log]
+  );
+
+  const updateVenture = useCallback(
+    (id, patch) => {
+      put(
+        KEYS.ventures,
+        stateRef.current.ventures.map((v) => (v.id === id ? { ...v, ...patch, id: v.id, updatedAt: Date.now() } : v))
+      );
+    },
+    [put]
+  );
+
+  const removeVenture = useCallback(
+    (id) => {
+      const v = stateRef.current.ventures.find((x) => x.id === id);
+      put(KEYS.ventures, stateRef.current.ventures.filter((x) => x.id !== id));
+      if (v) log({ actor: 'user', action: 'ventureRemoved', target: v.title });
+    },
+    [put, log]
+  );
+
+  /**
+   * 状態を変える。**「実行中」にできるのは1つだけ**（選択と集中）。
+   * すでに別の事業が実行中なら、勝手に入れ替えずに断る
+   * （どちらを休止にするかは人が決めること）。
+   * @returns {{ok:boolean, blocker:object|null}}
+   */
+  const setVentureState = useCallback(
+    async (id, state) => {
+      const { canStart } = await import('./venture.js');
+      if (state === 'running') {
+        const check = canStart(stateRef.current.ventures, id);
+        if (!check.ok) return check;
+      }
+      const now = Date.now();
+      put(
+        KEYS.ventures,
+        stateRef.current.ventures.map((v) => {
+          if (v.id !== id) return v;
+          // 実行中にした時だけ日数を数え始める（休止から戻した時は続きから）
+          const startedAt = state === 'running' ? v.startedAt || now : v.startedAt;
+          return { ...v, state, startedAt, updatedAt: now };
+        })
+      );
+      log({ actor: 'user', action: 'ventureState', target: state });
+      return { ok: true, blocker: null };
+    },
+    [put, log]
+  );
+
+  /** 撤退・継続の判断（続ける／やめる／延長）。AIは呼ばない。 */
+  const decideVenture = useCallback(
+    async (id, decision, extraDays = 14) => {
+      const { applyDecision } = await import('./verdict.js');
+      const cur = stateRef.current.ventures.find((v) => v.id === id);
+      if (!cur) return null;
+      const next = applyDecision(cur, decision, extraDays);
+      put(KEYS.ventures, stateRef.current.ventures.map((v) => (v.id === id ? next : v)));
+      log({ actor: 'user', action: 'ventureDecision', target: `${cur.title}／${decision}` });
+      return next;
+    },
+    [put, log]
+  );
+
+  const addSharePost = useCallback(
+    async (data) => {
+      const posts = await import('./posts.js');
+      const made = posts.makePost(data);
+      put(KEYS.posts, posts.addPost(stateRef.current.posts, made));
+      log({ actor: 'user', action: 'postLogged', target: posts.channelName(made.channel) });
+      return made;
+    },
+    [put, log]
+  );
+
+  const removeSharePost = useCallback(
+    async (id) => {
+      const { removePost } = await import('./posts.js');
+      put(KEYS.posts, removePost(stateRef.current.posts, id));
+    },
+    [put]
+  );
+
   const archiveEmployee = useCallback(
     (id) => {
       const emp = stateRef.current.employees.find((e) => e.id === id);
@@ -775,6 +884,7 @@ export function useStore() {
       workflowId = null,
       employeeId = null,
       dealId = null,
+      ventureId = null,
       context = '',
       genreId = null,
       dueAt = null,
@@ -796,6 +906,7 @@ export function useStore() {
         request,
         forceRoles,
         dealId,
+        ventureId,
         context,
         dueAt,
         deliverableSpec,
@@ -2034,6 +2145,16 @@ export function useStore() {
     putFunnelEntry,
     removeFunnelEntry,
     renameFunnelStage,
+    // 事業・発信ログ
+    addVenture,
+    updateVenture,
+    removeVenture,
+    setVentureState,
+    decideVenture,
+    addSharePost,
+    removeSharePost,
+    // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）
+    hydrated: hydratedRef.current,
     updateRules,
     addCompanyRule,
     removeCompanyRule,
