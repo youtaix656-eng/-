@@ -175,6 +175,26 @@ function reasonFor({ preferred, needs, capable, chosen, weight, avoided = false,
   return weight >= WEIGHTS.heavy ? '重い仕事のため上位モデル' : '標準';
 }
 
+/**
+ * そのモデルが使えなかった時に、**同じエンジンの1つ下のモデル**を返す。
+ *
+ * 2つの行き止まりを塞ぐためにある：
+ *  ・モデルが廃止された（404）——2026-08-27、新しいキーで 1.5/2.0/2.5 系が全部 404 になっていた
+ *  ・無料枠にそのモデルが無い（429）——Gemini の Pro は無料枠が無いので、
+ *    「重い仕事＝上位モデル」の判断がそのまま失敗になる
+ *
+ * 下が無ければ null（＝これ以上落とせない）。
+ */
+export function cheaperModel(provider, modelId) {
+  if (!provider || !Array.isArray(provider.models)) return null;
+  const sorted = [...provider.models].sort(
+    (a, b) => (TIER_ORDER[a.tier] || 2) - (TIER_ORDER[b.tier] || 2)
+  );
+  const i = sorted.findIndex((m) => m.id === modelId);
+  if (i <= 0) return null;
+  return sorted[i - 1].id;
+}
+
 export function providerLabel(id) {
   const p = PROVIDERS.find((x) => x.id === id);
   return p ? p.name : id;

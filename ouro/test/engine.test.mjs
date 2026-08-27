@@ -354,3 +354,41 @@ test('見積もりの回数は、カードの「AIを呼ぶ ◯回」と同じ�
   const est = estimateRun({ steps: withCheck, employeeFor: assign, secrets: { gemini: 'k' }, settings: {} });
   assert.equal(est.calls, sug.calls, 'カードの回数と見積もりの回数が違う');
 });
+
+// ── ⑪ モデルが使えない時に行き止まりにしない ──
+
+test('1つ下のモデルを返す。いちばん下なら null', async () => {
+  const { cheaperModel } = await import('../src/lib/router.js');
+  const { default: gemini } = await import('../src/lib/providers/gemini.js');
+  const sorted = [...gemini.models].sort((a, b) => ({ low: 1, mid: 2, high: 3 }[a.tier] - { low: 1, mid: 2, high: 3 }[b.tier]));
+  assert.equal(cheaperModel(gemini, sorted[0].id), null, 'いちばん下から更に下がある');
+  assert.equal(cheaperModel(gemini, sorted[1].id), sorted[0].id);
+  assert.equal(cheaperModel(gemini, 'まったく無いモデル'), null);
+  assert.equal(cheaperModel(null, 'x'), null);
+});
+
+test('どのエンジンも、モデルの id・料金・段が揃っている', () => {
+  for (const p of PROVIDERS) {
+    const tiers = new Set();
+    for (const m of p.models) {
+      assert.ok(m.id, `${p.id} に id の無いモデル`);
+      assert.ok(m.label, `${p.id}/${m.id} に表示名が無い`);
+      assert.equal(typeof m.inputPer1M, 'number', `${p.id}/${m.id} の入力料金が数字でない`);
+      assert.equal(typeof m.outputPer1M, 'number', `${p.id}/${m.id} の出力料金が数字でない`);
+      if (p.needsKey) assert.ok(m.inputPer1M > 0, `${p.id}/${m.id} の料金が0（キーが要るのに無料になっている）`);
+      tiers.add(m.tier);
+    }
+    // 段が全部同じだと、costMode（安い／良い）が効かない
+    if (p.models.length > 1) assert.ok(tiers.size > 1, `${p.id} のモデルの段が全部同じ`);
+  }
+});
+
+test('Gemini の登録モデルは、廃止された世代を残していない', async () => {
+  const { default: gemini } = await import('../src/lib/providers/gemini.js');
+  const ids = gemini.models.map((m) => m.id);
+  // 2026-08-27 時点で、新しく作ったキーでは 404 になる世代
+  for (const dead of ['gemini-1.5', 'gemini-2.0', 'gemini-2.5']) {
+    assert.ok(!ids.some((id) => id.startsWith(dead)), `${dead} 系が残っている（新しいキーでは 404）`);
+  }
+  assert.ok(ids.length >= 2);
+});

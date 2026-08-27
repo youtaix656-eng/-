@@ -5,7 +5,7 @@
 // **エンジン名で分岐しない**（providers/index.js の登録内容だけで動く）。
 
 import { providerById, estimateCost } from './providers/index.js';
-import { route, markBusy } from './router.js';
+import { route, markBusy, cheaperModel } from './router.js';
 import { isBusyError, failureAdvice } from './providers/stream.js';
 import { buildContext } from './memory.js';
 import { roleById, groupById } from '../data/roles.js';
@@ -222,11 +222,15 @@ export async function runStep({
     text: res.text || '',
     providerId: provider.id,
     providerName: provider.name,
-    model: decision.model,
-    reason: decision.reason,
+    // **実際に投げたモデルを記録する。** 下のモデルへ落ちた時に
+    // 決めた側の名前を残すと、費用の記録が実物とズレる。
+    model: res.model || decision.model,
+    reason: res.downgradedFrom
+      ? `${decision.reason}／${res.downgradedFrom} が使えなかったので下のモデルへ`
+      : decision.reason,
     offline: Boolean(res.offline),
     usage: res.usage || { input: 0, output: 0 },
-    cost: estimateCost(provider.id, decision.model, res.usage),
+    cost: estimateCost(provider.id, res.model || decision.model, res.usage),
     citations: res.citations || [],
     usedKnowledgeIds: context.knowledgeIds,
     layers: context.layers,
@@ -245,25 +249,75 @@ export async function runStep({
  * やり直す時は、そのエンジンを混雑中として記録し（新項目25）、
  * 次の手順から別のエンジンへ回るようにする。
  */
+/**
+ * そのモデルでは通らない失敗か。
+ *   404 …… モデルが廃止された／このキーでは使えない
+ *   429 …… 呼びすぎ、または**そのモデルが無料枠に無い**
+ *   503 / 529 …… 混んでいる（上位モデルほど混みやすい）
+ */
+function isModelProblem(e) {
+  const s = e && e.status;
+  return s === 404 || s === 429 || s === 503 || s === 529;
+}
+
+/** 待ってからもう一度投げても意味がある失敗か（混んでいるだけ）。 */
+function worthWaiting(e) {
+  return isBusyError(e);
+}
+
+/**
+ * 1回の呼び出し。**行き止まりを作らない**ための順番になっている。
+ *
+ *   ① そのまま投げる
+ *   ② 404 / 429 …… 待っても変わらないので、**すぐ1つ下のモデル**へ
+ *   ③ 503 / 529 …… 混んでいるだけなので、少し待って**同じモデル**でもう一度
+ *   ④ それでもダメなら、1つ下のモデルへ（下が無ければ失敗として返す）
+ *
+ * ②が要るのは、「重い仕事だから上位モデル」と決めた結果が
+ * 「そのモデルは無料枠に無い（429）」で終わることが実際にあるため。
+ * 落とした時は、どのモデルで通ったかを必ず呼び出し元へ返す
+ * （決めた側の名前を記録すると、費用の記録が実物とズレる）。
+ */
 async function callWithRetry(provider, args) {
-  try {
-    return await provider.run(args);
-  } catch (e) {
-    // fetch そのものが失敗した時（圏外・機内モード）は状態番号が無い。
-    // 生の "Failed to fetch" を出さず、何をすればよいかに置き換える。
-    if (e && !e.status && /fetch|network|Load failed/i.test(e.message || '')) {
-      const wrapped = new Error(`${provider.name}：${failureAdvice(0)}`);
-      wrapped.offlineLike = true;
-      throw wrapped;
+  let model = args.model;
+  let downgradedFrom = null;
+  // 「混んでいるだけ」の待ち直しは、**モデル1つにつき1回**。
+  // 下へ落ちたらまた1回だけ待てる（落ちた先も混んでいることがあるため）。
+  let waited = false;
+
+  for (;;) {
+    try {
+      const res = await provider.run({ ...args, model });
+      return downgradedFrom ? { ...res, model, downgradedFrom } : res;
+    } catch (e) {
+      // fetch そのものが失敗した時（圏外・機内モード）は状態番号が無い。
+      // 生の "Failed to fetch" を出さず、何をすればよいかに置き換える。
+      if (e && !e.status && /fetch|network|Load failed/i.test(e.message || '')) {
+        const wrapped = new Error(`${provider.name}：${failureAdvice(0)}`);
+        wrapped.offlineLike = true;
+        throw wrapped;
+      }
+      if (args.signal && args.signal.aborted) throw e;
+      if (!isModelProblem(e)) throw e;
+
+      // ③ 混んでいるだけなら、少し待って同じモデルでもう一度
+      if (worthWaiting(e) && !waited) {
+        waited = true;
+        markBusy(provider.id, e.retryAfterMs);
+        const wait = Math.min(e.retryAfterMs || 1500, 20000);
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, wait));
+        if (args.signal && args.signal.aborted) throw e;
+        continue;
+      }
+
+      // ②④ 下のモデルへ。**落とした先も行き止まりにしない**
+      // （1段落として終わりにすると、落ちた先が混んでいた時にそのまま失敗する）。
+      const lower = cheaperModel(provider, model);
+      if (!lower) throw e;
+      downgradedFrom = downgradedFrom || model;
+      model = lower;
+      waited = false;
     }
-    if (!isBusyError(e)) throw e;
-    markBusy(provider.id, e.retryAfterMs);
-    // 中止されているならやり直さない
-    if (args.signal && args.signal.aborted) throw e;
-    const wait = Math.min(e.retryAfterMs || 1500, 20000);
-    await new Promise((r) => setTimeout(r, wait));
-    if (args.signal && args.signal.aborted) throw e;
-    // やり直しは1度だけ。ここで失敗したら、そのまま失敗として返す。
-    return provider.run(args);
   }
 }

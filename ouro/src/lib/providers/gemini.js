@@ -14,17 +14,25 @@ export const geminiProvider = {
   // 画面はこの印を見て「無料で始められます」と先に出す
   // （3つ並べるだけでは、どれが0円で始められるか分からない）。
   freeTier: true,
-  freeNote: 'Google AI Studio でキーを作ると無料枠で使えます（クレジットカード不要）。まずはここから。',
+  freeNote: 'Google AI Studio でキーを作ると無料枠で使えます（クレジットカード不要）。まずはここから。Flash 系は無料枠があり、Pro は有料のみです。',
+  // モデルの並びは Google 側で入れ替わる。**古い id を置いたままにしない**——
+  // 2026-08-27 に確かめたところ、新しく作ったキーでは 1.5 / 2.0 / 2.5 系が
+  // すべて 404（「新しいプロジェクトでは使えません」）になっていた。
+  // 料金は https://ai.google.dev/gemini-api/docs/pricing（2026-08-27 確認・USD / 100万トークン）。
+  // ※要確認：料金は変わるので、年に一度は見直すこと。
   models: [
-    { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash（低コスト）', inputPer1M: 0.1, outputPer1M: 0.4, tier: 'low' },
-    { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', inputPer1M: 1.25, outputPer1M: 5, tier: 'mid' },
+    { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite（無料枠あり・最安）', inputPer1M: 0.25, outputPer1M: 1.5, tier: 'low' },
+    { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash（無料枠あり）', inputPer1M: 0.75, outputPer1M: 3.75, tier: 'mid' },
+    // Pro には**無料枠が無い**。無料のキーだと 429（枠切れ）になるので、
+    // runtime.js が同じエンジンの下のモデルへ自動で落とす。
+    { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro（無料枠なし・有料のみ）', inputPer1M: 2, outputPer1M: 12, tier: 'high' },
   ],
   serverTools: {},
   supportsPdf: false,
 
   async run({ apiKey, model, system, messages, maxTokens = 4000, signal, onDelta }) {
     if (!apiKey) throw new Error('Gemini の APIキーが設定されていません');
-    const id = model || 'gemini-2.0-flash';
+    const id = model || 'gemini-3.1-flash-lite';
     const method = onDelta ? 'streamGenerateContent?alt=sse' : 'generateContent';
 
     const res = await fetch(`${BASE}/${encodeURIComponent(id)}:${method}`, {

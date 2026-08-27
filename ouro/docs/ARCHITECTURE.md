@@ -410,6 +410,9 @@ engineStats(tasks)                      // エンジン別の回数・費用・�
 
 - `availableProviders(secrets, settings)` は `isReady` があればそちらを見る。
 - `local`（AI未使用の受け皿）は**選ぶ側でも最後**に回す。
+- **モデルが使えなかった時は1つ下へ落とす**（`cheaperModel`）。
+  404 / 429 は待っても変わらないのですぐ下へ、503 / 529 は1度待ってから下へ。
+  下が無くなるまで降り、**実際に通ったモデル**を `res.model` として返す。
 - `runtime.js` とエンジン一式は **`useStore` の `loadRuntime()` で押した時に読む**
   （起動時に読む束へ入れない）。暇な時に `preloadRuntime()` が先読みする。
 
