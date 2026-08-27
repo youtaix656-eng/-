@@ -68,6 +68,7 @@ export const ROLES = [
   },
   {
     id: 'creator',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'クリエイター',
     reading: 'くりえいたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
@@ -222,6 +223,7 @@ export const ROLES = [
   },
   {
     id: 'marketer',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'マーケター',
     reading: 'まーけたー', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
@@ -238,6 +240,7 @@ export const ROLES = [
   },
   {
     id: 'writer',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'ライター',
     reading: 'らいたー', // 目次の並びに使う（推定しない）
     departmentId: 'creative',
@@ -346,6 +349,7 @@ export const ROLES = [
   },
   {
     id: 'contentmarketer',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'コンテンツマーケター',
     reading: 'こんてんつまーけたー',
     departmentId: 'creative',
@@ -364,6 +368,7 @@ export const ROLES = [
   },
   {
     id: 'sales',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: '営業',
     reading: 'えいぎょう',
     departmentId: 'biz',
@@ -382,6 +387,7 @@ export const ROLES = [
   },
   {
     id: 'support',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'カスタマーサポート',
     reading: 'かすたまーさぽーと',
     departmentId: 'biz',
@@ -455,6 +461,7 @@ export const ROLES = [
   },
   {
     id: 'pr',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: '広報・ブランディング',
     reading: 'こうほうぶらんでぃんぐ',
     departmentId: 'biz',
@@ -476,6 +483,7 @@ export const ROLES = [
   // 成果物は必ず分析・ガバナンス担当の確認を通してから外に出す。
   {
     id: 'mkt_content',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'マーケティング企画・コンテンツ',
     teamLabel: '企画・コンテンツ', // チーム内での短い表示名（目次では name を使う）
     reading: 'まーけてぃんぐきかくこんてんつ',
@@ -571,6 +579,7 @@ export const ROLES = [
   },
   {
     id: 'mkt_brand',
+    writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'マーケティングブランド・PR',
     teamLabel: 'ブランド・PR', // チーム内での短い表示名（目次では name を使う）
     reading: 'まーけてぃんぐぶらんどぴーあーる',

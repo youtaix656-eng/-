@@ -10,6 +10,7 @@
 //  ⑦ 1件あたりの採算を見る（稼ぎ ＞ AI費用 か）
 //  ⑧ 手離れを見る（最後に手を入れてから何日／そのあいだに入ったお金）
 //  ⑨ 続くかどうかの見立て（真似される・場所に止められる。**採点しない**）
+//  ⑩ 有料記事として売る（段階的に値上げする・売る前の確認）
 //
 // **AIは呼ばない。**（呼ぶのは「分析してもらう」「案を出してもらう」を押した時だけ）
 
@@ -33,6 +34,7 @@ import { formatMoney } from '../lib/revenue.js';
 import { unitEconomics, unitLine, costAdvice } from '../lib/unit.js';
 import { passiveState, passiveLine, finishNudge, REST_DAYS } from '../lib/passive.js';
 import { RISK_QUESTIONS, RISK_ANSWERS, riskReview, riskLine } from '../lib/risk.js';
+import { pricePlan, priceLine, halfOf, SELL_CHECKS, sellReview, sellLine, normalizePricing, LETTER_ROLE_ID } from '../lib/paid.js';
 
 export default function Ventures({ store, go, toast }) {
   const list = useMemo(() => sortVentures(store.ventures || []), [store.ventures]);
@@ -208,6 +210,7 @@ export function VentureDetail({ store, ventureId, go, toast }) {
       <RiskCard venture={venture} store={store} toast={toast} />
       <TargetCard venture={venture} plan={plan} store={store} go={go} funnel={funnel} toast={toast} />
       <MoneyCard venture={venture} unit={unit} store={store} go={go} toast={toast} />
+      <SellCard venture={venture} sold={unit ? unit.sales : 0} store={store} go={go} toast={toast} />
       <PassiveCard venture={venture} passive={passive} store={store} toast={toast} />
       <PostsCard venture={venture} posts={myPosts} store={store} toast={toast} funnel={funnel} />
 
@@ -495,6 +498,133 @@ function MoneyCard({ venture, unit, store, go, toast }) {
       <p className="muted" style={{ fontSize: 11.5 }}>
         線は1本だけです——稼ぎがAI費用を上回っているあいだは続けられます。
         速くなっただけでは残らないので、ここだけは毎回見てください。
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * 有料記事として売る——値付けの段と、売る前の確認。
+ *
+ * **相場の表は持たない。** ジャンルごとの相場は手元に無い基準なので、
+ * 「このジャンルは◯円」とは書かない（自分で調べた数字を入れてもらう）。
+ * 出すのは「決めた数が売れたら、決めた額だけ上げる」という自分の段だけ。
+ */
+function SellCard({ venture, sold, store, go, toast }) {
+  const [open, setOpen] = useState(false);
+  const hasLetterWriter = (store.activeEmployees || []).some((e) => e.roleId === LETTER_ROLE_ID);
+  const p = normalizePricing(venture.pricing);
+  const [form, setForm] = useState(p);
+  useEffect(() => setForm(normalizePricing(venture.pricing)), [venture.id, venture.pricing]);
+
+  const plan = pricePlan(venture.pricing, sold);
+  const review = sellReview(venture);
+
+  const save = () => {
+    store.updateVenture(venture.id, { pricing: normalizePricing(form) });
+    toast('値段の段を決めました');
+  };
+  const toggle = (id) => {
+    store.updateVenture(venture.id, { sellChecks: { ...review.done, [id]: !review.done[id] } });
+  };
+
+  return (
+    <Card glyph="❏" title="有料記事として売る">
+      <p className="muted" style={{ marginTop: -6 }}>{priceLine(plan)}</p>
+      {plan.ready && (
+        <div className="stats">
+          <Stat value={formatMoney(plan.price)} label={`いまの値段（${plan.stage}段目）`} />
+          <Stat value={sold} label="売れた数" />
+          <Stat value={plan.netPerSale === null ? '—' : formatMoney(plan.netPerSale)} label="1件の手取り" />
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="btn block primary"
+        onClick={() => go('compose', { ventureId: venture.id, workflowId: 'paid_note' })}
+      >
+        ❏ 有料記事をつくる（無料のレターつき）
+      </button>
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        調べる → 読み手と流れを決める → 本文（有料）→ 無料のレター → 言い過ぎと誤りを見る、の順に進みます。
+        レターを別の担当にしているのは、中身が良くても手前の無料部分がイマイチだと手に取ってもらえないからです。
+      </p>
+      {/* レター担当（ライター）は最初から居る6役職に入っていない。
+          未雇用だとその手順ごと計画から外れる＝**売る文章が丸ごと抜ける**ので、
+          押す前に見えるようにしておく（実行してから気づくと1回ぶん無駄になる）。 */}
+      {!hasLetterWriter && (
+        <p className="muted" style={{ fontSize: 12.5 }}>
+          レター担当（ライター）がまだ在籍していません。このままでも本文は作れますが、
+          <strong style={{ color: '#fff' }}>無料で読める部分（買うかどうかを決める所）が抜けます。</strong>
+          <br />
+          <Action className="btn small" onClick={() => go('hire', { roleId: 'writer' })}>ライターを雇う</Action>
+        </p>
+      )}
+
+      <SectionTitle>値段の段</SectionTitle>
+      <p className="muted" style={{ marginTop: -6, fontSize: 12.5 }}>
+        安すぎると手元に残らず内容も軽く見られ、いきなり高いとまだ届きません。
+        <strong style={{ color: '#fff' }}>決めた数が売れるたびに、決めた額だけ上げる</strong>のが間を取る形です。
+      </p>
+      <Field label="最終的に売りたい値段（円）">
+        <input className="input" type="number" inputMode="numeric" min="0" value={form.targetJpy || ''}
+          onChange={(e) => setForm({ ...form, targetJpy: e.target.value })} />
+      </Field>
+      <Field label="最初の値段（円）">
+        <input className="input" type="number" inputMode="numeric" min="0" value={form.startJpy || ''}
+          onChange={(e) => setForm({ ...form, startJpy: e.target.value })} />
+      </Field>
+      {Number(form.targetJpy) > 0 && (
+        <button type="button" className="btn small" onClick={() => setForm({ ...form, startJpy: halfOf(form.targetJpy) })}>
+          まず半分（{formatMoney(halfOf(form.targetJpy))}）から始める
+        </button>
+      )}
+      <div className="btn-row">
+        <Field label="何部売れたら">
+          <input className="input" type="number" inputMode="numeric" min="1" value={form.everyN || ''}
+            onChange={(e) => setForm({ ...form, everyN: e.target.value })} />
+        </Field>
+        <Field label="いくら上げるか（円）">
+          <input className="input" type="number" inputMode="numeric" min="0" value={form.stepJpy || ''}
+            onChange={(e) => setForm({ ...form, stepJpy: e.target.value })} />
+        </Field>
+      </div>
+      <Field label="売る場所の手数料（％・任意）" hint="調べた数字を入れると、1件あたりの手取りが出ます。入れなければ出しません。">
+        <input className="input" type="number" inputMode="numeric" min="0" max="100" value={form.feePct || ''}
+          onChange={(e) => setForm({ ...form, feePct: e.target.value })} />
+      </Field>
+      <button type="button" className="btn" onClick={save}>段を保存する</button>
+      {plan.ready && plan.stages.length > 1 && (
+        <p className="muted" style={{ fontSize: 12 }}>
+          {plan.stages.map((st) => `${st.from}部〜 ${st.price.toLocaleString('ja-JP')}円`).join(' → ')}
+        </p>
+      )}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        ジャンルごとの相場は持っていません（手元に無い基準なので書きません）。
+        自分の分野で売れているものをいくつか見て、自分で決めてください。
+      </p>
+
+      <SectionTitle>出す前に確かめる（{review.count}／{review.total}）</SectionTitle>
+      <p className="muted" style={{ marginTop: -6, fontSize: 12.5 }}>{sellLine(review)}</p>
+      <button type="button" className="btn ghost block" onClick={() => setOpen(!open)}>
+        {open ? '閉じる' : '一つずつ確かめる'}
+      </button>
+      {open && SELL_CHECKS.map((c) => (
+        <div key={c.id} className="card tight">
+          <button
+            type="button"
+            className={`chip ${review.done[c.id] ? 'on' : ''}`}
+            onClick={() => toggle(c.id)}
+          >
+            {review.done[c.id] ? '済' : '未'} {c.label}
+          </button>
+          <p className="muted" style={{ fontSize: 11.5, margin: '6px 0 0' }}>{c.why}</p>
+        </div>
+      ))}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        Ouro は出す作業そのものはしません。道具でまとめて大量に投稿すると規約違反になり、
+        アカウントごと止められることがあるからです。作るところまでを任せて、出すのは自分の手で。
       </p>
     </Card>
   );

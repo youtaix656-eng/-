@@ -63,6 +63,12 @@ export function trustLabel(trust) {
  * @param {string} text 本文
  * @param {object} o { label, origin, trust }
  */
+/**
+ * 囲いの見出しに必ず入る文字列。**囲いの長さは中身によって伸びる**ので、
+ * 「囲われているか」を調べる側は目印の長さではなくこの語で見ること。
+ */
+export const FENCE_HEAD = 'ここから資料：';
+
 export function wrapUntrusted(text, { label = '資料', origin = '', trust = null } = {}) {
   const body = String(text || '').trim();
   if (!body) return '';
@@ -71,7 +77,7 @@ export function wrapUntrusted(text, { label = '資料', origin = '', trust = nul
     ORIGIN_LABELS[origin] || (origin ? String(origin) : ''),
     trust === null || trust === undefined ? '' : trustLabel(trust),
   ].filter(Boolean);
-  const head = `${fence} ここから資料：${label}${tags.length ? ` ｜ ${tags.join(' ｜ ')}` : ''} ${fence}`;
+  const head = `${fence} ${FENCE_HEAD}${label}${tags.length ? ` ｜ ${tags.join(' ｜ ')}` : ''} ${fence}`;
   return [head, body, `${fence} ここまで資料 ${fence}`].join('\n');
 }
 

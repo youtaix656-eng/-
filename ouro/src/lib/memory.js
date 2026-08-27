@@ -5,7 +5,7 @@
 // **社員が全情報へ無制限にアクセスする設計にしない。**
 // 読める範囲は employee.knowledgeScopes が決め、ここが唯一の関門になる。
 
-import { wrapUntrusted, isUntrustedOrigin, trustLabel, ORIGIN_LABELS } from './untrusted.js';
+import { wrapUntrusted, isUntrustedOrigin, trustLabel, ORIGIN_LABELS, FENCE_HEAD } from './untrusted.js';
 
 export const SCOPES = {
   company: 'company', // 会社共通
@@ -99,6 +99,7 @@ export const CONTEXT_LIMITS = {
   related: 500, // 関係する仕事
   pitfall: 400, // この役職で過去に起きたつまずき
   brief: 800, // 会社の現在地
+  style: 1500, // 書き方の見本（オーナーの文章。書く役だけに渡す）
 };
 
 /** 末尾を残して切り詰める。切ったことが分かる印を頭に付ける。 */
@@ -132,6 +133,7 @@ export function buildContext({
   relatedText = '',
   pitfallText = '',
   briefText = '',
+  styleText = '',
 }) {
   const layers = [];
   const parts = [];
@@ -184,6 +186,14 @@ export function buildContext({
   if (pitfallText) {
     layers.push({ layer: 'pitfall', count: 1 });
     parts.push(trimTail(pitfallText, CONTEXT_LIMITS.pitfall));
+  }
+
+  // 書き方の見本（オーナーの文章）。**渡すのは書く役だけ**（呼び出し側で絞る）。
+  // 囲いが要るもの（AI・外から来たもの）は styleText の中で既に囲われている。
+  if (styleText) {
+    layers.push({ layer: 'style', count: 1 });
+    parts.push(trimTail(styleText, CONTEXT_LIMITS.style));
+    if (styleText.includes(FENCE_HEAD)) hasUntrusted = true;
   }
 
   if (inherited) {

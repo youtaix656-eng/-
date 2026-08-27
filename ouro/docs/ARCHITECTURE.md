@@ -487,6 +487,29 @@ riskReview(venture)                              // 答えと「その時にで�
 - お金の話の確約（必ず稼げる／放置で増える／不労所得になる／リスクゼロ）も
   `guard.js` の `PROMISE_PATTERNS` で見張る。**止めない・書き換えない。**
 
+### 6-14. 書き方の見本と有料記事（`lib/style.js` / `lib/paid.js`）
+
+```js
+// 決まり（rules.js）＝守らせること／見本（style.js）＝まねさせるもの。混ぜない。
+StyleSample = { id, label, text, origin:'user'|'edited'|'ai'|'external', ... } // ouro:style
+styleText(samples, roleId)    // 書く役でなければ ''（roles.js の writesForReaders）
+checkEdited(original, edited) // AIの下書きのままは受け取らない
+buildContext({ ..., styleText })  // 社員が読む層の7つめ
+
+// 有料記事＝無料のレター＋有料の本文。レターは別の手順（workflows: paid_note）。
+LETTER_ROLE_ID = 'writer'     // 最初から居る6役職に入っていない＝未雇用なら抜ける
+pricePlan(venture.pricing, soldCount)  // 段の表は保存せず、売れた数から毎回導く
+sellReview(venture)           // 出す前の確認。数えるだけ・通せない関門にしない
+```
+
+- 見本を読ませるのは**書く役だけ**。全員に読ませると、調べるだけの社員の料金にも毎回乗る。
+- **来歴で囲いを変える**（自分で書いた／直した＝囲わない、AI／外＝囲う）。囲いの有無は
+  `untrusted.FENCE_HEAD` で見る（囲いの目印は中身によって伸びるので、長さで判定しない）。
+- 成果物から見本にするときの下敷きは `parseSections(x).sections.deliverable`。
+  **`parseSections(x).deliverable` は必ず undefined**（一度踏んだのでテストが見張る）。
+- **「自動で出す」は作らない**（規約違反でアカウントごと止まる）。
+- REST_KEYS のものは、**読み込みが済むまで「無い」と言い切らない**（`store.hydrated`）。
+
 ---
 
 ## 7. Knowledge Base 設計

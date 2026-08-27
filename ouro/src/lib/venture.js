@@ -15,6 +15,7 @@
 import { newId } from './id.js';
 import { dealAiCost, EARNED_STATUS, PIPELINE_STATUS } from './revenue.js';
 import { normalizeRisks } from './risk.js';
+import { normalizePricing, normalizeSellChecks } from './paid.js';
 
 export const VENTURE_STATES = {
   idea: '検討中',
@@ -54,6 +55,9 @@ export function makeVenture(data = {}) {
     // 仕上げ線＝「ここまで出来たら手を止める」。伸びた時に増やし続けないための1行。
     finishWhen: String(data.finishWhen || '').slice(0, 120),
     restedAt: Number(data.restedAt) || 0,
+    // 値付けの段（段階的に値上げする）と、売る前の確認。
+    pricing: normalizePricing(data.pricing),
+    sellChecks: normalizeSellChecks(data.sellChecks),
     notes: String(data.notes || '').slice(0, 1000),
     createdAt: data.createdAt || now,
     updatedAt: now,
