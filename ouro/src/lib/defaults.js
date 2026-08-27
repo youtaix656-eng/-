@@ -47,5 +47,15 @@ export function makeSettings() {
     // 切ると、掲示板が空のままでも完了になる。
     requireShare: true,
     starterHidden: false,
+    // ── 裏で動かす・知らせる（既定の考え方）──
+    // **閉じたら止まるのは Web の仕組み上どうにもならない。**
+    // その代わり「次に開いた時に続きから走る」を既定で入れておく。
+    autoResume: true,
+    // 最後にアプリを見ていた時刻。これより後に終わったものを「知らせ」に出す。
+    lastSeenAt: 0,
+    // 端末の通知（裏に回っている間に終わった時だけ出す）。許可が要るので既定オフ。
+    notifyDone: false,
+    // 走っている間、画面を眠らせない。電池を食うので既定オフ。
+    keepAwake: false,
   };
 }

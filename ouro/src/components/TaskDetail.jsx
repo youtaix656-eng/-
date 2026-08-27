@@ -20,6 +20,7 @@ import { prepublishChecks, prepublishLine } from '../lib/prepublish.js';
 import { isFlagged, overRedoLimit, REDO_LIMIT } from '../lib/workflow.js';
 import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js';
 import { ticketOf, dueStateOf, DUE_LABELS, needsShare } from '../lib/ledger.js';
+import { progressOf } from '../lib/resume.js';
 import { checkSummary } from '../lib/checks.js';
 
 export default function TaskDetail({ store, taskId, go }) {
@@ -104,7 +105,43 @@ export default function TaskDetail({ store, taskId, go }) {
         </Card>
       )}
 
-      <SectionTitle>仕事の流れ</SectionTitle>
+      <SectionTitle>経過（指示 → 成果物）</SectionTitle>
+      <Card className="tight">
+        <div className="post-row">
+          <div className="p-title">✎ あなたの指示</div>
+          <div className="muted" style={{ fontSize: 11.5 }}>
+            {new Date(task.createdAt).toLocaleString('ja-JP')}・{task.request.length}字
+          </div>
+        </div>
+        {progressOf(task).map((r) => (
+          <div key={r.id} className="post-row">
+            <div className="p-title">
+              {r.status === 'done' ? '✓' : r.status === 'failed' ? '✗' : r.status === 'running' ? '…' : '·'}{' '}
+              {r.who}
+              {r.kind === 'check' ? '（完成条件の確認）' : ''}
+            </div>
+            <div className="muted" style={{ fontSize: 11.5 }}>
+              {r.finishedAt ? new Date(r.finishedAt).toLocaleString('ja-JP') : '未実行'}
+              {r.tookMs !== null ? `・${Math.max(1, Math.round(r.tookMs / 1000))}秒` : ''}
+              {r.chars ? `・${r.chars}字` : ''}
+              {r.engine ? `・${r.engine}${r.model ? `／${r.model}` : ''}` : ''}
+              {r.cost > 0 ? `・${usd(r.cost)}` : ''}
+              {r.error ? `・⚠ ${r.error}` : ''}
+            </div>
+          </div>
+        ))}
+        {task.finishedAt && (
+          <div className="post-row">
+            <div className="p-title">◈ 提出物ができました</div>
+            <div className="muted" style={{ fontSize: 11.5 }}>
+              {new Date(task.finishedAt).toLocaleString('ja-JP')}
+              {task.totalCost > 0 ? `・合計 ${usd(task.totalCost)}` : ''}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <SectionTitle>各社員の作業</SectionTitle>
       <div className="steps">
         {task.steps.map((s) => {
           const role = roleById(s.roleId);

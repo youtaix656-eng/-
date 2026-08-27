@@ -418,6 +418,24 @@ engineStats(tasks)                      // エンジン別の回数・費用・�
 
 ---
 
+### 6-11. 閉じても続きから（`lib/resume.js` / `lib/notify.js`）
+
+```js
+resumeTargets(tasks, { limit })   // 続きから走らせてよい仕事（既定1件）
+finishedWhileAway(tasks, since)   // 見ていない間に終わったもの
+progressOf(task)                  // 誰が・いつ・何秒・何字・どのエンジン
+notifyDone(task, { onClick })     // 端末通知（許可があり、裏に回っている時だけ）
+keepAwake() / releaseAwake()      // 走っている間だけ画面を眠らせない
+```
+
+- **閉じたら止まる**のは変えられない。埋めるのは「次に開いた時に続きから」。
+- 再開の除外：`holdReason`（人が止めた）／`flagged`（外へ出せない）／`awaiting_approval`。
+- `settings.lastSeenAt` が知らせの基準。**目の前で終わった時は完了時に進める**
+  （進めないと、見たはずのものを次に開くたび知らせる）。
+- `resumedRef` で同じ仕事を1セッションに何度も再開しない。
+
+---
+
 ## 7. Knowledge Base 設計
 
 ```js

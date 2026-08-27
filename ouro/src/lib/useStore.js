@@ -34,6 +34,8 @@ import {
 // ここを静的に読むと、起動時に読む束へ AI エンジン4種＋通信の受け口まで入る。
 // 実行するまでは1バイトも要らないので、使う場所で読み込む（項目01と同じ考え方）。
 const loadRuntime = () => import('./runtime.js');
+// 知らせ（端末通知）と Wake Lock。どちらも使う時だけ読む。
+const loadNotify = () => import('./notify.js');
 // 文字を切るだけの処理は軽いので、これまでどおり即時に読む
 import { distill, extractUrls } from './distill.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
@@ -185,6 +187,10 @@ export function useStore() {
   const foldedRef = useRef(false);
   // いま走っているAI実行の中止スイッチ（新項目20）
   const abortRef = useRef(null);
+  // 通知をタップした時に開く先。画面側（App）が差し込む。
+  const notifyClickRef = useRef(null);
+  // このセッションで一度でも再開を試した仕事（同じものを何度も走らせない）
+  const resumedRef = useRef(new Set());
   // 会議の実行は decideApproval より後で定義されるので、ref 経由で呼ぶ
   // （承認したその場で会議を始めるため）
   const runMeetingRef = useRef(() => {});
@@ -1133,6 +1139,13 @@ export function useStore() {
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
       abortRef.current = controller;
 
+      // **走っている間だけ**画面を眠らせない（既定オフ）。
+      // スマホは画面が消えるとタブごと止めることがあるので、
+      // 最後まで走り切らせたい人はここを入れる。終わったら必ず離す。
+      if (stateRef.current.settings.keepAwake) {
+        loadNotify().then((n) => n.keepAwake()).catch(() => {});
+      }
+
       // 社員どうしの共通記憶（掲示板）と、関係する仕事。
       // どちらも AI を呼ばずに作れるので、1つのかたまりにつき1回だけ組み立てる。
       const tw = await loadTeamwork();
@@ -1266,6 +1279,29 @@ export function useStore() {
         if (found.length) updated = { ...updated, decisions: found };
       }
       patchTask(updated);
+
+      // 走り終わったので、眠らせない指定を離す（点けっぱなしは電池を食う）
+      if (stateRef.current.settings.keepAwake) {
+        loadNotify().then((n) => n.releaseAwake()).catch(() => {});
+      }
+
+      // **終わったことを知らせる。** 出せるのは「アプリが生きている間」だけなので、
+      // 裏に回っているタブが終えた時に出す。表で見ている時は画面に出ているので出さない。
+      if (updated.status === 'done') {
+        const hidden = typeof document === 'undefined' || document.visibilityState === 'hidden';
+        if (hidden) {
+          if (stateRef.current.settings.notifyDone) {
+            loadNotify()
+              .then((n) => n.notifyDone(updated, { onClick: () => { notifyClickRef.current?.(updated.id); } }))
+              .catch(() => {});
+          }
+        } else {
+          // **目の前で終わったものを、次に開いた時にもう一度知らせない。**
+          // 「見た印」を進めておく（知らせに出るのは、見ていない間に
+          //  終わったものだけ、という約束を保つ）。
+          put(KEYS.settings, { ...stateRef.current.settings, lastSeenAt: Date.now() });
+        }
+      }
 
       // 完了したら成果を知識にする（＝ウロボロスの循環）。
       // ただし **AIが動いていない「仕事の型」は自動で知識にしない。**
@@ -1413,6 +1449,47 @@ export function useStore() {
     },
     [runNextStep]
   );
+  const runTaskRef = useRef(null);
+  runTaskRef.current = runTask;
+
+  /**
+   * 中断された仕事を、続きから走らせる（新規）。
+   *
+   * **ブラウザのアプリは閉じられたら止まる。** だから「閉じても回り続ける」ではなく、
+   * 「次に開いた時に自分で続きから走る」で埋める。
+   * まとめて走らせない（開いた瞬間に何件も動くと、費用も分かりにくさも跳ねる）。
+   * 費用の承認・上限は今までどおり通る（runTask がそのまま面倒を見る）。
+   */
+  const resumeInterrupted = useCallback(async () => {
+    if (!stateRef.current.settings.autoResume) return [];
+    const { resumeTargets } = await import('./resume.js');
+    const targets = resumeTargets(stateRef.current.tasks).filter((t) => !resumedRef.current.has(t.id));
+    const started = [];
+    for (const t of targets) {
+      resumedRef.current.add(t.id);
+      log({ actor: 'user', action: 'taskResumed', target: t.title });
+      started.push(t.id);
+      // eslint-disable-next-line no-await-in-loop
+      await runTaskRef.current(t.id);
+    }
+    return started;
+  }, [log]);
+
+  /** 離れている間に終わったもの（知らせに使う）。 */
+  const finishedAway = useCallback(async () => {
+    const { finishedWhileAway } = await import('./resume.js');
+    return finishedWhileAway(stateRef.current.tasks, Number(stateRef.current.settings.lastSeenAt) || 0);
+  }, []);
+
+  /** 「見た」印を進める。知らせを閉じた時に呼ぶ。 */
+  const markSeen = useCallback(() => {
+    put(KEYS.settings, { ...stateRef.current.settings, lastSeenAt: Date.now() });
+  }, [put]);
+
+  /** 通知をタップした時の飛び先を、画面側から差し込む。 */
+  const onNotifyOpen = useCallback((fn) => {
+    notifyClickRef.current = fn;
+  }, []);
 
   /**
    * 失敗した手順をやり直す（新規）。
@@ -2195,6 +2272,11 @@ export function useStore() {
     putFunnelEntry,
     removeFunnelEntry,
     renameFunnelStage,
+    // 中断からの再開・完成の知らせ
+    resumeInterrupted,
+    finishedAway,
+    markSeen,
+    onNotifyOpen,
     // 事業・発信ログ
     addVenture,
     updateVenture,

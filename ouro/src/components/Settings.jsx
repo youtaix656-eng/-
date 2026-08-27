@@ -5,6 +5,7 @@ import { Card, Field, SectionTitle } from './ui.jsx';
 import { PROVIDERS } from '../lib/providers/index.js';
 import { DEFAULT_BASE_URL, DEFAULT_MODEL } from '../lib/providers/compat.js';
 import { VOICE_PRIVACY_NOTE, isVoiceInputAvailable } from '../lib/voice.js';
+import { canNotify, notifyState, askNotifyPermission, canKeepAwake } from '../lib/notify.js';
 import { PLANS } from '../data/plans.js';
 
 export default function Settings({ store, toast }) {
@@ -286,6 +287,72 @@ export default function Settings({ store, toast }) {
             value={store.settings.usdJpy}
             onChange={(e) => store.updateSettings({ usdJpy: Number(e.target.value) || 155 })}
           />
+        </Field>
+      </Card>
+
+      <Card glyph="◷" title="裏で動かす・終わったら知らせる">
+        <p className="muted" style={{ marginTop: -6 }}>
+          <strong style={{ color: '#fff' }}>アプリを完全に閉じると、仕事は本当に止まります。</strong>
+          ブラウザの仕組み上どうにもならないので、その代わりに次の3つで埋めています。
+        </p>
+        <Field
+          label="開いた時に、止まっている仕事を続きから走らせる"
+          hint="閉じている間に止まったものを、次に開いた瞬間に拾います。一度に走らせるのは1件だけ。費用の承認・上限は今までどおり通ります。"
+        >
+          <select
+            className="select"
+            value={store.settings.autoResume === false ? 'off' : 'on'}
+            onChange={(e) => store.updateSettings({ autoResume: e.target.value === 'on' })}
+          >
+            <option value="on">続きから走らせる（既定）</option>
+            <option value="off">走らせない（自分で押す）</option>
+          </select>
+        </Field>
+        <Field
+          label="終わったら端末で知らせる"
+          hint={
+            canNotify()
+              ? '裏に回っている間に終わった時だけ出します。閉じている間は出せません（サーバーを持たないため）。'
+              : 'このブラウザは通知に対応していません。'
+          }
+        >
+          <div style={{ display: 'flex', gap: 6 }}>
+            <select
+              className="select"
+              value={store.settings.notifyDone ? 'on' : 'off'}
+              onChange={async (e) => {
+                const on = e.target.value === 'on';
+                if (on && notifyState() !== 'granted') {
+                  const r = await askNotifyPermission();
+                  if (r !== 'granted') {
+                    toast('通知が許可されませんでした');
+                    return;
+                  }
+                }
+                store.updateSettings({ notifyDone: on });
+              }}
+            >
+              <option value="off">知らせない（既定）</option>
+              <option value="on">知らせる</option>
+            </select>
+          </div>
+        </Field>
+        <Field
+          label="走っている間、画面を眠らせない"
+          hint={
+            canKeepAwake()
+              ? 'スマホは画面が消えるとタブごと止めることがあります。入れると最後まで走り切りやすくなりますが、電池を食います。'
+              : 'この端末では使えません。'
+          }
+        >
+          <select
+            className="select"
+            value={store.settings.keepAwake ? 'on' : 'off'}
+            onChange={(e) => store.updateSettings({ keepAwake: e.target.value === 'on' })}
+          >
+            <option value="off">眠らせる（既定）</option>
+            <option value="on">走っている間は眠らせない</option>
+          </select>
         </Field>
       </Card>
 

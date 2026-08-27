@@ -439,3 +439,83 @@ test('知識にするのに必要なものは、手順そのものが持って�
   assert.equal(s.offline, false);
   assert.equal(s.citations.length, 1);
 });
+
+// ── ⑬ 中断からの再開・完成の知らせ・経過 ──
+
+test('中断された仕事だけを再開する（保留・印付き・承認待ちは動かさない）', async () => {
+  const { interruptedTasks, resumeTargets } = await import('../src/lib/resume.js');
+  const tasks = [
+    { id: 'ok1', status: 'queued', createdAt: 2, steps: [{ status: 'pending' }] },
+    { id: 'ok2', status: 'running', createdAt: 1, steps: [{ status: 'running' }] },
+    { id: 'hold', status: 'queued', holdReason: '待つ', steps: [{ status: 'pending' }] },
+    { id: 'flag', status: 'queued', flagged: { reason: 'x' }, steps: [{ status: 'pending' }] },
+    { id: 'apv', status: 'awaiting_approval', steps: [{ status: 'pending' }] },
+    { id: 'done', status: 'done', steps: [{ status: 'done' }] },
+    { id: 'fail', status: 'failed', steps: [{ status: 'failed' }] },
+    { id: 'empty', status: 'queued', steps: [] },
+  ];
+  assert.deepEqual(interruptedTasks(tasks).map((t) => t.id).sort(), ['ok1', 'ok2']);
+  // 古いものから、一度に1件だけ
+  assert.deepEqual(resumeTargets(tasks).map((t) => t.id), ['ok2']);
+  assert.equal(resumeTargets(tasks, { limit: 5 }).length, 2);
+});
+
+test('離れている間に終わったものだけを知らせる', async () => {
+  const { finishedWhileAway, doneMessage } = await import('../src/lib/resume.js');
+  const now = 1000;
+  const tasks = [
+    { id: 'new', status: 'done', finishedAt: 900 },
+    { id: 'old', status: 'done', finishedAt: 100 },
+    { id: 'yet', status: 'running', finishedAt: 0 },
+  ];
+  assert.deepEqual(finishedWhileAway(tasks, 500, now).map((t) => t.id), ['new']);
+  // 一度も見ていない（0）なら何も出さない（初回に過去のもの全部が出ると邪魔）
+  assert.deepEqual(finishedWhileAway(tasks, 0, now), []);
+  assert.match(doneMessage([1]), /成果物が完成しました/);
+  assert.match(doneMessage([1, 2]), /2件/);
+  assert.equal(doneMessage([]), '');
+});
+
+test('経過は「誰が・いつ・どれだけ」を持つ。分からない時間を0秒と書かない', async () => {
+  const { progressOf } = await import('../src/lib/resume.js');
+  const rows = progressOf({
+    steps: [
+      { id: 's1', employeeName: 'ルナ', roleId: 'researcher', status: 'done', startedAt: 1000, finishedAt: 4000, output: 'abc', providerName: 'Gemini', model: 'g', cost: 0.01 },
+      { id: 's2', employeeName: null, roleId: 'writer', status: 'pending' },
+    ],
+  });
+  assert.equal(rows[0].who, 'ルナ');
+  assert.equal(rows[0].tookMs, 3000);
+  assert.equal(rows[0].chars, 3);
+  assert.equal(rows[1].who, '未割り当て');
+  assert.equal(rows[1].tookMs, null, '実行していないのに時間を作っている');
+});
+
+test('知らせと眠らせない仕組みは、使えない端末でも落ちない', async () => {
+  const n = await import('../src/lib/notify.js');
+  assert.equal(n.canNotify(null), false);
+  assert.equal(n.notifyState(null), 'unsupported');
+  assert.equal(await n.askNotifyPermission(null), 'unsupported');
+  assert.equal(n.notifyDone({ id: 'a' }, { win: null }), false);
+  assert.equal(n.canKeepAwake(null), false);
+  assert.equal(await n.keepAwake(null), false);
+  await n.releaseAwake();
+  assert.equal(n.isAwake(), false);
+});
+
+test('許可が無ければ通知を出さない', async () => {
+  const n = await import('../src/lib/notify.js');
+  const win = { Notification: function Rec() {} };
+  win.Notification.permission = 'default';
+  assert.equal(n.notifyDone({ id: 'a', title: 'x' }, { win }), false);
+  win.Notification.permission = 'denied';
+  assert.equal(n.notifyDone({ id: 'a', title: 'x' }, { win }), false);
+});
+
+test('裏で動かす設定の既定（勝手に許可を取らない・勝手に電池を食わない）', () => {
+  const s = makeSettings();
+  assert.equal(s.autoResume, true, '続きから走らせるは既定で入っていてよい（費用の承認は通る）');
+  assert.equal(s.notifyDone, false, '通知は既定オフ');
+  assert.equal(s.keepAwake, false, '画面を眠らせないは既定オフ');
+  assert.equal(s.lastSeenAt, 0);
+});

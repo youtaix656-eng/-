@@ -9,6 +9,7 @@ import { useStore } from './lib/useStore.js';
 import * as perf from './lib/perf.js';
 import { LOADERS, preloadView, preloadMany, preloadRuntime } from './lib/preload.js';
 import { useToast, Skeleton } from './components/ui.jsx';
+import { doneMessage } from './lib/resume.js';
 import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
@@ -93,6 +94,8 @@ export default function App() {
   const [view, setView] = useState('home');
   const [arg, setArg] = useState(null);
   const [stack, setStack] = useState([]);
+  // 離れている間に終わった仕事の知らせ（「開きますか？ はい／いいえ」）
+  const [done, setDone] = useState(null);
 
   const go = useCallback(
     (next, nextArg = null) => {
@@ -165,6 +168,51 @@ export default function App() {
       if (typeof cancelIdleCallback === 'function') cancelIdleCallback(id);
     };
   }, [store.ready]);
+
+  // ── 開いた時にやること ──
+  //
+  // ① 離れている間に終わった仕事があれば「開きますか？」を出す
+  // ② 中断されたまま止まっている仕事があれば、**続きから**走らせる
+  //
+  // **閉じている間は本当に止まっている**（ブラウザの仕組み上どうにもならない）。
+  // その代わり、開いた瞬間にここが埋める。
+  useEffect(() => {
+    if (!store.ready) return;
+    let alive = true;
+    (async () => {
+      const finished = await store.finishedAway();
+      if (!alive) return;
+      if (finished.length) setDone(finished);
+      else store.markSeen();
+      // 知らせを出したあとで再開する（順番を逆にすると、いま終わったものまで
+      // 「離れている間に終わった」ことになってしまう）
+      await store.resumeInterrupted();
+    })();
+    return () => {
+      alive = false;
+    };
+    // 起動時に1度だけ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.ready]);
+
+  // タブに戻ってきた時も、止まっているものを拾う
+  useEffect(() => {
+    if (!store.ready) return undefined;
+    const onBack = () => {
+      if (document.visibilityState === 'visible') store.resumeInterrupted();
+    };
+    document.addEventListener('visibilitychange', onBack);
+    return () => document.removeEventListener('visibilitychange', onBack);
+  }, [store.ready, store.resumeInterrupted]);
+
+  // 端末の通知をタップした時の飛び先
+  useEffect(() => {
+    store.onNotifyOpen((taskId) => {
+      setDone(null);
+      store.markSeen();
+      go('task', taskId);
+    });
+  }, [store, go]);
 
   // ブラウザの戻るで1つ前の画面へ
   useEffect(() => {
@@ -275,7 +323,50 @@ export default function App() {
         ))}
       </nav>
 
+      {done && done.length > 0 && (
+        <DoneAsk
+          tasks={done}
+          onYes={() => {
+            const first = done[0];
+            setDone(null);
+            store.markSeen();
+            go('task', first.id);
+          }}
+          onNo={() => {
+            setDone(null);
+            store.markSeen();
+          }}
+        />
+      )}
+
       {toastNode}
+    </div>
+  );
+}
+
+/**
+ * 「成果物が完成しました！ 開きますか？」
+ *
+ * **閉じている間に届いたものを、開いた瞬間に必ず1度だけ見せる。**
+ * 「いいえ」でも見た印は進めるので、同じ知らせが何度も出ることはない
+ * （仕事そのものは消えないので、あとから台帳や一覧から開ける）。
+ */
+function DoneAsk({ tasks, onYes, onNo }) {
+  const first = tasks[0];
+  return (
+    <div className="sheet-bg" role="presentation">
+      <div className="sheet fade-in" role="dialog" aria-modal="true">
+        <h2>{doneMessage(tasks)}</h2>
+        <p className="muted" style={{ marginTop: -4 }}>
+          {first.title}
+          {tasks.length > 1 ? `　ほか${tasks.length - 1}件` : ''}
+        </p>
+        <p className="muted" style={{ fontSize: 12.5 }}>開きますか？</p>
+        <div className="btn-row" style={{ marginTop: 10 }}>
+          <button type="button" className="btn primary" onClick={onYes}>はい</button>
+          <button type="button" className="btn" onClick={onNo}>いいえ</button>
+        </div>
+      </div>
     </div>
   );
 }
