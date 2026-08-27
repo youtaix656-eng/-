@@ -100,13 +100,16 @@ export const compatProvider = {
       });
       sink.flush();
       out.text = out.text.trim();
-      return out;
+      // **実際に投げたモデル名を返す。** 返さないと、記録が器の id（'local'）のままになり、
+      // 「どのモデルで通ったか」が分からなくなる（エンジンの実績の表にも出ない）。
+      return { ...out, model };
     }
 
     const json = await res.json();
     return {
       text: ((json.choices && json.choices[0] && json.choices[0].message.content) || '').trim(),
       citations: [],
+      model,
       usage: {
         input: (json.usage && json.usage.prompt_tokens) || 0,
         output: (json.usage && json.usage.completion_tokens) || 0,

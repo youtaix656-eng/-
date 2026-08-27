@@ -301,15 +301,23 @@ export function assembleResult(task) {
  * 見出しを探すと途中の手順の「まとめ」や担当者名を拾ってしまい、
  * 本物の「あなたの判断が要ること」が見つからなくなる（実際に起きた）。
  */
-export function finalOutput(task) {
+/**
+ * 会社としての提出物を書いた手順（＝最後の「成果」の手順）。
+ * **完成の確認（kind:'check'）は成果ではない**ので必ず除く。
+ */
+export function finalStep(task) {
   const steps = (task && task.steps) || [];
-  // 完成の確認は提出物ではない（○×の並びなので、ここから見出しを探さない）
   const done = steps.filter((s) => s.status === 'done' && s.output && s.kind !== 'check');
-  if (!done.length) return '';
+  if (!done.length) return null;
   const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
   let best = done[0];
   for (const s of done) if (g(s) >= g(best)) best = s;
-  return best.output || '';
+  return best;
+}
+
+export function finalOutput(task) {
+  const best = finalStep(task);
+  return best ? best.output || '' : '';
 }
 
 export function taskProgress(task) {

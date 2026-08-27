@@ -392,3 +392,50 @@ test('Gemini の登録モデルは、廃止された世代を残していない'
   }
   assert.ok(ids.length >= 2);
 });
+
+// ── ⑫ 完了した仕事が、ちゃんと知識になる ──
+
+test('完成条件の確認は「成果の手順」ではない（finalStep が確認を選ばない）', async () => {
+  const { finalStep, finalOutput } = await import('../src/lib/workflow.js');
+  const task = {
+    steps: [
+      { id: 's1', group: 0, kind: 'work', status: 'done', output: '調べた結果', employeeId: 'e1', roleId: 'researcher' },
+      { id: 's2', group: 1, kind: 'work', status: 'done', output: '書いた記事', employeeId: 'e2', roleId: 'writer' },
+      { id: 's3', group: 2, kind: 'check', status: 'done', output: '[YES] 出典がある', employeeId: 'e3', roleId: 'reviewer' },
+    ],
+  };
+  const last = finalStep(task);
+  assert.equal(last.id, 's2', '確認の手順を成果として選んでいる');
+  assert.equal(finalOutput(task), '書いた記事');
+  assert.equal(finalStep({ steps: [] }), null);
+  // 確認しかない仕事（成果の手順が全部失敗した）では null
+  assert.equal(finalStep({ steps: [{ id: 'c', kind: 'check', status: 'done', output: 'x' }] }), null);
+});
+
+test('未雇用で番号が飛んでいても、最後の成果の手順を選べる', async () => {
+  const { finalStep } = await import('../src/lib/workflow.js');
+  const task = {
+    steps: [
+      { id: 'a', group: 0, kind: 'work', status: 'done', output: 'A' },
+      { id: 'b', group: 4, kind: 'work', status: 'done', output: 'B' },
+      { id: 'c', group: 5, kind: 'check', status: 'done', output: '[YES]' },
+    ],
+  };
+  assert.equal(finalStep(task).id, 'b');
+});
+
+test('知識にするのに必要なものは、手順そのものが持っている', async () => {
+  const { applyStepResult } = await import('../src/lib/workflow.js');
+  const task = { steps: [{ id: 's1', group: 0, kind: 'work', status: 'running', employeeId: 'e1', employeeName: 'ルナ', roleId: 'researcher' }] };
+  const next = applyStepResult(task, 's1', {
+    text: '本文', providerId: 'gemini', providerName: 'Gemini', model: 'gemini-3.7-flash',
+    offline: false, citations: [{ url: 'https://example.com', title: 'x' }], cost: 0.01, usage: { input: 1, output: 1 },
+  });
+  const s = next.steps[0];
+  // saveResultAsKnowledge が使う項目が、あとから取り出せること
+  for (const k of ['employeeId', 'employeeName', 'roleId', 'offline', 'citations', 'providerName', 'output']) {
+    assert.ok(k in s, `${k} が手順に残っていない`);
+  }
+  assert.equal(s.offline, false);
+  assert.equal(s.citations.length, 1);
+});

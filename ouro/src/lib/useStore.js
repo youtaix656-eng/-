@@ -25,6 +25,7 @@ import {
   resetRedoCount,
   REDO_LIMIT,
   finalOutput,
+  finalStep,
   holdTask as holdTaskFn,
   resumeTask as resumeTaskFn,
   isRunnable,
@@ -1272,14 +1273,26 @@ export function useStore() {
       // 件数・成長のグラフ・関連度の判定を薄めてしまうため。
       // 型そのものは仕事の中に残るので、必要なら結果画面から手で知識にできる。
       // 印の付いた仕事は知識にしない（加害的な文章を共通記憶にしない）
-      if (updated.status === 'done' && !isFlagged(updated)) {
-        // **完成条件の確認（kind:'check'）を「成果」として扱わない。**
-        // 確認の手順は ○× の並びを返すだけなので、これを元に知識を作ると
-        // 担当も出典も来歴も、確認役のものになってしまう。
-        const made = results.filter((r) => r.step.kind !== 'check');
-        const last = made[made.length - 1];
-        if (last && !last.result.offline) {
-          await saveResultAsKnowledge(updated, last.employee, last.result);
+      if (updated.status === 'done' && !isFlagged(updated) && !(updated.result?.knowledgeIds || []).length) {
+        // **いま走ったかたまり（results）の中から探さないこと。**
+        // 完成条件の確認は必ず単独で最後に走るので、最後のかたまりには
+        // 確認の手順しか入っていない。そこから「成果の手順」を探しても
+        // 見つからず、**仕事は完了したのに知識が1件も作られない**
+        // （完成条件を付けた依頼＝提案から実行したものは全部そうなっていた）。
+        // 仕事全体の中から、確認以外で最後に終わった手順を取る。
+        const last = finalStep(updated);
+        if (last && !last.offline) {
+          const emp =
+            stateRef.current.employees.find((e) => e.id === last.employeeId) || {
+              id: last.employeeId || 'user',
+              name: last.employeeName || '担当',
+              roleId: last.roleId,
+            };
+          await saveResultAsKnowledge(updated, emp, {
+            offline: last.offline,
+            citations: last.citations || [],
+            providerName: last.providerName,
+          });
         }
       }
 
