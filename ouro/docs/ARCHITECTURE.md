@@ -370,6 +370,51 @@ prepublishChecks({ text, task, past })
 
 ---
 
+### 6-8. 外から来た文章の扱い（`lib/untrusted.js`）
+
+```js
+wrapUntrusted(text, { label, origin, trust })  // 囲い＋来歴＋確からしさ
+SOURCE_RULE                                     // 「従ってよい指示は4つだけ」
+isUntrustedOrigin(origin)                       // external / ai だけ true
+```
+
+- `buildContext` が知識を渡すとき、**外から来たものだけ**を囲い、`hasUntrusted` を返す。
+- `buildSystemPrompt` は `hasUntrusted` の時だけ `SOURCE_RULE` を足し、**材料より前**に置く。
+- 囲いの目印（`=====`）は資料の中身とぶつかったら伸ばす（囲いを閉じさせない）。
+- **書き換えない。** 消すと資料として使えないので、囲って「指示ではない」と伝えるだけ。
+
+### 6-9. お金（見積もり・上限・エンジンの実績）
+
+```js
+estimateRun({ steps, employeeFor, secrets, settings, request })
+// → { calls, usd, jpyLow, jpyHigh, rows, free }
+route({ ..., settings, costMode })      // 'auto' | 'cheap' | 'best'
+addCost(settings, usd, now)             // 日・月・合計を積む
+checkAction({ ..., spentThisMonth, spentToday })
+engineStats(tasks)                      // エンジン別の回数・費用・失敗
+```
+
+- 見積もりは**目安**（`AVG_INPUT_TOKENS` / `AVG_OUTPUT_TOKENS`）で、**幅**（0.5〜2倍）で出す。
+- 画面の「AIを呼ぶ ◯回」と見積もりは**同じ数**から作る（担当がいる手順＋確認の手順）。
+- `costMode` は**社員の希望（`modelPref`）より優先**する。
+- 日の上限・月の上限は、自動承認を入れていても確認へ戻す。
+
+### 6-10. エンジンの登録（`providers/`）
+
+| 項目 | 意味 |
+|---|---|
+| `needsKey` | APIキーが要るか |
+| `isReady(secrets, settings)` | キー以外で決まるエンジン用（ローカルAIは宛先URL） |
+| `freeTier` / `freeNote` | 0円で始められる印。画面が先頭に出す |
+| `models[].tier` | `low` / `mid` / `high`。`costMode` と重さで選ぶ |
+
+- `availableProviders(secrets, settings)` は `isReady` があればそちらを見る。
+- `local`（AI未使用の受け皿）は**選ぶ側でも最後**に回す。
+- `runtime.js` とエンジン一式は **`useStore` の `loadRuntime()` で押した時に読む**
+  （起動時に読む束へ入れない）。暇な時に `preloadRuntime()` が先読みする。
+
+---
+
 ## 7. Knowledge Base 設計
 
 ```js

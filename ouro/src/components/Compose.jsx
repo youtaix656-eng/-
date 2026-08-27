@@ -7,6 +7,7 @@ import { planSteps, detectNeeds } from '../lib/dispatcher.js';
 import { roleById } from '../data/roles.js';
 import { workflowById } from '../data/workflows.js';
 import { availableProviders } from '../lib/providers/index.js';
+import { estimateRun, estimateLine } from '../lib/estimate.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { suggestPlan, MIN_REQUEST } from '../lib/suggest.js';
 import Portrait from './Portrait.jsx';
@@ -35,6 +36,8 @@ export default function Compose({ store, preset = {}, go }) {
   // **既定は提案。** 選べるものが増えすぎて、選ぶこと自体が負担になっていた。
   // 社員を直に指名して来た時だけ、最初から手動にする。
   const [mode, setMode] = useState(preset.employeeId ? 'manual' : 'suggest');
+  // モデルの選び方（この依頼だけ）。既定は設定から。
+  const [costMode, setCostMode] = useState(store.settings.costMode || 'auto');
   const genres = allGenres(store.genres);
 
   // おすすめの組み合わせ（AIを呼ばずに、語の一致と既存の計画から作る）
@@ -90,6 +93,8 @@ export default function Compose({ store, preset = {}, go }) {
       // 事業から依頼した時の紐づけ。**提案では推測しない**
       // （呼び出し元が決めているものを推測で上書きしない、と同じ理由）。
       ventureId: preset.ventureId || null,
+      // この依頼だけモデルを下げる／上げる（設定の既定より優先）
+      costMode,
       context,
       genreId: 'genreId' in v ? v.genreId : genreId,
       dueAt: spec.dueAt ? new Date(spec.dueAt).getTime() : null,
@@ -155,6 +160,8 @@ export default function Compose({ store, preset = {}, go }) {
           request={request}
           store={store}
           go={go}
+          costMode={costMode}
+          setCostMode={setCostMode}
           onYes={runSuggestion}
           onNo={editSuggestion}
         />
@@ -364,7 +371,34 @@ export default function Compose({ store, preset = {}, go }) {
  * 選べること自体が負担になっていた。まず1つ出して、違えば直せばよい。
  * 判定は AI を呼ばずに（語の一致だけで）作っているので、費用はかからない。
  */
-function SuggestionCard({ suggestion, request, store, go, onYes, onNo }) {
+/**
+ * 押す前に「およそいくらか」を出す。
+ * **必ず「目安」と書く**（実際の長さは依頼と材料で変わるので、断定にしない）。
+ */
+function CostLine({ suggestion, store, costMode }) {
+  // **上のカードの「AIを呼ぶ ◯回」と同じ数で計算すること。**
+  // 別々に数えると、同じカードの中に違う回数が2つ並ぶ。
+  // 実際に走るのは「担当がいる手順」＋（完成条件があれば）確認の手順1つ。
+  const staffed = suggestion.steps.filter((x) => x.employee);
+  const withCheck =
+    suggestion.doneWhen && staffed.length ? [...staffed, staffed[staffed.length - 1]] : staffed;
+  const est = estimateRun({
+    steps: withCheck,
+    employeeFor: (roleId) => store.assignFor(roleId, suggestion.genreId),
+    secrets: store.secrets,
+    settings: { ...store.settings, costMode },
+    request: '',
+  });
+  const line = estimateLine(est);
+  if (!line) return null;
+  return (
+    <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: 12.5 }}>
+      ¥ {line}
+    </p>
+  );
+}
+
+function SuggestionCard({ suggestion, request, store, go, costMode, setCostMode, onYes, onNo }) {
   if (!request.trim()) {
     return (
       <p className="muted" style={{ textAlign: 'center', marginTop: -4 }}>
@@ -412,6 +446,25 @@ function SuggestionCard({ suggestion, request, store, go, onYes, onNo }) {
             <div className="k">AIを呼ぶ</div>
             <div className="v">{suggestion.calls}回</div>
           </div>
+        </div>
+
+        <CostLine suggestion={suggestion} store={store} costMode={costMode} />
+
+        <div className="chips" style={{ marginTop: 8 }}>
+          {[
+            ['cheap', '安いモデルで'],
+            ['auto', 'おまかせ'],
+            ['best', '良いモデルで'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`chip ${costMode === id ? 'on' : ''}`}
+              onClick={() => setCostMode(id)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="sg-people">

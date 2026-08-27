@@ -7,7 +7,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { useStore } from './lib/useStore.js';
 import * as perf from './lib/perf.js';
-import { LOADERS, preloadView, preloadMany } from './lib/preload.js';
+import { LOADERS, preloadView, preloadMany, preloadRuntime } from './lib/preload.js';
 import { useToast, Skeleton } from './components/ui.jsx';
 import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
@@ -154,6 +154,8 @@ export default function App() {
     const id = idle(
       () => {
         preloadMany(['compose', 'toc', 'calendar', 'task', 'employee']);
+        // 実行の中身（AIエンジン一式）も、暇なうちに取っておく
+        preloadRuntime();
         // さらに空きがあれば、会社バーから開く画面も
         idle(() => preloadMany(['company', 'team', 'approvals', 'ledger', 'funnel', 'settings', 'characters', 'connect']), { timeout: 8000 });
       },

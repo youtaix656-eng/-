@@ -63,6 +63,17 @@ export function preloadView(name) {
   }
 }
 
+/**
+ * 実行の中身（runtime.js とエンジン一式）を先に取っておく。
+ * 押した時に読むと最初の1回だけ待たされるので、暇な時に取る。
+ * **起動時に読む束には入れない**（実行するまでは1バイトも要らないため）。
+ */
+export function preloadRuntime() {
+  if (!shouldPrefetch() || started.has('__runtime')) return;
+  started.add('__runtime');
+  import('./runtime.js').catch(() => started.delete('__runtime'));
+}
+
 /** まだ読んでいない画面をまとめて先読みする（暇な時に呼ぶ／新項目02）。 */
 export function preloadMany(names) {
   if (!shouldPrefetch()) return;

@@ -12,6 +12,7 @@ import { roleById, groupById } from '../data/roles.js';
 import { isToolEnabled } from '../data/tools.js';
 import { outputFormatPrompt } from './outline.js';
 import { rulesPrompt } from './rules.js';
+import { SOURCE_RULE } from './untrusted.js';
 
 // ── 新項目21：同じ問いの答えを使い回す ──
 //
@@ -65,7 +66,7 @@ export function isFinalStep(task, step) {
 }
 
 /** 社員の人格をシステムプロンプトに起こす。 */
-export function buildSystemPrompt({ employee, company, contextText, isFinal = false }) {
+export function buildSystemPrompt({ employee, company, contextText, isFinal = false, hasUntrusted = false }) {
   const role = roleById(employee.roleId);
   const group = role ? groupById(role.group || 'knowledge') : null;
   const lines = [
@@ -95,6 +96,9 @@ export function buildSystemPrompt({ employee, company, contextText, isFinal = fa
   }
 
   if (contextText) {
+    // **指示の出どころの宣言は、材料より必ず先に置く。**
+    // 後ろに置くと、資料の中の「指示」が「あとから来た指示」に見えてしまう。
+    if (hasUntrusted) lines.push('', SOURCE_RULE);
     lines.push('', '## 使える材料', contextText);
   }
   return lines.join('\n');
@@ -117,6 +121,7 @@ export async function runStep({
   boardText = '',
   relatedText = '',
   pitfallText = '',
+  briefText = '',
   signal,
   onDelta,
 }) {
@@ -128,16 +133,26 @@ export async function runStep({
   const decision = route({
     employee,
     secrets,
+    settings,
     request: `${task.request || ''} ${step.instruction || ''}`,
     mode: settings.routerMode || 'auto',
+    // 仕事ごとの指定を、全体の既定より優先する
+    // （「この依頼は安いモデルでいい」を人が言えるようにするため）。
+    costMode: task.costMode || settings.costMode || 'auto',
     needs,
   });
 
   const provider = providerById(decision.providerId);
   if (!provider) throw new Error(`エンジン ${decision.providerId} が見つかりません`);
 
-  const context = buildContext({ employee, task, knowledgeList, inherited, boardText, relatedText, pitfallText });
-  const system = buildSystemPrompt({ employee, company, contextText: context.text, isFinal: isFinalStep(task, step) });
+  const context = buildContext({ employee, task, knowledgeList, inherited, boardText, relatedText, pitfallText, briefText });
+  const system = buildSystemPrompt({
+    employee,
+    company,
+    contextText: context.text,
+    isFinal: isFinalStep(task, step),
+    hasUntrusted: context.hasUntrusted,
+  });
 
   // 受付のときに決めた条件（成果物の形・完成条件・使う材料・触れないこと）。
   // 空なら何も足さないので、これまでどおり1行の依頼でも動く。
@@ -184,6 +199,8 @@ export async function runStep({
   const res = await callWithRetry(provider, {
     apiKey: secrets[provider.id],
     model: decision.model,
+    // ローカルAI（compat）は宛先とモデル名を設定から読む
+    settings,
     system,
     messages: [{ role: 'user', content: userContent }],
     tools,
@@ -249,45 +266,4 @@ async function callWithRetry(provider, args) {
     // やり直しは1度だけ。ここで失敗したら、そのまま失敗として返す。
     return provider.run(args);
   }
-}
-
-/**
- * 成果テキストから、知識にするタイトルと要約を取り出す。
- *
- * preferredTitle（＝ユーザー自身の依頼文から作ったタイトル）があれば必ずそれを使う。
- * 成果本文の先頭は `## リサーチャー・ルナ` のような担当者名の見出しなので、
- * それをタイトルにすると「リサーチャー・ルナ」という検索できない知識ができてしまう。
- */
-export function distill(text = '', preferredTitle = '') {
-  const clean = String(text).replace(/\r/g, '');
-  const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
-
-  const heading = lines.find((l) => /^#{1,3}\s+/.test(l));
-  const title =
-    (preferredTitle && preferredTitle.slice(0, 60)) ||
-    (heading ? heading.replace(/^#{1,3}\s+/, '').slice(0, 60) : '') ||
-    '成果';
-
-  // 一覧に出る1行の要約なので、**文になっていない行は拾わない**。
-  // 注意書き（⚠・※）、見出し、箇条書き（記号・番号つきの両方）、
-  // 表の行、引用、括弧だけの補足を外す。
-  // ※ 番号つき（「1. 一次情報が…」）を外していなかったため、
-  //   箇条書きの途中が知識カードの要約になっていた。
-  const isNoise = (l) =>
-    /^[⚠※]/.test(l) ||
-    /^#{1,3}\s/.test(l) ||
-    /^[-*・>＞|｜]/.test(l) ||
-    /^[0-9０-９]+\s*[.．)）、]/.test(l) ||
-    /^[（(]/.test(l) ||
-    /^[　\s]*[（(]/.test(l);
-  const firstBody = lines.find((l) => !isNoise(l) && l.length > 10);
-  const summary = (firstBody || lines.find((l) => !isNoise(l)) || lines[0] || '').slice(0, 240);
-
-  return { title, summary };
-}
-
-/** 出力に含まれる URL を出典候補として拾う。 */
-export function extractUrls(text = '') {
-  const found = String(text).match(/https?:\/\/[^\s)）」』】、,]+/g) || [];
-  return [...new Set(found)].slice(0, 20);
 }

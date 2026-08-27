@@ -29,7 +29,12 @@ import {
   resumeTask as resumeTaskFn,
   isRunnable,
 } from './workflow.js';
-import { runStep, distill, extractUrls } from './runtime.js';
+// **実行の中身（runtime.js とエンジン一式）は、押した時に読む。**
+// ここを静的に読むと、起動時に読む束へ AI エンジン4種＋通信の受け口まで入る。
+// 実行するまでは1バイトも要らないので、使う場所で読み込む（項目01と同じ考え方）。
+const loadRuntime = () => import('./runtime.js');
+// 文字を切るだけの処理は軽いので、これまでどおり即時に読む
+import { distill, extractUrls } from './distill.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
 import { decisionsFrom, decideDecision } from './decisions.js';
@@ -57,11 +62,10 @@ const loadTeamwork = () =>
     ...consult,
     ...pitfalls,
   }));
-import { checkAction, addCost, spentThisMonthOf } from './permissions.js';
+import { checkAction, addCost, spentThisMonthOf, spentTodayOf } from './permissions.js';
 import { createDeal } from './revenue.js';
 import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
-import { providerById } from './providers/index.js';
 import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { loadCharacterDetails } from '../data/characters.js';
 import { makeEvent } from './schedule.js';
@@ -393,6 +397,29 @@ export function useStore() {
    * 数え直すと実際より小さく出て、上限が効かなくなる。設定に積み上げた値を使う。
    */
   const spentThisMonth = useCallback(() => spentThisMonthOf(stateRef.current.settings), []);
+  const spentToday = useCallback(() => spentTodayOf(stateRef.current.settings), []);
+
+  /**
+   * 社員に読ませる「会社の現在地」。
+   * **AIを呼ばない**（事業・数字・待ち・決定から毎回導く）。
+   * 動的 import で読むので、起動時に読む量は増えない。
+   */
+  const buildBrief = useCallback(async () => {
+    try {
+      const { companyBrief } = await import('./brief.js');
+      const st = stateRef.current;
+      return companyBrief({
+        company: st.company,
+        ventures: st.ventures,
+        funnel: st.funnel,
+        tasks: st.tasks,
+        approvals: st.approvals,
+        settings: st.settings,
+      });
+    } catch {
+      return '';
+    }
+  }, []);
 
   // 保存つきの更新。key に対応する値だけを書く。
   // ref を先に更新してから setState することで、同じ処理の中で続けて
@@ -1068,6 +1095,7 @@ export function useStore() {
             action: 'costly',
             settings: s.settings,
             spentThisMonth: spentThisMonth(),
+            spentToday: spentToday(),
           });
           if (!check.needsApproval) continue;
           const approval = {
@@ -1109,6 +1137,9 @@ export function useStore() {
       const tw = await loadTeamwork();
       const boardText = tw.boardPrompt(s.board, { exceptTaskId: task.id });
       const relatedText = tw.relatedPrompt(tw.relatedTasks(task, s.tasks));
+      // 会社の現在地（1枚）。**役割より先に読ませる**ので、ここで1回だけ作る。
+      const briefText = await buildBrief();
+      const { runStep } = await loadRuntime();
 
       const results = await Promise.all(
         assigned.map(async ({ step, employee }) => {
@@ -1126,6 +1157,7 @@ export function useStore() {
               connections: s.connections,
               boardText,
               relatedText,
+              briefText,
               // 同じ役職で過去に起きたつまずき（新しい3件だけ）
               pitfallText: tw.pitfallPrompt(s.pitfalls, step.roleId),
               signal: controller ? controller.signal : undefined,
@@ -1253,7 +1285,7 @@ export function useStore() {
 
       return updated;
     },
-    [put, log, patchTask, updateEmployee, spentThisMonth]
+    [put, log, patchTask, updateEmployee, spentThisMonth, spentToday, buildBrief]
   );
 
   /** 実行中の仕事をやめる（新項目20）。 */
@@ -1584,6 +1616,7 @@ export function useStore() {
           action: 'costly',
           settings: s.settings,
           spentThisMonth: spentThisMonth(),
+          spentToday: spentToday(),
         });
         if (check.needsApproval) {
           const approval = {
@@ -1610,6 +1643,7 @@ export function useStore() {
       abortRef.current = controller;
 
       const { weeklyPrompt, opinionPrompt, rebuttalPrompt, synthesisPrompt, addRound, meetingTakeaways } = await loadTeamwork();
+      const { runStep } = await loadRuntime();
 
       const ask = async (employee, prompt) => {
         const pseudoTask = { request: mtg.topic, title: mtg.topic, context: '' };
@@ -1788,6 +1822,7 @@ export function useStore() {
           action: 'costly',
           settings: s.settings,
           spentThisMonth: spentThisMonth(),
+          spentToday: spentToday(),
         });
         if (check.needsApproval) {
           const approval = {
@@ -1808,7 +1843,7 @@ export function useStore() {
       }
       return runConsultRef.current(payload);
     },
-    [put, log, spentThisMonth]
+    [put, log, spentThisMonth, spentToday]
   );
   askOnceRef.current = askOnce;
 
@@ -1822,6 +1857,7 @@ export function useStore() {
     abortRef.current = controller;
     let res;
     try {
+      const { runStep } = await loadRuntime();
       res = await runStep({
         employee,
         company: s.company,
@@ -1832,6 +1868,7 @@ export function useStore() {
         settings: s.settings,
         connections: s.connections,
         boardText: (await loadTeamwork()).boardPrompt(s.board, { exceptTaskId: taskId }),
+        briefText: await buildBrief(),
         signal: controller ? controller.signal : undefined,
       });
     } catch (e) {

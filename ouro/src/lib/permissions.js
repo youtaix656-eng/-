@@ -16,6 +16,11 @@ export const DEFAULT_PERMISSIONS = { read: true, create: true, edit: false, send
 // 0 を入れると上限なし（自分で決めた人だけが外せる）。
 export const DEFAULT_MONTHLY_CAP_USD = 5;
 
+// 1日の上限（USD）。既定は 0 ＝ 上限なし。
+// **月の上限だけだと、気づくのが遅い。** 1日で月ぶんを使い切っても、
+// 気づくのは使い切ったあとになる。日の線を引けるようにしておく。
+export const DEFAULT_DAILY_CAP_USD = 0;
+
 export function monthlyCap(settings = {}) {
   const v = Number(settings.monthlyCapUsd);
   return Number.isFinite(v) && v >= 0 ? v : DEFAULT_MONTHLY_CAP_USD;
@@ -25,6 +30,23 @@ export function overMonthlyCap(settings = {}, spentThisMonth = 0) {
   const cap = monthlyCap(settings);
   if (cap <= 0) return false; // 0 ＝ 上限なし
   return Number(spentThisMonth) >= cap;
+}
+
+export function dailyCap(settings = {}) {
+  const v = Number(settings.dailyCapUsd);
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_DAILY_CAP_USD;
+}
+
+export function overDailyCap(settings = {}, spentToday = 0) {
+  const cap = dailyCap(settings);
+  if (cap <= 0) return false; // 0 ＝ 上限なし
+  return Number(spentToday) >= cap;
+}
+
+/** 'YYYY-MM-DD'。日が変わったかを見るのに使う。 */
+export function dayKey(now = Date.now()) {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** その月の始まり（ミリ秒）。 */
@@ -41,19 +63,31 @@ export function monthKey(now = Date.now()) {
 
 /**
  * 費用を積み上げた設定を返す（新規）。
- * 月が変わったら今月ぶんを0に戻す。合計は戻さない。
+ * 月が変わったら今月ぶんを0に戻す。日が変わったら今日ぶんを0に戻す。合計は戻さない。
+ *
+ * **操作履歴から数え直さないこと。** 履歴は起動時に新しい400件しか読まないので、
+ * 数え直すと合計が実際より小さく出て、上限が効かなくなる。
  */
 export function addCost(settings = {}, usd = 0, now = Date.now()) {
   const amount = Number(usd) || 0;
   if (amount <= 0) return settings;
   const key = monthKey(now);
   const sameMonth = settings.costMonth === key;
+  const dkey = dayKey(now);
+  const sameDay = settings.costDay === dkey;
   return {
     ...settings,
     costTotalUsd: (Number(settings.costTotalUsd) || 0) + amount,
     costMonth: key,
     costMonthUsd: (sameMonth ? Number(settings.costMonthUsd) || 0 : 0) + amount,
+    costDay: dkey,
+    costDayUsd: (sameDay ? Number(settings.costDayUsd) || 0 : 0) + amount,
   };
+}
+
+/** 今日これまでに使った額（日が変わっていれば0）。 */
+export function spentTodayOf(settings = {}, now = Date.now()) {
+  return settings.costDay === dayKey(now) ? Number(settings.costDayUsd) || 0 : 0;
 }
 
 /** 今月これまでに使った額（月が変わっていれば0）。 */
@@ -81,7 +115,7 @@ export function hasPermission(employee, permission) {
  * 実行してよいか判定する。
  * @returns {{allowed:boolean, needsApproval:boolean, reason:string, risk:string}}
  */
-export function checkAction({ employee, action, settings = {}, spentThisMonth = 0 }) {
+export function checkAction({ employee, action, settings = {}, spentThisMonth = 0, spentToday = 0 }) {
   const rule = REQUIRE_APPROVAL[action];
 
   if (!rule) {
@@ -115,6 +149,15 @@ export function checkAction({ employee, action, settings = {}, spentThisMonth = 
         allowed: true,
         needsApproval: true,
         reason: `今月のAI費用の上限（$${monthlyCap(settings)}）に達しています`,
+        risk: 'high',
+      };
+    }
+    // 日の線も同じ扱い。**月だけ見ていると、1日で使い切っても気づけない。**
+    if (overDailyCap(settings, spentToday)) {
+      return {
+        allowed: true,
+        needsApproval: true,
+        reason: `今日のAI費用の上限（$${dailyCap(settings)}）に達しています`,
         risk: 'high',
       };
     }

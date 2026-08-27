@@ -5,7 +5,7 @@ import { Suspense, lazy, useMemo } from 'react';
 import { Card, Stat, SectionTitle, Empty, Bar, Skeleton } from './ui.jsx';
 import { taskProgress, TASK_STATUS } from '../lib/workflow.js';
 import { backupReminder } from '../lib/backup.js';
-import { availableProviders } from '../lib/providers/index.js';
+import { connectedEngines } from '../lib/engines.js';
 import { buildLedger, todayFocus } from '../lib/ledger.js';
 
 const HomeBelow = lazy(() => import('./HomeBelow.jsx'));
@@ -34,7 +34,7 @@ export default function Home({ store, go }) {
 
   const pendingApprovals = approvals.filter((a) => a.status === 'pending');
   const busyIds = new Set(running.flatMap((t) => (t.steps || []).map((s) => s.employeeId)));
-  const engines = availableProviders(secrets).filter((p) => p.needsKey);
+  const engines = connectedEngines(secrets, store.settings);
   // **操作履歴から数え直さない。** 履歴は起動時に新しい400件しか読まないので、
   // 数え直すと実際より小さく出る。log() が設定に積み上げた値を使う。
   const spent = Number(store.settings.costTotalUsd) || 0;

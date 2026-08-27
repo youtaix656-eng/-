@@ -2,10 +2,85 @@
 // クロスオリジンの本文取得はブラウザから出来ないので、
 // 「URL＋本文の貼り付け」を基本にし、AIエンジン接続時は社員に読ませる。
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, Field, Empty } from './ui.jsx';
+import {
+  canUseVoiceInput,
+  createRecognizer,
+  appendTranscript,
+  previewTranscript,
+  describeVoiceError,
+  VOICE_PRIVACY_NOTE,
+} from '../lib/voice.js';
 import { INGEST_KINDS, ingestOne, detectKind, youtubeId, MAX_TEXT_BYTES, MAX_TEXT_CHARS } from '../lib/ingest.js';
 import { CATEGORIES } from '../lib/knowledge.js';
+
+/**
+ * 話したことを、そのまま材料にする（既定オフのオプトイン）。
+ *
+ * **端末内保存方針の明示的な例外**なので、ボタンの下に必ず理由を書く。
+ * 設定を入れていない人には何も出さない（勝手にマイクの話をしない）。
+ */
+function VoiceButton({ settings, text, setText, toast }) {
+  const [on, setOn] = useState(false);
+  const [interim, setInterim] = useState('');
+  const recRef = useRef(null);
+  const textRef = useRef(text);
+  textRef.current = text;
+
+  // 画面を離れたら必ず止める（マイクが開いたままにならないように）
+  useEffect(() => () => {
+    if (recRef.current) recRef.current.abort();
+  }, []);
+
+  if (typeof window === 'undefined' || !canUseVoiceInput(window, settings)) return null;
+
+  const stop = () => {
+    if (recRef.current) recRef.current.stop();
+    recRef.current = null;
+    setOn(false);
+    setInterim('');
+  };
+
+  const start = () => {
+    const rec = createRecognizer(window, {
+      onFinal: (chunk) => {
+        // **ref から足すこと。** state を閉じ込めると、
+        // 2文目以降が1文目を上書きする。
+        const next = appendTranscript(textRef.current, chunk);
+        textRef.current = next;
+        setText(next);
+      },
+      onInterim: setInterim,
+      onError: (code) => {
+        toast(describeVoiceError(code));
+        stop();
+      },
+      onEnd: () => {
+        recRef.current = null;
+        setOn(false);
+        setInterim('');
+      },
+    });
+    if (!rec) {
+      toast('このブラウザは音声入力に対応していません');
+      return;
+    }
+    recRef.current = rec;
+    rec.start();
+    setOn(true);
+  };
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <button type="button" className={`btn small ${on ? 'primary' : ''}`} onClick={on ? stop : start}>
+        {on ? '■ 話し終わった' : '◍ 話して入力する'}
+      </button>
+      {interim && <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>{previewTranscript('', interim)}</span>}
+      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{VOICE_PRIVACY_NOTE}</div>
+    </div>
+  );
+}
 
 export default function Ingest({ store, go, toast, preset = {} }) {
   // 呼び出し元が本文の下書きを渡せる（掲示板から知識へ移すときなど）
@@ -146,6 +221,7 @@ export default function Ingest({ store, go, toast, preset = {} }) {
             style={{ minHeight: 140 }}
             placeholder="ここに貼り付け"
           />
+          <VoiceButton settings={store.settings} text={text} setText={setText} toast={toast} />
         </Field>
 
         {(kind === 'pdf' || kind === 'note') && (

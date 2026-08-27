@@ -10,6 +10,11 @@ export const geminiProvider = {
   needsKey: true,
   keyHelpUrl: 'https://aistudio.google.com/app/apikey',
   desc: '無料枠が使いやすい。まず動かしたいときの入口。',
+  // **お金をかけずに社員を動かせる唯一の口。**
+  // 画面はこの印を見て「無料で始められます」と先に出す
+  // （3つ並べるだけでは、どれが0円で始められるか分からない）。
+  freeTier: true,
+  freeNote: 'Google AI Studio でキーを作ると無料枠で使えます（クレジットカード不要）。まずはここから。',
   models: [
     { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash（低コスト）', inputPer1M: 0.1, outputPer1M: 0.4, tier: 'low' },
     { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', inputPer1M: 1.25, outputPer1M: 5, tier: 'mid' },

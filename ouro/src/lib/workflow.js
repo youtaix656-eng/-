@@ -55,6 +55,9 @@ export function createTask({
   // 事業（1つの事業の器）。**結びつきはこの片方向だけ**
   // （事業の側に taskIds を持たない。持つと誰も更新しない列になる）。
   ventureId = null,
+  // モデルの選び方（'auto' | 'cheap' | 'best'）。
+  // 自動判定だけだと1行の要約にも上位モデルが回りうるので、人が下げられるようにする。
+  costMode = 'auto',
   context = '',
   assign,
   // 受付のときに決まっていることがあれば預かる（全部あとから足せる）。
@@ -133,6 +136,7 @@ export function createTask({
     currentStep: 0,
     dealId,
     ventureId,
+    costMode,
     // ── 台帳の3列。ここだけは人が手で持つ（lib/ledger.js のコメント参照） ──
     dueAt: dueAt || null,
     nextAction: '',

@@ -24,6 +24,19 @@ export function makeSettings() {
     costTotalUsd: 0,
     costMonth: '', // 'YYYY-MM'
     costMonthUsd: 0,
+    // 1日の上限（USD）。0 で上限なし。**月だけだと気づくのが遅い。**
+    dailyCapUsd: 0,
+    costDay: '', // 'YYYY-MM-DD'
+    costDayUsd: 0,
+    // モデルの選び方の既定（'auto' | 'cheap' | 'best'）。依頼ごとに上書きできる。
+    costMode: 'auto',
+    // ローカルAI（OpenAI互換）の宛先とモデル名。空なら使わない。
+    // **パソコンの Chrome / Firefox でのみ動く**（iPhone・iPad は不可）。
+    compatBaseUrl: '',
+    compatModel: '',
+    // 音声メモ入力。**端末内保存方針の明示的な例外**なので既定はオフ。
+    // ブラウザの音声認識は、音声を提供元のサーバへ送る場合がある。
+    voiceInput: false,
     // 手順から手順への引き継ぎ方（lib/handoff.js）。
     //   compact … 次の担当に要るものだけ渡す（既定・トークンが減る）
     //   full    … これまでどおり前の担当の出力をまるごと渡す

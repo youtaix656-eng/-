@@ -64,10 +64,20 @@ export function weighTask(request = '', roleId = '') {
  * @param {string} o.request    依頼文
  * @param {string} o.mode       'auto' | 'manual'
  * @param {string[]} o.needs    必要な能力（'web' | 'webfetch' | 'pdf'）
+ * @param {object} o.settings   ローカルAIの宛先など（availableProviders が見る）
+ * @param {string} o.costMode   'auto' | 'cheap' | 'best'
  * @returns {{providerId, model, reason, offline}}
  */
-export function route({ employee = {}, secrets = {}, request = '', mode = 'auto', needs = [] } = {}) {
-  const usable = availableProviders(secrets);
+export function route({
+  employee = {},
+  secrets = {},
+  request = '',
+  mode = 'auto',
+  needs = [],
+  settings = {},
+  costMode = 'auto',
+} = {}) {
+  const usable = availableProviders(secrets, settings);
 
   // 手動指定：社員の希望どおりに。使えないときだけ自動へ落とす。
   if (mode === 'manual' && employee.providerPref && employee.providerPref !== 'auto') {
@@ -75,7 +85,7 @@ export function route({ employee = {}, secrets = {}, request = '', mode = 'auto'
     if (p) {
       return {
         providerId: p.id,
-        model: pickModel(p, employee, WEIGHTS.normal),
+        model: pickModel(p, employee, WEIGHTS.normal, costMode),
         reason: '手動指定',
         offline: p.id === 'local',
       };
@@ -107,13 +117,17 @@ export function route({ employee = {}, secrets = {}, request = '', mode = 'auto'
     preferred ||
     // キーが要るエンジンを優先（local はあくまで最後の受け皿）
     pool.find((p) => p.needsKey) ||
+    // **local を「最後の受け皿」にするなら、ここでも外すこと。**
+    // pool[0] にすると、登録順の都合で local が先に来て、
+    // せっかく繋いだローカルAIが一度も選ばれない（実際に踏んだ）。
+    pool.find((p) => p.id !== 'local') ||
     pool[0] ||
     providerById('local');
 
   return {
     providerId: chosen.id,
-    model: pickModel(chosen, employee, weight),
-    reason: reasonFor({ preferred, needs, capable, chosen, weight, avoided }),
+    model: pickModel(chosen, employee, weight, costMode),
+    reason: reasonFor({ preferred, needs, capable, chosen, weight, avoided, costMode }),
     offline: chosen.id === 'local',
   };
 }
@@ -123,23 +137,39 @@ function hasCapability(provider, need) {
   return Boolean(provider.serverTools && provider.serverTools[need]);
 }
 
-function pickModel(provider, employee, weight) {
-  if (employee.modelPref && employee.modelPref !== 'auto') {
-    const m = provider.models.find((x) => x.id === employee.modelPref);
-    if (m) return m.id;
-  }
+/**
+ * 使うモデルを決める。
+ *
+ * 新項目：**人が「この仕事は安いモデルでいい」と言えるようにする**（costMode）。
+ * 自動判定だけだと、1行の要約にまで上位モデルが回ることがあり、
+ * そこが積み上がって月の上限に当たる。
+ *   cheap … いちばん安いモデルに固定（社員の希望より優先する）
+ *   best  … いちばん上のモデルに固定
+ *   auto  … これまでどおり仕事の重さで選ぶ
+ */
+function pickModel(provider, employee, weight, costMode = 'auto') {
   const sorted = [...provider.models].sort(
     (a, b) => (TIER_ORDER[a.tier] || 2) - (TIER_ORDER[b.tier] || 2)
   );
   if (!sorted.length) return null;
+  // **安くしろ／良くしろ、は社員の希望より優先する。**
+  // 希望を優先すると「安くしたのに変わらない」が起きる。
+  if (costMode === 'cheap') return sorted[0].id;
+  if (costMode === 'best') return sorted[sorted.length - 1].id;
+  if (employee.modelPref && employee.modelPref !== 'auto') {
+    const m = provider.models.find((x) => x.id === employee.modelPref);
+    if (m) return m.id;
+  }
   if (weight >= WEIGHTS.heavy) return sorted[sorted.length - 1].id;
   if (weight <= WEIGHTS.light) return sorted[0].id;
   return sorted[Math.min(1, sorted.length - 1)].id;
 }
 
-function reasonFor({ preferred, needs, capable, chosen, weight, avoided = false }) {
+function reasonFor({ preferred, needs, capable, chosen, weight, avoided = false, costMode = 'auto' }) {
   if (chosen.id === 'local') return 'AIエンジン未接続のためローカル社員が対応';
   if (avoided) return '希望のエンジンが混んでいたため別のエンジンへ';
+  if (costMode === 'cheap') return '安いモデルで、と指定されたため';
+  if (costMode === 'best') return '良いモデルで、と指定されたため';
   if (needs.length && capable.length) return `${needs.join('・')}が必要なため`;
   if (preferred) return '社員の希望';
   return weight >= WEIGHTS.heavy ? '重い仕事のため上位モデル' : '標準';

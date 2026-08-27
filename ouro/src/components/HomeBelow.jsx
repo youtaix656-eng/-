@@ -12,7 +12,7 @@ import { verifiedRate } from '../lib/knowledge.js';
 import { revenueSummary, formatMoney } from '../lib/revenue.js';
 import { upcoming } from '../lib/schedule.js';
 import { roleById } from '../data/roles.js';
-import { availableProviders } from '../lib/providers/index.js';
+import { connectedEngines } from '../lib/engines.js';
 import { bottleneck, latestEntry, labelOf } from '../lib/funnel.js';
 import { activeVenture } from '../lib/venture.js';
 import { todayPlan, todayLine } from '../lib/daily.js';
@@ -25,7 +25,7 @@ export default function HomeBelow({ store, go }) {
   const weak = weakestStage(stages);
   const series = growthSeries(knowledge, 14);
   const money = revenueSummary(deals, tasks, { usdJpy: store.settings.usdJpy });
-  const engines = availableProviders(secrets).filter((p) => p.needsKey);
+  const engines = connectedEngines(secrets, store.settings);
   // **操作履歴から数え直さない。** 履歴は起動時に新しい400件しか読まないので、
   // 数え直すと実際より小さく出る。log() が設定に積み上げた値を使う。
   const spent = Number(store.settings.costTotalUsd) || 0;

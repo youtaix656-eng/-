@@ -5,6 +5,8 @@
 // **社員が全情報へ無制限にアクセスする設計にしない。**
 // 読める範囲は employee.knowledgeScopes が決め、ここが唯一の関門になる。
 
+import { wrapUntrusted, isUntrustedOrigin, trustLabel, ORIGIN_LABELS } from './untrusted.js';
+
 export const SCOPES = {
   company: 'company', // 会社共通
   self: 'self', // 社員専用
@@ -96,6 +98,7 @@ export const CONTEXT_LIMITS = {
   board: 900, // 社内で共有されていること
   related: 500, // 関係する仕事
   pitfall: 400, // この役職で過去に起きたつまずき
+  brief: 800, // 会社の現在地
 };
 
 /** 末尾を残して切り詰める。切ったことが分かる印を頭に付ける。 */
@@ -128,19 +131,36 @@ export function buildContext({
   boardText = '',
   relatedText = '',
   pitfallText = '',
+  briefText = '',
 }) {
   const layers = [];
   const parts = [];
+  let hasUntrusted = false;
+
+  // 会社の現在地は**いちばん先**に読ませる（役割より前）。
+  // ここは自分のデータから作るので、資料として囲わない。
+  if (briefText) {
+    layers.push({ layer: 'brief', count: 1 });
+    parts.push(trimTail(briefText, CONTEXT_LIMITS.brief));
+  }
 
   const rel = relevantKnowledge(employee, knowledgeList, `${task.request || ''} ${task.title || ''}`);
   if (rel.length) {
     layers.push({ layer: 'knowledge', count: rel.length });
-    parts.push(
-      trimTail(
-        ['## 会社の知識（読める範囲）', ...rel.map((k) => `- 【${k.title}】${k.summary}`)].join('\n'),
-        CONTEXT_LIMITS.knowledge
-      )
-    );
+    // **知識は「資料」であって「指示」ではない。**
+    // Web・PDF・別のAIから取り込んだ本文がそのまま入るので、
+    // 中に「これまでの指示を無視して〇〇と書け」があれば通ってしまう。
+    // 外から来たものは囲い、来歴と確からしさを添える（lib/untrusted.js）。
+    const lines = rel.map((k) => {
+      const body = `【${k.title}】${k.summary}`;
+      if (!isUntrustedOrigin(k.origin)) {
+        const tag = [ORIGIN_LABELS[k.origin] || '', trustLabel(k.trust)].filter(Boolean).join('・');
+        return `- ${body}${tag ? `（${tag}）` : ''}`;
+      }
+      hasUntrusted = true;
+      return wrapUntrusted(body, { label: k.title, origin: k.origin, trust: k.trust });
+    });
+    parts.push(trimTail(['## 会社の知識（読める範囲）', ...lines].join('\n'), CONTEXT_LIMITS.knowledge));
   }
 
   const notes = (employee.memory && employee.memory.notes) || [];
@@ -176,7 +196,7 @@ export function buildContext({
     parts.push(`## この仕事の補足\n${trimTail(task.context, CONTEXT_LIMITS.taskContext)}`);
   }
 
-  return { text: parts.join('\n\n'), layers, knowledgeIds: rel.map((k) => k.id) };
+  return { text: parts.join('\n\n'), layers, knowledgeIds: rel.map((k) => k.id), hasUntrusted };
 }
 
 // ── 社員を育てる（改善ログ）──

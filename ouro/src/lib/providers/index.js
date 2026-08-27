@@ -9,8 +9,9 @@ import localProvider from './local.js';
 import anthropicProvider from './anthropic.js';
 import openaiProvider from './openai.js';
 import geminiProvider from './gemini.js';
+import compatProvider from './compat.js';
 
-export const PROVIDERS = [localProvider, anthropicProvider, openaiProvider, geminiProvider];
+export const PROVIDERS = [localProvider, anthropicProvider, openaiProvider, geminiProvider, compatProvider];
 
 export function providerById(id) {
   return PROVIDERS.find((p) => p.id === id) || null;
@@ -22,9 +23,24 @@ export function modelById(providerId, modelId) {
   return p.models.find((m) => m.id === modelId) || p.models[0] || null;
 }
 
-/** キーが登録済み（＝実際に使える）エンジンの一覧。local は常に使える。 */
-export function availableProviders(secrets = {}) {
-  return PROVIDERS.filter((p) => !p.needsKey || Boolean(secrets[p.id]));
+/**
+ * 実際に使えるエンジンの一覧。local は常に使える。
+ *
+ * **`needsKey` だけで見ない。** ローカルAI（compat）はキーではなく
+ * 「宛先のURL」で使えるかどうかが決まるので、そういうエンジンは
+ * `isReady(secrets, settings)` で判定する。
+ */
+export function availableProviders(secrets = {}, settings = {}) {
+  return PROVIDERS.filter((p) => {
+    if (typeof p.isReady === 'function') return p.isReady(secrets, settings);
+    return !p.needsKey || Boolean(secrets[p.id]);
+  });
+}
+
+/** 設定・接続がまだ済んでいないエンジン（画面で「つなぐ」を出すため）。 */
+export function pendingProviders(secrets = {}, settings = {}) {
+  const ready = new Set(availableProviders(secrets, settings).map((p) => p.id));
+  return PROVIDERS.filter((p) => p.id !== 'local' && !ready.has(p.id));
 }
 
 /** 概算コスト（USD）。ユーザーが「いくらかかったか」を見られるように必ず出す。 */

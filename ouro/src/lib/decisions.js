@@ -61,3 +61,37 @@ export function decideDecision(task, decisionId, state, note = '') {
   );
   return { ...task, decisions };
 }
+
+// ── 決定ログ（会社の脳）──
+//
+// 判断は仕事ごとに散っていて、**「何を・いつ・なぜ決めたか」を一本で見る場所が無かった**。
+// 仕事が読み込まれていない（起動時は新しい120件だけ）時でも、
+// 手元にあるぶんから作れる形にしてある。**AIを呼ばない。**
+
+export const DECISION_STATES = { approved: '決めた', rejected: '見送った' };
+
+/**
+ * 決まったこと・見送ったことを新しい順に。
+ * @param {object[]} tasks
+ * @param {number} limit
+ */
+export function recentDecisions(tasks = [], limit = 20, now = Date.now()) {
+  const out = [];
+  for (const t of tasks) {
+    for (const d of t.decisions || []) {
+      if (!d.decidedAt || d.state === 'open') continue;
+      out.push({
+        id: d.id,
+        taskId: t.id,
+        taskTitle: (t.request || '').slice(0, 40),
+        text: d.text,
+        state: d.state,
+        label: DECISION_STATES[d.state] || d.state,
+        note: d.note || '',
+        at: d.decidedAt,
+        daysAgo: Math.max(0, Math.floor((now - d.decidedAt) / 86400000)),
+      });
+    }
+  }
+  return out.sort((a, b) => b.at - a.at).slice(0, limit);
+}
