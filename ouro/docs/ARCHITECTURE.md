@@ -292,6 +292,23 @@ Task.redoCount                  // やり直した回数（REDO_LIMIT=3 で一�
 
 ---
 
+### 6-5. 依頼の提案（`lib/suggest.js`）
+
+```js
+suggestPlan({ request, assign, customGenres, deals, fixed })
+// → { ok, genreId, workflowId, steps[], staffedCount, unstaffedRoles,
+//     needs, doneWhen, dealId, calls, reasons[] }
+```
+
+- **AIを1回も呼ばない**（語の一致と、既にある `planSteps` から作る）
+- `fixed`（案件・進め方・分野）は**推測で上書きしない**。案件から依頼したのに
+  紐づけが外れると、`task.dealId` は一方向なので二度と戻らない
+- `ok:false`（依頼が短い）のときは中身を持たせない。画面は「自分で決める」だけ出す
+- `staffedCount === 0` の提案は実行させない（最初の手順で必ず失敗するため）
+- 提案から実行しても、費用の承認・今月の上限は今までどおり通る
+
+---
+
 ## 7. Knowledge Base 設計
 
 ```js

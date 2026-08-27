@@ -1553,3 +1553,74 @@ select {
 .load-row .lr-bar span.heavy {
   background: var(--ink);
 }
+
+/* ── おすすめの組み合わせ ── */
+.sg-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: -2px 0 10px;
+}
+
+.sg-grid .sg-cell {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.sg-grid .k {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.sg-grid .v {
+  font-family: var(--serif);
+  font-size: 15px;
+  margin-top: 2px;
+}
+
+.sg-people {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+}
+
+.sg-person {
+  flex: none;
+  width: 68px;
+  text-align: center;
+}
+
+.sg-person.vacant {
+  opacity: 0.5;
+}
+
+.sg-person .sg-name {
+  font-size: 11.5px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sg-person .sg-role {
+  font-size: 10px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sg-why {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.sg-why li {
+  margin-bottom: 3px;
+}

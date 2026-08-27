@@ -8,6 +8,8 @@ import { roleById } from '../data/roles.js';
 import { workflowById } from '../data/workflows.js';
 import { availableProviders } from '../lib/providers/index.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
+import { suggestPlan, MIN_REQUEST } from '../lib/suggest.js';
+import Portrait from './Portrait.jsx';
 
 const EXAMPLES = [
   'YouTubeとWebから腰痛について調べて、信頼できる情報だけまとめて',
@@ -29,7 +31,26 @@ export default function Compose({ store, preset = {}, go }) {
   // 受付のときに決めておくと、あとで手戻りが減るもの（全部任意）。
   // 空なら今までどおり1行の依頼としてそのまま動く。
   const [spec, setSpec] = useState({ dueAt: '', deliverable: '', doneWhen: '', materials: '', constraints: '' });
+  // 提案どおりに進めるか、自分で決めるか。
+  // **既定は提案。** 選べるものが増えすぎて、選ぶこと自体が負担になっていた。
+  // 社員を直に指名して来た時だけ、最初から手動にする。
+  const [mode, setMode] = useState(preset.employeeId ? 'manual' : 'suggest');
   const genres = allGenres(store.genres);
+
+  // おすすめの組み合わせ（AIを呼ばずに、語の一致と既存の計画から作る）
+  const suggestion = useMemo(
+    () =>
+      suggestPlan({
+        request,
+        assign: store.assignFor,
+        customGenres: store.genres,
+        deals: store.deals,
+        // **呼び出し元が決めているものを、推測で上書きしない。**
+        // 案件から開いたのに紐づけが外れると、その案件の仕事が0件のままになる。
+        fixed: { dealId: preset.dealId, workflowId: preset.workflowId, genreId: preset.genreId },
+      }),
+    [request, store.assignFor, store.genres, store.deals, preset.dealId, preset.workflowId, preset.genreId]
+  );
 
   const chosenEmployee = store.employees.find((e) => e.id === employeeId);
 
@@ -52,23 +73,54 @@ export default function Compose({ store, preset = {}, go }) {
   const needs = detectNeeds(request);
   const engines = availableProviders(store.secrets).filter((p) => p.needsKey);
 
-  const submit = async () => {
+  /**
+   * 依頼する。
+   * @param {object} [over] 提案どおりに進める時は、提案の値で上書きする
+   *   （画面の状態を書き換えてから送ると、setState が反映される前に送ってしまう）。
+   */
+  const submit = async (over = null) => {
     if (!request.trim()) return;
+    const v = over || {};
+    const wf = 'workflowId' in v ? v.workflowId : workflowId === 'auto' ? null : workflowId;
     const task = store.newTask({
       request,
-      workflowId: workflowId === 'auto' ? null : workflowId,
-      employeeId,
-      dealId,
+      workflowId: wf,
+      employeeId: 'employeeId' in v ? v.employeeId : employeeId,
+      dealId: 'dealId' in v ? v.dealId : dealId,
       context,
-      genreId,
+      genreId: 'genreId' in v ? v.genreId : genreId,
       dueAt: spec.dueAt ? new Date(spec.dueAt).getTime() : null,
       deliverableSpec: spec.deliverable,
-      doneWhen: spec.doneWhen,
+      doneWhen: 'doneWhen' in v ? v.doneWhen : spec.doneWhen,
       materials: spec.materials,
       constraints: spec.constraints,
     });
     go('task', task.id);
     store.runTask(task.id);
+  };
+
+  /** 提案どおりに実行する（②の「はい」）。 */
+  const runSuggestion = async () => {
+    // 担当が1人もいない計画は、最初の手順で必ず失敗する。実行させない。
+    if (!suggestion.ok || suggestion.staffedCount === 0) return;
+    await submit({
+      workflowId: suggestion.workflowId,
+      genreId: suggestion.genreId,
+      dealId: suggestion.dealId,
+      doneWhen: suggestion.doneWhen,
+      employeeId: null,
+    });
+  };
+
+  /** 提案を下敷きにして、自分で決める（②の「いいえ」）。 */
+  const editSuggestion = () => {
+    if (suggestion.ok) {
+      setWorkflowId(suggestion.workflowId || 'auto');
+      setGenreId(suggestion.genreId);
+      if (suggestion.dealId) setDealId(suggestion.dealId);
+      if (suggestion.doneWhen && !spec.doneWhen) setSpec((x) => ({ ...x, doneWhen: suggestion.doneWhen }));
+    }
+    setMode('manual');
   };
 
   return (
@@ -93,7 +145,30 @@ export default function Compose({ store, preset = {}, go }) {
         </div>
       </Card>
 
-      {chosenEmployee ? (
+      {/* ② おすすめの組み合わせ → はい／いいえ */}
+      {mode === 'suggest' && !chosenEmployee && (
+        <SuggestionCard
+          suggestion={suggestion}
+          request={request}
+          store={store}
+          go={go}
+          onYes={runSuggestion}
+          onNo={editSuggestion}
+        />
+      )}
+
+      {mode === 'manual' && !chosenEmployee && (
+        <button
+          type="button"
+          className="btn ghost small"
+          style={{ marginBottom: 12 }}
+          onClick={() => setMode('suggest')}
+        >
+          ‹ おすすめの組み合わせに戻る
+        </button>
+      )}
+
+      {mode === 'manual' && (chosenEmployee ? (
         <Card glyph={chosenEmployee.avatar} title={`${chosenEmployee.name} に直接依頼`}>
           <p className="muted" style={{ marginTop: -6, marginBottom: 8 }}>
             {chosenEmployee.title}／{chosenEmployee.persona}
@@ -151,9 +226,9 @@ export default function Compose({ store, preset = {}, go }) {
             </p>
           )}
         </>
-      )}
+      ))}
 
-      {plan.length > 0 && (
+      {mode === 'manual' && plan.length > 0 && (
         <Card glyph="⟳" title="この順番で進みます">
           <div className="steps">
             {plan.map((p, i) => {
@@ -197,6 +272,7 @@ export default function Compose({ store, preset = {}, go }) {
         </Card>
       )}
 
+      {mode === 'manual' && (
       <details style={{ marginBottom: 12 }}>
         <summary className="muted" style={{ cursor: 'pointer' }}>受付の条件を決める（任意）</summary>
         <div style={{ marginTop: 10 }}>
@@ -255,16 +331,156 @@ export default function Compose({ store, preset = {}, go }) {
           )}
         </div>
       </details>
+      )}
 
       {/* 新項目26：押した瞬間に待ちの見た目にする。二度押しで仕事が2つできるのを防ぐ。 */}
-      <Action className="btn primary block" onClick={submit} disabled={!request.trim()} busyLabel="依頼しています…">
-        依頼する
-      </Action>
+      {mode === 'manual' && (
+        <Action
+          className="btn primary block"
+          onClick={() => submit()}
+          disabled={!request.trim()}
+          busyLabel="依頼しています…"
+        >
+          依頼する
+        </Action>
+      )}
       {engines.length === 0 && (
         <p className="muted" style={{ textAlign: 'center', marginTop: 8 }}>
           AIエンジン未接続のため、今は「仕事の型」だけが返ります。
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * ① 依頼を書いたら、おすすめの組み合わせを1つ出す。
+ * ② 「この提案で実行する」／「自分で決める」の2択。
+ *
+ * **選択肢を全部並べない。** 役職25・仕事の流れ12・ジャンル9…と増えたので、
+ * 選べること自体が負担になっていた。まず1つ出して、違えば直せばよい。
+ * 判定は AI を呼ばずに（語の一致だけで）作っているので、費用はかからない。
+ */
+function SuggestionCard({ suggestion, request, store, go, onYes, onNo }) {
+  if (!request.trim()) {
+    return (
+      <p className="muted" style={{ textAlign: 'center', marginTop: -4 }}>
+        依頼を書くと、おすすめの組み合わせを出します。
+      </p>
+    );
+  }
+  // **提案が出せない時も行き止まりにしない。**
+  // 「自分で決める」は必ず押せるようにしておく（ここが無いと、短い依頼では
+  // 依頼するボタンにも手動の設定にもたどり着けなくなる）。
+  if (!suggestion.ok) {
+    return (
+      <Card className="tight">
+        <p className="muted" style={{ marginTop: 0 }}>
+          {suggestion.reason}（あと{Math.max(1, MIN_REQUEST - request.trim().length)}文字）
+        </p>
+        <button type="button" className="btn block" onClick={onNo}>
+          このまま自分で決める
+        </button>
+      </Card>
+    );
+  }
+
+  const engines = availableProviders(store.secrets).filter((p) => p.needsKey);
+  const vacant = suggestion.steps.filter((x) => !x.employee);
+  const noOne = suggestion.staffedCount === 0;
+
+  return (
+    <>
+      <Card glyph="◎" title="おすすめの組み合わせ">
+        <div className="sg-grid">
+          <div className="sg-cell">
+            <div className="k">分野</div>
+            <div className="v">{suggestion.genreName}</div>
+          </div>
+          <div className="sg-cell">
+            <div className="k">進め方</div>
+            <div className="v">{suggestion.workflowName}</div>
+          </div>
+          <div className="sg-cell">
+            <div className="k">担当</div>
+            <div className="v">{suggestion.staffedCount}人</div>
+          </div>
+          <div className="sg-cell">
+            <div className="k">AIを呼ぶ</div>
+            <div className="v">{suggestion.calls}回</div>
+          </div>
+        </div>
+
+        <div className="sg-people">
+          {suggestion.steps.map((x, i) => (
+            <div key={`${x.roleId}-${i}`} className={`sg-person ${x.employee ? '' : 'vacant'}`}>
+              {x.employee ? (
+                <Portrait employee={x.employee} size={44} />
+              ) : (
+                <span className="rune" style={{ fontSize: 22 }}>◌</span>
+              )}
+              <div className="sg-name">{x.employee ? x.employee.shortName || x.employee.name : x.roleName}</div>
+              <div className="sg-role">{x.employee ? x.roleName : '未雇用'}</div>
+            </div>
+          ))}
+        </div>
+
+        <ul className="sg-why">
+          {suggestion.reasons.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+
+        {suggestion.doneWhen && (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            完成条件：{suggestion.doneWhen}
+          </p>
+        )}
+      </Card>
+
+      {vacant.length > 0 && (
+        <Card glyph="＋" title={`${vacant.length}人ぶんの席が空いています`}>
+          <p className="muted" style={{ marginTop: -6 }}>
+            {vacant.map((x) => x.roleName).join('・')}
+            が向いていますが、まだ雇っていないので今回は担当から外れます。
+            {noOne ? '' : 'このまま進めても構いません。'}
+          </p>
+          <button type="button" className="btn small primary" onClick={() => go('characters')}>
+            雇いに行く（AIキャラクター名鑑）
+          </button>
+        </Card>
+      )}
+
+      <Card glyph="?" title="この提案を実行しますか？">
+        {engines.length === 0 && (
+          <p className="muted" style={{ marginTop: -6 }}>
+            ※ AIエンジンが未接続なので、今は「仕事の型」だけが返ります。
+          </p>
+        )}
+        {noOne ? (
+          // 担当が1人もいない計画は、最初の手順で必ず失敗する。
+          // 押しても失敗するだけのボタンは出さない（行き止まりを作らない）。
+          <p className="muted" style={{ marginTop: -6 }}>
+            この依頼に向いている役職を1人も雇っていないので、このままでは実行できません。
+            上から雇うか、「自分で決める」で担当を選んでください。
+          </p>
+        ) : (
+          <Action className="btn primary block" onClick={onYes} busyLabel="依頼しています…">
+            はい、この提案で実行する
+          </Action>
+        )}
+        <button
+          type="button"
+          className={`btn block ${noOne ? 'primary' : ''}`}
+          style={{ marginTop: 8 }}
+          onClick={onNo}
+        >
+          いいえ、自分で決める
+        </button>
+        <p className="muted" style={{ marginBottom: 0, marginTop: 8 }}>
+          「自分で決める」を選ぶと、分野・進め方・担当・完成条件をこの提案から直せます。
+        </p>
+      </Card>
+    </>
   );
 }
