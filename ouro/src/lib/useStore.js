@@ -17,26 +17,58 @@ import {
   nextGroup,
   assembleResult,
   retryFailed,
+  redoFrom,
+  flagTask as flagTaskFn,
+  unflagTask,
+  isFlagged,
+  overRedoLimit,
+  resetRedoCount,
+  REDO_LIMIT,
   finalOutput,
+  finalStep,
   holdTask as holdTaskFn,
   resumeTask as resumeTaskFn,
   isRunnable,
 } from './workflow.js';
-import { runStep, distill, extractUrls } from './runtime.js';
+// **実行の中身（runtime.js とエンジン一式）は、押した時に読む。**
+// ここを静的に読むと、起動時に読む束へ AI エンジン4種＋通信の受け口まで入る。
+// 実行するまでは1バイトも要らないので、使う場所で読み込む（項目01と同じ考え方）。
+const loadRuntime = () => import('./runtime.js');
+// 知らせ（端末通知）と Wake Lock。どちらも使う時だけ読む。
+const loadNotify = () => import('./notify.js');
+// 文字を切るだけの処理は軽いので、これまでどおり即時に読む
+import { distill, extractUrls } from './distill.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
 import { decisionsFrom, decideDecision } from './decisions.js';
 import { addNote, removeNote, notesOf } from './memory.js';
 import { normalizeRules, addRule, removeRule } from './rules.js';
 import { makeFunnel, normalizeFunnel } from './funnel.js';
-import { checkAction, addCost, spentThisMonthOf } from './permissions.js';
+
+// 朝会・会議の材料・相談・関係する仕事は、**押した時にだけ**要る。
+// 起動時に読む量を増やさないよう、使う場所で読み込む（項目01と同じ考え方）。
+const loadTeamwork = () =>
+  Promise.all([
+    import('./board.js'),
+    import('./meeting.js'),
+    import('./related.js'),
+    import('./standup.js'),
+    import('./briefing.js'),
+    import('./consult.js'),
+    import('./pitfalls.js'),
+  ]).then(([board, meeting, related, standup, briefing, consult, pitfalls]) => ({
+    ...board,
+    ...meeting,
+    ...related,
+    ...standup,
+    ...briefing,
+    ...consult,
+    ...pitfalls,
+  }));
+import { checkAction, addCost, spentThisMonthOf, spentTodayOf } from './permissions.js';
 import { createDeal } from './revenue.js';
-import {
-  createMeeting, addRound, opinionPrompt, rebuttalPrompt, synthesisPrompt, estimatedCalls,
-} from './meeting.js';
 import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
-import { providerById } from './providers/index.js';
 import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { loadCharacterDetails } from '../data/characters.js';
 import { makeEvent } from './schedule.js';
@@ -61,6 +93,9 @@ function loadRoster() {
 const FIRST_KEYS = [
   KEYS.company, KEYS.settings, KEYS.employees, KEYS.tasks, KEYS.knowledge,
   KEYS.deals, KEYS.events, KEYS.genres, KEYS.approvals, KEYS.secrets,
+  // 事業（実行中は1つだけ）。ホームの「今日やる1つ」がここから出るので後回しにできない。
+  // 件数は多くても数十なので、最初のひと組に入れても起動は重くならない。
+  KEYS.ventures,
   // 道具を切ってあるかどうかは**実行の判定に使う**ので、後回しにできない。
   // 読み込み前は空＝「全部使える」になり、切ったはずの道具が使われてしまう。
   // 数件しか無いので、最初のひと組に入れても起動は重くならない。
@@ -85,6 +120,16 @@ const REST_KEYS = [
   KEYS.departments, KEYS.sources, KEYS.meetings, KEYS.audit,
   // 収益導線の数字。ホームは「詰まっている所」を1行出すだけなので後回しでよい。
   KEYS.funnel,
+  // 社内掲示板。仕事の実行時に読むので、実行より前に揃っていればよい。
+  KEYS.board,
+  // つまずき集（役職別の失敗）。掲示板と同じく実行より前に揃っていればよい。
+  KEYS.pitfalls,
+  // 投稿の型。発信の画面でしか使わないので後回しでよい。
+  KEYS.patterns,
+  // 発信ログ。事業の画面とホームの「今日やる1つ」で使う。
+  // **読み込みが済むまで「まだ出していない」と言い切らないこと**
+  // （空配列のまま判定すると、出した日でも「未」と出る）。
+  KEYS.posts,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -104,7 +149,12 @@ const EMPTY = {
   connections: [],
   genres: [],
   events: [],
+  ventures: [],
+  posts: [],
+  patterns: [],
   funnel: makeFunnel(),
+  pitfalls: [],
+  board: [],
   settings: makeSettings(),
   secrets: {},
 };
@@ -140,6 +190,10 @@ export function useStore() {
   const foldedRef = useRef(false);
   // いま走っているAI実行の中止スイッチ（新項目20）
   const abortRef = useRef(null);
+  // 通知をタップした時に開く先。画面側（App）が差し込む。
+  const notifyClickRef = useRef(null);
+  // このセッションで一度でも再開を試した仕事（同じものを何度も走らせない）
+  const resumedRef = useRef(new Set());
   // 会議の実行は decideApproval より後で定義されるので、ref 経由で呼ぶ
   // （承認したその場で会議を始めるため）
   const runMeetingRef = useRef(() => {});
@@ -190,20 +244,17 @@ export function useStore() {
       // ── 2回目以降：まず最初の画面に要るものだけ ──
       const first = await loadMany(FIRST_KEYS, FIRST_FALLBACKS, { [KEYS.tasks]: TASK_PAGE });
       if (!alive) return;
-      const next = {
-        ...EMPTY,
-        company: migrateCompany(first[KEYS.company]),
-        employees: asArray(first[KEYS.employees]),
-        tasks: asArray(first[KEYS.tasks]),
-        knowledge: asArray(first[KEYS.knowledge]),
-        deals: asArray(first[KEYS.deals]),
-        events: asArray(first[KEYS.events]),
-        genres: asArray(first[KEYS.genres]),
-        approvals: asArray(first[KEYS.approvals]),
-        connections: asArray(first[KEYS.connections]),
-        settings: { ...makeSettings(), ...(first[KEYS.settings] || {}) },
-        secrets: first[KEYS.secrets] || {},
-      };
+      // **FIRST_KEYS から作ること。** ここを手書きの一覧にしていたせいで、
+      // 新しいキー（事業）を FIRST_KEYS に足しても読み込まれず、
+      // 作った事業が再起動のたびに消えた（実際に踏んだ）。
+      // 特別扱いが要るのは会社・設定・APIキーの3つだけ。
+      const next = { ...EMPTY };
+      for (const key of FIRST_KEYS) {
+        if (key === KEYS.company) next.company = migrateCompany(first[key]);
+        else if (key === KEYS.settings) next.settings = { ...makeSettings(), ...(first[key] || {}) };
+        else if (key === KEYS.secrets) next.secrets = first[key] || {};
+        else next[keyName(key)] = asArray(first[key]);
+      }
       stateRef.current = next;
       setState(next);
       setReady(true);
@@ -356,6 +407,29 @@ export function useStore() {
    * 数え直すと実際より小さく出て、上限が効かなくなる。設定に積み上げた値を使う。
    */
   const spentThisMonth = useCallback(() => spentThisMonthOf(stateRef.current.settings), []);
+  const spentToday = useCallback(() => spentTodayOf(stateRef.current.settings), []);
+
+  /**
+   * 社員に読ませる「会社の現在地」。
+   * **AIを呼ばない**（事業・数字・待ち・決定から毎回導く）。
+   * 動的 import で読むので、起動時に読む量は増えない。
+   */
+  const buildBrief = useCallback(async () => {
+    try {
+      const { companyBrief } = await import('./brief.js');
+      const st = stateRef.current;
+      return companyBrief({
+        company: st.company,
+        ventures: st.ventures,
+        funnel: st.funnel,
+        tasks: st.tasks,
+        approvals: st.approvals,
+        settings: st.settings,
+      });
+    } catch {
+      return '';
+    }
+  }, []);
 
   // 保存つきの更新。key に対応する値だけを書く。
   // ref を先に更新してから setState することで、同じ処理の中で続けて
@@ -388,6 +462,78 @@ export function useStore() {
     // 新項目07：記録として積むだけなので急がない。まとめて書く。
     save(KEYS.audit, next, 'low');
   }, []);
+
+  // ---- 社内掲示板（社員どうしの共通記憶）----
+  //
+  // **30日で消える。** 溜めるためではなく「新しいものだけが見える」ための場所。
+  // 保存の前に必ず古いものを落とす（放っておくと読まれない掲示板になる）。
+  const addBoardPost = useCallback(async (post) => {
+    const { makePost, addPost, prunePosts } = await loadTeamwork();
+    const made = makePost(post);
+    if (!made.text) return null;
+    const next = prunePosts(addPost(stateRef.current.board, made));
+    stateRef.current = { ...stateRef.current, board: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.board);
+    // 読み込みが済むまで保存しない（空の配列で上書きしないため）
+    if (hydratedRef.current) save(KEYS.board, next, 'low');
+    return made;
+  }, []);
+
+  const removeBoardPost = useCallback(async (id) => {
+    const { removePost } = await loadTeamwork();
+    const next = removePost(stateRef.current.board, id);
+    stateRef.current = { ...stateRef.current, board: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.board);
+    if (hydratedRef.current) save(KEYS.board, next, 'low');
+    return next;
+  }, []);
+
+  /**
+   * つまずき集に1件足す（新規・AIを呼ばない）。
+   * 失敗した手順から自動で呼ばれるほか、画面から手でも足せる。
+   */
+  const addPitfallEntry = useCallback(async (item) => {
+    const { makePitfall, addPitfall } = await loadTeamwork();
+    const made = item && item.id ? item : makePitfall(item || {});
+    if (!made.text) return null;
+    const next = addPitfall(stateRef.current.pitfalls, made);
+    stateRef.current = { ...stateRef.current, pitfalls: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.pitfalls);
+    if (hydratedRef.current) save(KEYS.pitfalls, next, 'low');
+    return made;
+  }, []);
+
+  const removePitfallEntry = useCallback(async (id) => {
+    const { removePitfall } = await loadTeamwork();
+    const next = removePitfall(stateRef.current.pitfalls, id);
+    stateRef.current = { ...stateRef.current, pitfalls: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.pitfalls);
+    if (hydratedRef.current) save(KEYS.pitfalls, next, 'low');
+    return next;
+  }, []);
+
+  /** 失敗した手順を、つまずき集へ回す。 */
+  const recordPitfall = useCallback(
+    async (step, task, employee) => {
+      const { fromFailedStep } = await loadTeamwork();
+      // 役職名は表示のためだけなので、ここで取りに行く
+      // （useStore が data/roles.js を抱えると起動時に読む量が増える）。
+      const { roleById } = await import('../data/roles.js');
+      const role = roleById(step.roleId);
+      const made = fromFailedStep(
+        { ...step, employeeName: (employee && employee.name) || step.employeeName },
+        task,
+        role ? role.name : ''
+      );
+      if (!made) return null;
+      return addPitfallEntry(made);
+    },
+    [addPitfallEntry]
+  );
 
   /**
    * 操作履歴を全部読み込む（新項目09）。
@@ -631,6 +777,150 @@ export function useStore() {
     [put]
   );
 
+  // ---- 事業（ベンチャー）と発信ログ ----
+  //
+  // **どちらも動的 import で読む。** 起動時に読む量を増やさないため
+  // （venture.js は revenue.js を使うので、静的に書くと最初のひと束に混ざる）。
+  // 呼び出し側は await しなくてよい（画面の更新は put が行う）。
+
+  const addVenture = useCallback(
+    async (data) => {
+      const { makeVenture, canStart } = await import('./venture.js');
+      const made = makeVenture(data);
+      // 「実行中」で作ろうとした時も、選択と集中の錠を通す
+      if (made.state === 'running' && !canStart(stateRef.current.ventures, made.id).ok) {
+        made.state = 'idea';
+        made.startedAt = null;
+      }
+      put(KEYS.ventures, [made, ...stateRef.current.ventures]);
+      log({ actor: 'user', action: 'ventureCreated', target: made.title });
+      return made;
+    },
+    [put, log]
+  );
+
+  const updateVenture = useCallback(
+    (id, patch) => {
+      put(
+        KEYS.ventures,
+        stateRef.current.ventures.map((v) => (v.id === id ? { ...v, ...patch, id: v.id, updatedAt: Date.now() } : v))
+      );
+    },
+    [put]
+  );
+
+  const removeVenture = useCallback(
+    (id) => {
+      const v = stateRef.current.ventures.find((x) => x.id === id);
+      put(KEYS.ventures, stateRef.current.ventures.filter((x) => x.id !== id));
+      if (v) log({ actor: 'user', action: 'ventureRemoved', target: v.title });
+    },
+    [put, log]
+  );
+
+  /**
+   * 状態を変える。**「実行中」にできるのは1つだけ**（選択と集中）。
+   * すでに別の事業が実行中なら、勝手に入れ替えずに断る
+   * （どちらを休止にするかは人が決めること）。
+   * @returns {{ok:boolean, blocker:object|null}}
+   */
+  const setVentureState = useCallback(
+    async (id, state) => {
+      const { canStart } = await import('./venture.js');
+      if (state === 'running') {
+        const check = canStart(stateRef.current.ventures, id);
+        if (!check.ok) return check;
+      }
+      const now = Date.now();
+      put(
+        KEYS.ventures,
+        stateRef.current.ventures.map((v) => {
+          if (v.id !== id) return v;
+          // 実行中にした時だけ日数を数え始める（休止から戻した時は続きから）
+          const startedAt = state === 'running' ? v.startedAt || now : v.startedAt;
+          return { ...v, state, startedAt, updatedAt: now };
+        })
+      );
+      log({ actor: 'user', action: 'ventureState', target: state });
+      return { ok: true, blocker: null };
+    },
+    [put, log]
+  );
+
+  /** 撤退・継続の判断（続ける／やめる／延長）。AIは呼ばない。 */
+  const decideVenture = useCallback(
+    async (id, decision, extraDays = 14) => {
+      const { applyDecision } = await import('./verdict.js');
+      const cur = stateRef.current.ventures.find((v) => v.id === id);
+      if (!cur) return null;
+      const next = applyDecision(cur, decision, extraDays);
+      put(KEYS.ventures, stateRef.current.ventures.map((v) => (v.id === id ? next : v)));
+      log({ actor: 'user', action: 'ventureDecision', target: `${cur.title}／${decision}` });
+      return next;
+    },
+    [put, log]
+  );
+
+  const addSharePost = useCallback(
+    async (data) => {
+      const posts = await import('./posts.js');
+      const made = posts.makePost(data);
+      put(KEYS.posts, posts.addPost(stateRef.current.posts, made));
+      log({ actor: 'user', action: 'postLogged', target: posts.channelName(made.channel) });
+      return made;
+    },
+    [put, log]
+  );
+
+  /** 投稿の型（伸びた投稿を次の種にする）。 */
+  const addPattern = useCallback(
+    async (data) => {
+      const pat = await import('./patterns.js');
+      const made = data && data.id ? data : pat.makePattern(data || {});
+      if (!made.text) return null;
+      put(KEYS.patterns, pat.addPattern(stateRef.current.patterns, made));
+      log({ actor: 'user', action: 'patternAdded', target: made.label || made.text.slice(0, 30) });
+      return made;
+    },
+    [put, log]
+  );
+
+  const updatePatternAction = useCallback(
+    async (id, patch) => {
+      const { updatePattern } = await import('./patterns.js');
+      put(KEYS.patterns, updatePattern(stateRef.current.patterns, id, patch));
+    },
+    [put]
+  );
+
+  const removePatternAction = useCallback(
+    async (id) => {
+      const { removePattern } = await import('./patterns.js');
+      put(KEYS.patterns, removePattern(stateRef.current.patterns, id));
+    },
+    [put]
+  );
+
+  /**
+   * 出した投稿に、あとから反応の数字を入れる。
+   * **これが無いと「型 → 出す → 数字を見る → 伸びた型を次の種に」が閉じない。**
+   */
+  const updateSharePost = useCallback(
+    async (id, patch) => {
+      const { updatePost } = await import('./posts.js');
+      put(KEYS.posts, updatePost(stateRef.current.posts, id, patch));
+    },
+    [put]
+  );
+
+  const removeSharePost = useCallback(
+    async (id) => {
+      const { removePost } = await import('./posts.js');
+      put(KEYS.posts, removePost(stateRef.current.posts, id));
+    },
+    [put]
+  );
+
   const archiveEmployee = useCallback(
     (id) => {
       const emp = stateRef.current.employees.find((e) => e.id === id);
@@ -672,6 +962,7 @@ export function useStore() {
       workflowId = null,
       employeeId = null,
       dealId = null,
+      ventureId = null,
       context = '',
       genreId = null,
       dueAt = null,
@@ -693,6 +984,7 @@ export function useStore() {
         request,
         forceRoles,
         dealId,
+        ventureId,
         context,
         dueAt,
         deliverableSpec,
@@ -758,12 +1050,44 @@ export function useStore() {
     (taskId) => {
       const task = stateRef.current.tasks.find((t) => t.id === taskId);
       if (!task) return null;
+      // 印のせいで止めた仕事は、ここからは解かない（印を外す方から解く）。
+      // ここで解けてしまうと、印が付いたまま提出物の画面が戻ってくる。
+      if (isFlagged(task)) return task;
       const next = resumeTaskFn(task);
       if (next === task) return task;
       log({ actor: 'user', action: 'taskResumed', target: task.title });
       return patchTask(next);
     },
     [patchTask, log]
+  );
+
+  /**
+   * 社内への共有を1行書く（新規）。共有しないと台帳で「完了」にならない。
+   * `waive` を true にすると「この仕事は共有なしでよい」と決められる
+   * （押しても何も起きない行き止まりを作らないため、逃げ道は必ず残す）。
+   */
+  const shareTask = useCallback(
+    async (taskId, text, waive = false) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      // 外へ出せないと印を付けた仕事は、共有もしない（掲示板へ戻してしまうため）
+      if (isFlagged(task)) return task;
+      const line = String(text || '').trim();
+      if (!waive && !line) return task;
+      if (line) {
+        const step = [...(task.steps || [])].reverse().find((x) => x.employeeId && x.kind !== 'check');
+        await addBoardPost({
+          text: line,
+          kind: 'share',
+          employeeId: step ? step.employeeId : null,
+          employeeName: step ? step.employeeName || '' : '',
+          roleId: step ? step.roleId : null,
+          taskId,
+        });
+      }
+      return patchTask({ ...task, shared: line || task.shared || '', shareWaived: Boolean(waive) });
+    },
+    [patchTask, addBoardPost]
   );
 
   /** 「あなたの判断が要ること」を1件決める（新規）。 */
@@ -822,6 +1146,7 @@ export function useStore() {
             action: 'costly',
             settings: s.settings,
             spentThisMonth: spentThisMonth(),
+            spentToday: spentToday(),
           });
           if (!check.needsApproval) continue;
           const approval = {
@@ -858,6 +1183,22 @@ export function useStore() {
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
       abortRef.current = controller;
 
+      // **走っている間だけ**画面を眠らせない（既定オフ）。
+      // スマホは画面が消えるとタブごと止めることがあるので、
+      // 最後まで走り切らせたい人はここを入れる。終わったら必ず離す。
+      if (stateRef.current.settings.keepAwake) {
+        loadNotify().then((n) => n.keepAwake()).catch(() => {});
+      }
+
+      // 社員どうしの共通記憶（掲示板）と、関係する仕事。
+      // どちらも AI を呼ばずに作れるので、1つのかたまりにつき1回だけ組み立てる。
+      const tw = await loadTeamwork();
+      const boardText = tw.boardPrompt(s.board, { exceptTaskId: task.id });
+      const relatedText = tw.relatedPrompt(tw.relatedTasks(task, s.tasks));
+      // 会社の現在地（1枚）。**役割より先に読ませる**ので、ここで1回だけ作る。
+      const briefText = await buildBrief();
+      const { runStep } = await loadRuntime();
+
       const results = await Promise.all(
         assigned.map(async ({ step, employee }) => {
           perf.mark(`run:${step.id}`);
@@ -872,6 +1213,11 @@ export function useStore() {
               secrets: s.secrets,
               settings: s.settings,
               connections: s.connections,
+              boardText,
+              relatedText,
+              briefText,
+              // 同じ役職で過去に起きたつまずき（新しい3件だけ）
+              pitfallText: tw.pitfallPrompt(s.pitfalls, step.roleId),
               signal: controller ? controller.signal : undefined,
               // 受け取った先から画面へ出す。ここでは保存しない。
               onDelta: (piece) =>
@@ -931,6 +1277,43 @@ export function useStore() {
           );
         }
       }
+      // 完了したら「他の人が知っておくべきこと」を1行だけ掲示板へ回す（AI費用ゼロ）。
+      // 拾えなければ何も出さない——中身の無い掲示は、読まれない掲示板を作るだけ。
+      let sharedLine = updated.shared || '';
+      for (const { step, employee, result } of results) {
+        if (result.error || step.kind === 'check') continue;
+        // 外へ出せないと印を付けた仕事の中身は、掲示板にも回さない
+        if (isFlagged(updated)) continue;
+        const line = tw.extractShare(result.text);
+        if (!line) continue;
+        sharedLine = sharedLine || line;
+        addBoardPost({
+          text: line,
+          kind: 'share',
+          employeeId: employee.id,
+          employeeName: employee.name,
+          roleId: employee.roleId,
+          taskId: task.id,
+        });
+      }
+      if (sharedLine !== updated.shared) updated = { ...updated, shared: sharedLine };
+      // この仕組みが動いている状態で終わった、という印。
+      // 印の無い（＝昔の）仕事に共有を求めない（lib/ledger.js の needsShare）。
+      if (updated.status === 'done' && !updated.shareAsked) updated = { ...updated, shareAsked: true };
+
+      // 失敗した手順は「つまずき集」へ回す（役職ごと・AI費用ゼロ）。
+      // 仕事は起動時に新しい120件しか読まないので、ここへ移さないと
+      // 失敗は古い仕事ごと視界から消えて、同じことを繰り返す。
+      for (const { step, employee, result } of results) {
+        if (!result.error) continue;
+        // **やめた（中止）は失敗ではない。** 貯めると「中止しました」が
+        // その役職のつまずきとして、以後ずっとプロンプトに入り続ける。
+        if (result.aborted) continue;
+        // **エラーは result 側にある。** ここの step は実行前の写しなので
+        // step.error はまだ null（そのまま渡すと、つまずきが1件も貯まらない）。
+        recordPitfall({ ...step, error: result.error }, updated, employee);
+      }
+
       // 完了したら、提出物の③から「あなたの判断が要ること」を拾う（新規）。
       // AIをもう一度呼ばないので費用はかからない。拾えなければ空のまま。
       if (updated.status === 'done' && !(updated.decisions || []).length) {
@@ -941,25 +1324,61 @@ export function useStore() {
       }
       patchTask(updated);
 
+      // 走り終わったので、眠らせない指定を離す（点けっぱなしは電池を食う）
+      if (stateRef.current.settings.keepAwake) {
+        loadNotify().then((n) => n.releaseAwake()).catch(() => {});
+      }
+
+      // **終わったことを知らせる。** 出せるのは「アプリが生きている間」だけなので、
+      // 裏に回っているタブが終えた時に出す。表で見ている時は画面に出ているので出さない。
+      if (updated.status === 'done') {
+        const hidden = typeof document === 'undefined' || document.visibilityState === 'hidden';
+        if (hidden) {
+          if (stateRef.current.settings.notifyDone) {
+            loadNotify()
+              .then((n) => n.notifyDone(updated, { onClick: () => { notifyClickRef.current?.(updated.id); } }))
+              .catch(() => {});
+          }
+        } else {
+          // **目の前で終わったものを、次に開いた時にもう一度知らせない。**
+          // 「見た印」を進めておく（知らせに出るのは、見ていない間に
+          //  終わったものだけ、という約束を保つ）。
+          put(KEYS.settings, { ...stateRef.current.settings, lastSeenAt: Date.now() });
+        }
+      }
+
       // 完了したら成果を知識にする（＝ウロボロスの循環）。
       // ただし **AIが動いていない「仕事の型」は自動で知識にしない。**
       // キーを入れる前に何度か試すたびに中身の無い知識が積まれ、
       // 件数・成長のグラフ・関連度の判定を薄めてしまうため。
       // 型そのものは仕事の中に残るので、必要なら結果画面から手で知識にできる。
-      if (updated.status === 'done') {
-        // **完成条件の確認（kind:'check'）を「成果」として扱わない。**
-        // 確認の手順は ○× の並びを返すだけなので、これを元に知識を作ると
-        // 担当も出典も来歴も、確認役のものになってしまう。
-        const made = results.filter((r) => r.step.kind !== 'check');
-        const last = made[made.length - 1];
-        if (last && !last.result.offline) {
-          await saveResultAsKnowledge(updated, last.employee, last.result);
+      // 印の付いた仕事は知識にしない（加害的な文章を共通記憶にしない）
+      if (updated.status === 'done' && !isFlagged(updated) && !(updated.result?.knowledgeIds || []).length) {
+        // **いま走ったかたまり（results）の中から探さないこと。**
+        // 完成条件の確認は必ず単独で最後に走るので、最後のかたまりには
+        // 確認の手順しか入っていない。そこから「成果の手順」を探しても
+        // 見つからず、**仕事は完了したのに知識が1件も作られない**
+        // （完成条件を付けた依頼＝提案から実行したものは全部そうなっていた）。
+        // 仕事全体の中から、確認以外で最後に終わった手順を取る。
+        const last = finalStep(updated);
+        if (last && !last.offline) {
+          const emp =
+            stateRef.current.employees.find((e) => e.id === last.employeeId) || {
+              id: last.employeeId || 'user',
+              name: last.employeeName || '担当',
+              roleId: last.roleId,
+            };
+          await saveResultAsKnowledge(updated, emp, {
+            offline: last.offline,
+            citations: last.citations || [],
+            providerName: last.providerName,
+          });
         }
       }
 
       return updated;
     },
-    [put, log, patchTask, updateEmployee, spentThisMonth]
+    [put, log, patchTask, updateEmployee, spentThisMonth, spentToday, buildBrief]
   );
 
   /** 実行中の仕事をやめる（新項目20）。 */
@@ -1041,6 +1460,8 @@ export function useStore() {
   saveTaskAsKnowledgeRef.current = (taskId) => {
     const t = stateRef.current.tasks.find((x) => x.id === taskId);
     if (!t) return null;
+    // 外へ出せないと印を付けた仕事は、手でも知識にできない
+    if (isFlagged(t)) return null;
     // 確認の手順は成果ではないので、担当としても選ばない
     const step = [...(t.steps || [])].reverse().find((x) => x.status === 'done' && x.output && x.kind !== 'check');
     if (!step) return null;
@@ -1072,6 +1493,47 @@ export function useStore() {
     },
     [runNextStep]
   );
+  const runTaskRef = useRef(null);
+  runTaskRef.current = runTask;
+
+  /**
+   * 中断された仕事を、続きから走らせる（新規）。
+   *
+   * **ブラウザのアプリは閉じられたら止まる。** だから「閉じても回り続ける」ではなく、
+   * 「次に開いた時に自分で続きから走る」で埋める。
+   * まとめて走らせない（開いた瞬間に何件も動くと、費用も分かりにくさも跳ねる）。
+   * 費用の承認・上限は今までどおり通る（runTask がそのまま面倒を見る）。
+   */
+  const resumeInterrupted = useCallback(async () => {
+    if (!stateRef.current.settings.autoResume) return [];
+    const { resumeTargets } = await import('./resume.js');
+    const targets = resumeTargets(stateRef.current.tasks).filter((t) => !resumedRef.current.has(t.id));
+    const started = [];
+    for (const t of targets) {
+      resumedRef.current.add(t.id);
+      log({ actor: 'user', action: 'taskResumed', target: t.title });
+      started.push(t.id);
+      // eslint-disable-next-line no-await-in-loop
+      await runTaskRef.current(t.id);
+    }
+    return started;
+  }, [log]);
+
+  /** 離れている間に終わったもの（知らせに使う）。 */
+  const finishedAway = useCallback(async () => {
+    const { finishedWhileAway } = await import('./resume.js');
+    return finishedWhileAway(stateRef.current.tasks, Number(stateRef.current.settings.lastSeenAt) || 0);
+  }, []);
+
+  /** 「見た」印を進める。知らせを閉じた時に呼ぶ。 */
+  const markSeen = useCallback(() => {
+    put(KEYS.settings, { ...stateRef.current.settings, lastSeenAt: Date.now() });
+  }, [put]);
+
+  /** 通知をタップした時の飛び先を、画面側から差し込む。 */
+  const onNotifyOpen = useCallback((fn) => {
+    notifyClickRef.current = fn;
+  }, []);
 
   /**
    * 失敗した手順をやり直す（新規）。
@@ -1094,6 +1556,12 @@ export function useStore() {
     [put]
   );
 
+  // 1回だけAIを呼ぶもの（相談・引き継ぎの確認）の実体。
+  // 定義順の都合で ref に載せる（decideApproval より後ろで代入する）。
+  const runConsultRef = useRef(async () => null);
+  // askOnce も定義順の都合で ref に載せる（朝会から呼ぶため）
+  const askOnceRef = useRef(async () => null);
+
   // ---- 承認 ----
   const decideApproval = useCallback(
     async (id, ok) => {
@@ -1105,6 +1573,13 @@ export function useStore() {
         s.approvals.map((a) => (a.id === id ? { ...a, status: ok ? 'granted' : 'denied', decidedAt: Date.now() } : a))
       );
       log({ actor: 'user', action: ok ? 'approvalGranted' : 'approvalDenied', target: apv.label });
+
+      // 1回だけ呼ぶもの（相談・引き継ぎの確認）。
+      // 仕事・会議と同じく、費用の出る実行は必ずここを通す。
+      if (apv.consult) {
+        if (ok) await runConsultRef.current(apv.consult);
+        return;
+      }
 
       // 会議の承認（仕事と同じ扱い）。
       // **patchMeeting / runMeeting をここで直接呼ばないこと。**
@@ -1222,14 +1697,33 @@ export function useStore() {
 
   // ---- AI会議 ----
   const startMeeting = useCallback(
-    ({ topic, employeeIds }) => {
-      const emps = stateRef.current.employees.filter((e) => employeeIds.includes(e.id));
-      const mtg = createMeeting({ topic, employees: emps });
-      put(KEYS.meetings, [mtg, ...stateRef.current.meetings]);
+    async ({ topic, employeeIds, kind = 'free' }) => {
+      const s = stateRef.current;
+      const emps = s.employees.filter((e) => employeeIds.includes(e.id));
+      // 事前配布：台帳・収益導線・掲示板から材料を作って全員に配る（AI費用ゼロ）。
+      const { buildBriefing, createMeeting } = await loadTeamwork();
+      const materials = buildBriefing({
+        tasks: s.tasks,
+        deals: s.deals,
+        funnel: s.funnel,
+        board: s.board,
+        requireShare: s.settings.requireShare !== false,
+      });
+      const mtg = createMeeting({ topic, employees: emps, materials, kind });
+      put(KEYS.meetings, [mtg, ...s.meetings]);
       log({ actor: 'user', action: 'meetingHeld', target: topic });
       return mtg;
     },
     [put, log]
+  );
+
+  /** 週次レビュー会（議題と「答え方」が決まっている会議）。 */
+  const startWeeklyReview = useCallback(
+    async (employeeIds) => {
+      const { weeklyTopic } = await loadTeamwork();
+      return startMeeting({ topic: weeklyTopic(), employeeIds, kind: 'weekly' });
+    },
+    [startMeeting]
   );
 
   const patchMeeting = useCallback(
@@ -1247,6 +1741,7 @@ export function useStore() {
       // 会議は Ouro でいちばん費用の出る操作（意見＋反論＋統合で人数×2＋1回）。
       // **仕事と同じく、必ず1度ユーザー承認を通す。**
       // ここを飛ばしていたため、高い方だけが素通りしていた。
+      const { estimatedCalls } = await loadTeamwork();
       const willCost = Object.keys(s.secrets).length > 0;
       if (willCost && !mtg.costApproved) {
         const chairFor = parts.find((e) => e.id === mtg.chairId) || parts[0];
@@ -1255,6 +1750,7 @@ export function useStore() {
           action: 'costly',
           settings: s.settings,
           spentThisMonth: spentThisMonth(),
+          spentToday: spentToday(),
         });
         if (check.needsApproval) {
           const approval = {
@@ -1279,6 +1775,9 @@ export function useStore() {
       // 会議も途中でやめられるようにする（仕事と同じ中断スイッチを使う）
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
       abortRef.current = controller;
+
+      const { weeklyPrompt, opinionPrompt, rebuttalPrompt, synthesisPrompt, addRound, meetingTakeaways } = await loadTeamwork();
+      const { runStep } = await loadRuntime();
 
       const ask = async (employee, prompt) => {
         const pseudoTask = { request: mtg.topic, title: mtg.topic, context: '' };
@@ -1306,7 +1805,7 @@ export function useStore() {
       patchMeeting(mtg);
       const opinions = await Promise.all(
         parts.map((emp) =>
-          ask(emp, opinionPrompt(mtg.topic, mtg.interventions)).then((r) => ({ emp, r }))
+          ask(emp, opinionPrompt(mtg.topic, mtg.interventions, mtg.materials, mtg.kind === 'weekly' ? weeklyPrompt() : '')).then((r) => ({ emp, r }))
         )
       );
       for (const { emp, r } of opinions) {
@@ -1320,7 +1819,7 @@ export function useStore() {
       const opinionRounds = mtg.rounds.filter((r) => r.phase === 'opinion');
       const rebuttals = await Promise.all(
         parts.map((emp) =>
-          ask(emp, rebuttalPrompt(mtg.topic, opinionRounds.filter((r) => r.employeeId !== emp.id)))
+          ask(emp, rebuttalPrompt(mtg.topic, opinionRounds.filter((r) => r.employeeId !== emp.id), mtg.materials))
             .then((r) => ({ emp, r }))
         )
       );
@@ -1333,7 +1832,7 @@ export function useStore() {
       mtg = { ...mtg, phase: 'synthesis' };
       const chair = parts.find((e) => e.id === mtg.chairId) || parts[0];
       if (chair) {
-        const r = await ask(chair, synthesisPrompt(mtg.topic, mtg.rounds, mtg.interventions));
+        const r = await ask(chair, synthesisPrompt(mtg.topic, mtg.rounds, mtg.interventions, mtg.materials));
         mtg = addRound(mtg, { phase: 'synthesis', employeeId: chair.id, employeeName: chair.name, ...r });
         mtg = { ...mtg, conclusion: r.text };
       }
@@ -1350,13 +1849,28 @@ export function useStore() {
         detail: '結論を出した',
         cost: mtg.totalCost,
       });
+
+      // **会議の結論を会議の中で閉じさせない。**
+      // 決まったことを掲示板へ回すと、次に動く社員が読む（AI費用ゼロ）。
+      if (!stopped) {
+        for (const line of meetingTakeaways(mtg)) {
+          addBoardPost({
+            text: line,
+            kind: 'meeting',
+            employeeId: chair ? chair.id : null,
+            employeeName: chair ? chair.name : '議長',
+            roleId: chair ? chair.roleId : null,
+          });
+        }
+      }
       return mtg;
     },
-    [patchMeeting, log, put, spentThisMonth]
+    [patchMeeting, log, put, spentThisMonth, addBoardPost]
   );
 
   // 承認画面から会議を始められるようにしておく（定義順の都合で ref に載せる）
   runMeetingRef.current = runMeeting;
+
 
   // ---- 設定・接続・キー ----
   const updateSettings = useCallback(
@@ -1390,6 +1904,349 @@ export function useStore() {
   const updateCompany = useCallback(
     (patch) => put(KEYS.company, { ...stateRef.current.company, ...patch }),
     [put]
+  );
+
+  // ---- 朝会（AIを呼ばない）----
+  //
+  // **人数ぶんAIを呼ばない。** 18人いれば18回になり、会議より高くつく。
+  // 中身は仕事から機械的に作る＝費用ゼロ。まとめの一言だけ書記1人に頼める。
+  const holdStandup = useCallback(
+    async ({ withSummary = false } = {}) => {
+      const s = stateRef.current;
+      const { buildStandup, standupSummaryPrompt } = await loadTeamwork();
+      const standup = buildStandup({ tasks: s.tasks, employees: s.employees.filter((e) => !e.archivedAt) });
+      updateSettings({ lastStandupAt: Date.now() });
+      log({ actor: 'user', action: 'standupHeld', target: `${standup.counts.people}人ぶん` });
+      if (!withSummary) return { standup, summary: '' };
+
+      // 書記役（オーガナイザー → いなければ誰でも1人）に1回だけ頼む
+      const scribe =
+        s.employees.find((e) => !e.archivedAt && e.roleId === 'organizer') ||
+        s.employees.find((e) => !e.archivedAt) ||
+        null;
+      if (!scribe) return { standup, summary: '' };
+      // **askOnce を通すこと。** 直に runConsultRef を呼ぶと、
+      // 費用の出る実行なのに承認も今月の上限も効かない。
+      const res = await askOnceRef.current({
+        employeeId: scribe.id,
+        prompt: standupSummaryPrompt(standup),
+        kind: 'standup',
+        label: `${scribe.name} が今日の朝会をまとめます（AIを1回呼びます）`,
+      });
+      return { standup, summary: res && res.text ? res.text : '', queued: Boolean(res && res.queued) };
+    },
+    [updateSettings, log]
+  );
+
+  // ---- 1回だけAIを呼ぶ（相談・引き継ぎの確認）----
+  //
+  // 会議は「人数×2＋1回」でいちばん高い。会議を開くほどではない場面のために、
+  // **1回だけ**呼ぶ道を用意する。費用の出る実行なので、仕事・会議と同じ承認を通す。
+  const askOnce = useCallback(
+    async ({ employeeId, prompt, kind = 'consult', taskId = null, stepId = null, label = '', question = '' }) => {
+      const s = stateRef.current;
+      const employee = s.employees.find((e) => e.id === employeeId);
+      if (!employee) return null;
+      const payload = { employeeId, prompt, kind, taskId, stepId, label, question };
+
+      const willCost = Object.keys(s.secrets).length > 0;
+      if (willCost) {
+        const check = checkAction({
+          employee,
+          action: 'costly',
+          settings: s.settings,
+          spentThisMonth: spentThisMonth(),
+          spentToday: spentToday(),
+        });
+        if (check.needsApproval) {
+          const approval = {
+            id: newId('apv'),
+            taskId,
+            employeeId,
+            action: 'costly',
+            label: label || `${employee.name} に1つ聞きます（AIを1回呼びます）`,
+            risk: check.risk,
+            status: 'pending',
+            createdAt: Date.now(),
+            consult: payload,
+          };
+          put(KEYS.approvals, [approval, ...s.approvals]);
+          log({ actor: employeeId, action: 'approvalRequested', target: approval.label });
+          return { queued: true, approvalId: approval.id };
+        }
+      }
+      return runConsultRef.current(payload);
+    },
+    [put, log, spentThisMonth, spentToday]
+  );
+  askOnceRef.current = askOnce;
+
+  // 実体。承認を通ったあと（または承認が要らないとき）にここへ来る。
+  runConsultRef.current = async ({ employeeId, prompt, kind, taskId, stepId, question }) => {
+    const s = stateRef.current;
+    const employee = s.employees.find((e) => e.id === employeeId);
+    if (!employee) return null;
+    setBusy({ taskId: taskId || null, consult: true });
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    abortRef.current = controller;
+    let res;
+    try {
+      const { runStep } = await loadRuntime();
+      res = await runStep({
+        employee,
+        company: s.company,
+        task: { request: question || prompt, title: question || '相談', context: '', spec: {} },
+        step: { instruction: prompt, needs: [] },
+        knowledgeList: s.knowledge,
+        secrets: s.secrets,
+        settings: s.settings,
+        connections: s.connections,
+        boardText: (await loadTeamwork()).boardPrompt(s.board, { exceptTaskId: taskId }),
+        briefText: await buildBrief(),
+        signal: controller ? controller.signal : undefined,
+      });
+    } catch (e) {
+      res = { text: '', error: e.message || String(e), cost: 0 };
+    }
+    abortRef.current = null;
+    setBusy(null);
+
+    log({
+      actor: employee.id,
+      action: res.error ? 'stepFailed' : 'consultAnswered',
+      target: question || kind,
+      detail: res.error || `${res.providerName || 'ローカル'} / ${res.model || '—'}`,
+      cost: res.cost || 0,
+    });
+    if (res.error) return { text: '', error: res.error };
+
+    const { trimAnswer } = await loadTeamwork();
+    const text = kind === 'consult' ? trimAnswer(res.text) : res.text;
+
+    if (kind === 'consult') {
+      addBoardPost({
+        text: `${question ? `${question} → ` : ''}${text}`.slice(0, 200),
+        kind: 'consult',
+        employeeId: employee.id,
+        employeeName: employee.name,
+        roleId: employee.roleId,
+        taskId,
+      });
+    }
+    if (kind === 'standup') {
+      addBoardPost({
+        text,
+        kind: 'share',
+        employeeId: employee.id,
+        employeeName: employee.name,
+        roleId: employee.roleId,
+      });
+    }
+    if ((kind === 'gap' || kind === 'supplement') && taskId && stepId) {
+      const { isNothing } = await loadTeamwork();
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (task) {
+        const steps = (task.steps || []).map((x) =>
+          x.id === stepId
+            ? kind === 'gap'
+              ? // **「なし」を足りないものとして持たない。**
+                // 持つと「補ってもらう」が出てしまい、要らない1回ぶん課金される。
+                { ...x, gap: isNothing(text) ? '' : text, gapChecked: true, gapAt: Date.now() }
+              : // 補ってもらった材料は、受け手の入力の末尾に足す（元の材料は消さない）
+                { ...x, input: `${x.input || ''}\n\n## 追加で補われた材料\n${text}`.trim(), supplement: text }
+            : x
+        );
+        patchTask({ ...task, steps });
+      }
+    }
+    return { text, cost: res.cost || 0 };
+  };
+
+  /** 他の担当に3行だけ聞く（会議を開くほどではない時）。 */
+  const consultEmployee = useCallback(
+    async ({ employeeId, question, taskId = null }) => {
+      const s = stateRef.current;
+      const employee = s.employees.find((e) => e.id === employeeId);
+      if (!employee || !String(question || '').trim()) return null;
+      const { buildBriefing, consultPrompt } = await loadTeamwork();
+      const brief = buildBriefing({
+        tasks: s.tasks,
+        deals: s.deals,
+        funnel: s.funnel,
+        board: s.board,
+        requireShare: s.settings.requireShare !== false,
+      });
+      return askOnce({
+        employeeId,
+        prompt: consultPrompt(question, brief),
+        kind: 'consult',
+        taskId,
+        question: String(question).slice(0, 200),
+        label: `${employee.name} に1つ聞きます（AIを1回呼びます）`,
+      });
+    },
+    [askOnce]
+  );
+
+  /** 引き継ぎ会：受け取った側に「足りない材料」を聞く（1回）。 */
+  const askHandoffGap = useCallback(
+    async (taskId, stepId) => {
+      const s = stateRef.current;
+      const { gapPrompt } = await loadTeamwork();
+      const task = s.tasks.find((t) => t.id === taskId);
+      const step = task && (task.steps || []).find((x) => x.id === stepId);
+      if (!task || !step || !step.employeeId) return null;
+      const emp = s.employees.find((e) => e.id === step.employeeId);
+      return askOnce({
+        employeeId: step.employeeId,
+        prompt: gapPrompt(step.instruction, step.input),
+        kind: 'gap',
+        taskId,
+        stepId,
+        label: `${emp ? emp.name : '担当'} に「材料が足りているか」を聞きます（AIを1回呼びます）`,
+      });
+    },
+    [askOnce]
+  );
+
+  /**
+   * この成果物は外へ出せない、と印を付ける（新規）。
+   * 印を付けたものは知識にも掲示板にも入らず、仕事は保留になる。
+   */
+  const flagTask = useCallback(
+    async (taskId, reason) => {
+      const s = stateRef.current;
+      const task = s.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+
+      // **印を付けるだけでは足りない。** 実行が終わった時点で、成果は既に
+      // 知識と掲示板に入っている。ここで実際に取り除かないと、
+      // 「知識にも掲示板にも入りません」という画面の説明が嘘になる。
+      const rest = s.knowledge.filter((k) => k.taskId !== taskId);
+      if (rest.length !== s.knowledge.length) {
+        const gone = s.knowledge.filter((k) => k.taskId === taskId);
+        put(KEYS.knowledge, rest);
+        // その知識だけが参照していた出典も一緒に消す（deleteKnowledge と同じ扱い）
+        const orphans = new Set(gone.flatMap((k) => orphanSourceIds(k, rest)));
+        if (orphans.size) put(KEYS.sources, s.sources.filter((src) => !orphans.has(src.id)));
+      }
+      const board = (s.board || []).filter((post) => post.taskId !== taskId);
+      if (board.length !== (s.board || []).length) {
+        stateRef.current = { ...stateRef.current, board };
+        setState(stateRef.current);
+        touchedRef.current.add(KEYS.board);
+        if (hydratedRef.current) save(KEYS.board, board, 'low');
+      }
+
+      const next = flagTaskFn(task, reason);
+      log({ actor: 'user', action: 'taskFlagged', target: task.title, detail: String(reason || '').slice(0, 120) });
+      // 共有の1行も取り下げる（掲示板から消したので、手元にも残さない）
+      return patchTask({ ...next, shared: '', shareWaived: true });
+    },
+    [patchTask, log, put]
+  );
+
+  const unflagTaskAction = useCallback(
+    (taskId) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      return patchTask(unflagTask(task));
+    },
+    [patchTask]
+  );
+
+  /** やり直しの回数を数え直す（「それでもやり直す」）。 */
+  const allowMoreRedo = useCallback(
+    (taskId) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      return patchTask(resetRedoCount(task));
+    },
+    [patchTask]
+  );
+
+  /** その手順からやり直す（補った材料を活かすため）。 */
+  const redoStep = useCallback(
+    async (taskId, stepId) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      // **際限のない差し戻しは型として持たない。** 上限に達したら、
+      // 続ける前に人が見る（「それでもやり直す」で抜けられる）。
+      if (overRedoLimit(task)) return { blocked: true, redoLimit: REDO_LIMIT };
+      const next = redoFrom(task, stepId);
+      if (next === task) return task;
+      patchTask(next);
+      log({ actor: 'user', action: 'taskRetried', target: task.title, detail: 'この手順からやり直し' });
+      return runTask(taskId);
+    },
+    [patchTask, log, runTask]
+  );
+
+  /**
+   * 会議の結論を知識にする（新規）。
+   * これまで結論は会議の中で閉じていて、次の仕事で誰も使わなかった。
+   * 出典は会議そのもの（AI生成ではなく、社内で出た結論だと分かるようにする）。
+   */
+  const saveMeetingAsKnowledge = useCallback(
+    (meetingId) => {
+      const s = stateRef.current;
+      const mtg = s.meetings.find((m) => m.id === meetingId);
+      if (!mtg || !String(mtg.conclusion || '').trim()) return null;
+      const chair = s.employees.find((e) => e.id === mtg.chairId) || s.employees[0] || null;
+      const source = makeSource({
+        type: 'meeting',
+        title: `社内会議「${mtg.topic}」`,
+        excerpt: `${new Date(mtg.createdAt).toLocaleDateString('ja-JP')}／参加 ${mtg.participantIds.length}人`,
+        addedBy: chair ? chair.id : 'user',
+        trust: 50,
+      });
+      // **createKnowledge は { knowledge, extraSources } を返す。**
+      // 直に受け取ると id が undefined になり、開いた先で「知識が見つかりません」になる。
+      const { title, summary } = distill(mtg.conclusion, `会議の結論：${mtg.topic}`);
+      const { knowledge } = createKnowledge({
+        title: title || `会議の結論：${mtg.topic}`.slice(0, 80),
+        summary,
+        body: mtg.conclusion,
+        category: '戦略',
+        tags: [],
+        origin: 'meeting',
+        sourceIds: [source.id],
+        employeeId: chair ? chair.id : null,
+        departmentId: chair ? chair.departmentId : null,
+      });
+      put(KEYS.sources, [source, ...s.sources]);
+      put(KEYS.knowledge, [knowledge, ...s.knowledge]);
+      put(KEYS.meetings, s.meetings.map((m) => (m.id === mtg.id ? { ...m, knowledgeId: knowledge.id } : m)));
+      log({ actor: chair ? chair.id : 'user', action: 'knowledgeCreated', target: knowledge.title });
+      return knowledge;
+    },
+    [put, log]
+  );
+
+  /** 引き継ぎ会：渡した側に補ってもらう（1回）。 */
+  const supplementHandoff = useCallback(
+    async (taskId, stepId) => {
+      const s = stateRef.current;
+      const { supplementPrompt } = await loadTeamwork();
+      const task = s.tasks.find((t) => t.id === taskId);
+      const steps = task ? task.steps || [] : [];
+      const idx = steps.findIndex((x) => x.id === stepId);
+      const step = idx >= 0 ? steps[idx] : null;
+      if (!task || !step || !step.gap) return null;
+      // 渡した側＝この手順より前で、出力を出している最後の手順
+      const giver = [...steps.slice(0, idx)].reverse().find((x) => x.output && x.employeeId);
+      if (!giver) return null;
+      const emp = s.employees.find((e) => e.id === giver.employeeId);
+      return askOnce({
+        employeeId: giver.employeeId,
+        prompt: supplementPrompt(step.gap, giver.output),
+        kind: 'supplement',
+        taskId,
+        stepId,
+        label: `${emp ? emp.name : '前の担当'} に足りない材料を補ってもらいます（AIを1回呼びます）`,
+      });
+    },
+    [askOnce]
   );
 
   /**
@@ -1450,11 +2307,34 @@ export function useStore() {
     deleteTask,
     patchTask,
     setTaskMeta,
+    shareTask,
+    flagTask,
+    unflagTask: unflagTaskAction,
+    allowMoreRedo,
     teachEmployee,
     forgetEmployeeNote,
     putFunnelEntry,
     removeFunnelEntry,
     renameFunnelStage,
+    // 中断からの再開・完成の知らせ
+    resumeInterrupted,
+    finishedAway,
+    markSeen,
+    onNotifyOpen,
+    // 事業・発信ログ
+    addVenture,
+    updateVenture,
+    removeVenture,
+    setVentureState,
+    decideVenture,
+    addSharePost,
+    updateSharePost,
+    removeSharePost,
+    addPattern,
+    updatePattern: updatePatternAction,
+    removePattern: removePatternAction,
+    // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）
+    hydrated: hydratedRef.current,
     updateRules,
     addCompanyRule,
     removeCompanyRule,
@@ -1474,6 +2354,17 @@ export function useStore() {
     deleteDeal,
     // 会議
     startMeeting,
+    startWeeklyReview,
+    holdStandup,
+    consultEmployee,
+    askHandoffGap,
+    supplementHandoff,
+    saveMeetingAsKnowledge,
+    redoStep,
+    addBoardPost,
+    addPitfallEntry,
+    removePitfallEntry,
+    removeBoardPost,
     runMeeting,
     patchMeeting,
     // 設定

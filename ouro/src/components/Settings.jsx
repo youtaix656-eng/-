@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { Card, Field, SectionTitle } from './ui.jsx';
 import { PROVIDERS } from '../lib/providers/index.js';
+import { DEFAULT_BASE_URL, DEFAULT_MODEL } from '../lib/providers/compat.js';
+import { VOICE_PRIVACY_NOTE, isVoiceInputAvailable } from '../lib/voice.js';
+import { canNotify, notifyState, askNotifyPermission, canKeepAwake } from '../lib/notify.js';
 import { PLANS } from '../data/plans.js';
 
 export default function Settings({ store, toast }) {
@@ -73,10 +76,19 @@ export default function Settings({ store, toast }) {
           <strong style={{ color: '#fff' }}>1つ登録すれば、社員全員が使えるようになります。</strong>
         </p>
 
-        {PROVIDERS.filter((p) => p.needsKey).map((p) => (
+        {/* **どれが0円で始められるかを先に言う。** 3つ並べるだけだと、
+            お金が無い時にどれを選べばよいか分からない。 */}
+        {PROVIDERS.filter((p) => p.freeTier && p.needsKey).map((p) => (
+          <p key={`free:${p.id}`} className="muted" style={{ marginTop: -2 }}>
+            💡 <strong style={{ color: '#fff' }}>{p.name} は無料で始められます。</strong>
+            {p.freeNote}
+          </p>
+        ))}
+
+        {PROVIDERS.filter((p) => p.needsKey).sort((a, b) => (b.freeTier ? 1 : 0) - (a.freeTier ? 1 : 0)).map((p) => (
           <div key={p.id} style={{ marginBottom: 16 }}>
             <Field
-              label={`${p.name}${store.secrets[p.id] ? '（接続済み）' : ''}`}
+              label={`${p.name}${p.freeTier ? '（無料で始められます）' : ''}${store.secrets[p.id] ? '・接続済み' : ''}`}
               hint={p.desc}
             >
               <div style={{ display: 'flex', gap: 6 }}>
@@ -134,7 +146,68 @@ export default function Settings({ store, toast }) {
         ))}
       </Card>
 
+      <Card glyph="◱" title="ローカルAI（自分のパソコンの中で動かす）">
+        <p className="muted" style={{ marginTop: -6 }}>
+          Ollama や LM Studio など、<strong style={{ color: '#fff' }}>自分のPCの中で動くAI</strong>に繋げます。
+          費用は0です。要約・分類・整理のような軽い仕事をここへ逃がすと、月の上限に当たりにくくなります。
+        </p>
+        <p className="muted" style={{ fontSize: 11.5 }}>
+          ⚠ <strong style={{ color: '#fff' }}>iPhone・iPad では使えません</strong>
+          （端末にモデルが無く、Safari はこのページから自分のPCへの通信を止めます）。
+          パソコンの Chrome / Firefox で開いた時だけ使えます。
+          サーバー側で「このページからの通信を許す」設定も要ります（Ollama なら OLLAMA_ORIGINS）。
+        </p>
+        <Field label="宛先のURL" hint={`空にすると使いません。Ollama の既定は ${DEFAULT_BASE_URL}`}>
+          <input
+            className="input"
+            value={store.settings.compatBaseUrl || ''}
+            onChange={(e) => store.updateSettings({ compatBaseUrl: e.target.value.trim() })}
+            placeholder={DEFAULT_BASE_URL}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </Field>
+        <Field label="モデル名" hint={`サーバーに入れてあるモデルの名前。空なら ${DEFAULT_MODEL}`}>
+          <input
+            className="input"
+            value={store.settings.compatModel || ''}
+            onChange={(e) => store.updateSettings({ compatModel: e.target.value.trim() })}
+            placeholder={DEFAULT_MODEL}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </Field>
+      </Card>
+
       <Card glyph="⟳" title="AI Router">
+        <Field
+          label="モデルの選び方（既定）"
+          hint="依頼ごとに上書きできます。安い＝いちばん安いモデルに固定。1行の要約にまで上位モデルが回るのを止められます。"
+        >
+          <select
+            className="select"
+            value={store.settings.costMode || 'auto'}
+            onChange={(e) => store.updateSettings({ costMode: e.target.value })}
+          >
+            <option value="cheap">安いモデルで（節約）</option>
+            <option value="auto">おまかせ（仕事の重さで選ぶ）</option>
+            <option value="best">良いモデルで（高い）</option>
+          </select>
+        </Field>
+        <Field
+          label="1日のAI費用の上限（ドル）"
+          hint="0 で上限なし。月の上限だけだと、1日で使い切っても気づくのが翌日以降になります。"
+        >
+          <input
+            className="input"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.5"
+            value={store.settings.dailyCapUsd ?? 0}
+            onChange={(e) => store.updateSettings({ dailyCapUsd: Math.max(0, Number(e.target.value) || 0) })}
+          />
+        </Field>
         <Field label="どのモデルを使うか" hint="自動＝仕事の重さと必要な道具から選びます。手動＝各社員の希望どおりに。">
           <select
             className="select"
@@ -155,6 +228,19 @@ export default function Settings({ store, toast }) {
             <option value={4000}>4,000</option>
             <option value={8000}>8,000（標準）</option>
             <option value={16000}>16,000（長い・高い）</option>
+          </select>
+        </Field>
+        <Field
+          label="共有しないと完了にしない"
+          hint="仕事から「他の社員が知っておくとよいこと」を1行、掲示板へ残すまで、台帳では『確認待ち』のままにします。書く場所を作っただけでは誰も書かないため、既定は入りです。"
+        >
+          <select
+            className="select"
+            value={store.settings.requireShare === false ? 'off' : 'on'}
+            onChange={(e) => store.updateSettings({ requireShare: e.target.value === 'on' })}
+          >
+            <option value="on">共有を書くまで完了にしない（標準）</option>
+            <option value="off">共有が無くても完了にする</option>
           </select>
         </Field>
         <Field
@@ -201,6 +287,91 @@ export default function Settings({ store, toast }) {
             value={store.settings.usdJpy}
             onChange={(e) => store.updateSettings({ usdJpy: Number(e.target.value) || 155 })}
           />
+        </Field>
+      </Card>
+
+      <Card glyph="◷" title="裏で動かす・終わったら知らせる">
+        <p className="muted" style={{ marginTop: -6 }}>
+          <strong style={{ color: '#fff' }}>アプリを完全に閉じると、仕事は本当に止まります。</strong>
+          ブラウザの仕組み上どうにもならないので、その代わりに次の3つで埋めています。
+        </p>
+        <Field
+          label="開いた時に、止まっている仕事を続きから走らせる"
+          hint="閉じている間に止まったものを、次に開いた瞬間に拾います。一度に走らせるのは1件だけ。費用の承認・上限は今までどおり通ります。"
+        >
+          <select
+            className="select"
+            value={store.settings.autoResume === false ? 'off' : 'on'}
+            onChange={(e) => store.updateSettings({ autoResume: e.target.value === 'on' })}
+          >
+            <option value="on">続きから走らせる（既定）</option>
+            <option value="off">走らせない（自分で押す）</option>
+          </select>
+        </Field>
+        <Field
+          label="終わったら端末で知らせる"
+          hint={
+            canNotify()
+              ? '裏に回っている間に終わった時だけ出します。閉じている間は出せません（サーバーを持たないため）。'
+              : 'このブラウザは通知に対応していません。'
+          }
+        >
+          <div style={{ display: 'flex', gap: 6 }}>
+            <select
+              className="select"
+              value={store.settings.notifyDone ? 'on' : 'off'}
+              onChange={async (e) => {
+                const on = e.target.value === 'on';
+                if (on && notifyState() !== 'granted') {
+                  const r = await askNotifyPermission();
+                  if (r !== 'granted') {
+                    toast('通知が許可されませんでした');
+                    return;
+                  }
+                }
+                store.updateSettings({ notifyDone: on });
+              }}
+            >
+              <option value="off">知らせない（既定）</option>
+              <option value="on">知らせる</option>
+            </select>
+          </div>
+        </Field>
+        <Field
+          label="走っている間、画面を眠らせない"
+          hint={
+            canKeepAwake()
+              ? 'スマホは画面が消えるとタブごと止めることがあります。入れると最後まで走り切りやすくなりますが、電池を食います。'
+              : 'この端末では使えません。'
+          }
+        >
+          <select
+            className="select"
+            value={store.settings.keepAwake ? 'on' : 'off'}
+            onChange={(e) => store.updateSettings({ keepAwake: e.target.value === 'on' })}
+          >
+            <option value="off">眠らせる（既定）</option>
+            <option value="on">走っている間は眠らせない</option>
+          </select>
+        </Field>
+      </Card>
+
+      <Card glyph="◍" title="音声で入力する">
+        <p className="muted" style={{ marginTop: -6 }}>
+          話したことを、そのまま会社の材料にします。手で打ち直す手間があるうちは、人は貯めません。
+        </p>
+        <p className="muted" style={{ fontSize: 11.5 }}>
+          ⚠ <strong style={{ color: '#fff' }}>ここは端末内保存の例外です。</strong>{VOICE_PRIVACY_NOTE}
+        </p>
+        <Field label="音声入力を使う" hint={isVoiceInputAvailable(typeof window === 'undefined' ? null : window) ? '情報を追加の画面にマイクのボタンが出ます。' : 'このブラウザは音声認識に対応していません。'}>
+          <select
+            className="select"
+            value={store.settings.voiceInput ? 'on' : 'off'}
+            onChange={(e) => store.updateSettings({ voiceInput: e.target.value === 'on' })}
+          >
+            <option value="off">使わない（既定）</option>
+            <option value="on">使う</option>
+          </select>
         </Field>
       </Card>
 

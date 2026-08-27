@@ -15,9 +15,14 @@ export const LOADERS = {
   ingest: () => import('../components/Ingest.jsx'),
   meeting: () => import('../components/Meeting.jsx'),
   meetingDetail: () => import('../components/Meeting.jsx'),
+  compose: () => import('../components/Compose.jsx'),
   company: () => import('../components/Company.jsx'),
+  team: () => import('../components/Team.jsx'),
   ledger: () => import('../components/Ledger.jsx'),
   funnel: () => import('../components/Funnel.jsx'),
+  studio: () => import('../components/Studio.jsx'),
+  ventures: () => import('../components/Ventures.jsx'),
+  venture: () => import('../components/Ventures.jsx'),
   rules: () => import('../components/Rules.jsx'),
   deals: () => import('../components/Deals.jsx'),
   deal: () => import('../components/Deals.jsx'),
@@ -57,6 +62,17 @@ export function preloadView(name) {
   } catch {
     started.delete(name);
   }
+}
+
+/**
+ * 実行の中身（runtime.js とエンジン一式）を先に取っておく。
+ * 押した時に読むと最初の1回だけ待たされるので、暇な時に取る。
+ * **起動時に読む束には入れない**（実行するまでは1バイトも要らないため）。
+ */
+export function preloadRuntime() {
+  if (!shouldPrefetch() || started.has('__runtime')) return;
+  started.add('__runtime');
+  import('./runtime.js').catch(() => started.delete('__runtime'));
 }
 
 /** まだ読んでいない画面をまとめて先読みする（暇な時に呼ぶ／新項目02）。 */

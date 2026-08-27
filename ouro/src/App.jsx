@@ -7,12 +7,11 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { useStore } from './lib/useStore.js';
 import * as perf from './lib/perf.js';
-import { LOADERS, preloadView, preloadMany } from './lib/preload.js';
+import { LOADERS, preloadView, preloadMany, preloadRuntime } from './lib/preload.js';
 import { useToast, Skeleton } from './components/ui.jsx';
-import Splash from './components/Splash.jsx';
+import { doneMessage } from './lib/resume.js';
 import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
-import Compose from './components/Compose.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
 // 肖像の額縁は全員で1つを使い回すので、その定義だけ即時に読む
 import { PortraitSprite } from './components/Portrait.jsx';
@@ -27,8 +26,12 @@ const MeetingDetail = lazy(() => LOADERS.meetingDetail().then((m) => ({ default:
 // 会社は下部ナビではなく常設バーから開く画面なので、押した時に読む。
 // バー（ボタン）は即時、画面は lazy。指が触れた時点で先読みされる。
 const Company = lazy(LOADERS.company);
+const Team = lazy(LOADERS.team);
 const Ledger = lazy(LOADERS.ledger);
 const Funnel = lazy(LOADERS.funnel);
+const Studio = lazy(LOADERS.studio);
+const Ventures = lazy(LOADERS.ventures);
+const VentureDetail = lazy(() => LOADERS.venture().then((m) => ({ default: m.VentureDetail })));
 const Rules = lazy(LOADERS.rules);
 const Deals = lazy(LOADERS.deals);
 const DealDetail = lazy(() => LOADERS.deal().then((m) => ({ default: m.DealDetail })));
@@ -37,6 +40,10 @@ const Approvals = lazy(LOADERS.approvals);
 const AuditView = lazy(LOADERS.audit);
 const Settings = lazy(LOADERS.settings);
 // 新項目01：下部ナビにあるが起動直後には要らないので、後から読む
+// （目次・予定と同じ扱い。押す前に先読みするので待ちは実質ゼロ）
+// 初回だけ出る画面。起動時に読む束から外す（2回目以降は一度も読まない）。
+const Splash = lazy(() => import('./components/Splash.jsx'));
+const Compose = lazy(LOADERS.compose);
 const Calendar = lazy(LOADERS.calendar);
 const Toc = lazy(LOADERS.toc);
 const GenreEditor = lazy(LOADERS.genre);
@@ -68,8 +75,12 @@ const TITLES = {
   ingest: '情報を追加',
   meeting: 'AI会議',
   meetingDetail: 'AI会議',
+  team: 'チーム',
   ledger: '仕事台帳',
   funnel: '収益導線',
+  studio: '発信',
+  ventures: '事業',
+  venture: '事業',
   rules: '会社のルール',
   deals: '案件・収益',
   deal: '案件',
@@ -85,6 +96,8 @@ export default function App() {
   const [view, setView] = useState('home');
   const [arg, setArg] = useState(null);
   const [stack, setStack] = useState([]);
+  // 離れている間に終わった仕事の知らせ（「開きますか？ はい／いいえ」）
+  const [done, setDone] = useState(null);
 
   const go = useCallback(
     (next, nextArg = null) => {
@@ -145,9 +158,11 @@ export default function App() {
     if (!idle) return undefined;
     const id = idle(
       () => {
-        preloadMany(['toc', 'calendar', 'task', 'employee']);
+        preloadMany(['compose', 'toc', 'calendar', 'task', 'employee']);
+        // 実行の中身（AIエンジン一式）も、暇なうちに取っておく
+        preloadRuntime();
         // さらに空きがあれば、会社バーから開く画面も
-        idle(() => preloadMany(['company', 'approvals', 'ledger', 'funnel', 'settings', 'characters', 'connect']), { timeout: 8000 });
+        idle(() => preloadMany(['company', 'team', 'approvals', 'ledger', 'funnel', 'settings', 'characters', 'connect']), { timeout: 8000 });
       },
       { timeout: 4000 }
     );
@@ -155,6 +170,51 @@ export default function App() {
       if (typeof cancelIdleCallback === 'function') cancelIdleCallback(id);
     };
   }, [store.ready]);
+
+  // ── 開いた時にやること ──
+  //
+  // ① 離れている間に終わった仕事があれば「開きますか？」を出す
+  // ② 中断されたまま止まっている仕事があれば、**続きから**走らせる
+  //
+  // **閉じている間は本当に止まっている**（ブラウザの仕組み上どうにもならない）。
+  // その代わり、開いた瞬間にここが埋める。
+  useEffect(() => {
+    if (!store.ready) return;
+    let alive = true;
+    (async () => {
+      const finished = await store.finishedAway();
+      if (!alive) return;
+      if (finished.length) setDone(finished);
+      else store.markSeen();
+      // 知らせを出したあとで再開する（順番を逆にすると、いま終わったものまで
+      // 「離れている間に終わった」ことになってしまう）
+      await store.resumeInterrupted();
+    })();
+    return () => {
+      alive = false;
+    };
+    // 起動時に1度だけ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.ready]);
+
+  // タブに戻ってきた時も、止まっているものを拾う
+  useEffect(() => {
+    if (!store.ready) return undefined;
+    const onBack = () => {
+      if (document.visibilityState === 'visible') store.resumeInterrupted();
+    };
+    document.addEventListener('visibilitychange', onBack);
+    return () => document.removeEventListener('visibilitychange', onBack);
+  }, [store.ready, store.resumeInterrupted]);
+
+  // 端末の通知をタップした時の飛び先
+  useEffect(() => {
+    store.onNotifyOpen((taskId) => {
+      setDone(null);
+      store.markSeen();
+      go('task', taskId);
+    });
+  }, [store, go]);
 
   // ブラウザの戻るで1つ前の画面へ
   useEffect(() => {
@@ -172,7 +232,11 @@ export default function App() {
   }
 
   if (!store.settings.splashSeen) {
-    return <Splash onStart={() => store.updateSettings({ splashSeen: true })} />;
+    return (
+      <Suspense fallback={<div className="splash"><span className="spinner" /></div>}>
+        <Splash onStart={() => store.updateSettings({ splashSeen: true })} />
+      </Suspense>
+    );
   }
 
   const isTab = NAV.some((n) => n.id === view);
@@ -215,11 +279,15 @@ export default function App() {
         {view === 'employee' && <EmployeeDetail store={store} employeeId={arg} go={go} />}
         {view === 'hire' && <Hire store={store} initialRoleId={arg} go={go} />}
         {view === 'knowledgeDetail' && <KnowledgeDetail store={store} knowledgeId={arg} go={go} />}
-        {view === 'ingest' && <Ingest store={store} go={go} toast={toast} />}
+        {view === 'ingest' && <Ingest store={store} go={go} toast={toast} preset={arg || {}} key={JSON.stringify(arg)} />}
         {view === 'meeting' && <Meeting store={store} go={go} />}
         {view === 'meetingDetail' && <MeetingDetail store={store} meetingId={arg} go={go} />}
+        {view === 'team' && <Team store={store} go={go} toast={toast} />}
         {view === 'ledger' && <Ledger store={store} go={go} toast={toast} />}
         {view === 'funnel' && <Funnel store={store} go={go} toast={toast} />}
+        {view === 'studio' && <Studio store={store} go={go} toast={toast} />}
+        {view === 'ventures' && <Ventures store={store} go={go} toast={toast} />}
+        {view === 'venture' && <VentureDetail store={store} ventureId={arg} go={go} toast={toast} />}
         {view === 'rules' && <Rules store={store} toast={toast} />}
         {view === 'deals' && <Deals store={store} go={go} toast={toast} highlight={arg && arg.templateId} />}
         {view === 'deal' && <DealDetail store={store} dealId={arg} go={go} />}
@@ -258,7 +326,50 @@ export default function App() {
         ))}
       </nav>
 
+      {done && done.length > 0 && (
+        <DoneAsk
+          tasks={done}
+          onYes={() => {
+            const first = done[0];
+            setDone(null);
+            store.markSeen();
+            go('task', first.id);
+          }}
+          onNo={() => {
+            setDone(null);
+            store.markSeen();
+          }}
+        />
+      )}
+
       {toastNode}
+    </div>
+  );
+}
+
+/**
+ * 「成果物が完成しました！ 開きますか？」
+ *
+ * **閉じている間に届いたものを、開いた瞬間に必ず1度だけ見せる。**
+ * 「いいえ」でも見た印は進めるので、同じ知らせが何度も出ることはない
+ * （仕事そのものは消えないので、あとから台帳や一覧から開ける）。
+ */
+function DoneAsk({ tasks, onYes, onNo }) {
+  const first = tasks[0];
+  return (
+    <div className="sheet-bg" role="presentation">
+      <div className="sheet fade-in" role="dialog" aria-modal="true">
+        <h2>{doneMessage(tasks)}</h2>
+        <p className="muted" style={{ marginTop: -4 }}>
+          {first.title}
+          {tasks.length > 1 ? `　ほか${tasks.length - 1}件` : ''}
+        </p>
+        <p className="muted" style={{ fontSize: 12.5 }}>開きますか？</p>
+        <div className="btn-row" style={{ marginTop: 10 }}>
+          <button type="button" className="btn primary" onClick={onYes}>はい</button>
+          <button type="button" className="btn" onClick={onNo}>いいえ</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -40,7 +40,12 @@ export const KEYS = {
   connections: 'ouro:connections',
   genres: 'ouro:genres',
   events: 'ouro:events',
+  ventures: 'ouro:ventures', // 事業（1つの事業の器。実行中は1つだけ）
+  posts: 'ouro:posts',       // 発信ログ（何をどこへ出したか）
+  patterns: 'ouro:patterns', // 投稿の型（伸びた投稿を次の種にする）
   funnel: 'ouro:funnel', // 収益導線（週ごとの数字）
+  board: 'ouro:board',   // 社内掲示板（社員どうしの共通記憶・30日で消える）
+  pitfalls: 'ouro:pitfalls', // つまずき集（役職別の失敗・消えない）
   settings: 'ouro:settings',
   secrets: 'ouro:secrets', // APIキー。書き出しには絶対に含めない
   seeded: 'ouro:seeded',

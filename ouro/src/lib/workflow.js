@@ -52,6 +52,12 @@ export function createTask({
   forceRoles = null,
   maxSteps = 4,
   dealId = null,
+  // 事業（1つの事業の器）。**結びつきはこの片方向だけ**
+  // （事業の側に taskIds を持たない。持つと誰も更新しない列になる）。
+  ventureId = null,
+  // モデルの選び方（'auto' | 'cheap' | 'best'）。
+  // 自動判定だけだと1行の要約にも上位モデルが回りうるので、人が下げられるようにする。
+  costMode = 'auto',
   context = '',
   assign,
   // 受付のときに決まっていることがあれば預かる（全部あとから足せる）。
@@ -129,6 +135,8 @@ export function createTask({
     steps,
     currentStep: 0,
     dealId,
+    ventureId,
+    costMode,
     // ── 台帳の3列。ここだけは人が手で持つ（lib/ledger.js のコメント参照） ──
     dueAt: dueAt || null,
     nextAction: '',
@@ -293,15 +301,23 @@ export function assembleResult(task) {
  * 見出しを探すと途中の手順の「まとめ」や担当者名を拾ってしまい、
  * 本物の「あなたの判断が要ること」が見つからなくなる（実際に起きた）。
  */
-export function finalOutput(task) {
+/**
+ * 会社としての提出物を書いた手順（＝最後の「成果」の手順）。
+ * **完成の確認（kind:'check'）は成果ではない**ので必ず除く。
+ */
+export function finalStep(task) {
   const steps = (task && task.steps) || [];
-  // 完成の確認は提出物ではない（○×の並びなので、ここから見出しを探さない）
   const done = steps.filter((s) => s.status === 'done' && s.output && s.kind !== 'check');
-  if (!done.length) return '';
+  if (!done.length) return null;
   const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
   let best = done[0];
   for (const s of done) if (g(s) >= g(best)) best = s;
-  return best.output || '';
+  return best;
+}
+
+export function finalOutput(task) {
+  const best = finalStep(task);
+  return best ? best.output || '' : '';
 }
 
 export function taskProgress(task) {
@@ -353,4 +369,129 @@ export function resumeTask(task) {
 /** 実行してよい状態か（保留・中止・完了は動かさない）。 */
 export function isRunnable(task) {
   return Boolean(task) && !['on_hold', 'cancelled', 'done'].includes(task.status);
+}
+
+/**
+ * その手順からやり直す（新規）。
+ *
+ * 引き継ぎの確認で「材料が足りなかった」と分かっても、その手順が既に終わっていると
+ * 直しようがなかった。補った材料を活かすために、**その手順と、それより後**を
+ * 待機に戻す（後ろの手順の入力は、この手順の出力から作られているため）。
+ *
+ * やり直す範囲ぶんのAI費用がもう一度かかるので、押す前に画面で件数を伝えること。
+ */
+/**
+ * やり直しの上限（新規）。
+ *
+ * **際限のない差し戻しは、人間の職場でも典型的なパワハラの形**なので、
+ * 型として持たない。3回やり直しているなら、指示の方に無理があるか、
+ * ここは人が直した方が早い、というどちらかである可能性が高い。
+ *
+ * 止めはするが、行き止まりにはしない——「それでもやり直す」で必ず抜けられる
+ * （抜けたら数え直す）。AI費用の歯止めにもなる。
+ */
+export const REDO_LIMIT = 3;
+
+export function redoCountOf(task) {
+  return Number((task && task.redoCount) || 0);
+}
+
+export function overRedoLimit(task) {
+  return redoCountOf(task) >= REDO_LIMIT;
+}
+
+/** 「それでもやり直す」で数え直す。 */
+export function resetRedoCount(task) {
+  return { ...task, redoCount: 0 };
+}
+
+export function redoFrom(task, stepId) {
+  const steps = task.steps || [];
+  const idx = steps.findIndex((s) => s.id === stepId);
+  if (idx < 0) return task;
+  const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
+  const from = g(steps[idx]);
+  const next = steps.map((s) =>
+    g(s) >= from
+      ? {
+          ...s,
+          status: 'pending',
+          output: '',
+          error: null,
+          startedAt: null,
+          finishedAt: null,
+          // **cost は消さない。** 既に払ったぶんなので、消すと案件の
+          // AI費用が実際より少なく見える（retryFailed も消していない）。
+          citations: [],
+        }
+      : s
+  );
+  return {
+    ...task,
+    steps: next,
+    status: 'queued',
+    finishedAt: null,
+    // 提出物が変わるので、拾い直すために判断は白紙に戻す
+    decisions: [],
+    // 何度やり直したか。上限を超えたら、続ける前に人が見る（REDO_LIMIT）。
+    redoCount: redoCountOf(task) + 1,
+    totalCost: next.reduce((sum, s) => sum + (s.cost || 0), 0),
+  };
+}
+
+/**
+ * 「この成果物は外へ出せない」と印を付ける（新規）。
+ *
+ * 印を付けたものは、知識にも掲示板にも入れない——
+ * **加害的な文章を会社の共通記憶にしない**ため。
+ * 仕事は保留になり、理由が残る。
+ */
+export const FLAG_HOLD_PREFIX = '外へ出せない内容として止めました：';
+
+export function flagTask(task, reason = '') {
+  if (!task) return task;
+  return {
+    ...task,
+    flagged: { reason: String(reason || '').slice(0, 200), at: Date.now() },
+    status: task.status === 'cancelled' ? task.status : 'on_hold',
+    holdReason: `${FLAG_HOLD_PREFIX}${String(reason || '').slice(0, 120)}`,
+    heldFrom: task.status,
+    heldAt: Date.now(),
+  };
+}
+
+/**
+ * 印を外す。
+ *
+ * **保留も一緒に解く。** 印のせいで保留にしたのに印だけ外すと、
+ * 「外へ出せない内容として止めました」という理由だけが残った保留になり、
+ * 提出物の画面も出ないまま行き止まりになる（実際に踏んだ）。
+ * 自分で付けた保留（別の理由）は触らない。
+ */
+export function unflagTask(task) {
+  if (!task || !task.flagged) return task;
+  const byFlag = task.status === 'on_hold' && String(task.holdReason || '').startsWith(FLAG_HOLD_PREFIX);
+  if (!byFlag) return { ...task, flagged: null };
+  return {
+    ...task,
+    flagged: null,
+    status: task.heldFrom || 'done',
+    holdReason: '',
+    heldFrom: null,
+    heldAt: null,
+  };
+}
+
+export function isFlagged(task) {
+  return Boolean(task && task.flagged && task.flagged.at);
+}
+
+/** その手順からやり直すと、いくつの手順が動くか（費用を伝えるため）。 */
+export function redoCount(task, stepId) {
+  const steps = task.steps || [];
+  const idx = steps.findIndex((s) => s.id === stepId);
+  if (idx < 0) return 0;
+  const g = (x) => (Number.isInteger(x.group) ? x.group : steps.indexOf(x));
+  const from = g(steps[idx]);
+  return steps.filter((s) => g(s) >= from).length;
 }

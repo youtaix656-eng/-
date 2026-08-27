@@ -10,6 +10,11 @@ import { availableProviders } from '../lib/providers/index.js';
 import { ROLES } from '../data/roles.js';
 import * as perf from '../lib/perf.js';
 import { storageEstimate, isStorageTight } from '../lib/storage.js';
+import { briefLines } from '../lib/brief.js';
+import { recentDecisions } from '../lib/decisions.js';
+import { engineStats, cheapestUsed, unreliable } from '../lib/engineStats.js';
+import { handworkSplit, handworkLine } from '../lib/handwork.js';
+import { spentTodayOf, dailyCap, monthlyCap } from '../lib/permissions.js';
 
 export default function Company({ store, go }) {
   const { company, tasks, knowledge, activeEmployees, audit, approvals, connections, deals } = store;
@@ -30,6 +35,24 @@ export default function Company({ store, go }) {
   const stages = cycleStats({ tasks, knowledge });
   const series = growthSeries(knowledge, 21);
 
+  // 会社の現在地（社員が仕事の前に読むものと同じ材料）
+  const brief = briefLines({
+    company,
+    ventures: store.ventures,
+    funnel: store.funnel,
+    tasks,
+    approvals,
+    settings: store.settings,
+  });
+  const decisions = recentDecisions(tasks, 5);
+  const engineRows = engineStats(tasks);
+  const cheapest = cheapestUsed(engineRows);
+  const shaky = unreliable(engineRows);
+  const split = handworkSplit({ tasks, approvals, knowledge, posts: store.posts, days: 30 });
+  const today = spentTodayOf(store.settings);
+  const dayCap = dailyCap(store.settings);
+  const monCap = monthlyCap(store.settings);
+
   return (
     <div className="screen fade-in">
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
@@ -40,6 +63,32 @@ export default function Company({ store, go }) {
           設立 {company ? new Date(company.foundedAt).toLocaleDateString('ja-JP') : '—'}・{plan?.name}プラン
         </div>
       </div>
+
+      {brief.length > 0 && (
+        <Card glyph="◎" title="会社の現在地">
+          <p className="muted" style={{ marginTop: -6 }}>
+            AI社員が仕事の前に読むのと<strong style={{ color: '#fff' }}>同じ1枚</strong>です。
+            全員が同じ現在地を見ていないと、それぞれ違う前提で動きます。
+          </p>
+          {brief.map((line) => (
+            <div key={line} className="muted" style={{ fontSize: 12.5, marginBottom: 3 }}>・{line}</div>
+          ))}
+        </Card>
+      )}
+
+      <Card glyph="¥" title="AIに使ったお金">
+        <div className="stats">
+          <Stat value={usd(today)} label={dayCap > 0 ? `今日／上限 $${dayCap}` : '今日'} />
+          <Stat value={usd(Number(store.settings.costMonthUsd) || 0)} label={monCap > 0 ? `今月／上限 $${monCap}` : '今月'} />
+          <Stat value={usd(Number(store.settings.costTotalUsd) || 0)} label="累計" />
+        </div>
+        {dayCap <= 0 && (
+          <p className="muted" style={{ fontSize: 11.5 }}>
+            1日の上限は決めていません。月の上限だけだと、1日で使い切っても気づくのが翌日以降になります。
+            設定で1日の線を引けます。
+          </p>
+        )}
+      </Card>
 
       <SectionTitle>会社の成長</SectionTitle>
       <div className="stats" style={{ marginBottom: 12 }}>
@@ -67,6 +116,27 @@ export default function Company({ store, go }) {
       </Card>
 
       <SectionTitle>会社の管理</SectionTitle>
+      <Row
+        glyph="◍"
+        title="チーム"
+        sub="誰が何をしているか・朝会・社内掲示板（AI費用ゼロ）"
+        preload="team"
+        onClick={() => go('team')}
+      />
+      <Row
+        glyph="⚑"
+        title="事業"
+        sub="いま何を売るのか・やめる基準・今日やる1つ"
+        preload="ventures"
+        onClick={() => go('ventures')}
+      />
+      <Row
+        glyph="↗"
+        title="発信"
+        sub="型 → まとめて作る → 出す → 伸びた型を次の種にする"
+        preload="studio"
+        onClick={() => go('studio')}
+      />
       <Row
         glyph="◎"
         title="収益導線"
@@ -129,6 +199,87 @@ export default function Company({ store, go }) {
           );
         })}
       </Card>
+
+      <SectionTitle>エンジンの実績</SectionTitle>
+      <Card className="tight">
+        <p className="muted" style={{ marginTop: 0 }}>
+          どのエンジンに・何回・いくら使ったか。
+          <strong style={{ color: '#fff' }}>安いモデルで足りていた仕事</strong>を、
+          自分の記録から見つけるための表です（他社の平均のような手元にない基準は使いません）。
+        </p>
+        {!engineRows.length && <div className="muted">まだ実行の記録がありません。</div>}
+        {engineRows.map((r) => (
+          <div key={`${r.providerId}|${r.model}`} className="post-row">
+            <div className="p-title">
+              {r.providerName}
+              {r.model ? ` ／ ${r.model}` : ''}
+            </div>
+            <div className="muted" style={{ fontSize: 11.5 }}>
+              {r.calls}回・{usd(r.usd)}
+              {r.calls ? `・1回あたり ${usd(r.usdPerCall)}` : ''}
+              {r.avgChars ? `・平均${r.avgChars}字` : ''}
+              {r.failed ? `・失敗${r.failed}回` : ''}
+            </div>
+          </div>
+        ))}
+        {cheapest && (
+          <p className="muted" style={{ fontSize: 11.5 }}>
+            いまいちばん安く済んでいるのは「{cheapest.providerName}
+            {cheapest.model ? ` ／ ${cheapest.model}` : ''}」です（1回あたり {usd(cheapest.usdPerCall)}）。
+            軽い仕事は依頼画面で「安いモデル」を選ぶと、ここへ寄ります。
+          </p>
+        )}
+        {shaky.map((r) => (
+          <p key={`ng:${r.providerId}|${r.model}`} className="muted" style={{ fontSize: 11.5 }}>
+            ⚠ {r.providerName}{r.model ? ` ／ ${r.model}` : ''} は {r.calls}回中 {r.failed}回 失敗しています。
+          </p>
+        ))}
+      </Card>
+
+      <SectionTitle>AIと、あなたの手</SectionTitle>
+      <Card className="tight">
+        <p className="muted" style={{ marginTop: 0 }}>{handworkLine(split)}</p>
+        <div className="stats">
+          <Stat value={split.ai.calls} label="AIの呼び出し" />
+          <Stat value={split.human.decisions} label="あなたの判断" />
+          <Stat value={split.human.approvals} label="承認" />
+          <Stat value={split.human.writes} label="自分で書いた" />
+          <Stat value={split.human.posts} label="外へ出した" />
+          <Stat value={split.ratio === null ? '—' : split.ratio} label="AI1回あたりの手" />
+        </div>
+        <p className="muted" style={{ fontSize: 11.5 }}>
+          AIを使えるほど、AIにできない仕事の方が自分の仕事になっていきます。
+          <strong style={{ color: '#fff' }}>多い＝悪い、ではありません</strong>——
+          増え方を見て、どこを任せるかを決めるための数字です。
+        </p>
+      </Card>
+
+      {decisions.length > 0 && (
+        <>
+          <SectionTitle>決まったこと</SectionTitle>
+          <Card className="tight">
+            <p className="muted" style={{ marginTop: 0 }}>
+              仕事ごとに散っていた判断を、時系列で1本にしたものです。
+              いちばん新しい2件は、社員が読む「会社の現在地」にも入ります。
+            </p>
+            {decisions.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                className="post-row"
+                style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 0, borderBottom: '1px solid var(--line)', color: 'inherit' }}
+                onClick={() => go('task', d.taskId)}
+              >
+                <div className="p-title">{d.label}：{d.text}</div>
+                <div className="muted" style={{ fontSize: 11.5 }}>
+                  {d.daysAgo === 0 ? '今日' : `${d.daysAgo}日前`}・{d.taskTitle}
+                  {d.note ? `・${d.note}` : ''}
+                </div>
+              </button>
+            ))}
+          </Card>
+        </>
+      )}
 
       <SectionTitle>速さの記録</SectionTitle>
       <StorageCard />

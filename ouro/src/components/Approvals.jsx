@@ -5,6 +5,39 @@ import { relTime } from '../lib/format.js';
 import { REQUIRE_APPROVAL } from '../lib/permissions.js';
 import { openDecisions } from '../lib/decisions.js';
 import { useAllTasks } from './useAllTasks.js';
+import { estimateRun, estimateLine, remainingThisMonth } from '../lib/estimate.js';
+import { spentTodayOf, dailyCap } from '../lib/permissions.js';
+import { usd } from '../lib/format.js';
+
+/**
+ * 承認する前に「およそいくらか」と「上限まであといくらか」を出す。
+ * 押してから金額が分かるのでは、止める判断ができない。
+ */
+function CostNote({ approval, store }) {
+  const task = approval.taskId ? store.tasks.find((t) => t.id === approval.taskId) : null;
+  const steps = task ? (task.steps || []).filter((x) => x.status !== 'done') : [];
+  const est = steps.length
+    ? estimateRun({
+        steps,
+        employeeFor: (roleId) => store.employees.find((e) => e.roleId === roleId) || null,
+        secrets: store.secrets,
+        settings: { ...store.settings, costMode: (task && task.costMode) || store.settings.costMode },
+        request: task ? task.request : '',
+      })
+    : null;
+  const left = remainingThisMonth(store.settings);
+  const today = spentTodayOf(store.settings);
+  const dcap = dailyCap(store.settings);
+  const line = est ? estimateLine(est) : '';
+  if (!line && left === null) return null;
+  return (
+    <p className="muted" style={{ fontSize: 12 }}>
+      {line ? `¥ ${line}　` : ''}
+      {left === null ? '今月の上限は決めていません' : `今月の残り ${usd(left)}`}
+      {dcap > 0 ? `／今日は ${usd(today)} 使用（上限 $${dcap}）` : ''}
+    </p>
+  );
+}
 
 export default function Approvals({ store, go }) {
   // 判断待ちは古い仕事にも残るので、ここでは全部の仕事を見る
@@ -61,6 +94,7 @@ export default function Approvals({ store, go }) {
               </div>
               <p style={{ fontSize: 14.5 }}>{a.label}</p>
               {emp && <p className="muted">依頼者：{emp.name}</p>}
+              {a.action === 'costly' && <CostNote approval={a} store={store} />}
               <div className="btn-row">
                 <button
                   type="button"

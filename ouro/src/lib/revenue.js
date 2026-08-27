@@ -25,6 +25,8 @@ export function createDeal(data = {}) {
     title: String(data.title || '無題の案件').slice(0, 100),
     client: String(data.client || ''),
     templateId: data.templateId || null,
+    // 事業（片方向の結びつき）
+    ventureId: data.ventureId || null,
     fee: Number(data.fee) || 0,
     currency: data.currency || 'JPY',
     status: DEAL_STATUS[data.status] ? data.status : 'lead',

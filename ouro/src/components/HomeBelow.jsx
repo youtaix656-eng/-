@@ -5,15 +5,18 @@
 // ここを後から読むことで、起動時に読む量から
 // revenue.js / cycle.js / schedule.js / knowledge.js を外している（項目01）。
 
-import { Card, Row, Stat, SectionTitle, Empty, Spark } from './ui.jsx';
+import { Card, Row, SectionTitle, Empty, Spark } from './ui.jsx';
 import { relTime, usd } from '../lib/format.js';
 import { cycleStats, weakestStage, growthSeries } from '../lib/cycle.js';
 import { verifiedRate } from '../lib/knowledge.js';
 import { revenueSummary, formatMoney } from '../lib/revenue.js';
 import { upcoming } from '../lib/schedule.js';
 import { roleById } from '../data/roles.js';
-import { availableProviders } from '../lib/providers/index.js';
+import { connectedEngines } from '../lib/engines.js';
 import { bottleneck, latestEntry, labelOf } from '../lib/funnel.js';
+import { activeVenture } from '../lib/venture.js';
+import { todayPlan, todayLine } from '../lib/daily.js';
+import { verdictStatus } from '../lib/verdict.js';
 
 export default function HomeBelow({ store, go }) {
   const { tasks, knowledge, deals, secrets, employees } = store;
@@ -22,15 +25,50 @@ export default function HomeBelow({ store, go }) {
   const weak = weakestStage(stages);
   const series = growthSeries(knowledge, 14);
   const money = revenueSummary(deals, tasks, { usdJpy: store.settings.usdJpy });
-  const engines = availableProviders(secrets).filter((p) => p.needsKey);
+  const engines = connectedEngines(secrets, store.settings);
   // **操作履歴から数え直さない。** 履歴は起動時に新しい400件しか読まないので、
   // 数え直すと実際より小さく出る。log() が設定に積み上げた値を使う。
   const spent = Number(store.settings.costTotalUsd) || 0;
   const entry = latestEntry(store.funnel);
   const neck = entry ? bottleneck(entry) : null;
 
+  // 実行中の事業と、今日やる1つ。
+  // **発信ログの読み込みが済むまで「やっていない」と言い切らない**
+  // （空配列のまま判定すると、出した日でも「未」と出る）。
+  const venture = activeVenture(store.ventures || []);
+  const today = venture
+    ? todayPlan({
+        venture,
+        posts: (store.posts || []).filter((p) => p.ventureId === venture.id),
+        tasks: tasks.filter((t) => t.ventureId === venture.id),
+        loaded: store.hydrated,
+      })
+    : null;
+  const verdict = venture ? verdictStatus(venture, store.funnel) : null;
+
   return (
     <>
+      {/* 事業（1つだけ）。今日やる1つは、ここから毎回導く
+          （カレンダーに複製しない）。 */}
+      <SectionTitle>事業</SectionTitle>
+      {venture ? (
+        <Row
+          glyph="⚑"
+          title={venture.title}
+          sub={verdict && verdict.state === 'due' ? '期間が終わりました。続けるか決めてください' : todayLine(today)}
+          preload="venture"
+          onClick={() => go('venture', venture.id)}
+        />
+      ) : (
+        <Row
+          glyph="⚑"
+          title="事業をつくる"
+          sub="何を・誰に・いくらで売るのか。やめる基準もここで決めます"
+          preload="ventures"
+          onClick={() => go('ventures')}
+        />
+      )}
+
       {/* 地図（どこで人が減っているか）。作業が速くなっても、
           向きがズレていれば収入にはならない。 */}
       <SectionTitle>収益導線</SectionTitle>

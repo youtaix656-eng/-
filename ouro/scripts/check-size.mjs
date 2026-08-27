@@ -24,10 +24,21 @@ const dist = join(root, 'dist');
 // 2026-08-26：台帳（lib/ledger.js・outline.js・decisions.js・handoff.js）で
 // アプリ本体が 4.7KB 増えて 112.8KB になった。ホームの「今日やること」を
 // 最初の描画で出すため、この4つは起動時に要る（CSV まわりは ledgerCsv.js へ
-// 分けて外した）。原因を確かめたうえで目安を 115KB へ上げている。
+// 分けて外した）。原因を確かめたうえで目安を上げている。
+//
+// 2026-08-26（チーム機能）：掲示板・朝会・在席・会議の材料・相談を足して
+// 116.6KB。**足す前に、外せるものを先に外した**——board / meeting / related /
+// standup / briefing / consult は押した時に読む形（loadTeamwork）へ移し、
+// 会社の画面とホームの下半分も lazy にしてある。
+// 起動時に残っているのは presence.js（社員タブが最初の描画で使う）だけ。
+// **次にここを超える時は、目安を上げる前に外せるものを探すこと。**
 // 上限 125KB は動かさない。
-const WARN_KB = 115;
-const MAX_KB = 125;
+// 2026-08-27：チーム機能の追加ぶんは、依頼（Compose）を lazy に回して相殺した
+// （目次・予定と同じ扱い。押す前に先読みするので待ちは実質ゼロ）。
+// 117.9KB → 115.8KB。**目安は上げずに下げている**——次に足すときも、
+// まず「起動時から外せるもの」を探すこと。
+const WARN_KB = 111;
+const MAX_KB = 120;
 
 function eagerAssets(html) {
   const out = new Set();

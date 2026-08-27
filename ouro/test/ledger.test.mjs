@@ -61,8 +61,8 @@ test('完了でも判断が残っていれば「確認待ち」', () => {
   assert.equal(ledgerStateOf(t), 'waiting');
 });
 
-test('判断を決めきったら「完了」', () => {
-  const t = task({ status: 'done', decisions: [{ id: 'd1', state: 'approved', text: 'x' }] });
+test('判断を決めきり、共有も書けば「完了」', () => {
+  const t = task({ status: 'done', shareAsked: true, decisions: [{ id: 'd1', state: 'approved', text: 'x' }], shared: '共有した1行' });
   assert.equal(ledgerStateOf(t), 'done');
 });
 
@@ -124,7 +124,7 @@ test('今日やること＝期限切れ・今日・判断待ち・止まって�
 });
 
 test('終わった仕事は既定で外れる／受付番号でも探せる', () => {
-  const rows = buildLedger([task({ status: 'done' }), task({ id: 'task_x', status: 'queued' })], {});
+  const rows = buildLedger([task({ status: 'done', shared: '共有' }), task({ id: 'task_x', status: 'queued' })], {});
   assert.equal(filterLedger(rows, { openOnly: true }).length, 1);
   const t = task();
   assert.equal(filterLedger(buildLedger([t], {}), { q: ticketOf(t) }).length, 1);

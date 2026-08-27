@@ -24,7 +24,8 @@ import { createDeal, revenueSummary, dealAiCost, upcomingDeals } from '../src/li
 import { cycleStats, weakestStage, growthSeries } from '../src/lib/cycle.js';
 import { ingestOne, detectKind, youtubeId } from '../src/lib/ingest.js';
 import { createMeeting, addRound, meetingProgress, synthesisPrompt } from '../src/lib/meeting.js';
-import { distill, extractUrls, buildSystemPrompt } from '../src/lib/runtime.js';
+import { buildSystemPrompt } from '../src/lib/runtime.js';
+import { distill, extractUrls } from '../src/lib/distill.js';
 import { KEYS, EXPORT_EXCLUDE } from '../src/lib/storage.js';
 import { toBlocks } from '../src/lib/format.js';
 
@@ -216,7 +217,14 @@ test('エンジンは登録制で、増やしてもコードを直さない', ()
     assert.ok(Array.isArray(p.models) && p.models.length, 'models が空');
   }
   assert.ok(providerById('local'), 'キー無しの受け皿が必ず要る');
-  assert.equal(availableProviders({}).length, PROVIDERS.filter((p) => !p.needsKey).length);
+  // 何も設定していない時に使えるのは、キーも宛先も要らないエンジンだけ。
+  // **needsKey だけで数えないこと**——ローカルAI（compat）はキーではなく
+  // 「宛先のURL」で使えるかが決まるので、isReady を持つ。
+  const ready = PROVIDERS.filter((p) =>
+    typeof p.isReady === 'function' ? p.isReady({}, {}) : !p.needsKey
+  );
+  assert.equal(availableProviders({}).length, ready.length);
+  assert.deepEqual(availableProviders({}).map((p) => p.id), ['local']);
 });
 
 test('費用の概算が出せる（使ったお金を隠さない）', () => {

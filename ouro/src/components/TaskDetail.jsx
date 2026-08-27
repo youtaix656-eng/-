@@ -2,16 +2,26 @@
 
 import { useState } from 'react';
 import { Card, Doc, Empty, Bar, SectionTitle, Field } from './ui.jsx';
-import { TASK_STATUS, taskProgress, nextStep, assembleResult, isRunnable, finalOutput } from '../lib/workflow.js';
+import {
+  TASK_STATUS,
+  taskProgress,
+  nextStep,
+  assembleResult,
+  isRunnable,
+  finalOutput,
+  redoCount,
+} from '../lib/workflow.js';
 import { roleById } from '../data/roles.js';
 import { relTime, usd } from '../lib/format.js';
 import { useAllTasks } from './useAllTasks.js';
 import { openDecisions } from '../lib/decisions.js';
-import { checkPromises } from '../lib/guard.js';
+import { personalAttack, rephraseHint } from '../lib/guard.js';
+import { prepublishChecks, prepublishLine } from '../lib/prepublish.js';
+import { isFlagged, overRedoLimit, REDO_LIMIT } from '../lib/workflow.js';
 import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js';
-import { ticketOf, dueStateOf, DUE_LABELS } from '../lib/ledger.js';
+import { ticketOf, dueStateOf, DUE_LABELS, needsShare } from '../lib/ledger.js';
+import { progressOf } from '../lib/resume.js';
 import { checkSummary } from '../lib/checks.js';
-import { similarOpenings } from '../lib/opening.js';
 
 export default function TaskDetail({ store, taskId, go }) {
   // 古い仕事も要る画面なので、残りを読み足す
@@ -53,6 +63,10 @@ export default function TaskDetail({ store, taskId, go }) {
 
       {openDecisions(task).length > 0 && <DecisionCard task={task} store={store} />}
 
+      <FlaggedCard task={task} store={store} />
+
+      <ShareCard task={task} store={store} go={go} />
+
       {task.missingApprovers?.length > 0 && (
         <Card glyph="⚠" title="確認を通していない成果物です">
           <p className="muted" style={{ marginTop: -6 }}>
@@ -91,7 +105,43 @@ export default function TaskDetail({ store, taskId, go }) {
         </Card>
       )}
 
-      <SectionTitle>仕事の流れ</SectionTitle>
+      <SectionTitle>経過（指示 → 成果物）</SectionTitle>
+      <Card className="tight">
+        <div className="post-row">
+          <div className="p-title">✎ あなたの指示</div>
+          <div className="muted" style={{ fontSize: 11.5 }}>
+            {new Date(task.createdAt).toLocaleString('ja-JP')}・{task.request.length}字
+          </div>
+        </div>
+        {progressOf(task).map((r) => (
+          <div key={r.id} className="post-row">
+            <div className="p-title">
+              {r.status === 'done' ? '✓' : r.status === 'failed' ? '✗' : r.status === 'running' ? '…' : '·'}{' '}
+              {r.who}
+              {r.kind === 'check' ? '（完成条件の確認）' : ''}
+            </div>
+            <div className="muted" style={{ fontSize: 11.5 }}>
+              {r.finishedAt ? new Date(r.finishedAt).toLocaleString('ja-JP') : '未実行'}
+              {r.tookMs !== null ? `・${Math.max(1, Math.round(r.tookMs / 1000))}秒` : ''}
+              {r.chars ? `・${r.chars}字` : ''}
+              {r.engine ? `・${r.engine}${r.model ? `／${r.model}` : ''}` : ''}
+              {r.cost > 0 ? `・${usd(r.cost)}` : ''}
+              {r.error ? `・⚠ ${r.error}` : ''}
+            </div>
+          </div>
+        ))}
+        {task.finishedAt && (
+          <div className="post-row">
+            <div className="p-title">◈ 提出物ができました</div>
+            <div className="muted" style={{ fontSize: 11.5 }}>
+              {new Date(task.finishedAt).toLocaleString('ja-JP')}
+              {task.totalCost > 0 ? `・合計 ${usd(task.totalCost)}` : ''}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <SectionTitle>各社員の作業</SectionTitle>
       <div className="steps">
         {task.steps.map((s) => {
           const role = roleById(s.roleId);
@@ -128,6 +178,12 @@ export default function TaskDetail({ store, taskId, go }) {
                     <div className="muted">受け取りを待っています</div>
                   )}
                 </div>
+              )}
+              {/* 引き継ぎ会：受け取った側が「材料が足りない」と言える場（1往復だけ）。
+                  **終わった手順でも聞ける。** 実行はひと続きで走るので、
+                  「まだ動いていない手順」だけに限ると、押せる瞬間がほとんど無い。 */}
+              {s.input && s.kind !== 'check' && s.status !== 'running' && (
+                <HandoffReview task={task} step={s} store={store} />
               )}
               {s.output && (
                 <>
@@ -213,8 +269,7 @@ export default function TaskDetail({ store, taskId, go }) {
         <>
           <SectionTitle>会社としての提出物</SectionTitle>
           <CheckCard task={task} />
-          <PromiseWarning text={deliverable} />
-          <SameOpeningWarning task={task} store={store} go={go} />
+          <PrePublishCard task={task} text={deliverable} store={store} go={go} />
           <Card>
             {/* 見出しは「提出物を書いた手順」の本文から拾う（連結文からは拾わない） */}
             <Highlights text={finalOutput(task)} />
@@ -235,6 +290,7 @@ export default function TaskDetail({ store, taskId, go }) {
                 </button>
               )}
               <TeachButton task={task} store={store} />
+              <FlagButton task={task} store={store} />
               {!knowledge[0] && isTemplate && (
                 <button
                   type="button"
@@ -361,9 +417,13 @@ function LedgerCard({ task, store, meta, setMeta }) {
               期限・次の対応を書く
             </button>
             {task.status === 'on_hold' ? (
-              <button type="button" className="btn small primary" onClick={() => store.resumeTask(task.id)}>
-                保留を解く
-              </button>
+              // 印のせいで止まっている時は、ここからは解かない
+              // （印を外す方から解く。印だけ残った状態を作らないため）
+              isFlagged(task) ? null : (
+                <button type="button" className="btn small primary" onClick={() => store.resumeTask(task.id)}>
+                  保留を解く
+                </button>
+              )
             ) : (
               task.status !== 'done' &&
               task.status !== 'cancelled' && (
@@ -477,22 +537,104 @@ function Highlights({ text }) {
   );
 }
 
-/** 外へ出す前に、約束になっている表現を知らせる（止めはしない）。 */
-function PromiseWarning({ text }) {
-  const hits = checkPromises(text);
-  if (!hits.length) return null;
+/**
+ * 出す前チェック（1枚）。
+ *
+ * 見張りは前からあったが、**画面のあちこちにバラバラに出ていた**ので、
+ * 出す直前にどれを見たのか分からなかった。判定は lib/prepublish.js が単一の正。
+ *   ・お客さんの氏名・連絡先（ここだけ止める）
+ *   ・完成条件／確約（価格・納期・効果）／人ではなく成果物を指しているか
+ *   ・書き出しが前と同じでないか／結論から書けているか
+ * どれも AI を呼ばずに、語の一致だけで見ている。**当たらなかった時も出す**
+ * （出ない時だけ静かだと、確かめたのか忘れたのか分からない）。
+ */
+function PrePublishCard({ task, text, store, go }) {
+  const past = (store.knowledge || [])
+    .filter((k) => k.taskId && k.taskId !== task.id && k.body)
+    .slice(0, 30)
+    .map((k) => ({ id: k.id, title: k.title, text: k.body }));
+  const result = prepublishChecks({ text, task, past });
+  const shown = result.items.filter((i) => i.level !== 'skip');
+
   return (
-    <Card glyph="⚠" title="外へ出す前に確かめてください">
-      <p className="muted" style={{ marginTop: -6 }}>
-        この文章には「約束」になる表現が {hits.length} か所あります。
-        価格・納期・効果の確約は、AIではなくあなたが引き受けるところです。
+    <Card glyph={result.blocked ? '⛔' : result.worst === 'warn' ? '⚠' : '✓'} title="出す前チェック">
+      <p className="muted" style={{ marginTop: -6 }}>{prepublishLine(result)}</p>
+      {shown.map((i) => (
+        <div key={i.id} className="today-item">
+          <span className="rune">{i.level === 'stop' ? '⛔' : i.level === 'warn' ? '⚠' : '✓'}</span>
+          <div className="ti-body">
+            <div className="ti-label">{i.title}</div>
+            <div className="ti-why">{i.level === 'ok' ? i.ok : i.ng}</div>
+            {i.hits.length > 0 && (
+              <div className="chips" style={{ marginTop: 6 }}>
+                {i.hits.map((h, n) => (
+                  i.id === 'opening' && h.id ? (
+                    <button
+                      key={h.id}
+                      type="button"
+                      className="chip"
+                      onClick={() => go('knowledgeDetail', h.id)}
+                    >
+                      {h.phrase}（{h.label}）
+                    </button>
+                  ) : (
+                    <span key={`${i.id}:${h.phrase}:${n}`} className="chip">
+                      {h.phrase}（{h.label}）
+                    </span>
+                  )
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        止めるのは個人情報だけです。ほかは「ここは見直す所」と伝えるだけで、書けなくはしません。
       </p>
-      <div className="chips">
-        {hits.map((h) => (
-          <span key={`${h.label}:${h.phrase}`} className="chip">
-            {h.phrase}（{h.label}）
-          </span>
-        ))}
+    </Card>
+  );
+}
+
+/**
+ * 「この成果物は外へ出せない」。
+ *
+ * **見張りのカードの中に置かないこと。** 見張りは決まった語に当たった時しか
+ * 出ないので、その中に入れると、決まった語に当たらない加害を止められなくなる。
+ * 提出物があれば必ず押せる場所に置く。
+ */
+function FlagButton({ task, store }) {
+  if (!task || !store || isFlagged(task)) return null;
+  return (
+    <button
+      type="button"
+      className="btn small ghost"
+      onClick={() => {
+        const reason = window.prompt('どこが問題か、ひと言で書いてください（記録に残ります）');
+        if (reason === null || !reason.trim()) return;
+        store.flagTask(task.id, reason.trim());
+      }}
+    >
+      この成果物は外へ出せない
+    </button>
+  );
+}
+
+/** 外へ出せないと印を付けた仕事。知識にも掲示板にも入らない。 */
+function FlaggedCard({ task, store }) {
+  if (!isFlagged(task)) return null;
+  return (
+    <Card glyph="⛔" title="外へ出せない内容として止めています">
+      <p className="muted" style={{ marginTop: -6 }}>
+        理由：{task.flagged.reason || '（未記入）'}
+      </p>
+      <p className="muted">
+        この仕事の中身は<strong style={{ color: '#fff' }}>知識にも掲示板にも入りません</strong>。
+        加害的な文章が会社の共通記憶に残らないようにするためです。
+      </p>
+      <div className="btn-row">
+        <button type="button" className="btn small ghost" onClick={() => store.unflagTask(task.id)}>
+          印を外す
+        </button>
       </div>
     </Card>
   );
@@ -557,38 +699,6 @@ function CheckCard({ task }) {
   );
 }
 
-/** 書き出しが過去の成果物とそっくりでないか（AIは呼ばない）。 */
-function SameOpeningWarning({ task, store, go }) {
-  // **比べるものをそろえる。** 知識の body は全手順を連ねた文なので、
-  // その書き出しは「最初の手順」の冒頭。こちらも同じ形で取り出さないと、
-  // 別の層どうしを比べることになり、本当に似ているものを見落とす。
-  const text = assembleResult(task);
-  const past = (store.knowledge || [])
-    .filter((k) => k.taskId && k.taskId !== task.id && k.body)
-    .slice(0, 30)
-    .map((k) => ({ id: k.id, title: k.title, text: k.body }));
-  const hits = similarOpenings(text, past);
-  if (!hits.length) return null;
-  return (
-    <Card glyph="≡" title="書き出しが前のものとそっくりです">
-      <p className="muted" style={{ marginTop: -6 }}>
-        中身は違っても、入口が同じだと読み手には同じものに見えます。冒頭だけ変えると効きます。
-      </p>
-      {hits.map((h) => (
-        <button
-          key={h.id}
-          type="button"
-          className="btn ghost small block"
-          style={{ marginBottom: 6 }}
-          onClick={() => go('knowledgeDetail', h.id)}
-        >
-          {h.title}（{Math.round(h.score * 100)}% 一致）
-        </button>
-      ))}
-    </Card>
-  );
-}
-
 /**
  * この結果を見て、担当した社員に1行覚えさせる（改善ログ）。
  * 「①ミス → ②ルール化 → ③次回改善」を、結果を見ているその場で回すための入口。
@@ -633,6 +743,11 @@ function TeachButton({ task, store }) {
           className="btn small primary"
           disabled={!text.trim() || !who}
           onClick={() => {
+            // **ここがいちばん効く場所。** 社員は傷つかないが、
+            // 「使えない」と書く癖は、そのまま人に向く癖になる。
+            // 止めはせず、行動で書き直すよう1度だけ促す。
+            const hit = personalAttack(text);
+            if (hit && !window.confirm(`${rephraseHint(hit.phrase)}\n\nこのまま覚えさせますか？`)) return;
             store.teachEmployee(who, text, task.id);
             setText('');
             setOpen(false);
@@ -648,5 +763,172 @@ function TeachButton({ task, store }) {
         全員に守らせたいことなら、会社 →「会社のルール」に書いてください。
       </p>
     </div>
+  );
+}
+
+/**
+ * 引き継ぎ会（新規）。
+ *
+ * これまでの引き継ぎは一方向で、受け取った側は「材料が足りない」と言えなかった。
+ * **1往復だけ**にする（無限に往復させると費用が読めなくなる）。
+ */
+function HandoffReview({ task, step, store }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const run = async (fn, done) => {
+    setBusy(true);
+    try {
+      const r = await fn();
+      // **何も返ってこなかった時を「できた」にしない。**
+      // 担当が見つからない等で何もしていないのに「確認しました」と出る。
+      if (!r) setMsg('この手順では聞けませんでした。');
+      else if (r.queued) setMsg('承認が要ります。承認画面から進めてください。');
+      else if (r.error) setMsg(`聞けませんでした：${r.error}`);
+      else setMsg(done);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 「なし」と返ってきた時は、足りているのだから何も出さない
+  if (step.gapChecked && !step.gap) {
+    return <div className="muted" style={{ marginTop: 6 }}>◇ 受け取った材料は足りていました。</div>;
+  }
+
+  if (!step.gap) {
+    return (
+      <div style={{ marginTop: 6 }}>
+        <button
+          type="button"
+          className="btn ghost small"
+          disabled={busy}
+          onClick={() =>
+            run(() => store.askHandoffGap(task.id, step.id), '確認しました')
+          }
+        >
+          {busy ? '聞いています…' : '受け取る前に「材料が足りているか」を聞く（AI1回）'}
+        </button>
+        {msg && <div className="muted" style={{ marginTop: 4 }}>{msg}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card tight" style={{ marginTop: 6 }}>
+      <div className="muted" style={{ marginBottom: 4 }}>◇ 受け取った側からの返事</div>
+      <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{step.gap}</div>
+      {!step.supplement && (
+        <button
+          type="button"
+          className="btn small"
+          style={{ marginTop: 8 }}
+          disabled={busy}
+          onClick={() => run(() => store.supplementHandoff(task.id, step.id), '補ってもらいました')}
+        >
+          {busy ? '聞いています…' : '前の担当に補ってもらう（AI1回）'}
+        </button>
+      )}
+      {step.supplement && (
+        <>
+          <div className="muted" style={{ marginTop: 8 }}>
+            ✓ 補われた材料を、この手順の入力に足しました。
+          </div>
+          {step.status === 'done' && (
+            <button
+              type="button"
+              className="btn small primary"
+              style={{ marginTop: 8 }}
+              disabled={busy}
+              onClick={async () => {
+                const n = redoCount(task, step.id);
+                if (!window.confirm(`この手順からやり直します。${n}件の手順がもう一度動き、そのぶんAIの利用料がかかります。よろしいですか？`)) return;
+                const r = await store.redoStep(task.id, step.id);
+                // **際限のない差し戻しは型として持たない。**
+                // ただし行き止まりにもしない——「それでもやり直す」で必ず抜けられる。
+                if (r && r.blocked) {
+                  const go = window.confirm(
+                    `この仕事はもう${REDO_LIMIT}回やり直しています。\n\n` +
+                      '指示の方に無理があるか、ここは自分で直した方が早いかもしれません。\n' +
+                      'それでもやり直しますか？'
+                  );
+                  if (go) {
+                    store.allowMoreRedo(task.id);
+                    setMsg(`やり直しの回数を数え直しました。もう一度押してください。`);
+                  } else {
+                    setMsg(`${REDO_LIMIT}回やり直しています。指示を見直すか、自分で直す方が早いかもしれません。`);
+                  }
+                }
+              }}
+            >
+              この手順からやり直す（{redoCount(task, step.id)}件）
+            </button>
+          )}
+          {overRedoLimit(task) && (
+            <div className="muted" style={{ marginTop: 4 }}>
+              ※ この仕事は{REDO_LIMIT}回やり直しています。
+            </div>
+          )}
+        </>
+      )}
+      {msg && <div className="muted" style={{ marginTop: 4 }}>{msg}</div>}
+    </div>
+  );
+}
+
+/**
+ * 社内への共有（新規）。**書く場所を作っただけでは誰も書かない。**
+ * 共有が書かれるまで、台帳ではこの仕事は「確認待ち」のままになる。
+ * ただし逃げ道は必ず残す（「共有なしでよい」）——押しても何も起きない
+ * 行き止まりを作らないのと同じ理由で、抜けられない関門も作らない。
+ */
+function ShareCard({ task, store, go }) {
+  const require = store.settings.requireShare !== false;
+  const need = needsShare(task, require);
+  const [text, setText] = useState('');
+  if (task.status !== 'done') return null;
+
+  if (!need) {
+    if (!task.shared) return null;
+    return (
+      <Card glyph="◈" title="社内へ共有しました">
+        <p className="muted" style={{ marginTop: -6, marginBottom: 0 }}>{task.shared}</p>
+        <button type="button" className="btn ghost small" style={{ marginTop: 8 }} onClick={() => go('team')}>
+          掲示板を見る
+        </button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card glyph="◈" title="社内へ共有する1行を書いてください">
+      <p className="muted" style={{ marginTop: -6 }}>
+        この仕事から、<strong style={{ color: '#fff' }}>他の社員が知っておくとよいこと</strong>を1行だけ。
+        掲示板に載り、次に動く社員が必ず読みます。書くまで台帳では「確認待ち」のままです。
+      </p>
+      <div className="btn-row" style={{ marginBottom: 6 }}>
+        <input
+          className="input"
+          style={{ flex: 1 }}
+          value={text}
+          placeholder="例：この分野の統計は2024年版が最新。古い数字に注意。"
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn primary"
+          disabled={!text.trim()}
+          onClick={() => {
+            store.shareTask(task.id, text);
+            setText('');
+          }}
+        >
+          共有する
+        </button>
+      </div>
+      <button type="button" className="btn ghost small" onClick={() => store.shareTask(task.id, '', true)}>
+        この仕事は共有なしでよい
+      </button>
+    </Card>
   );
 }

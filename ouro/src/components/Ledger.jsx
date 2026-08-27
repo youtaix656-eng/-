@@ -32,8 +32,8 @@ export default function Ledger({ store, go, toast }) {
   const fileRef = useRef(null);
 
   const rows = useMemo(
-    () => buildLedger(store.tasks, { deals: store.deals }),
-    [store.tasks, store.deals]
+    () => buildLedger(store.tasks, { deals: store.deals, requireShare: store.settings.requireShare !== false }),
+    [store.tasks, store.deals, store.settings.requireShare]
   );
   const focus = useMemo(() => todayFocus(rows), [rows]);
   const shown = useMemo(() => filterLedger(rows, filter), [rows, filter]);

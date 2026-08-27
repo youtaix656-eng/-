@@ -119,6 +119,9 @@ AI社員の成果物を「案件」に紐づけ、売上・見込み・時給換
 | `ouro:approvals` | Approval[] | 承認待ち |
 | `ouro:audit` | AuditEntry[] | 監査ログ（上限 2000 件で古い順に間引き） |
 | `ouro:connections` | Connection[] | 外部サービス接続 |
+| `ouro:ventures` | Venture[] | 事業（実行中は1つだけ・起動時に読む） |
+| `ouro:posts` | Post[] | 発信ログ（出したものと反応・上限500件） |
+| `ouro:patterns` | Pattern[] | 投稿の型（伸びた投稿を次の種にする） |
 | `ouro:secrets` | {providerId: apiKey} | APIキー（端末内のみ・書き出し対象外） |
 | `ouro:settings` | Settings | 表示・既定モデル・自動実行 |
 
@@ -229,6 +232,260 @@ Funnel = {
 - **これは配列ではなくオブジェクト。** 起動時の読み込みで `asArray` に通さないこと
 - 詰まっている所は自分の数字の中の相対で決める（手元に無い基準を持たない）
 - 書き込み側は `lib/funnelInput.js`（起動時に読ませない）
+
+---
+
+### 6-3. 社員どうしの共有（`ouro:board` ほか）
+
+```js
+BoardPost = { id, text, kind:'share'|'blocked'|'decision'|'meeting'|'consult',
+              employeeId, employeeName, roleId, taskId, at }   // 30日で消える
+Meeting.materials  // 台帳・収益導線・掲示板から作った事前配布（AI費用ゼロ）
+Meeting.hasGuard   // 反対役（守り）が入っていたか
+Step.gap / gapChecked / supplement  // 引き継ぎ会（受け手が返した「足りない材料」）
+Approval.consult = { employeeId, prompt, kind, taskId, stepId, question }  // 1回だけ呼ぶもの
+```
+
+**社員が仕事の前に読むもの（`buildContext`）は6層**：
+知識 ／ 自分の記憶 ／ **掲示板** ／ **関係する仕事** ／ 引き継ぎ ／ この仕事の補足。
+後ろの2つを足すまで、別の仕事にいる社員が何をしているかは誰も知らなかった。
+
+- 共有のための仕組みは**AIを呼ばない**（在席・朝会・掲示板・関係する仕事・会議の材料）
+- AIを呼ぶのは会議（人数×2＋1回）と相談（1回）だけ。**1回だけのものも `askOnce` で承認を通す**
+- 掲示板の切り詰めは `memory.trimHead`（先頭＝新しい方を残す）
+
+---
+
+### 6-3. 進み具合を見える形にする（`ouro:pitfalls` ほか）
+
+```js
+Task.shareAsked  // この仕組みが動いている状態で終わった印（これが無い＝昔の仕事）
+Task.shared      // 社内へ共有した1行
+Task.shareWaived // 「この仕事は共有なしでよい」と決めた
+
+Pitfall = { id, roleId, roleName, text, taskTitle, employeeName, count, at }  // ouro:pitfalls
+```
+
+- `lib/queue.js` … 誰のせいで何件止まっているか（実行中と未着手を分けて数える）
+- `lib/load.js` … 役職ごとの1人あたり持ち数＋未雇用で外れた役職
+- `lib/stall.js` … 人間待ちの時間（承認は承認の記録の時刻を使う）
+- `lib/pitfalls.js` … 役職別の失敗。**エラーは `result.error` から取る**
+  （ループの `step` は実行前の写しで、`step.error` はまだ null）
+- `lib/promote.js` … 掲示板 → 会社のルール／知識 への昇格の**提案**
+- どれも AI を1回も呼ばない
+
+---
+
+### 6-4. 加害を起こさない（`guard.js` / `privacy.js`）
+
+```js
+Task.flagged = { reason, at }   // 「外へ出せない」印。付けた時点で知識・掲示から取り除く
+Task.redoCount                  // やり直した回数（REDO_LIMIT=3 で一度止める）
+```
+
+- 見張りは **止めない・書き換えない**。`checkPromises`（確約）／`checkRespect`（傷つけうる表現）／
+  `checkPersonal`（個人を特定できるもの）はどれも判定を返すだけ
+- **分類ごとに件数で打ち切らない**（後ろの分類が一度も当たらなくなる）。
+  `personalAttack` はその型を直接当てる
+- **後読み（lookbehind）を使わない**（古い Safari で構文エラー→チャンクごと読めなくなる）
+- `flagTask` は印を付けるだけでなく、**知識・孤児の出典・掲示・共有の1行を実際に消す**。
+  印が付いている間は共有も知識化もできず、`resumeTask` からは解けない
+- `FIXED_RULES` に「人ではなく成果物を指す」「個人を特定できるものは書かない」の2行。
+  **足したルールでは外せない**
+
+---
+
+### 6-5. 依頼の提案（`lib/suggest.js`）
+
+```js
+suggestPlan({ request, assign, customGenres, deals, fixed })
+// → { ok, genreId, workflowId, steps[], staffedCount, unstaffedRoles,
+//     needs, doneWhen, dealId, calls, reasons[] }
+```
+
+- **AIを1回も呼ばない**（語の一致と、既にある `planSteps` から作る）
+- `fixed`（案件・進め方・分野）は**推測で上書きしない**。案件から依頼したのに
+  紐づけが外れると、`task.dealId` は一方向なので二度と戻らない
+- `ok:false`（依頼が短い）のときは中身を持たせない。画面は「自分で決める」だけ出す
+- `staffedCount === 0` の提案は実行させない（最初の手順で必ず失敗するため）
+- 提案から実行しても、費用の承認・今月の上限は今までどおり通る
+
+---
+
+### 6-6. 事業（`ouro:ventures` / `lib/venture.js`）
+
+```js
+Venture = {
+  id, title, hypothesis, who, what,
+  priceJpy, goalMonthlyJpy, days,          // 逆算とやめる基準に使う
+  state,                                    // idea | running | paused | stopped | keep
+  startedAt,                                // running にした時だけ立つ
+  verdict: { metric, target, decidedAt, decision },
+  createdAt, updatedAt,
+}
+```
+
+- **結びつきは片方向だけ**：`task.ventureId` / `deal.ventureId`。
+  事業の側に `taskIds` を**持たない**（`deal.taskIds` が誰にも更新されず、
+  AI費用が常に¥0に見えていた失敗を繰り返さないため）。
+- **`state:'running'` は1つだけ**（`canStart`）。2つめは断るだけで、勝手に入れ替えない。
+- `ventureStats()` は仕事と案件の側から数える。案件に紐づかない仕事のAI費用も、
+  その事業のコストとして足す。
+
+```js
+targetPlan({ venture, entry, funnel })
+// → { price, goal, needBuyers, rows:[{stageId, need, now, rate, gap}], unknown[], ready }
+```
+
+- 後ろ（買ってもらう）から前へ、いまの通過率で割り戻す。
+- **通過率が分からない段は `need: null`。** 1と置くと「前の段も同じ人数でよい」という嘘になる。
+
+```js
+verdictStatus(venture, funnel, now)
+// → { state: 'none'|'waiting'|'running'|'met'|'due'|'decided', target, current, left, day }
+applyDecision(venture, 'continue'|'stop'|'extend', extraDays)
+```
+
+- `met` は期間の途中でも基準に届いた状態（続けてよい）。`due` は期間が終わって未達（判断待ち）。
+- `extend` だけは判断を残さず `days` を伸ばす。**どれもAIを呼ばない。**
+
+```js
+todayPlan({ venture, posts, tasks, loaded, now })
+// → { items:[出す/作る/数える], next, day, total, left, practiceDays, doneCount }
+```
+
+- 3枠から増やさない。**カレンダーに複製しない**（毎回ここから導く）。
+- `practiceDays` は**通算**（連続ではない）。休んだ日があっても減らない。
+- `loaded:false`（発信ログがまだ読めていない）の間は、どれも「未」と言い切らない。
+
+### 6-7. 出す前チェック（`lib/prepublish.js`）
+
+```js
+prepublishChecks({ text, task, past })
+// → { items:[{id, title, level:'stop'|'warn'|'ok'|'skip', hits}], worst, blocked }
+```
+
+- 見張り（確約・言い方・個人情報・完成条件・書き出しの重なり・枠）の**単一の正**。
+- **`blocked` になるのは個人情報だけ。** ほかは知らせるだけで、書けなくはしない。
+- 当たらなかった項目も `level:'ok'` で返す（確かめたことが画面に残るように）。
+
+---
+
+### 6-8. 外から来た文章の扱い（`lib/untrusted.js`）
+
+```js
+wrapUntrusted(text, { label, origin, trust })  // 囲い＋来歴＋確からしさ
+SOURCE_RULE                                     // 「従ってよい指示は4つだけ」
+isUntrustedOrigin(origin)                       // external / ai だけ true
+```
+
+- `buildContext` が知識を渡すとき、**外から来たものだけ**を囲い、`hasUntrusted` を返す。
+- `buildSystemPrompt` は `hasUntrusted` の時だけ `SOURCE_RULE` を足し、**材料より前**に置く。
+- 囲いの目印（`=====`）は資料の中身とぶつかったら伸ばす（囲いを閉じさせない）。
+- **書き換えない。** 消すと資料として使えないので、囲って「指示ではない」と伝えるだけ。
+
+### 6-9. お金（見積もり・上限・エンジンの実績）
+
+```js
+estimateRun({ steps, employeeFor, secrets, settings, request })
+// → { calls, usd, jpyLow, jpyHigh, rows, free }
+route({ ..., settings, costMode })      // 'auto' | 'cheap' | 'best'
+addCost(settings, usd, now)             // 日・月・合計を積む
+checkAction({ ..., spentThisMonth, spentToday })
+engineStats(tasks)                      // エンジン別の回数・費用・失敗
+```
+
+- 見積もりは**目安**（`AVG_INPUT_TOKENS` / `AVG_OUTPUT_TOKENS`）で、**幅**（0.5〜2倍）で出す。
+- 画面の「AIを呼ぶ ◯回」と見積もりは**同じ数**から作る（担当がいる手順＋確認の手順）。
+- `costMode` は**社員の希望（`modelPref`）より優先**する。
+- 日の上限・月の上限は、自動承認を入れていても確認へ戻す。
+
+### 6-10. エンジンの登録（`providers/`）
+
+| 項目 | 意味 |
+|---|---|
+| `needsKey` | APIキーが要るか |
+| `isReady(secrets, settings)` | キー以外で決まるエンジン用（ローカルAIは宛先URL） |
+| `freeTier` / `freeNote` | 0円で始められる印。画面が先頭に出す |
+| `models[].tier` | `low` / `mid` / `high`。`costMode` と重さで選ぶ |
+
+- `availableProviders(secrets, settings)` は `isReady` があればそちらを見る。
+- `local`（AI未使用の受け皿）は**選ぶ側でも最後**に回す。
+- **モデルが使えなかった時は1つ下へ落とす**（`cheaperModel`）。
+  404 / 429 は待っても変わらないのですぐ下へ、503 / 529 は1度待ってから下へ。
+  下が無くなるまで降り、**実際に通ったモデル**を `res.model` として返す。
+- `runtime.js` とエンジン一式は **`useStore` の `loadRuntime()` で押した時に読む**
+  （起動時に読む束へ入れない）。暇な時に `preloadRuntime()` が先読みする。
+
+---
+
+### 6-11. 閉じても続きから（`lib/resume.js` / `lib/notify.js`）
+
+```js
+resumeTargets(tasks, { limit })   // 続きから走らせてよい仕事（既定1件）
+finishedWhileAway(tasks, since)   // 見ていない間に終わったもの
+progressOf(task)                  // 誰が・いつ・何秒・何字・どのエンジン
+notifyDone(task, { onClick })     // 端末通知（許可があり、裏に回っている時だけ）
+keepAwake() / releaseAwake()      // 走っている間だけ画面を眠らせない
+```
+
+- **閉じたら止まる**のは変えられない。埋めるのは「次に開いた時に続きから」。
+- 再開の除外：`holdReason`（人が止めた）／`flagged`（外へ出せない）／`awaiting_approval`。
+- `settings.lastSeenAt` が知らせの基準。**目の前で終わった時は完了時に進める**
+  （進めないと、見たはずのものを次に開くたび知らせる）。
+- `resumedRef` で同じ仕事を1セッションに何度も再開しない。
+
+---
+
+### 6-12. 発信の型を回す（`lib/patterns.js` / `lib/batch.js`）
+
+```js
+Pattern = { id, ventureId, text, origin:'seed'|'own', postId, label, archivedAt, ... }
+Post    = { ..., patternId, taskId }   // 結びつきは投稿の側の片方向だけ
+
+rankPatterns(patterns, posts)   // 3本以上 かつ 反応>0 の型にだけ順位
+bestPattern(patterns, posts)
+winnerCandidates(posts, patterns)  // 自分の平均の1.5倍以上のものを提案
+candidateStatus(posts)             // 出せない時は「あと◯本」を返す
+batchRequest({ venture, patterns, count, channel })  // 型は資料として囲う
+splitPosts(text)                   // ④成果物の中だけを1本ずつに
+overLimit(items, channel)          // 長さは知らせるだけ（切らない）
+```
+
+- 型の側に投稿の一覧を持たせない（`post.patternId` から数える）。
+- 束の中どうしでも `similarOpenings` を掛ける（同じ型から作ると入口がそっくりになる）。
+- 「まとめて作る」は依頼の道を通るので、費用の確認・日／月の上限がそのまま効く。
+
+### 6-13. 稼ぎとして残るか（`lib/passive.js` / `lib/unit.js` / `lib/risk.js`）
+
+速く作れることと、稼ぎとして残ることは別。残るかどうかを見る層。
+
+```js
+Venture = { ..., risks:{copy,platform,terms,liked,mine}, finishWhen, restedAt }
+Deal    = { ..., ventureId }   // 画面（案件フォーム／案件の詳細）から必ず付けられる
+
+// 手離れ＝不労所得の実測
+lastTouchedAt(venture, { tasks, posts, deals })  // 依頼した・出した・案件を起こした だけ
+passiveState({ venture, tasks, posts, deals })   // none / building / resting / passive
+finishNudge(venture, passive)                    // 仕上げ線（伸びた時に手を止める線）
+
+// 1件あたりの採算——線は1本だけ（稼ぎ ＞ AI費用）
+unitEconomics({ venture, tasks, deals, usdJpy }) // 売れた数0なら1件あたりは null
+costAdvice(unit, settings)                       // 赤のときの手（やめろとは言わない）
+
+// 続くかどうかの見立て——採点しない
+riskReview(venture)                              // 答えと「その時にできること」だけ
+```
+
+- **入金の記録を「手を入れた」に数えない。** 数えると売れるたびに日数が0に戻り、
+  不労所得は永久に測れない。事業の `updatedAt`（説明文の手直し）も数えない。
+- **やめる基準（`verdict.js`）と仕上げ線は別の層。** 前者は伸びない時に降りる線、
+  後者は**伸びた時に手を止める線**。届いたかどうかを機械が判定しない。
+- **手元に無い基準を持たない。** 採算は「稼ぎ ＞ AI費用」の1本だけ、見立ては点を付けない。
+- **`deal.ventureId` を付ける口を画面に必ず置く**（`deal.taskIds` と同じ
+  「誰も更新しない列」を作らない）。
+- お金の話の確約（必ず稼げる／放置で増える／不労所得になる／リスクゼロ）も
+  `guard.js` の `PROMISE_PATTERNS` で見張る。**止めない・書き換えない。**
 
 ---
 

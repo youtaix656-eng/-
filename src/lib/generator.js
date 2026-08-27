@@ -34,8 +34,22 @@ function shuffle(arr) {
   }
   return a;
 }
+/**
+ * 候補から n 個選ぶ。
+ *
+ * **候補の中の重複を必ず落とすこと。** 複数の表を混ぜて候補にすると
+ * 同じ経穴が2回入りうる（例：四総穴の「合谷」は原穴にもある）。
+ * そのまま選ぶと、選択肢に同じものが2つ並ぶ問題が出来てしまう
+ * （実際に約1.6%の確率で出ていた）。
+ */
 function sample(arr, n, exclude = []) {
-  const pool = arr.filter((x) => !exclude.includes(x));
+  const seen = new Set(exclude);
+  const pool = [];
+  for (const x of arr) {
+    if (seen.has(x)) continue;
+    seen.add(x);
+    pool.push(x);
+  }
   return shuffle(pool).slice(0, n);
 }
 let genSeq = 0;

@@ -9,6 +9,8 @@ import { JOB_TEMPLATES, easiestFirst, templateById } from '../data/jobTemplates.
 import { DEAL_STATUS, revenueSummary, upcomingDeals, formatMoney, dealAiCost } from '../lib/revenue.js';
 import { relTime } from '../lib/format.js';
 import { useAllTasks } from './useAllTasks.js';
+import { checkPersonal, CLIENT_HINT } from '../lib/privacy.js';
+import { activeVenture } from '../lib/venture.js';
 
 export default function Deals({ store, go, toast, highlight = null }) {
   // 古い仕事も要る画面なので、残りを読み足す
@@ -20,6 +22,10 @@ export default function Deals({ store, go, toast, highlight = null }) {
   const money = revenueSummary(store.deals, store.tasks, { usdJpy: store.settings.usdJpy });
   const upcoming = upcomingDeals(store.deals);
 
+  // 案件をどの事業に付けるか。既定は実行中の事業（付け忘れると
+  // その事業の売上が永久に0のままになる——**誰も更新しない列を作らない**）。
+  const running = activeVenture(store.ventures || []);
+
   const addFromTemplate = (tpl) => {
     setForm({
       title: tpl.name,
@@ -29,6 +35,7 @@ export default function Deals({ store, go, toast, highlight = null }) {
       status: 'lead',
       dueAt: '',
       notes: tpl.firstStep,
+      ventureId: running ? running.id : '',
     });
     setTab('deals');
   };
@@ -74,7 +81,9 @@ export default function Deals({ store, go, toast, highlight = null }) {
         <button
           type="button"
           className="chip"
-          onClick={() => setForm({ title: '', client: '', fee: 0, status: 'lead', dueAt: '', notes: '' })}
+          onClick={() =>
+            setForm({ title: '', client: '', fee: 0, status: 'lead', dueAt: '', notes: '', ventureId: running ? running.id : '' })
+          }
         >
           ＋ 案件
         </button>
@@ -85,9 +94,15 @@ export default function Deals({ store, go, toast, highlight = null }) {
           <Field label="案件名">
             <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
-          <Field label="依頼元（任意）">
-            <input className="input" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
+          <Field label="依頼元（任意）" hint={CLIENT_HINT}>
+            <input
+              className="input"
+              value={form.client}
+              placeholder="例：Aさん／〇〇整体院"
+              onChange={(e) => setForm({ ...form, client: e.target.value })}
+            />
           </Field>
+          <PersonalWarning text={`${form.client} ${form.notes}`} />
           <Field label="金額（円）">
             <input
               className="input"
@@ -107,6 +122,20 @@ export default function Deals({ store, go, toast, highlight = null }) {
               ))}
             </select>
           </Field>
+          {(store.ventures || []).length > 0 && (
+            <Field label="どの事業か" hint="付けておくと、その事業の売上・1件あたりの採算に入ります。">
+              <select
+                className="select"
+                value={form.ventureId || ''}
+                onChange={(e) => setForm({ ...form, ventureId: e.target.value })}
+              >
+                <option value="">どの事業にも付けない</option>
+                {(store.ventures || []).map((v) => (
+                  <option key={v.id} value={v.id}>{v.title}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="メモ">
             <textarea className="textarea" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
@@ -243,6 +272,20 @@ export function DealDetail({ store, dealId, go }) {
             </button>
           ))}
         </div>
+        {(store.ventures || []).length > 0 && (
+          <Field label="どの事業か" hint="付け替えると、その事業の売上・採算に入ります。">
+            <select
+              className="select"
+              value={deal.ventureId || ''}
+              onChange={(e) => store.updateDeal(deal.id, { ventureId: e.target.value || null })}
+            >
+              <option value="">どの事業にも付けない</option>
+              {(store.ventures || []).map((v) => (
+                <option key={v.id} value={v.id}>{v.title}</option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="かかった時間（時間）">
           <input
             className="input"
@@ -307,6 +350,29 @@ export function DealDetail({ store, dealId, go }) {
           削除
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * お客さん個人を特定できるものが入っていないか（新規）。
+ *
+ * Ouro のデータは端末内にしか無いが、**書き出し（バックアップ）や CSV は
+ * 端末の外へ出る**。落とした時に取り返しがつかないのはここなので、
+ * 書いている最中に気づけるようにする。止めはしない。
+ */
+function PersonalWarning({ text }) {
+  const hits = checkPersonal(text);
+  if (!hits.length) return null;
+  return (
+    <div className="card tight" style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 14 }}>
+        ⚠ 個人を特定できるものが {hits.length} か所あります
+      </div>
+      <div className="muted" style={{ marginTop: 4 }}>
+        {hits.map((h) => `${h.phrase}（${h.label}）`).join('・')}
+      </div>
+      <div className="muted">{CLIENT_HINT}</div>
     </div>
   );
 }

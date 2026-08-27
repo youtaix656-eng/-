@@ -1515,3 +1515,159 @@ select {
   height: 100%;
   background: var(--ink);
 }
+
+/* ── 役職ごとの持ち数 ── */
+.load-row {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.load-row .lr-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.load-row .lr-name {
+  font-size: 13.5px;
+}
+
+.load-row .lr-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.load-row .lr-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ink-2);
+}
+
+.load-row .lr-bar span.heavy {
+  background: var(--ink);
+}
+
+/* ── おすすめの組み合わせ ── */
+.sg-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: -2px 0 10px;
+}
+
+.sg-grid .sg-cell {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.sg-grid .k {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.sg-grid .v {
+  font-family: var(--serif);
+  font-size: 15px;
+  margin-top: 2px;
+}
+
+.sg-people {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+}
+
+.sg-person {
+  flex: none;
+  width: 68px;
+  text-align: center;
+}
+
+.sg-person.vacant {
+  opacity: 0.5;
+}
+
+.sg-person .sg-name {
+  font-size: 11.5px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sg-person .sg-role {
+  font-size: 10px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sg-why {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.sg-why li {
+  margin-bottom: 3px;
+}
+
+/* ── 事業：今日やること・発信ログの1行 ── */
+.today-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.today-item:last-of-type {
+  border-bottom: 0;
+}
+
+.today-item .ti-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.today-item .ti-label {
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+}
+
+.today-item.done .ti-label {
+  color: var(--ink-3);
+}
+
+.today-item .ti-why {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.6;
+}
+
+.post-row {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.post-row:last-of-type {
+  border-bottom: 0;
+}
+
+.post-row .p-title {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}

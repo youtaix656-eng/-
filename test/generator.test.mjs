@@ -24,6 +24,26 @@ test('生成問題の選択肢に重複がない', () => {
   });
 });
 
+// **たまに落ちるテストは、直った証拠にならない。**
+// 選択肢の重複は乱数しだいで出るので（四総穴の「合谷」は原穴にもあり、
+// 候補を混ぜると同じものが2つ入る）、少ない回数では見逃す。
+// 全部の生成器を数多く回して、1件も出ないことを確かめる。
+test('どの生成器でも、選択肢に重複が出ない（乱数を多く回して確かめる）', () => {
+  for (const [key, gen] of Object.entries(GENERATORS)) {
+    for (let i = 0; i < 300; i += 1) {
+      const q = gen.fn();
+      if (!q || !Array.isArray(q.choices)) continue;
+      assert.equal(
+        new Set(q.choices).size,
+        q.choices.length,
+        `${key} で重複：${JSON.stringify(q.choices)}`
+      );
+      // 正解が選択肢の中にあること（重複を落とした時に消えていないか）
+      assert.ok(q.answer >= 0 && q.answer < q.choices.length, `${key} の正解番号が範囲外`);
+    }
+  }
+});
+
 test('経絡→原穴の生成は KB と正解が一致する', () => {
   // meridianToYuan だけを大量生成し、正解がKBの原穴と一致することを確認
   for (let i = 0; i < 30; i++) {
