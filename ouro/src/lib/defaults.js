@@ -30,6 +30,9 @@ export function makeSettings() {
     handoffMode: 'compact',
     // 最初の道しるべ（lib/onboarding.js）。棚卸しだけは状態から導けないので印を持つ。
     didInventory: false,
+    // 共有が書かれていない仕事を「完了」にしない（lib/ledger.js の needsShare）。
+    // 切ると、掲示板が空のままでも完了になる。
+    requireShare: true,
     starterHidden: false,
   };
 }

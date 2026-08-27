@@ -253,6 +253,26 @@ Approval.consult = { employeeId, prompt, kind, taskId, stepId, question }  // 1�
 
 ---
 
+### 6-3. 進み具合を見える形にする（`ouro:pitfalls` ほか）
+
+```js
+Task.shareAsked  // この仕組みが動いている状態で終わった印（これが無い＝昔の仕事）
+Task.shared      // 社内へ共有した1行
+Task.shareWaived // 「この仕事は共有なしでよい」と決めた
+
+Pitfall = { id, roleId, roleName, text, taskTitle, employeeName, count, at }  // ouro:pitfalls
+```
+
+- `lib/queue.js` … 誰のせいで何件止まっているか（実行中と未着手を分けて数える）
+- `lib/load.js` … 役職ごとの1人あたり持ち数＋未雇用で外れた役職
+- `lib/stall.js` … 人間待ちの時間（承認は承認の記録の時刻を使う）
+- `lib/pitfalls.js` … 役職別の失敗。**エラーは `result.error` から取る**
+  （ループの `step` は実行前の写しで、`step.error` はまだ null）
+- `lib/promote.js` … 掲示板 → 会社のルール／知識 への昇格の**提案**
+- どれも AI を1回も呼ばない
+
+---
+
 ## 7. Knowledge Base 設計
 
 ```js

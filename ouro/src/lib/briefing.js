@@ -16,10 +16,10 @@ export const MAX_BRIEF = 1800;
  * 会議の材料。
  * @param {object} o {tasks, deals, funnel, board, now}
  */
-export function buildBriefing({ tasks = [], deals = [], funnel = null, board = [], now = Date.now() } = {}) {
+export function buildBriefing({ tasks = [], deals = [], funnel = null, board = [], now = Date.now(), requireShare = true } = {}) {
   const parts = [];
 
-  const rows = buildLedger(tasks, { deals, now });
+  const rows = buildLedger(tasks, { deals, now, requireShare });
   const focus = todayFocus(rows);
   const open = rows.filter((r) => r.state !== 'done' && r.state !== 'cancelled');
   if (open.length) {

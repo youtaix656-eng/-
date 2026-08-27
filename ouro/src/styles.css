@@ -1515,3 +1515,41 @@ select {
   height: 100%;
   background: var(--ink);
 }
+
+/* ── 役職ごとの持ち数 ── */
+.load-row {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.load-row .lr-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.load-row .lr-name {
+  font-size: 13.5px;
+}
+
+.load-row .lr-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.load-row .lr-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ink-2);
+}
+
+.load-row .lr-bar span.heavy {
+  background: var(--ink);
+}

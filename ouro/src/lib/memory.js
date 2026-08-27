@@ -95,6 +95,7 @@ export const CONTEXT_LIMITS = {
   taskContext: 2000, // この仕事の補足
   board: 900, // 社内で共有されていること
   related: 500, // 関係する仕事
+  pitfall: 400, // この役職で過去に起きたつまずき
 };
 
 /** 末尾を残して切り詰める。切ったことが分かる印を頭に付ける。 */
@@ -119,7 +120,15 @@ export function trimHead(text, limit) {
   return `${t.slice(0, limit)}\n…（古いぶんは省略しています）`;
 }
 
-export function buildContext({ employee, task, knowledgeList = [], inherited = '', boardText = '', relatedText = '' }) {
+export function buildContext({
+  employee,
+  task,
+  knowledgeList = [],
+  inherited = '',
+  boardText = '',
+  relatedText = '',
+  pitfallText = '',
+}) {
   const layers = [];
   const parts = [];
 
@@ -150,6 +159,11 @@ export function buildContext({ employee, task, knowledgeList = [], inherited = '
   if (relatedText) {
     layers.push({ layer: 'related', count: 1 });
     parts.push(trimTail(relatedText, CONTEXT_LIMITS.related));
+  }
+
+  if (pitfallText) {
+    layers.push({ layer: 'pitfall', count: 1 });
+    parts.push(trimTail(pitfallText, CONTEXT_LIMITS.pitfall));
   }
 
   if (inherited) {

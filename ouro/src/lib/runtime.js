@@ -116,6 +116,7 @@ export async function runStep({
   connections = [],
   boardText = '',
   relatedText = '',
+  pitfallText = '',
   signal,
   onDelta,
 }) {
@@ -135,7 +136,7 @@ export async function runStep({
   const provider = providerById(decision.providerId);
   if (!provider) throw new Error(`エンジン ${decision.providerId} が見つかりません`);
 
-  const context = buildContext({ employee, task, knowledgeList, inherited, boardText, relatedText });
+  const context = buildContext({ employee, task, knowledgeList, inherited, boardText, relatedText, pitfallText });
   const system = buildSystemPrompt({ employee, company, contextText: context.text, isFinal: isFinalStep(task, step) });
 
   // 受付のときに決めた条件（成果物の形・完成条件・使う材料・触れないこと）。

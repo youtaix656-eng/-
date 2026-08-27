@@ -41,13 +41,15 @@ const loadTeamwork = () =>
     import('./standup.js'),
     import('./briefing.js'),
     import('./consult.js'),
-  ]).then(([board, meeting, related, standup, briefing, consult]) => ({
+    import('./pitfalls.js'),
+  ]).then(([board, meeting, related, standup, briefing, consult, pitfalls]) => ({
     ...board,
     ...meeting,
     ...related,
     ...standup,
     ...briefing,
     ...consult,
+    ...pitfalls,
   }));
 import { checkAction, addCost, spentThisMonthOf } from './permissions.js';
 import { createDeal } from './revenue.js';
@@ -104,6 +106,8 @@ const REST_KEYS = [
   KEYS.funnel,
   // 社内掲示板。仕事の実行時に読むので、実行より前に揃っていればよい。
   KEYS.board,
+  // つまずき集（役職別の失敗）。掲示板と同じく実行より前に揃っていればよい。
+  KEYS.pitfalls,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -124,6 +128,7 @@ const EMPTY = {
   genres: [],
   events: [],
   funnel: makeFunnel(),
+  pitfalls: [],
   board: [],
   settings: makeSettings(),
   secrets: {},
@@ -435,6 +440,51 @@ export function useStore() {
     if (hydratedRef.current) save(KEYS.board, next, 'low');
     return next;
   }, []);
+
+  /**
+   * つまずき集に1件足す（新規・AIを呼ばない）。
+   * 失敗した手順から自動で呼ばれるほか、画面から手でも足せる。
+   */
+  const addPitfallEntry = useCallback(async (item) => {
+    const { makePitfall, addPitfall } = await loadTeamwork();
+    const made = item && item.id ? item : makePitfall(item || {});
+    if (!made.text) return null;
+    const next = addPitfall(stateRef.current.pitfalls, made);
+    stateRef.current = { ...stateRef.current, pitfalls: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.pitfalls);
+    if (hydratedRef.current) save(KEYS.pitfalls, next, 'low');
+    return made;
+  }, []);
+
+  const removePitfallEntry = useCallback(async (id) => {
+    const { removePitfall } = await loadTeamwork();
+    const next = removePitfall(stateRef.current.pitfalls, id);
+    stateRef.current = { ...stateRef.current, pitfalls: next };
+    setState(stateRef.current);
+    touchedRef.current.add(KEYS.pitfalls);
+    if (hydratedRef.current) save(KEYS.pitfalls, next, 'low');
+    return next;
+  }, []);
+
+  /** 失敗した手順を、つまずき集へ回す。 */
+  const recordPitfall = useCallback(
+    async (step, task, employee) => {
+      const { fromFailedStep } = await loadTeamwork();
+      // 役職名は表示のためだけなので、ここで取りに行く
+      // （useStore が data/roles.js を抱えると起動時に読む量が増える）。
+      const { roleById } = await import('../data/roles.js');
+      const role = roleById(step.roleId);
+      const made = fromFailedStep(
+        { ...step, employeeName: (employee && employee.name) || step.employeeName },
+        task,
+        role ? role.name : ''
+      );
+      if (!made) return null;
+      return addPitfallEntry(made);
+    },
+    [addPitfallEntry]
+  );
 
   /**
    * 操作履歴を全部読み込む（新項目09）。
@@ -813,6 +863,33 @@ export function useStore() {
     [patchTask, log]
   );
 
+  /**
+   * 社内への共有を1行書く（新規）。共有しないと台帳で「完了」にならない。
+   * `waive` を true にすると「この仕事は共有なしでよい」と決められる
+   * （押しても何も起きない行き止まりを作らないため、逃げ道は必ず残す）。
+   */
+  const shareTask = useCallback(
+    async (taskId, text, waive = false) => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const line = String(text || '').trim();
+      if (!waive && !line) return task;
+      if (line) {
+        const step = [...(task.steps || [])].reverse().find((x) => x.employeeId && x.kind !== 'check');
+        await addBoardPost({
+          text: line,
+          kind: 'share',
+          employeeId: step ? step.employeeId : null,
+          employeeName: step ? step.employeeName || '' : '',
+          roleId: step ? step.roleId : null,
+          taskId,
+        });
+      }
+      return patchTask({ ...task, shared: line || task.shared || '', shareWaived: Boolean(waive) });
+    },
+    [patchTask, addBoardPost]
+  );
+
   /** 「あなたの判断が要ること」を1件決める（新規）。 */
   const decideTask = useCallback(
     (taskId, decisionId, state, note = '') => {
@@ -927,6 +1004,8 @@ export function useStore() {
               connections: s.connections,
               boardText,
               relatedText,
+              // 同じ役職で過去に起きたつまずき（新しい3件だけ）
+              pitfallText: tw.pitfallPrompt(s.pitfalls, step.roleId),
               signal: controller ? controller.signal : undefined,
               // 受け取った先から画面へ出す。ここでは保存しない。
               onDelta: (piece) =>
@@ -988,10 +1067,12 @@ export function useStore() {
       }
       // 完了したら「他の人が知っておくべきこと」を1行だけ掲示板へ回す（AI費用ゼロ）。
       // 拾えなければ何も出さない——中身の無い掲示は、読まれない掲示板を作るだけ。
+      let sharedLine = updated.shared || '';
       for (const { step, employee, result } of results) {
         if (result.error || step.kind === 'check') continue;
         const line = tw.extractShare(result.text);
         if (!line) continue;
+        sharedLine = sharedLine || line;
         addBoardPost({
           text: line,
           kind: 'share',
@@ -1000,6 +1081,23 @@ export function useStore() {
           roleId: employee.roleId,
           taskId: task.id,
         });
+      }
+      if (sharedLine !== updated.shared) updated = { ...updated, shared: sharedLine };
+      // この仕組みが動いている状態で終わった、という印。
+      // 印の無い（＝昔の）仕事に共有を求めない（lib/ledger.js の needsShare）。
+      if (updated.status === 'done' && !updated.shareAsked) updated = { ...updated, shareAsked: true };
+
+      // 失敗した手順は「つまずき集」へ回す（役職ごと・AI費用ゼロ）。
+      // 仕事は起動時に新しい120件しか読まないので、ここへ移さないと
+      // 失敗は古い仕事ごと視界から消えて、同じことを繰り返す。
+      for (const { step, employee, result } of results) {
+        if (!result.error) continue;
+        // **やめた（中止）は失敗ではない。** 貯めると「中止しました」が
+        // その役職のつまずきとして、以後ずっとプロンプトに入り続ける。
+        if (result.aborted) continue;
+        // **エラーは result 側にある。** ここの step は実行前の写しなので
+        // step.error はまだ null（そのまま渡すと、つまずきが1件も貯まらない）。
+        recordPitfall({ ...step, error: result.error }, updated, employee);
       }
 
       // 完了したら、提出物の③から「あなたの判断が要ること」を拾う（新規）。
@@ -1311,7 +1409,13 @@ export function useStore() {
       const emps = s.employees.filter((e) => employeeIds.includes(e.id));
       // 事前配布：台帳・収益導線・掲示板から材料を作って全員に配る（AI費用ゼロ）。
       const { buildBriefing, createMeeting } = await loadTeamwork();
-      const materials = buildBriefing({ tasks: s.tasks, deals: s.deals, funnel: s.funnel, board: s.board });
+      const materials = buildBriefing({
+        tasks: s.tasks,
+        deals: s.deals,
+        funnel: s.funnel,
+        board: s.board,
+        requireShare: s.settings.requireShare !== false,
+      });
       const mtg = createMeeting({ topic, employees: emps, materials, kind });
       put(KEYS.meetings, [mtg, ...s.meetings]);
       log({ actor: 'user', action: 'meetingHeld', target: topic });
@@ -1667,7 +1771,13 @@ export function useStore() {
       const employee = s.employees.find((e) => e.id === employeeId);
       if (!employee || !String(question || '').trim()) return null;
       const { buildBriefing, consultPrompt } = await loadTeamwork();
-      const brief = buildBriefing({ tasks: s.tasks, deals: s.deals, funnel: s.funnel, board: s.board });
+      const brief = buildBriefing({
+        tasks: s.tasks,
+        deals: s.deals,
+        funnel: s.funnel,
+        board: s.board,
+        requireShare: s.settings.requireShare !== false,
+      });
       return askOnce({
         employeeId,
         prompt: consultPrompt(question, brief),
@@ -1840,6 +1950,7 @@ export function useStore() {
     deleteTask,
     patchTask,
     setTaskMeta,
+    shareTask,
     teachEmployee,
     forgetEmployeeNote,
     putFunnelEntry,
@@ -1872,6 +1983,8 @@ export function useStore() {
     saveMeetingAsKnowledge,
     redoStep,
     addBoardPost,
+    addPitfallEntry,
+    removePitfallEntry,
     removeBoardPost,
     runMeeting,
     patchMeeting,

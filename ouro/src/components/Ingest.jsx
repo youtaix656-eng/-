@@ -7,11 +7,12 @@ import { Card, Field, Empty } from './ui.jsx';
 import { INGEST_KINDS, ingestOne, detectKind, youtubeId, MAX_TEXT_BYTES, MAX_TEXT_CHARS } from '../lib/ingest.js';
 import { CATEGORIES } from '../lib/knowledge.js';
 
-export default function Ingest({ store, go, toast }) {
-  const [kind, setKind] = useState('web');
+export default function Ingest({ store, go, toast, preset = {} }) {
+  // 呼び出し元が本文の下書きを渡せる（掲示板から知識へ移すときなど）
+  const [kind, setKind] = useState(preset.text ? 'note' : 'web');
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
-  const [text, setText] = useState('');
+  const [text, setText] = useState(preset.text || '');
   const [tags, setTags] = useState('');
   const [category, setCategory] = useState('調査');
   const [summarize, setSummarize] = useState(true);

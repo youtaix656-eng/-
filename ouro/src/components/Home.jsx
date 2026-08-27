@@ -44,7 +44,10 @@ export default function Home({ store, go }) {
   // **ここは起動時に読んだぶん（新しい120件）だけで数える。**
   // ホームで全件を読み足すと、仕事が増えるほど起動が遅くなるため。
   // 全部を見るときは台帳（useAllTasks で読み足す）へ。
-  const focus = useMemo(() => todayFocus(buildLedger(tasks, { deals })), [tasks, deals]);
+  const focus = useMemo(
+    () => todayFocus(buildLedger(tasks, { deals, requireShare: store.settings.requireShare !== false })),
+    [tasks, deals, store.settings.requireShare]
+  );
 
   // 最初の道しるべ。**チェックは手で付けさせず、実際の状態から導く**。
   // 7つ全部済むと、この案内は自動で出なくなる。

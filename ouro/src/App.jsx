@@ -12,7 +12,6 @@ import { useToast, Skeleton } from './components/ui.jsx';
 import Splash from './components/Splash.jsx';
 import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
-import Compose from './components/Compose.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
 // 肖像の額縁は全員で1つを使い回すので、その定義だけ即時に読む
 import { PortraitSprite } from './components/Portrait.jsx';
@@ -38,6 +37,8 @@ const Approvals = lazy(LOADERS.approvals);
 const AuditView = lazy(LOADERS.audit);
 const Settings = lazy(LOADERS.settings);
 // 新項目01：下部ナビにあるが起動直後には要らないので、後から読む
+// （目次・予定と同じ扱い。押す前に先読みするので待ちは実質ゼロ）
+const Compose = lazy(LOADERS.compose);
 const Calendar = lazy(LOADERS.calendar);
 const Toc = lazy(LOADERS.toc);
 const GenreEditor = lazy(LOADERS.genre);
@@ -147,7 +148,7 @@ export default function App() {
     if (!idle) return undefined;
     const id = idle(
       () => {
-        preloadMany(['toc', 'calendar', 'task', 'employee']);
+        preloadMany(['compose', 'toc', 'calendar', 'task', 'employee']);
         // さらに空きがあれば、会社バーから開く画面も
         idle(() => preloadMany(['company', 'team', 'approvals', 'ledger', 'funnel', 'settings', 'characters', 'connect']), { timeout: 8000 });
       },
@@ -217,7 +218,7 @@ export default function App() {
         {view === 'employee' && <EmployeeDetail store={store} employeeId={arg} go={go} />}
         {view === 'hire' && <Hire store={store} initialRoleId={arg} go={go} />}
         {view === 'knowledgeDetail' && <KnowledgeDetail store={store} knowledgeId={arg} go={go} />}
-        {view === 'ingest' && <Ingest store={store} go={go} toast={toast} />}
+        {view === 'ingest' && <Ingest store={store} go={go} toast={toast} preset={arg || {}} key={JSON.stringify(arg)} />}
         {view === 'meeting' && <Meeting store={store} go={go} />}
         {view === 'meetingDetail' && <MeetingDetail store={store} meetingId={arg} go={go} />}
         {view === 'team' && <Team store={store} go={go} toast={toast} />}

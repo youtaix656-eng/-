@@ -17,7 +17,7 @@ import { useAllTasks } from './useAllTasks.js';
 import { openDecisions } from '../lib/decisions.js';
 import { checkPromises } from '../lib/guard.js';
 import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js';
-import { ticketOf, dueStateOf, DUE_LABELS } from '../lib/ledger.js';
+import { ticketOf, dueStateOf, DUE_LABELS, needsShare } from '../lib/ledger.js';
 import { checkSummary } from '../lib/checks.js';
 import { similarOpenings } from '../lib/opening.js';
 
@@ -60,6 +60,8 @@ export default function TaskDetail({ store, taskId, go }) {
       <LedgerCard task={task} store={store} meta={meta} setMeta={setMeta} />
 
       {openDecisions(task).length > 0 && <DecisionCard task={task} store={store} />}
+
+      <ShareCard task={task} store={store} go={go} />
 
       {task.missingApprovers?.length > 0 && (
         <Card glyph="⚠" title="確認を通していない成果物です">
@@ -752,5 +754,62 @@ function HandoffReview({ task, step, store }) {
       )}
       {msg && <div className="muted" style={{ marginTop: 4 }}>{msg}</div>}
     </div>
+  );
+}
+
+/**
+ * 社内への共有（新規）。**書く場所を作っただけでは誰も書かない。**
+ * 共有が書かれるまで、台帳ではこの仕事は「確認待ち」のままになる。
+ * ただし逃げ道は必ず残す（「共有なしでよい」）——押しても何も起きない
+ * 行き止まりを作らないのと同じ理由で、抜けられない関門も作らない。
+ */
+function ShareCard({ task, store, go }) {
+  const require = store.settings.requireShare !== false;
+  const need = needsShare(task, require);
+  const [text, setText] = useState('');
+  if (task.status !== 'done') return null;
+
+  if (!need) {
+    if (!task.shared) return null;
+    return (
+      <Card glyph="◈" title="社内へ共有しました">
+        <p className="muted" style={{ marginTop: -6, marginBottom: 0 }}>{task.shared}</p>
+        <button type="button" className="btn ghost small" style={{ marginTop: 8 }} onClick={() => go('team')}>
+          掲示板を見る
+        </button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card glyph="◈" title="社内へ共有する1行を書いてください">
+      <p className="muted" style={{ marginTop: -6 }}>
+        この仕事から、<strong style={{ color: '#fff' }}>他の社員が知っておくとよいこと</strong>を1行だけ。
+        掲示板に載り、次に動く社員が必ず読みます。書くまで台帳では「確認待ち」のままです。
+      </p>
+      <div className="btn-row" style={{ marginBottom: 6 }}>
+        <input
+          className="input"
+          style={{ flex: 1 }}
+          value={text}
+          placeholder="例：この分野の統計は2024年版が最新。古い数字に注意。"
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn primary"
+          disabled={!text.trim()}
+          onClick={() => {
+            store.shareTask(task.id, text);
+            setText('');
+          }}
+        >
+          共有する
+        </button>
+      </div>
+      <button type="button" className="btn ghost small" onClick={() => store.shareTask(task.id, '', true)}>
+        この仕事は共有なしでよい
+      </button>
+    </Card>
   );
 }

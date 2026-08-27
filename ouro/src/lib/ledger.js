@@ -12,6 +12,24 @@
 
 import { openDecisions } from './decisions.js';
 
+/**
+ * 社内への共有が書かれていない完了か。
+ *
+ * `task.shared` は成果物から自動で拾えた1行（lib/board.js の extractShare）。
+ * 拾えなかった時は人が1行書くか、「共有なしでよい」と決める（shareWaived）。
+ * どちらもしていない間は、台帳では「確認待ち」のままにする。
+ */
+export function needsShare(task, requireShare = true) {
+  if (!requireShare) return false;
+  if (!task || task.status !== 'done') return false;
+  // **この仕組みより前に終わった仕事を蒸し返さない。**
+  // 印が無いものは「聞いていない」ではなく「昔の仕事」。
+  // 印を見ずに判定すると、過去の完了が全部「確認待ち」に戻る。
+  if (!task.shareAsked) return false;
+  if (task.shareWaived) return false;
+  return !String(task.shared || '').trim();
+}
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 // 台帳での状態。仕事の status から導く（status を増やさずに済むものは畳む）。
@@ -29,7 +47,7 @@ export function ledgerState(id) {
   return LEDGER_STATES.find((s) => s.id === id) || LEDGER_STATES[0];
 }
 
-export function ledgerStateOf(task) {
+export function ledgerStateOf(task, requireShare = true) {
   switch (task.status) {
     case 'running':
       return 'doing';
@@ -44,7 +62,12 @@ export function ledgerStateOf(task) {
     case 'done':
       // 完了でも、人間の判断が残っているなら「確認待ち」。
       // 完了だけを見て終わったつもりになるのを防ぐ。
-      return openDecisions(task).length ? 'waiting' : 'done';
+      if (openDecisions(task).length) return 'waiting';
+      // **共有が書かれていない仕事も「完了」にしない。**
+      // 書く場所（掲示板）を作っただけでは誰も書かない。
+      // 他の社員に何も渡していない仕事は、チームとしては終わっていない。
+      if (needsShare(task, requireShare)) return 'waiting';
+      return 'done';
     default:
       return 'todo';
   }
@@ -105,10 +128,11 @@ export function ownerOf(task) {
  * @param {object} task
  * @param {{deals?:object[], now?:number}} ctx
  */
-export function ledgerRow(task, { deals = [], now = Date.now() } = {}) {
-  const state = ledgerStateOf(task);
+export function ledgerRow(task, { deals = [], now = Date.now(), requireShare = true } = {}) {
+  const state = ledgerStateOf(task, requireShare);
   const deal = task.dealId ? deals.find((d) => d.id === task.dealId) : null;
   const decisions = openDecisions(task);
+  const needShare = needsShare(task, requireShare);
   // 期限は仕事に入っていればそれ。無ければ案件の締切を引き継ぐ（複製はしない）。
   const dueAt = task.dueAt || (deal ? deal.dueAt : null) || null;
   return {
@@ -126,7 +150,9 @@ export function ledgerRow(task, { deals = [], now = Date.now() } = {}) {
     dealId: task.dealId || null,
     dealTitle: deal ? deal.title : '',
     decisions: decisions.length,
-    nextAction: task.nextAction || defaultNextAction(task, state, decisions.length),
+    needsShare: needShare,
+    shared: task.shared || '',
+    nextAction: task.nextAction || defaultNextAction(task, state, decisions.length, needShare),
     holdReason: task.holdReason || '',
     knowledgeIds: (task.result && task.result.knowledgeIds) || [],
     cost: task.totalCost || 0,
@@ -135,8 +161,9 @@ export function ledgerRow(task, { deals = [], now = Date.now() } = {}) {
 }
 
 /** 「次に誰が何をするか」が書かれていない時の既定文（推測はしない・事実だけ）。 */
-function defaultNextAction(task, state, decisionCount) {
+function defaultNextAction(task, state, decisionCount, needShare = false) {
   if (state === 'waiting' && decisionCount) return `あなたの判断が${decisionCount}件`;
+  if (state === 'waiting' && needShare) return '社内へ共有する1行を書く';
   if (state === 'waiting') return 'あなたの承認待ち';
   if (state === 'stopped') return '失敗した所からやり直す';
   if (state === 'hold') return '再開する時期を決める';

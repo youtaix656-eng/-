@@ -158,6 +158,19 @@ export default function Settings({ store, toast }) {
           </select>
         </Field>
         <Field
+          label="共有しないと完了にしない"
+          hint="仕事から「他の社員が知っておくとよいこと」を1行、掲示板へ残すまで、台帳では『確認待ち』のままにします。書く場所を作っただけでは誰も書かないため、既定は入りです。"
+        >
+          <select
+            className="select"
+            value={store.settings.requireShare === false ? 'off' : 'on'}
+            onChange={(e) => store.updateSettings({ requireShare: e.target.value === 'on' })}
+          >
+            <option value="on">共有を書くまで完了にしない（標準）</option>
+            <option value="off">共有が無くても完了にする</option>
+          </select>
+        </Field>
+        <Field
           label="社員から社員への引き継ぎ"
           hint="要点だけ＝次の担当に要るものだけを渡します。前の担当の出力が長いほど費用が下がります。拾えなかった時は全文をそのまま渡すので、材料が消えることはありません。"
         >
