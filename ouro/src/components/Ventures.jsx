@@ -7,6 +7,9 @@
 //  ④ やめる基準を決める（始める前に。決めた期日が来たら判断待ちに出る）
 //  ⑤ 今日やる1つを見る
 //  ⑥ 出したものを記録する（発信ログ）
+//  ⑦ 1件あたりの採算を見る（稼ぎ ＞ AI費用 か）
+//  ⑧ 手離れを見る（最後に手を入れてから何日／そのあいだに入ったお金）
+//  ⑨ 続くかどうかの見立て（真似される・場所に止められる。**採点しない**）
 //
 // **AIは呼ばない。**（呼ぶのは「分析してもらう」「案を出してもらう」を押した時だけ）
 
@@ -27,6 +30,9 @@ import { todayPlan } from '../lib/daily.js';
 import { POST_CHANNELS, channelName, postsOf, postStats, weekDraft } from '../lib/posts.js';
 import { normalizeFunnel, latestEntry, startOfWeek, labelOf } from '../lib/funnel.js';
 import { formatMoney } from '../lib/revenue.js';
+import { unitEconomics, unitLine, costAdvice } from '../lib/unit.js';
+import { passiveState, passiveLine, finishNudge, REST_DAYS } from '../lib/passive.js';
+import { RISK_QUESTIONS, RISK_ANSWERS, riskReview, riskLine } from '../lib/risk.js';
 
 export default function Ventures({ store, go, toast }) {
   const list = useMemo(() => sortVentures(store.ventures || []), [store.ventures]);
@@ -170,6 +176,12 @@ export function VentureDetail({ store, ventureId, go, toast }) {
   const plan = venture ? targetPlan({ venture, entry, funnel }) : null;
   const status = venture ? verdictStatus(venture, store.funnel) : null;
   const today = venture ? todayPlan({ venture, posts: myPosts, tasks: myTasks, loaded: store.hydrated }) : null;
+  const unit = venture
+    ? unitEconomics({ venture, tasks: store.tasks, deals: store.deals, usdJpy: store.settings.usdJpy })
+    : null;
+  const passive = venture
+    ? passiveState({ venture, tasks: store.tasks, posts: store.posts, deals: store.deals })
+    : null;
 
   if (!venture) return <Empty>事業が見つかりません。</Empty>;
 
@@ -193,7 +205,10 @@ export function VentureDetail({ store, ventureId, go, toast }) {
       <StateCard venture={venture} store={store} toast={toast} />
       {venture.state === 'running' && today && <TodayCard plan={today} go={go} venture={venture} />}
       <VerdictCard venture={venture} status={status} store={store} funnel={funnel} toast={toast} />
+      <RiskCard venture={venture} store={store} toast={toast} />
       <TargetCard venture={venture} plan={plan} store={store} go={go} funnel={funnel} toast={toast} />
+      <MoneyCard venture={venture} unit={unit} store={store} go={go} toast={toast} />
+      <PassiveCard venture={venture} passive={passive} store={store} toast={toast} />
       <PostsCard venture={venture} posts={myPosts} store={store} toast={toast} funnel={funnel} />
 
       <SectionTitle>この事業の仕事（{myTasks.length}）</SectionTitle>
@@ -379,6 +394,178 @@ function VerdictCard({ venture, status, store, funnel, toast }) {
       <p className="muted" style={{ fontSize: 11.5 }}>
         続ける勇気より、降りる線引きのほうが先に要ります。ここを決めておくと、
         うまくいかない時に「もう少しだけ」を繰り返さずに済みます。
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * 続くかどうかの見立て。
+ *
+ * **採点しない・総合判定を出さない。** 「危険度◯点」は手元に無い基準（他社の事例）が
+ * 無いと出せないので出さない。出すのは「あなたがこう答えた」ことと、その時にできることだけ。
+ */
+function RiskCard({ venture, store, toast }) {
+  const [open, setOpen] = useState(false);
+  const review = riskReview(venture);
+
+  const answer = (id, value) => {
+    store.updateVenture(venture.id, { risks: { ...review.answers, [id]: value } });
+  };
+
+  return (
+    <Card glyph="⚠" title="続くかどうかの見立て" action={<span className="chip">{review.answered}／{review.total}</span>}>
+      <p className="muted" style={{ marginTop: -6 }}>{riskLine(review)}</p>
+      {review.cares.map((q) => (
+        <p key={q.id} className="muted" style={{ fontSize: 12.5 }}>・{q.care}</p>
+      ))}
+      <button type="button" className="btn ghost block" onClick={() => setOpen(!open)}>
+        {open ? '閉じる' : review.answered ? '答えを見直す' : '5つの問いに答える'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          {RISK_QUESTIONS.map((q) => (
+            <div key={q.id} style={{ marginBottom: 12 }}>
+              <p style={{ margin: '0 0 2px', fontSize: 13.5, fontWeight: 600 }}>{q.q}</p>
+              <p className="muted" style={{ margin: '0 0 6px', fontSize: 11.5 }}>{q.why}</p>
+              <div className="btn-row">
+                {Object.entries(RISK_ANSWERS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`btn${review.answers[q.id] === key ? ' primary' : ''}`}
+                    onClick={() => answer(q.id, key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button type="button" className="btn block" onClick={() => { setOpen(false); toast('見立てを保存しました'); }}>
+            閉じる
+          </button>
+        </div>
+      )}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        点は付けません。うまくいかなくなる理由は「真似される」か「場所に止められる」の
+        どちらかがほとんどで、どちらも頑張りでは避けられないからです。
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * 1件あたりの採算。**線は1本だけ**——稼ぎが AI費用 を上回っているか。
+ * 「◯割なら健全」のような外の基準は持たない。
+ */
+function MoneyCard({ venture, unit, store, go, toast }) {
+  if (!unit) return null;
+  const tips = costAdvice(unit, store.settings);
+  return (
+    <Card glyph="¥" title="1件あたりの採算">
+      <p className="muted" style={{ marginTop: -6 }}>{unitLine(unit)}</p>
+      <div className="stats">
+        <Stat value={unit.sales} label="売れた数" />
+        <Stat value={unit.perSale === null ? '—' : formatMoney(unit.perSale)} label="1件の売上" />
+        <Stat value={unit.costPerSale === null ? '—' : formatMoney(unit.costPerSale)} label="1件のAI費用" />
+        <Stat value={formatMoney(unit.net)} label="手残り" />
+      </div>
+      {unit.breakEven !== null && unit.aiCost > 0 && (
+        <p className="muted" style={{ fontSize: 12.5 }}>
+          {unit.remaining
+            ? `いまのAI費用（${formatMoney(unit.aiCost)}）を取り戻すには、${formatMoney(unit.price)}のものがあと${unit.remaining}本。`
+            : `AI費用（${formatMoney(unit.aiCost)}）は取り戻せています。`}
+        </p>
+      )}
+      {tips && tips.map((t) => (
+        <p key={t.id} className="muted" style={{ fontSize: 12.5 }}>・{t.text}</p>
+      ))}
+      {tips && store.settings.costMode !== 'cheap' && (
+        <Action
+          className="btn"
+          onClick={() => {
+            store.updateSettings({ costMode: 'cheap' });
+            toast('これからの仕事は安いモデルで動かします');
+          }}
+        >
+          安いモデルに切り替える
+        </Action>
+      )}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        線は1本だけです——稼ぎがAI費用を上回っているあいだは続けられます。
+        速くなっただけでは残らないので、ここだけは毎回見てください。
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * 手離れ（不労所得の実測）と、仕上げ線。
+ *
+ * 「不労所得」は**作るまでは労働**で、作ったあと更新しなくても回るもの。
+ * 気持ちではなく「最後に手を入れてから何日」「そのあいだに入ったお金」で見る。
+ * 仕上げ線は**伸びた時に手を止めるための線**（やめる基準の裏側）。
+ */
+function PassiveCard({ venture, passive, store, toast }) {
+  const [finish, setFinish] = useState(venture.finishWhen || '');
+  useEffect(() => setFinish(venture.finishWhen || ''), [venture.id, venture.finishWhen]);
+  if (!passive) return null;
+
+  const save = () => {
+    store.updateVenture(venture.id, { finishWhen: finish.trim().slice(0, 120) });
+    toast('仕上げ線を決めました');
+  };
+
+  return (
+    <Card glyph="☾" title="手離れ">
+      <p className="muted" style={{ marginTop: -6 }}>{passiveLine(passive)}</p>
+      <div className="stats">
+        <Stat value={passive.last ? passive.days : '—'} label="手を入れていない日数" />
+        {/* まだ作っている最中の入金は「手を止めているあいだに入ったお金」ではないので出さない
+            （出すと、作りながら売れただけのものが不労所得に見える）。 */}
+        <Stat
+          value={passive.state === 'resting' || passive.state === 'passive' ? formatMoney(passive.earned) : '—'}
+          label="そのあいだに入ったお金"
+        />
+      </div>
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        {REST_DAYS}日以上手を入れずにお金が入って、はじめて「不労所得」と呼べます。
+        入金の記録と説明文の手直しは、手を入れたうちに数えていません
+        （数えると、売れるたびに日数が0に戻って永久に測れないためです）。
+      </p>
+
+      <SectionTitle>ここで手を止める</SectionTitle>
+      <p className="muted" style={{ marginTop: -6, fontSize: 12.5 }}>{finishNudge(venture, passive)}</p>
+      {!venture.restedAt && (
+        <>
+          <Field label="ここまで出来たら手を止める" hint="例：月3万円が3か月続いたら／講座が10本たまったら">
+            <input className="input" value={finish} onChange={(e) => setFinish(e.target.value)} maxLength={120} />
+          </Field>
+          <div className="btn-row">
+            <button type="button" className="btn" onClick={save}>仕上げ線を保存する</button>
+            {venture.finishWhen && (
+              <Action
+                className="btn primary"
+                onClick={() => {
+                  store.updateVenture(venture.id, { restedAt: Date.now() });
+                  toast('ここで手を止めたと記録しました');
+                }}
+              >
+                ここで手を止める
+              </Action>
+            )}
+          </div>
+        </>
+      )}
+      {venture.restedAt > 0 && (
+        <Action className="btn ghost" onClick={() => { store.updateVenture(venture.id, { restedAt: 0 }); toast('また手を入れます'); }}>
+          やっぱり続きをやる
+        </Action>
+      )}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        いちばん難しいのは、うまくいかない時ではなく、うまくいった時に止めることです。
+        「もっと稼げるかも」で手を広げ続けると、不労所得のはずが仕事に戻ります。
       </p>
     </Card>
   );

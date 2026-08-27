@@ -456,6 +456,37 @@ overLimit(items, channel)          // 長さは知らせるだけ（切らない
 - 束の中どうしでも `similarOpenings` を掛ける（同じ型から作ると入口がそっくりになる）。
 - 「まとめて作る」は依頼の道を通るので、費用の確認・日／月の上限がそのまま効く。
 
+### 6-13. 稼ぎとして残るか（`lib/passive.js` / `lib/unit.js` / `lib/risk.js`）
+
+速く作れることと、稼ぎとして残ることは別。残るかどうかを見る層。
+
+```js
+Venture = { ..., risks:{copy,platform,terms,liked,mine}, finishWhen, restedAt }
+Deal    = { ..., ventureId }   // 画面（案件フォーム／案件の詳細）から必ず付けられる
+
+// 手離れ＝不労所得の実測
+lastTouchedAt(venture, { tasks, posts, deals })  // 依頼した・出した・案件を起こした だけ
+passiveState({ venture, tasks, posts, deals })   // none / building / resting / passive
+finishNudge(venture, passive)                    // 仕上げ線（伸びた時に手を止める線）
+
+// 1件あたりの採算——線は1本だけ（稼ぎ ＞ AI費用）
+unitEconomics({ venture, tasks, deals, usdJpy }) // 売れた数0なら1件あたりは null
+costAdvice(unit, settings)                       // 赤のときの手（やめろとは言わない）
+
+// 続くかどうかの見立て——採点しない
+riskReview(venture)                              // 答えと「その時にできること」だけ
+```
+
+- **入金の記録を「手を入れた」に数えない。** 数えると売れるたびに日数が0に戻り、
+  不労所得は永久に測れない。事業の `updatedAt`（説明文の手直し）も数えない。
+- **やめる基準（`verdict.js`）と仕上げ線は別の層。** 前者は伸びない時に降りる線、
+  後者は**伸びた時に手を止める線**。届いたかどうかを機械が判定しない。
+- **手元に無い基準を持たない。** 採算は「稼ぎ ＞ AI費用」の1本だけ、見立ては点を付けない。
+- **`deal.ventureId` を付ける口を画面に必ず置く**（`deal.taskIds` と同じ
+  「誰も更新しない列」を作らない）。
+- お金の話の確約（必ず稼げる／放置で増える／不労所得になる／リスクゼロ）も
+  `guard.js` の `PROMISE_PATTERNS` で見張る。**止めない・書き換えない。**
+
 ---
 
 ## 7. Knowledge Base 設計

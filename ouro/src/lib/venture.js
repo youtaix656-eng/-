@@ -14,6 +14,7 @@
 
 import { newId } from './id.js';
 import { dealAiCost, EARNED_STATUS, PIPELINE_STATUS } from './revenue.js';
+import { normalizeRisks } from './risk.js';
 
 export const VENTURE_STATES = {
   idea: '検討中',
@@ -48,6 +49,11 @@ export function makeVenture(data = {}) {
     startedAt: data.startedAt || (state === 'running' ? now : null),
     // 撤退・継続の基準。**始める前に書く**（惰性で続けないため）
     verdict: normalizeVerdict(data.verdict),
+    // 続くかどうかの見立て（真似される・場所に止められる…）。採点はしない。
+    risks: normalizeRisks(data.risks),
+    // 仕上げ線＝「ここまで出来たら手を止める」。伸びた時に増やし続けないための1行。
+    finishWhen: String(data.finishWhen || '').slice(0, 120),
+    restedAt: Number(data.restedAt) || 0,
     notes: String(data.notes || '').slice(0, 1000),
     createdAt: data.createdAt || now,
     updatedAt: now,
