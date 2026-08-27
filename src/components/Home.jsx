@@ -432,6 +432,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">経穴カード＋全科目対応。問題からその場でカードを作って反復。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('keizetsutextbook')}>
+          <span className="ico">📖</span>
+          <span className="title">経絡経穴 教科書目次</span>
+          <span className="desc">教科書の章立てをページ順に要約。過去問の出題頻度を🔴🟠🟡⚪で色分け表示。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('mnemonics')}>
           <span className="ico">💡</span>
           <span className="title">語呂合わせノート</span>
