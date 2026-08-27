@@ -22,6 +22,7 @@ import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js'
 import { ticketOf, dueStateOf, DUE_LABELS, needsShare } from '../lib/ledger.js';
 import { progressOf } from '../lib/resume.js';
 import { checkSummary } from '../lib/checks.js';
+import { checkEdited, MAX_SAMPLE_LEN, MAX_SAMPLES } from '../lib/style.js';
 
 export default function TaskDetail({ store, taskId, go }) {
   // 古い仕事も要る画面なので、残りを読み足す
@@ -290,6 +291,7 @@ export default function TaskDetail({ store, taskId, go }) {
                 </button>
               )}
               <TeachButton task={task} store={store} />
+              <StyleButton task={task} text={styleSeed(task, deliverable)} store={store} />
               <FlagButton task={task} store={store} />
               {!knowledge[0] && isTemplate && (
                 <button
@@ -703,6 +705,75 @@ function CheckCard({ task }) {
  * この結果を見て、担当した社員に1行覚えさせる（改善ログ）。
  * 「①ミス → ②ルール化 → ③次回改善」を、結果を見ているその場で回すための入口。
  */
+/**
+ * 成果物を**自分で直してから**「書き方の見本」に入れる。
+ *
+ * 直していない下書きをそのまま見本にすると、AIが自分の文体を学び直して、
+ * ますます「AIっぽい文」に寄っていく。だから `checkEdited` が同じ本文を弾く。
+ * 来歴は 'edited'（AIの下書きを自分で直したもの）で、'自分で書いた' とは区別する。
+ */
+
+/**
+ * 見本の下敷きにするのは **④成果物 の中だけ**。
+ * ①〜⑤の枠ごと見本にすると、社員が「①結論…」という枠そのものを
+ * 書き方のくせとして覚えてしまう（`splitPosts` と同じ理由）。
+ * 枠が見つからなければ、切らずに全文を使う。
+ */
+function styleSeed(task, deliverable) {
+  const full = finalOutput(task) || deliverable || '';
+  const { sections } = parseSections(full);
+  const body = sections.deliverable;
+  return (body && body.trim()) || full;
+}
+function StyleButton({ task, text, store }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [err, setErr] = useState('');
+  const full = (store.style || []).length >= MAX_SAMPLES;
+  if (!text || !text.trim()) return null;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="btn small"
+        onClick={() => { setDraft(text.slice(0, MAX_SAMPLE_LEN)); setErr(''); setOpen(true); }}
+      >
+        自分で直して、書き方の見本にする
+      </button>
+    );
+  }
+
+  const save = async () => {
+    const v = checkEdited(text, draft);
+    if (!v.ok) { setErr(v.reason); return; }
+    await store.addStyleSample({ label: task.title || '直した文章', text: draft, origin: 'edited' });
+    setOpen(false);
+    setErr('');
+  };
+
+  return (
+    <div className="card tight" style={{ width: '100%', marginTop: 8 }}>
+      <Field
+        label="自分の言葉に直す"
+        hint="言い回し・語尾・話の運びを自分のものに。ここで直したものが、次からの見本になります。"
+      >
+        <textarea className="textarea" rows={8} value={draft} maxLength={MAX_SAMPLE_LEN} onChange={(e) => setDraft(e.target.value)} />
+      </Field>
+      {err && <p className="muted" style={{ fontSize: 12.5, color: '#ffb4a2' }}>{err}</p>}
+      {full && (
+        <p className="muted" style={{ fontSize: 12.5 }}>
+          見本は{MAX_SAMPLES}本までです。入れると古いものから外れます。
+        </p>
+      )}
+      <div className="btn-row">
+        <button type="button" className="btn primary" onClick={save}>見本にする</button>
+        <button type="button" className="btn ghost" onClick={() => { setOpen(false); setErr(''); }}>やめる</button>
+      </div>
+    </div>
+  );
+}
+
 function TeachButton({ task, store }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');

@@ -130,6 +130,8 @@ const REST_KEYS = [
   // **読み込みが済むまで「まだ出していない」と言い切らないこと**
   // （空配列のまま判定すると、出した日でも「未」と出る）。
   KEYS.posts,
+  // 書き方の見本。仕事の実行時に書く役だけが読むので、実行より前に揃っていればよい。
+  KEYS.style,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -152,6 +154,7 @@ const EMPTY = {
   ventures: [],
   posts: [],
   patterns: [],
+  style: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -901,6 +904,38 @@ export function useStore() {
     [put]
   );
 
+  // ── 書き方の見本（自分の文章のお手本）──
+  // 会社の決まり（company.rules）とは**別の場所**に持つ。
+  // 決まりは守らせること、見本はまねさせるもので、層が違う。
+
+  const addStyleSample = useCallback(
+    async (data) => {
+      const sty = await import('./style.js');
+      const made = sty.makeSample(data || {});
+      if (!made.text.trim()) return null;
+      put(KEYS.style, sty.addSample(stateRef.current.style, made));
+      log({ actor: 'user', action: 'styleAdded', target: made.label });
+      return made;
+    },
+    [put, log]
+  );
+
+  const updateStyleSample = useCallback(
+    async (id, patch) => {
+      const { updateSample } = await import('./style.js');
+      put(KEYS.style, updateSample(stateRef.current.style, id, patch));
+    },
+    [put]
+  );
+
+  const removeStyleSample = useCallback(
+    async (id) => {
+      const { removeSample } = await import('./style.js');
+      put(KEYS.style, removeSample(stateRef.current.style, id));
+    },
+    [put]
+  );
+
   /**
    * 出した投稿に、あとから反応の数字を入れる。
    * **これが無いと「型 → 出す → 数字を見る → 伸びた型を次の種に」が閉じない。**
@@ -1216,6 +1251,9 @@ export function useStore() {
               boardText,
               relatedText,
               briefText,
+              // 書き方の見本（オーナーの文章）。渡す相手は runStep が役職で絞る。
+              // 会議や相談では渡さない——外へ出る文章を書く仕事だけに要るもの。
+              styleSamples: s.style,
               // 同じ役職で過去に起きたつまずき（新しい3件だけ）
               pitfallText: tw.pitfallPrompt(s.pitfalls, step.roleId),
               signal: controller ? controller.signal : undefined,
@@ -2331,6 +2369,9 @@ export function useStore() {
     updateSharePost,
     removeSharePost,
     addPattern,
+    addStyleSample,
+    updateStyleSample,
+    removeStyleSample,
     updatePattern: updatePatternAction,
     removePattern: removePatternAction,
     // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）

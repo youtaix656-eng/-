@@ -13,6 +13,7 @@ import { isToolEnabled } from '../data/tools.js';
 import { outputFormatPrompt } from './outline.js';
 import { rulesPrompt } from './rules.js';
 import { SOURCE_RULE } from './untrusted.js';
+import { styleText } from './style.js';
 
 // ── 新項目21：同じ問いの答えを使い回す ──
 //
@@ -122,6 +123,7 @@ export async function runStep({
   relatedText = '',
   pitfallText = '',
   briefText = '',
+  styleSamples = [],
   signal,
   onDelta,
 }) {
@@ -145,7 +147,13 @@ export async function runStep({
   const provider = providerById(decision.providerId);
   if (!provider) throw new Error(`エンジン ${decision.providerId} が見つかりません`);
 
-  const context = buildContext({ employee, task, knowledgeList, inherited, boardText, relatedText, pitfallText, briefText });
+  // 書き方の見本は**書く役の社員にだけ**渡す（`style.js` が役職で絞る）。
+  // 全員に渡すと、調べるだけの社員の毎回の料金にも上乗せされる。
+  const styleBlock = styleText(styleSamples, employee.roleId);
+  const context = buildContext({
+    employee, task, knowledgeList, inherited, boardText, relatedText, pitfallText, briefText,
+    styleText: styleBlock,
+  });
   const system = buildSystemPrompt({
     employee,
     company,
