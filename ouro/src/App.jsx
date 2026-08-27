@@ -29,6 +29,7 @@ const Company = lazy(LOADERS.company);
 const Team = lazy(LOADERS.team);
 const Ledger = lazy(LOADERS.ledger);
 const Funnel = lazy(LOADERS.funnel);
+const Studio = lazy(LOADERS.studio);
 const Ventures = lazy(LOADERS.ventures);
 const VentureDetail = lazy(() => LOADERS.venture().then((m) => ({ default: m.VentureDetail })));
 const Rules = lazy(LOADERS.rules);
@@ -77,6 +78,7 @@ const TITLES = {
   team: 'チーム',
   ledger: '仕事台帳',
   funnel: '収益導線',
+  studio: '発信',
   ventures: '事業',
   venture: '事業',
   rules: '会社のルール',
@@ -283,6 +285,7 @@ export default function App() {
         {view === 'team' && <Team store={store} go={go} toast={toast} />}
         {view === 'ledger' && <Ledger store={store} go={go} toast={toast} />}
         {view === 'funnel' && <Funnel store={store} go={go} toast={toast} />}
+        {view === 'studio' && <Studio store={store} go={go} toast={toast} />}
         {view === 'ventures' && <Ventures store={store} go={go} toast={toast} />}
         {view === 'venture' && <VentureDetail store={store} ventureId={arg} go={go} toast={toast} />}
         {view === 'rules' && <Rules store={store} toast={toast} />}

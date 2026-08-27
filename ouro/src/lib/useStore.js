@@ -124,6 +124,8 @@ const REST_KEYS = [
   KEYS.board,
   // つまずき集（役職別の失敗）。掲示板と同じく実行より前に揃っていればよい。
   KEYS.pitfalls,
+  // 投稿の型。発信の画面でしか使わないので後回しでよい。
+  KEYS.patterns,
   // 発信ログ。事業の画面とホームの「今日やる1つ」で使う。
   // **読み込みが済むまで「まだ出していない」と言い切らないこと**
   // （空配列のまま判定すると、出した日でも「未」と出る）。
@@ -149,6 +151,7 @@ const EMPTY = {
   events: [],
   ventures: [],
   posts: [],
+  patterns: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -867,6 +870,47 @@ export function useStore() {
       return made;
     },
     [put, log]
+  );
+
+  /** 投稿の型（伸びた投稿を次の種にする）。 */
+  const addPattern = useCallback(
+    async (data) => {
+      const pat = await import('./patterns.js');
+      const made = data && data.id ? data : pat.makePattern(data || {});
+      if (!made.text) return null;
+      put(KEYS.patterns, pat.addPattern(stateRef.current.patterns, made));
+      log({ actor: 'user', action: 'patternAdded', target: made.label || made.text.slice(0, 30) });
+      return made;
+    },
+    [put, log]
+  );
+
+  const updatePatternAction = useCallback(
+    async (id, patch) => {
+      const { updatePattern } = await import('./patterns.js');
+      put(KEYS.patterns, updatePattern(stateRef.current.patterns, id, patch));
+    },
+    [put]
+  );
+
+  const removePatternAction = useCallback(
+    async (id) => {
+      const { removePattern } = await import('./patterns.js');
+      put(KEYS.patterns, removePattern(stateRef.current.patterns, id));
+    },
+    [put]
+  );
+
+  /**
+   * 出した投稿に、あとから反応の数字を入れる。
+   * **これが無いと「型 → 出す → 数字を見る → 伸びた型を次の種に」が閉じない。**
+   */
+  const updateSharePost = useCallback(
+    async (id, patch) => {
+      const { updatePost } = await import('./posts.js');
+      put(KEYS.posts, updatePost(stateRef.current.posts, id, patch));
+    },
+    [put]
   );
 
   const removeSharePost = useCallback(
@@ -2284,7 +2328,11 @@ export function useStore() {
     setVentureState,
     decideVenture,
     addSharePost,
+    updateSharePost,
     removeSharePost,
+    addPattern,
+    updatePattern: updatePatternAction,
+    removePattern: removePatternAction,
     // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）
     hydrated: hydratedRef.current,
     updateRules,

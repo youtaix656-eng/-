@@ -121,6 +121,7 @@ AI社員の成果物を「案件」に紐づけ、売上・見込み・時給換
 | `ouro:connections` | Connection[] | 外部サービス接続 |
 | `ouro:ventures` | Venture[] | 事業（実行中は1つだけ・起動時に読む） |
 | `ouro:posts` | Post[] | 発信ログ（出したものと反応・上限500件） |
+| `ouro:patterns` | Pattern[] | 投稿の型（伸びた投稿を次の種にする） |
 | `ouro:secrets` | {providerId: apiKey} | APIキー（端末内のみ・書き出し対象外） |
 | `ouro:settings` | Settings | 表示・既定モデル・自動実行 |
 
@@ -433,6 +434,27 @@ keepAwake() / releaseAwake()      // 走っている間だけ画面を眠らせ�
 - `settings.lastSeenAt` が知らせの基準。**目の前で終わった時は完了時に進める**
   （進めないと、見たはずのものを次に開くたび知らせる）。
 - `resumedRef` で同じ仕事を1セッションに何度も再開しない。
+
+---
+
+### 6-12. 発信の型を回す（`lib/patterns.js` / `lib/batch.js`）
+
+```js
+Pattern = { id, ventureId, text, origin:'seed'|'own', postId, label, archivedAt, ... }
+Post    = { ..., patternId, taskId }   // 結びつきは投稿の側の片方向だけ
+
+rankPatterns(patterns, posts)   // 3本以上 かつ 反応>0 の型にだけ順位
+bestPattern(patterns, posts)
+winnerCandidates(posts, patterns)  // 自分の平均の1.5倍以上のものを提案
+candidateStatus(posts)             // 出せない時は「あと◯本」を返す
+batchRequest({ venture, patterns, count, channel })  // 型は資料として囲う
+splitPosts(text)                   // ④成果物の中だけを1本ずつに
+overLimit(items, channel)          // 長さは知らせるだけ（切らない）
+```
+
+- 型の側に投稿の一覧を持たせない（`post.patternId` から数える）。
+- 束の中どうしでも `similarOpenings` を掛ける（同じ型から作ると入口がそっくりになる）。
+- 「まとめて作る」は依頼の道を通るので、費用の確認・日／月の上限がそのまま効く。
 
 ---
 

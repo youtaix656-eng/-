@@ -20,6 +20,7 @@ export const LOADERS = {
   team: () => import('../components/Team.jsx'),
   ledger: () => import('../components/Ledger.jsx'),
   funnel: () => import('../components/Funnel.jsx'),
+  studio: () => import('../components/Studio.jsx'),
   ventures: () => import('../components/Ventures.jsx'),
   venture: () => import('../components/Ventures.jsx'),
   rules: () => import('../components/Rules.jsx'),

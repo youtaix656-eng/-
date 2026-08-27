@@ -30,6 +30,10 @@ export function makePost(data = {}) {
   return {
     id: data.id || newId('post'),
     ventureId: data.ventureId || null,
+    // どの型から作った投稿か／どの仕事で作ったか。**片方向だけ**
+    // （型や仕事の側に一覧を持たせない。持たせると誰も更新しない列になる）。
+    patternId: data.patternId || null,
+    taskId: data.taskId || null,
     channel: POST_CHANNELS.some((c) => c.id === data.channel) ? data.channel : 'other',
     title: String(data.title || '').slice(0, 100),
     url: String(data.url || '').slice(0, 300),
