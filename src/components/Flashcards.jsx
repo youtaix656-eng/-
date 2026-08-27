@@ -88,6 +88,9 @@ export default function Flashcards({ store, onNavigate }) {
           <button className="btn ghost block" onClick={() => onNavigate && onNavigate('keizetsuindex')}>
             🔖 索引・目次から探す
           </button>
+          <button className="btn ghost block" onClick={() => onNavigate && onNavigate('keizetsutextbook')}>
+            📖 教科書目次（ページ順・出題頻度つき）
+          </button>
         </div>
       )}
 

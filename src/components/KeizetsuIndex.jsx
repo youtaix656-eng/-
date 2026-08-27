@@ -103,6 +103,14 @@ export default function KeizetsuIndex({ onNavigate }) {
         全{entries.length}項目中{filtered.length}項目を表示。ページ番号は
         『新版 経絡経穴概論（第2版）』巻末索引の転記です。
       </p>
+      <button
+        type="button"
+        className="btn ghost block"
+        style={{ marginTop: 8 }}
+        onClick={() => onNavigate && onNavigate('keizetsutextbook')}
+      >
+        📖 教科書目次（ページ順・出題頻度つき）へ
+      </button>
     </div>
   );
 }
