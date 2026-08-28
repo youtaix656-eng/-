@@ -378,6 +378,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">このアプリの機能をすべて検索・確認できます。迷ったらここ。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('faq')}>
+          <span className="ico">❓</span>
+          <span className="title">鍼灸国試アプリ Q&A</span>
+          <span className="desc">使い方・学習の悩み・不具合など、よくある質問をキーワードや文章で検索できます。</span>
+        </button>
+
         {unvisitedFeature && (
           <button
             className="menu-item wide unvisited-feature-card"

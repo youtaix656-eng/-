@@ -57,6 +57,7 @@ const KeiketsuLibrary = lazy(() => import('./components/KeiketsuLibrary.jsx'));
 const KeizetsuIndex = lazy(() => import('./components/KeizetsuIndex.jsx'));
 const KeizetsuTextbook = lazy(() => import('./components/KeizetsuTextbook.jsx'));
 const KeizetsuPageImages = lazy(() => import('./components/KeizetsuPageImages.jsx'));
+const Faq = lazy(() => import('./components/Faq.jsx'));
 
 function ViewLoading() {
   return (
@@ -118,6 +119,7 @@ const VIEW_TITLES = {
   flashcards: 'フラッシュカード',
   mnemonics: '語呂合わせノート',
   features: '全機能一覧',
+  faq: '鍼灸国試アプリ Q&A',
   toc: '目次',
   settings: '設定',
 };
@@ -592,6 +594,8 @@ export default function App() {
         return <MnemonicQuiz store={store} onNavigate={setView} />;
       case 'features':
         return <FeatureIndex onNavigate={setView} />;
+      case 'faq':
+        return <Faq />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':

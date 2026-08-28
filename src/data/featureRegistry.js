@@ -86,6 +86,7 @@ const featureRegistry = [
   { id: 'clouddrive', title: 'Googleドライブ連携', icon: '☁️', category: '設定・その他', view: 'settings', sub: true, desc: '（任意・要OAuthクライアントID自己発行）Googleドライブのアプリ専用領域へバックアップを保存・復元。他機能と異なりGoogleのサーバーと通信する明示的な例外（設定画面内）。「自動同期」をONにすると、アプリを開くたび・進捗が変わるたびに裏で自動同期し、どの端末でも最新の進捗が反映される（差分マージにより片方の端末の進捗を失わない）。', tags: ['クラウド', 'Googleドライブ', '機種変更', '自動同期'] },
   { id: 'p2ptransfer', title: 'WebRTCで直接転送', icon: '📶', category: '設定・その他', view: 'settings', sub: true, desc: 'サーバーを経由せず端末間を直接つなぎ、容量制限なくバックアップを転送。接続の合図（オファー/アンサー）はQR（アプリ内カメラ読み取り対応・BarcodeDetector）またはテキストで手動交換（設定画面内）。TURN未使用のため一部ネットワークでは接続できないことがある。', tags: ['WebRTC', '機種変更', 'P2P'] },
   { id: 'migrationguide', title: '機種変更ガイド', icon: '🧭', category: '設定・その他', view: 'migrationguide', desc: 'QR・共有・Googleドライブ・WebRTC・バックアップファイルの全移行方法を1画面に集約し、今のデータ量とこの端末の対応状況（カメラQR読み取り・共有ボタン・WebRTC・クリップボード）から最適な方法を自動でおすすめ。対応していない方法は自動でおすすめから外れる。ホーム・設定画面から導線あり。', tags: ['機種変更', '移行', 'ガイド', '端末対応状況'] },
+  { id: 'faq', title: '鍼灸国試アプリ Q&A', icon: '❓', category: '設定・その他', view: 'faq', desc: '使い方・学習の悩み・不具合など、よくある質問30件をキーワード1語でも文章まるごとでも検索できる（faq.js＋faqSearch.js、2文字N-gramの一致率で緩く拾う簡易全文検索）。ホームの「全機能一覧」の下から遷移。', tags: ['Q&A', 'よくある質問', 'ヘルプ', 'サポート', '検索'] },
 ];
 
 export default featureRegistry;
