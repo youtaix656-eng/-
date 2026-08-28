@@ -44,6 +44,7 @@ export const KEYS = {
   posts: 'ouro:posts',       // 発信ログ（何をどこへ出したか）
   patterns: 'ouro:patterns', // 投稿の型（伸びた投稿を次の種にする）
   style: 'ouro:style',       // 書き方の見本（自分の文章のお手本。会社の決まりとは別）
+  loops: 'ouro:loops',       // 回し方の周回（OODA／PDCA。1周ずつの記録）
   funnel: 'ouro:funnel', // 収益導線（週ごとの数字）
   board: 'ouro:board',   // 社内掲示板（社員どうしの共通記憶・30日で消える）
   pitfalls: 'ouro:pitfalls', // つまずき集（役職別の失敗・消えない）

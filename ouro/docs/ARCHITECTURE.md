@@ -529,6 +529,27 @@ CHECK_ROLE_IDS = ['tester', 'reviewer']  // テスター優先／最後は必ず
 - 社員の記憶は `lib/notes.js` に分けてある（`memory.js` からも再輸出）。
   起動時に要るのは記憶の読み書きだけで、`buildContext` は実行時にしか要らない。
 
+### 6-16. 回し方（`lib/loop.js`）
+
+```js
+// `lib/cycle.js`（知識の循環）とは別物。名前を混ぜない。
+Loop = { id, ventureId, mode:'ooda'|'pdca', n, stepId, decision, decisionStage, closedAt } // ouro:loops
+Venture = { ..., loopMode:''|'ooda'|'pdca' }   // 空ならアプリが導く
+
+suggestMode({ venture, funnel, deals })  // 数字の週<2 or 売上0 → ooda
+OODA_STEPS / PDCA_STEPS                  // 段ごとの kind: 'human'|'app'|'ai'
+orientResult(funnel)                     // 詰まっている段＋直せること2つ（AIを呼ばない）
+loopRequest(loop, { venture, funnel, plan, unit })  // 依頼文を組み立てる（AIを呼ばない）
+advance(loop)                            // 人が押した時だけ。最後の段の次で閉じる
+```
+
+- **1周でAIを呼ぶのは1〜2段だけ**。観察・情勢判断・意思決定・評価はアプリの計算と人の判断。
+- **自動で進めない**（`setTimeout` を持たないことをテストが見張る）。
+- 依頼文は `Compose` へ `preset.request` で渡す。**費用の承認・日／月の上限はそのまま通る。**
+- **周回は taskIds を持たない**（結びつきは片方向）。同時に回るのは1事業1周（`openLoop`）。
+- `venture.loopMode` は **`makeVenture` の項目として持つ**（持たないと normalize で消える）。
+- 売上0・費用0のとき `unit.black` は false になる。**そのまま「赤字」と書かない。**
+
 ---
 
 ## 7. Knowledge Base 設計

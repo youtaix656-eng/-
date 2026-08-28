@@ -58,6 +58,8 @@ export function makeVenture(data = {}) {
     // 値付けの段（段階的に値上げする）と、売る前の確認。
     pricing: normalizePricing(data.pricing),
     sellChecks: normalizeSellChecks(data.sellChecks),
+    // 回し方（OODA／PDCA）。空ならアプリが数字から導く（`loop.suggestMode`）。
+    loopMode: data.loopMode === 'ooda' || data.loopMode === 'pdca' ? data.loopMode : '',
     notes: String(data.notes || '').slice(0, 1000),
     createdAt: data.createdAt || now,
     updatedAt: now,

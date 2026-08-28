@@ -11,6 +11,7 @@
 //  ⑧ 手離れを見る（最後に手を入れてから何日／そのあいだに入ったお金）
 //  ⑨ 続くかどうかの見立て（真似される・場所に止められる。**採点しない**）
 //  ⑩ 有料記事として売る（段階的に値上げする・売る前の確認）
+//  ⑪ 回し方（OODA／PDCA）を1周ずつ進め、AI社員を動かす
 //
 // **AIは呼ばない。**（呼ぶのは「分析してもらう」「案を出してもらう」を押した時だけ）
 
@@ -35,6 +36,10 @@ import { unitEconomics, unitLine, costAdvice } from '../lib/unit.js';
 import { passiveState, passiveLine, finishNudge, REST_DAYS } from '../lib/passive.js';
 import { RISK_QUESTIONS, RISK_ANSWERS, riskReview, riskLine } from '../lib/risk.js';
 import { pricePlan, priceLine, halfOf, SELL_CHECKS, sellReview, sellLine, normalizePricing, LETTER_ROLE_ID } from '../lib/paid.js';
+import {
+  LOOP_MODES, suggestMode, openLoop, loopsOf, stepOf, loopLine, loopStages,
+  orientResult, loopRequest, fixById, stepsOf,
+} from '../lib/loop.js';
 
 export default function Ventures({ store, go, toast }) {
   const list = useMemo(() => sortVentures(store.ventures || []), [store.ventures]);
@@ -184,6 +189,7 @@ export function VentureDetail({ store, ventureId, go, toast }) {
   const passive = venture
     ? passiveState({ venture, tasks: store.tasks, posts: store.posts, deals: store.deals })
     : null;
+  const loop = venture ? openLoop(store.loops || [], venture.id) : null;
 
   if (!venture) return <Empty>事業が見つかりません。</Empty>;
 
@@ -206,6 +212,16 @@ export function VentureDetail({ store, ventureId, go, toast }) {
 
       <StateCard venture={venture} store={store} toast={toast} />
       {venture.state === 'running' && today && <TodayCard plan={today} go={go} venture={venture} />}
+      <LoopCard
+        venture={venture}
+        loop={loop}
+        store={store}
+        funnel={funnel}
+        plan={plan}
+        unit={unit}
+        go={go}
+        toast={toast}
+      />
       <VerdictCard venture={venture} status={status} store={store} funnel={funnel} toast={toast} />
       <RiskCard venture={venture} store={store} toast={toast} />
       <TargetCard venture={venture} plan={plan} store={store} go={go} funnel={funnel} toast={toast} />
@@ -400,6 +416,198 @@ function VerdictCard({ venture, status, store, funnel, toast }) {
       </p>
     </Card>
   );
+}
+
+/**
+ * 回し方（OODA／PDCA）を1周ずつ進める。
+ *
+ * **2つを混ぜない。** 数字がまだ無いうちは OODA（週1周）、貯まったら PDCA（月1周）。
+ * どちらを回すかはアプリが導き、人が上書きもできる。
+ *
+ * **1周のうちAIを呼ぶのは1〜2段だけ**（観察・情勢判断・意思決定・評価はAIを呼ばない）。
+ * **勝手に次へ進めない**——段を進めるのは人が押した時だけ。
+ */
+function LoopCard({ venture, loop, store, funnel, plan, unit, go, toast }) {
+  const guess = suggestMode({ venture, funnel, deals: store.deals || [] });
+  const mode = loop ? loop.mode : guess.mode;
+  const m = LOOP_MODES[mode];
+  const past = loopsOf(store.loops || [], venture.id).filter((l) => l.closedAt);
+  const step = stepOf(loop);
+  const orient = orientResult(funnel);
+
+  // 読み込みが済むまで「まだ回していない」と言い切らない（項目138）
+  if (!store.hydrated && !loop) {
+    return (
+      <Card glyph="◌" title="回し方">
+        <p className="muted" style={{ marginTop: -6, marginBottom: 0 }}>読み込んでいます…</p>
+      </Card>
+    );
+  }
+
+  const start = async () => {
+    await store.startLoop(venture.id, mode);
+    toast(`${m.name} を始めました`);
+  };
+  const next = async (patch) => {
+    const r = await store.advanceLoop(loop.id, patch);
+    if (r && r.closedAt) toast('1周まわりました');
+  };
+  const ask = () => {
+    const req = loopRequest(loop, { venture, funnel, plan, unit });
+    if (!req) return;
+    // 依頼文はアプリの数字から組み立て済み。人は中身を見て押すだけ。
+    go('compose', {
+      ventureId: venture.id,
+      request: req.request,
+      workflowId: req.workflowId || undefined,
+    });
+  };
+
+  return (
+    <Card
+      glyph="◌"
+      title={`回し方（${m.name}・${m.sub}）`}
+      action={loop ? <span className="chip">{loop.n}周目</span> : null}
+    >
+      <p className="muted" style={{ marginTop: -6 }}>{loopLine(loop, funnel, past.length)}</p>
+
+      {!loop && (
+        <>
+          <p className="muted" style={{ fontSize: 12.5 }}>{guess.why}{guess.forced ? '' : `（${m.why}）`}</p>
+          <button type="button" className="btn primary block" onClick={start}>
+            {m.name} を1周まわす
+          </button>
+          <div className="btn-row">
+            {Object.values(LOOP_MODES).map((x) => (
+              <Action
+                key={x.id}
+                className={`btn small${mode === x.id ? ' primary' : ''}`}
+                onClick={() => { store.updateVenture(venture.id, { loopMode: x.id }); toast(`${x.name} にしました`); }}
+              >
+                {x.name}（{x.sub}）
+              </Action>
+            ))}
+          </div>
+        </>
+      )}
+
+      {loop && (
+        <>
+          {/* 4つの段 */}
+          <div className="chips" style={{ marginBottom: 10 }}>
+            {loopStages(loop).map((st) => (
+              <span key={st.id} className={`chip ${st.state === 'now' ? 'on' : ''}`}>
+                {st.state === 'done' ? '✓ ' : ''}{st.key} {st.name}
+              </span>
+            ))}
+          </div>
+
+          {step && (
+            <>
+              <p style={{ margin: '0 0 4px', fontSize: 14 }}>{step.what}</p>
+              <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>{step.note}</p>
+            </>
+          )}
+
+          {/* 観察・評価：数字を入れに行く（AIを呼ばない） */}
+          {step && step.go === 'funnel' && (
+            <button type="button" className="btn block" onClick={() => go('funnel')}>
+              ◎ 収益導線に数字を入れる
+            </button>
+          )}
+
+          {/* 情勢判断：アプリが判定する（AIを呼ばない） */}
+          {step && step.id === 'orient' && (
+            <div className="card tight">
+              {orient.ready ? (
+                <>
+                  <p style={{ margin: 0, fontSize: 14 }}>
+                    詰まっているのは <strong>「{orient.label}」</strong>
+                  </p>
+                  <p className="muted" style={{ margin: '2px 0 0', fontSize: 12.5 }}>{orient.reason}</p>
+                </>
+              ) : (
+                <p className="muted" style={{ margin: 0, fontSize: 13 }}>{orient.reason}</p>
+              )}
+            </div>
+          )}
+
+          {/* 意思決定：人が1つだけ選ぶ（AIを呼ばない） */}
+          {step && step.id === 'decide' && (
+            <div style={{ marginTop: 8 }}>
+              {orient.options.map((f) => (
+                <div key={f.id} className="card tight">
+                  <button
+                    type="button"
+                    className={`chip ${loop.decision === f.id ? 'on' : ''}`}
+                    onClick={() => store.decideLoop(loop.id, f.id, orient.stageId)}
+                  >
+                    {f.label}
+                  </button>
+                  <p className="muted" style={{ fontSize: 11.5, margin: '6px 0 0' }}>{f.why}</p>
+                </div>
+              ))}
+              <p className="muted" style={{ fontSize: 11.5 }}>
+                選ぶのは1つだけです。2つ直すと、どちらが効いたか分からなくなります。
+              </p>
+            </div>
+          )}
+
+          {/* 行動・計画・改善：ここだけAI社員を動かす */}
+          {step && step.kind === 'ai' && (
+            <>
+              <button
+                type="button"
+                className="btn primary block"
+                onClick={ask}
+                disabled={step.id === 'act' && loop.mode === 'ooda' && !loop.decision}
+              >
+                ✎ AI社員に依頼する
+              </button>
+              {step.id === 'act' && loop.mode === 'ooda' && !loop.decision && (
+                <p className="muted" style={{ fontSize: 12.5 }}>
+                  先に「意思決定」で直す所を1つ選んでください。
+                </p>
+              )}
+              {step.id === 'act' && loop.mode === 'ooda' && loop.decision && (
+                <p className="muted" style={{ fontSize: 12.5 }}>
+                  依頼文は、いまの数字と「{(fixById(loop.decision) || {}).label || loop.decision}」から自動で組み立てます。
+                  費用の確認と日・月の上限は、今までどおり通ります。
+                </p>
+              )}
+            </>
+          )}
+
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            <Action className="btn" onClick={() => next()}>
+              {stepIndexLabel(loop)}
+            </Action>
+            <Action className="btn ghost" onClick={() => { store.closeLoop(loop.id); toast('この周を閉じました'); }}>
+              この周を閉じる
+            </Action>
+          </div>
+        </>
+      )}
+
+      {past.length > 0 && (
+        <p className="muted" style={{ fontSize: 11.5 }}>
+          これまでに {past.length} 周。{past.length >= 2 ? '同じ所で止まっていないか、たまに見返してください。' : ''}
+        </p>
+      )}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        1周のうちAIを呼ぶのは{mode === 'ooda' ? '「行動」の1回' : '「計画」と「改善」の2回'}だけです。
+        観察・判断・評価はアプリの計算と、あなたの判断でやります（費用はかかりません）。
+      </p>
+    </Card>
+  );
+}
+
+/** 「次は〇〇へ」の文言。最後の段では「1周を終える」。 */
+function stepIndexLabel(loop) {
+  const steps = stepsOf(loop.mode);
+  const i = steps.findIndex((s) => s.id === loop.stepId);
+  if (i < 0 || i >= steps.length - 1) return '1周を終える';
+  return `次は「${steps[i + 1].name}」へ`;
 }
 
 /**

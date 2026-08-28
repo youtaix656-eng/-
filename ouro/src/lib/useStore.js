@@ -132,6 +132,9 @@ const REST_KEYS = [
   KEYS.posts,
   // 書き方の見本。仕事の実行時に書く役だけが読むので、実行より前に揃っていればよい。
   KEYS.style,
+  // 回し方の周回。事業の画面でしか使わないので後回しでよい。
+  // **読み込みが済むまで「まだ回していない」と言い切らないこと**（項目138）。
+  KEYS.loops,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -155,6 +158,7 @@ const EMPTY = {
   posts: [],
   patterns: [],
   style: [],
+  loops: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -900,6 +904,64 @@ export function useStore() {
     async (id) => {
       const { removePattern } = await import('./patterns.js');
       put(KEYS.patterns, removePattern(stateRef.current.patterns, id));
+    },
+    [put]
+  );
+
+  // ── 回し方の周回（OODA／PDCA）──
+  // **勝手に進めない。** 段を進めるのは人が押した時だけ
+  //（自動で進むと、人が見ていないところで費用の出る実行が始まる）。
+
+  const startLoop = useCallback(
+    async (ventureId, mode) => {
+      const lp = await import('./loop.js');
+      const cur = lp.openLoop(stateRef.current.loops, ventureId);
+      if (cur) return cur; // すでに回っている周がある（2つ同時に回さない）
+      const made = lp.makeLoop({ ventureId, mode, n: lp.nextN(stateRef.current.loops, ventureId) });
+      put(KEYS.loops, [made, ...stateRef.current.loops]);
+      log({ actor: 'user', action: 'loopStarted', target: `${made.mode} ${made.n}周目` });
+      return made;
+    },
+    [put, log]
+  );
+
+  const advanceLoop = useCallback(
+    async (loopId, patch = {}) => {
+      const { advance } = await import('./loop.js');
+      const cur = stateRef.current.loops.find((l) => l.id === loopId);
+      if (!cur) return null;
+      const next = advance({ ...cur, ...patch });
+      put(KEYS.loops, stateRef.current.loops.map((l) => (l.id === loopId ? next : l)));
+      return next;
+    },
+    [put]
+  );
+
+  /** 意思決定（直す所を1つ選ぶ）。AIは呼ばない。 */
+  const decideLoop = useCallback(
+    async (loopId, decision, stageId) => {
+      const cur = stateRef.current.loops.find((l) => l.id === loopId);
+      if (!cur) return null;
+      const next = {
+        ...cur,
+        decision: String(decision || '').slice(0, 120),
+        decisionStage: String(stageId || ''),
+        updatedAt: Date.now(),
+      };
+      put(KEYS.loops, stateRef.current.loops.map((l) => (l.id === loopId ? next : l)));
+      log({ actor: 'user', action: 'loopDecided', target: next.decision });
+      return next;
+    },
+    [put, log]
+  );
+
+  const closeLoop = useCallback(
+    async (loopId) => {
+      const now = Date.now();
+      put(
+        KEYS.loops,
+        stateRef.current.loops.map((l) => (l.id === loopId ? { ...l, closedAt: now, updatedAt: now } : l))
+      );
     },
     [put]
   );
@@ -2387,6 +2449,10 @@ export function useStore() {
     updateSharePost,
     removeSharePost,
     addPattern,
+    startLoop,
+    advanceLoop,
+    decideLoop,
+    closeLoop,
     addStyleSample,
     updateStyleSample,
     removeStyleSample,
