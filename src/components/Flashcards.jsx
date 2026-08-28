@@ -91,13 +91,16 @@ export default function Flashcards({ store, onNavigate }) {
           <button className="btn ghost block" onClick={() => onNavigate && onNavigate('keizetsutextbook')}>
             📖 教科書目次（ページ順・出題頻度つき）
           </button>
+          <button className="btn ghost block" onClick={() => onNavigate && onNavigate('keizetsupageimages')}>
+            📷 教科書ページ写真（端末内限定）
+          </button>
         </div>
       )}
 
       <div className="field" style={{ marginBottom: 14 }}>
         <label>科目</label>
         <select value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value={KEIKETSU_MODE}>経穴カード（経絡・部位・主治／361穴へ拡充予定）</option>
+          <option value={KEIKETSU_MODE}>経穴カード（経絡・部位・主治／361穴完全収録）</option>
           {CHOICE_QUIZ_SUBJECTS.map((s) => (
             <option key={s.name} value={s.name}>{s.label}</option>
           ))}
@@ -184,7 +187,7 @@ export default function Flashcards({ store, onNavigate }) {
       {isKeiketsu && (
         <>
           <p className="inline-note" style={{ marginTop: 10 }}>
-            ※ 現在はサンプル5枚。今後361穴へ拡充していきます。
+            ※ 十四経脈361穴を完全収録済み（{KEIKETSU_CARDS.length}枚）。
           </p>
           {/* 早見表（図や表も追加） */}
           <div className="section-label">📋 {YOUKETSU_TABLE.title}</div>

@@ -596,7 +596,7 @@ AIが自分の文体を学び直して、ますます「AIっぽい文」に寄�
    `weakClusters.js`（弱点クラスタ）でも多角的に支援済み（下記「機能一覧」参照）。
 5. **画像問題への対応** — ✅基盤は実装済み。`question.image`（外部URL）と
    `question.figure`（`src/data/figures.jsx`のオフラインSVG図、キーで参照）の2方式。
-   図問題データは`src/data/zumondaiQuestions.js`（現状サンプルのみ、361穴同様に拡充余地あり）。
+   図問題データは`src/data/zumondaiQuestions.js`（現状サンプルのみ、拡充余地あり）。
 6. **医療概論・衛生学公衆衛生学の弱点分析→提案（2026-08-20追加・ユーザー指定）** —
    この2科目は今後、`iryouQuestions.js`／`eiseiQuestions.js`のジャンル別収録数を
    `CoverageMap.jsx`と同じロジックで定期的に分析し、手薄なジャンルを特定したら
@@ -745,7 +745,7 @@ AIが自分の文体を学び直して、ますます「AIっぽい文」に寄�
 | 知識グラフ・連想 | `KnowledgeGraph.jsx`＋`AssocQuiz.jsx`／`AssocTrainer.jsx`／`RelationAuthor.jsx` | 経路クイズ・束グルーピング・対比識別ドリル・関係の手動オーサリング |
 | 連結学習 | `ConnectedLearning.jsx`＋`lib/connectlab.js` | 今日の1問・キーワード自動提案・表記ゆれ統合・ヒートマップ |
 | 語呂合わせ | `kwMeta`（保存）／`MnemonicNotebook.jsx`（一覧・編集） | 登録・一覧・関連問題数表示・**科目でしぼる検索**（`examScope.js`の科目順に1〜14で番号付き）・**ふりがな表示**（`reading`、手入力または`lib/yomi.js`の`TERM_READINGS`のみ。自動生成はしない＝誤読防止）。組み込みの語呂合わせは`src/data/defaultMnemonics.js`＋`DEFAULT_MNEMONICS_VERSION`（他の科目データと同じバッチ増分方式、`useStore.js`で初回のみ`kwMeta`へ追加。削除しても再追加されない） |
-| フラッシュカード | `Flashcards.jsx` | 経穴カード＋全科目対応（問題から自動生成） |
+| フラッシュカード | `Flashcards.jsx` | 経穴カード（`src/data/keiketsuCards.js`、361穴完全収録＝2026-08-28完了）＋全科目対応（問題から自動生成） |
 | 画像・図問題 | `figures.jsx`（オフラインSVG）／`question.image` | `zumondaiQuestions.js`にサンプルあり |
 | 網羅マップ | `CoverageMap.jsx` | 出題基準×収録数の可視化 |
 | エラーログ | `lib/errorLog.js`／`ErrorLogCard.jsx`（Settings内） | 端末内エラーの閲覧・消去 |

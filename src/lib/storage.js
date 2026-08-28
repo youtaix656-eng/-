@@ -40,6 +40,7 @@ export const KEYS = {
   numberOverrides: 'shinkyu:numberOverrides', // 数値ファクトの上書き（毎年変わる数値の一括更新）
   bookmarks: 'shinkyu:bookmarks', // ブックマーク（後で見直す問題・questionId→保存時刻）
   keiketsuLibrary: 'shinkyu:keiketsuLibrary', // 経絡経穴の教科書材料（貼り付けた原文の置き場・検索用）
+  keizetsuPageImages: 'shinkyu:keizetsuPageImages', // 経絡経穴の教科書ページ写真（端末内限定・自分で追加。バックアップ対象外）
   voiceCloneSecret: 'shinkyu:voiceCloneSecret', // ボイスクローン用の外部APIキー（BYOK・端末内のみ・バックアップ対象外）
   migrated: 'shinkyu:migrated',
   syncMeta: 'shinkyu:syncMeta', // クラウド自動同期用：進捗（srs/history/memos/links/examResults/settings）の最終更新時刻
@@ -223,6 +224,16 @@ export const saveExamResults = (r) => write(KEYS.examResults, r);
 // （画面から直接、経穴の医療的事実を編集させる作りにはしない）。
 export const loadKeiketsuLibrary = () => read(KEYS.keiketsuLibrary, []);
 export const saveKeiketsuLibrary = (v) => write(KEYS.keiketsuLibrary, v);
+
+// ---- 経絡経穴の教科書ページ写真（端末内限定） ----
+// keizetsuPageImages = [{ id, pageNumber, label, blob, addedAt }]
+// 教科書のページをスキャン画像としてこのアプリ（公開リポジトリ・公開サイト）に
+// 同梱すると著作権上の問題になるため、この画像は「ユーザーが自分の端末にだけ」保存する。
+// exportAll/importAll（バックアップ・QR・クラウド自動同期）には意図的に含めない
+// （画像はサイズが大きくQR/クラウド同期に不向きなことに加え、voiceCloneSecretと同様、
+// 端末をまたいで勝手に運ばれてほしくないデータのため）。
+export const loadKeizetsuPageImages = () => read(KEYS.keizetsuPageImages, []);
+export const saveKeizetsuPageImages = (v) => write(KEYS.keizetsuPageImages, v);
 
 // ---- ボイスクローン用の外部APIキー（BYOK） ----
 // voiceCloneSecret = { apiKey }
