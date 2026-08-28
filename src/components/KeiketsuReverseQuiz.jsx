@@ -3,10 +3,13 @@ import { KEIKETSU_CARDS } from '../data/keiketsuCards.js';
 import { buildChoices } from '../lib/acupointTap.js';
 
 const ALL_NAMES = KEIKETSU_CARDS.map((c) => c.name);
+// shuji（主治）がある経穴だけを出題対象にする。督脈28穴など、教科書に主治の記載が
+// 無い経穴（shuji: null）は出題文が空になってしまうため対象から除外する。
+const REVERSE_POOL = KEIKETSU_CARDS.filter((c) => c.shuji);
 
 function pickRandomCard(excludeId) {
-  const pool = KEIKETSU_CARDS.filter((c) => c.id !== excludeId);
-  const src = pool.length > 0 ? pool : KEIKETSU_CARDS;
+  const pool = REVERSE_POOL.filter((c) => c.id !== excludeId);
+  const src = pool.length > 0 ? pool : REVERSE_POOL;
   return src[Math.floor(Math.random() * src.length)];
 }
 
