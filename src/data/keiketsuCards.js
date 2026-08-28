@@ -1,6 +1,6 @@
 // 経穴フラッシュカード（#7）。
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
-// 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴の完全収録＝57枚）。
+// 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴の完全収録＝68枚）。
 //
 // sourceIds: 出典ID（未設定=[]）。将来361穴へ拡充する時、内容を裏付けた出典
 // （例: lib/keiketsuLibrary.js に置いた教科書原文のページID、または書名）をここに残す。
@@ -14,6 +14,7 @@
 //
 // 督脈28穴の出典：新版 経絡経穴概論（第2版）p.26-39。
 // 任脈24穴の出典：同書 p.42-51。
+// 手の太陰肺経11穴の出典：同書 p.52-59。
 
 export const KEIKETSU_CARDS = [
   {
@@ -342,6 +343,66 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-cv24', name: '承漿', yomi: 'しょうしょう', meridian: '任脈', ryaku: 'CV24', type: null,
     location: '顔面部、オトガイ唇溝中央の陥凹部。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 手の太陰肺経（LU）11穴（p.52-59・完全収録） ----
+  {
+    id: 'kc-lu1', name: '中府', yomi: 'ちゅうふ', meridian: '手の太陰肺経', ryaku: 'LU1', type: '肺の募穴',
+    location: '前胸部、第1肋間と同じ高さ、鎖骨下窩の外側、前正中線の外方6寸。雲門の下方1寸、鎖骨下窩で大胸筋の張ったところよりやや上方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu2', name: '雲門', yomi: 'うんもん', meridian: '手の太陰肺経', ryaku: 'LU2', type: null,
+    location: '前胸部、鎖骨下窩の陥凹部、烏口突起の内方、前正中線の外方6寸。上肢を前に挙げて、鎖骨中央のやや外方下方にできる陥凹部に取る（腋窩動脈が深部を通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu3', name: '天府', yomi: 'てんぷ', meridian: '手の太陰肺経', ryaku: 'LU3', type: null,
+    location: '上腕前外側、上腕二頭筋外側縁、腋窩横紋前端の下方3寸（腋窩横紋前端から尺沢までを9寸として3等分した上方1/3）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu4', name: '侠白', yomi: 'きょうはく', meridian: '手の太陰肺経', ryaku: 'LU4', type: null,
+    location: '上腕前外側、上腕二頭筋外側縁、腋窩横紋前端の下方4寸（天府の下方1寸）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu5', name: '尺沢', yomi: 'しゃくたく', meridian: '手の太陰肺経', ryaku: 'LU5', type: '肺経の合水穴',
+    location: '肘前部、肘窩横紋上、上腕二頭筋腱外方の陥凹部。肘を軽く曲げて上腕二頭筋腱を緊張させ、その外側陥凹部に取る（尺沢から太淵までの長さを1尺2寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu6', name: '孔最', yomi: 'こうさい', meridian: '手の太陰肺経', ryaku: 'LU6', type: '肺経の郄穴',
+    location: '前腕前外側、尺沢と太淵を結ぶ線上、手関節掌側横紋の上方7寸（尺沢と太淵の中点の上方1寸）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    // 教科書の印字は「列欠」（欠）だが、アプリ内では既存データ・過去問収録が
+    // すべて「列缺」（缺）で統一されているため、表記ゆれを防ぐためこちらに合わせる
+    // （同じ経穴の異体字であり、事実としての違いはない）。
+    id: 'kc-lu7', name: '列缺', yomi: 'れっけつ', meridian: '手の太陰肺経', ryaku: 'LU7', type: '肺経の絡穴・四総穴・八脈交会穴',
+    location: '前腕橈側、長母指外転筋腱と短母指伸筋腱の間、手関節掌側横紋の上方1寸5分。太淵の上方1寸5分で、母指を外転・伸展させてできる腱の間の溝に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu8', name: '経渠', yomi: 'けいきょ', meridian: '手の太陰肺経', ryaku: 'LU8', type: '肺経の経金穴',
+    location: '前腕前外側、橈骨下端の橈側で最も突出した部位と橈骨動脈の間、手関節掌側横紋の上方1寸（太淵の上方1寸）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu9', name: '太淵', yomi: 'たいえん', meridian: '手の太陰肺経', ryaku: 'LU9', type: '肺の原穴・肺経の兪土穴・八会穴の脈会',
+    location: '手関節前外側、橈骨茎状突起と舟状骨の間、長母指外転筋腱の尺側陥凹部。手関節前面横紋上で橈骨動脈拍動部に取る（太淵・大陵・神門は手関節掌側横紋上に並ぶ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu10', name: '魚際', yomi: 'ぎょさい', meridian: '手の太陰肺経', ryaku: 'LU10', type: '肺経の榮火穴',
+    location: '手掌、第1中手骨中点の橈側、赤白肉際。第1中手骨中点の外側、手掌と手背の境目に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lu11', name: '少商', yomi: 'しょうしょう', meridian: '手の太陰肺経', ryaku: 'LU11', type: '肺経の井木穴',
+    location: '母指、末節骨橈側、爪甲角の近位外方1分。母指爪根部近位縁に引いた線と外側縁に引いた線との交点に取る。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];

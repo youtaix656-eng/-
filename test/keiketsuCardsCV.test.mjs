@@ -54,8 +54,9 @@ test('muPointLocation: 天枢（大腸募）は任脈24穴に含まれないた�
   assert.equal(selfCount, 3);
 });
 
-test('KEIKETSU_CARDS全体でid・nameが重複しない（既存5枚＋督脈28穴＋任脈24穴）', () => {
-  assert.equal(KEIKETSU_CARDS.length, 57);
+test('KEIKETSU_CARDS全体でid・nameが重複しない', () => {
+  // 総数は経脈を追加するたびに増えるため、ここでは重複の無さだけを確認する
+  // （正確な総数はkeiketsuCardsLU.test.mjs等、最新バッチのテストで確認する）。
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.id)).size, KEIKETSU_CARDS.length);
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.name)).size, KEIKETSU_CARDS.length);
 });
