@@ -1,6 +1,6 @@
 // 経穴フラッシュカード（#7）。
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
-// 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴の完全収録＝33枚）。
+// 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴の完全収録＝57枚）。
 //
 // sourceIds: 出典ID（未設定=[]）。将来361穴へ拡充する時、内容を裏付けた出典
 // （例: lib/keiketsuLibrary.js に置いた教科書原文のページID、または書名）をここに残す。
@@ -8,11 +8,12 @@
 //
 // shuji（主治）について：『新版 経絡経穴概論（第2版）』は十四経脈上の361穴について
 // 部位・取り方・解剖（筋枝/皮枝/血管）のみを記載し、主治（症状）は記載しない
-// （主治が明記されるのは奇穴・新穴のみ）。そのため督脈28穴には shuji を null にし、
+// （主治が明記されるのは奇穴・新穴のみ）。そのため督脈・任脈の穴には shuji を null にし、
 // 本書に無い情報を捏造しない（既存5枚の shuji は本書以外の出典に基づく可能性が高い
 // ため据え置くが、督脈以降の新規追加分では本書の記載範囲を厳密に守る）。
 //
 // 督脈28穴の出典：新版 経絡経穴概論（第2版）p.26-39。
+// 任脈24穴の出典：同書 p.42-51。
 
 export const KEIKETSU_CARDS = [
   {
@@ -219,6 +220,128 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-gv28', name: '齦交', yomi: 'ぎんこう', meridian: '督脈', ryaku: 'GV28', type: null,
     location: '顔面部、上歯齦、上唇小帯の接合部。上唇を上げ、上唇小帯と歯齦との移行部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 任脈（CV）24穴（p.42-51・完全収録） ----
+  {
+    id: 'kc-cv1', name: '会陰', yomi: 'えいん', meridian: '任脈', ryaku: 'CV1', type: null,
+    location: '会陰部。男性は陰嚢根部と肛門を結ぶ線の中点、女性は後陰唇交連と肛門を結ぶ線の中点。側臥位または膝胸位で取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv2', name: '曲骨', yomi: 'きょくこつ', meridian: '任脈', ryaku: 'CV2', type: null,
+    location: '下腹部、前正中線上、恥骨結合上縁の中点（神闕から曲骨までの長さを5寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv3', name: '中極', yomi: 'ちゅうきょく', meridian: '任脈', ryaku: 'CV3', type: '膀胱の募穴',
+    location: '下腹部、前正中線上、臍中央の下方4寸。神闕の下方4寸、曲骨の上方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv4', name: '関元', yomi: 'かんげん', meridian: '任脈', ryaku: 'CV4', type: '小腸の募穴',
+    location: '下腹部、前正中線上、臍中央の下方3寸。神闕と曲骨とを結ぶ線の中点の下方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv5', name: '石門', yomi: 'せきもん', meridian: '任脈', ryaku: 'CV5', type: '三焦の募穴',
+    location: '下腹部、前正中線上、臍中央の下方2寸。神闕と曲骨とを結ぶ線の中点の上方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv6', name: '気海', yomi: 'きかい', meridian: '任脈', ryaku: 'CV6', type: null,
+    location: '下腹部、前正中線上、臍中央の下方1寸5分。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv7', name: '陰交', yomi: 'いんこう', meridian: '任脈', ryaku: 'CV7', type: null,
+    location: '下腹部、前正中線上、臍中央の下方1寸。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv8', name: '神闕', yomi: 'しんけつ', meridian: '任脈', ryaku: 'CV8', type: null,
+    location: '上腹部、臍の中央（中庭から神闕までの長さを8寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv9', name: '水分', yomi: 'すいぶん', meridian: '任脈', ryaku: 'CV9', type: null,
+    location: '上腹部、前正中線上、臍中央の上方1寸。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv10', name: '下脘', yomi: 'げかん', meridian: '任脈', ryaku: 'CV10', type: null,
+    location: '上腹部、前正中線上、臍中央の上方2寸。中庭と神闕とを結ぶ線を4等分し、神闕から4分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv11', name: '建里', yomi: 'けんり', meridian: '任脈', ryaku: 'CV11', type: null,
+    location: '上腹部、前正中線上、臍中央の上方3寸。中脘の下方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv12', name: '中脘', yomi: 'ちゅうかん', meridian: '任脈', ryaku: 'CV12', type: '胃の募穴・八会穴の腑会',
+    location: '上腹部、前正中線上、臍中央の上方4寸。中庭と神闕とを結ぶ線の中点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv13', name: '上脘', yomi: 'じょうかん', meridian: '任脈', ryaku: 'CV13', type: null,
+    location: '上腹部、前正中線上、臍中央の上方5寸。中脘の上方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv14', name: '巨闕', yomi: 'こけつ', meridian: '任脈', ryaku: 'CV14', type: '心の募穴',
+    location: '上腹部、前正中線上、臍中央の上方6寸。中庭と神闕とを結ぶ線を4等分し、中庭から4分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv15', name: '鳩尾', yomi: 'きゅうび', meridian: '任脈', ryaku: 'CV15', type: '任脈の絡穴',
+    location: '上腹部、前正中線上、胸骨体下端の下方1寸（中庭の下方1寸）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv16', name: '中庭', yomi: 'ちゅうてい', meridian: '任脈', ryaku: 'CV16', type: null,
+    location: '前胸部、前正中線上、胸骨体下端の中点。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv17', name: '膻中', yomi: 'だんちゅう', meridian: '任脈', ryaku: 'CV17', type: '心包の募穴・八会穴の気会',
+    location: '前胸部、前正中線上、第4肋間と同じ高さ。胸骨角（第2肋骨の高さ）を基準に取る。胸骨裂孔がある場合があるため刺鍼に注意。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv18', name: '玉堂', yomi: 'ぎょくどう', meridian: '任脈', ryaku: 'CV18', type: null,
+    location: '前胸部、前正中線上、第3肋間と同じ高さ。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv19', name: '紫宮', yomi: 'しきゅう', meridian: '任脈', ryaku: 'CV19', type: null,
+    location: '前胸部、前正中線上、第2肋間と同じ高さ（胸骨角の下方）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv20', name: '華蓋', yomi: 'かがい', meridian: '任脈', ryaku: 'CV20', type: null,
+    location: '前胸部、前正中線上、第1肋間と同じ高さ（胸骨角と胸鎖関節の高さのほぼ中央）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv21', name: '璇璣', yomi: 'せんき', meridian: '任脈', ryaku: 'CV21', type: null,
+    location: '前胸部、前正中線上、頸窩（胸骨上窩）の下方1寸（天突の下方1寸）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv22', name: '天突', yomi: 'てんとつ', meridian: '任脈', ryaku: 'CV22', type: null,
+    location: '前頸部、前正中線上、頸窩（胸骨上窩）の中央。左右の鎖骨内端の間で最もくぼんだところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv23', name: '廉泉', yomi: 'れんせん', meridian: '任脈', ryaku: 'CV23', type: null,
+    location: '前頸部、前正中線上、喉頭隆起上方、舌骨の上方陥凹部。頸部を軽く後屈して舌骨を触れ、その上際に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-cv24', name: '承漿', yomi: 'しょうしょう', meridian: '任脈', ryaku: 'CV24', type: null,
+    location: '顔面部、オトガイ唇溝中央の陥凹部。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];
