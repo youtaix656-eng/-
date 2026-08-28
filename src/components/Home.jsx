@@ -403,6 +403,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           </span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('cognitivestyle')}>
+          <span className="ico">🧭</span>
+          <span className="title">あなたの学習スタイル</span>
+          <span className="desc">
+            認知特性チェックの結果から、どの機能をどう使うと定着しやすいかをまとめました。
+          </span>
+        </button>
+
         <button className="menu-item wide featured" onClick={() => onNavigate('session')}>
           <span className="ico">📚</span>
           <span className="title">学習（10・60・300・900）</span>

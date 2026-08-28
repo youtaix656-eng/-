@@ -59,6 +59,7 @@ const KeizetsuIndex = lazy(() => import('./components/KeizetsuIndex.jsx'));
 const KeizetsuTextbook = lazy(() => import('./components/KeizetsuTextbook.jsx'));
 const KeizetsuPageImages = lazy(() => import('./components/KeizetsuPageImages.jsx'));
 const Faq = lazy(() => import('./components/Faq.jsx'));
+const CognitiveStyleGuide = lazy(() => import('./components/CognitiveStyleGuide.jsx'));
 
 function ViewLoading() {
   return (
@@ -121,6 +122,7 @@ const VIEW_TITLES = {
   mnemonics: '語呂合わせノート',
   features: '全機能一覧',
   faq: '鍼灸国試アプリ Q&A',
+  cognitivestyle: 'あなたの学習スタイル',
   toc: '目次',
   settings: '設定',
 };
@@ -597,6 +599,8 @@ export default function App() {
         return <FeatureIndex onNavigate={setView} />;
       case 'faq':
         return <Faq />;
+      case 'cognitivestyle':
+        return <CognitiveStyleGuide onNavigate={setView} />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':
