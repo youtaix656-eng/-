@@ -44,6 +44,7 @@ export const KEYS = {
   voiceCloneSecret: 'shinkyu:voiceCloneSecret', // ボイスクローン用の外部APIキー（BYOK・端末内のみ・バックアップ対象外）
   migrated: 'shinkyu:migrated',
   syncMeta: 'shinkyu:syncMeta', // クラウド自動同期用：進捗（srs/history/memos/links/examResults/settings）の最終更新時刻
+  visitedViews: 'shinkyu:visitedViews', // 一度でも開いたことのある画面（view id）の集合。「まだ使ったことのない機能」の判定用（activityは直近ログで古い訪問が消えるため別管理）
 };
 
 const useIdb = isIdbSupported();
@@ -255,6 +256,11 @@ export const saveActivity = (a) => write(KEYS.activity, a);
 export const loadNumberOverrides = () => read(KEYS.numberOverrides, {});
 export const saveNumberOverrides = (o) => write(KEYS.numberOverrides, o);
 export const clearActivity = () => remove(KEYS.activity);
+
+// ---- 一度でも開いたことのある画面（featureDiscovery.jsの「まだ使ったことのない機能」判定用） ----
+// activityは直近ログ（件数上限あり）なので古い訪問が消える。こちらは消さない集合。
+export const loadVisitedViews = () => read(KEYS.visitedViews, []);
+export const saveVisitedViews = (v) => write(KEYS.visitedViews, v);
 
 // ---- ログイン鍵（端末内のみ・サーバー送信なし） ----
 // auth = { email, salt, passHash, question, ansSalt, ansHash, updatedAt }

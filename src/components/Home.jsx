@@ -15,6 +15,8 @@ import {
   dismissStreakBreak,
 } from '../lib/streakBreak.js';
 import Mascot from './Mascot.jsx';
+import featureRegistry from '../data/featureRegistry.js';
+import { suggestUnvisitedFeature } from '../lib/featureDiscovery.js';
 
 const LONG_PRESS_MS = 550;
 
@@ -80,6 +82,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   const reviewCount = reviewQuestions.length;
   const dueCount = (dueReviewQuestions || []).length;
   const unreadCount = (unread || []).length;
+  // まだ使ったことのない機能を日替わりで1件だけ提案（60超の機能が下部ナビ・常設バー・
+  // 各画面内メニューに散らばっていて気づかれにくいため）。全部使ったことがあればnull。
+  const unvisitedFeature = useMemo(
+    () => suggestUnvisitedFeature(featureRegistry, store.visitedViews),
+    [store.visitedViews]
+  );
   const sessionActive = session && session.pos < session.target;
   const { streak, longestStreak, studiedToday } = studyStreak(history);
   const examLeft = daysUntil(settings.examDate);
@@ -369,6 +377,17 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="title">全機能一覧</span>
           <span className="desc">このアプリの機能をすべて検索・確認できます。迷ったらここ。</span>
         </button>
+
+        {unvisitedFeature && (
+          <button
+            className="menu-item wide unvisited-feature-card"
+            onClick={() => onNavigate(unvisitedFeature.view)}
+          >
+            <span className="ico">✨</span>
+            <span className="title">まだ使ったことのない機能：{unvisitedFeature.title}</span>
+            <span className="desc">{unvisitedFeature.desc}</span>
+          </button>
+        )}
 
         <button className="menu-item wide featured roadmap-card" onClick={() => onNavigate('roadmap')}>
           <span className="ico">🗺️</span>

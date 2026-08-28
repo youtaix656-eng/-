@@ -195,6 +195,13 @@ export default function App() {
     store.logActivity(activityInfo(view));
   }, [view, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 一度でも開いた画面を記録（消えない集合。「まだ使ったことのない機能」の判定用、
+  // Home.jsxのfeatureDiscoveryが参照する。activityと違い件数上限で古い訪問が消えない）。
+  useEffect(() => {
+    if (!store.loaded || !viewRestored.current) return;
+    store.markViewVisited(view);
+  }, [view, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 端末だけに取り込む体験メモ（#notes=…）を反映したら知らせて画面を開く
   useEffect(() => {
     if (store.seedToast > 0) {
