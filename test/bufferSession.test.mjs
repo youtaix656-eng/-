@@ -76,6 +76,6 @@ test('planStudySession: シフト連動時は比率が変わる', () => {
 test('resolveBufferUsage / bufferUsageLabel', () => {
   assert.equal(resolveBufferUsage(true), 'review');
   assert.equal(resolveBufferUsage(false), 'catchup');
-  assert.equal(bufferUsageLabel('review'), 'ご褒美復習（得意分野の確認）');
+  assert.equal(bufferUsageLabel('review'), 'ご褒美復習（気楽に取り組む復習）');
   assert.equal(bufferUsageLabel('catchup'), '積み残し消化（未完了問題の続き）');
 });

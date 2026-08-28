@@ -129,7 +129,10 @@ export function resolveBufferUsage(completed) {
 }
 
 export function bufferUsageLabel(usage) {
-  if (usage === 'review') return 'ご褒美復習（得意分野の確認）';
+  // 'review'は「まだ間違えた問題を確認する軽めの復習」であり、得意分野を確認するもの
+  // ではない（実装はreviewPoolFor＝通常の復習対象プールをそのまま使う）。文言と実装を
+  // 一致させる。
+  if (usage === 'review') return 'ご褒美復習（気楽に取り組む復習）';
   if (usage === 'catchup') return '積み残し消化（未完了問題の続き）';
   return '';
 }
