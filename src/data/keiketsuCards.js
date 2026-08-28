@@ -2,7 +2,8 @@
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
 // 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴＋
 // 手の陽明大腸経20穴＋足の陽明胃経45穴＋足の太陰脾経21穴＋手の少陰心経9穴＋
-// 手の太陽小腸経19穴＋足の太陽膀胱経67穴の完全収録＝245枚。
+// 手の太陽小腸経19穴＋足の太陽膀胱経67穴＋足の少陰腎経27穴＋手の厥陰心包経9穴＋
+// 手の少陽三焦経23穴の完全収録＝304枚。
 // 合谷・曲池・足三里・三陰交は仮サンプルと重複するため各経で新規追加枚数のみ
 // カウントしている）。
 //
@@ -25,6 +26,9 @@
 // 手の少陰心経9穴の出典：同書 p.104-109。
 // 手の太陽小腸経19穴の出典：同書 p.110-119。
 // 足の太陽膀胱経67穴の出典：同書 p.120-149。
+// 足の少陰腎経27穴の出典：同書 p.150-163。
+// 手の厥陰心包経9穴の出典：同書 p.164-169。
+// 手の少陽三焦経23穴の出典：同書 p.170-181。
 
 export const KEIKETSU_CARDS = [
   {
@@ -1316,6 +1320,307 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-bl67', name: '至陰', yomi: 'しいん', meridian: '足の太陽膀胱経', ryaku: 'BL67', type: '膀胱経の井金穴',
     location: '足の第5指、末節骨外側、爪甲角の近位外方1分（指寸）。足の第5指爪根部近位縁に引いた線と、外側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 足の少陰腎経（KI）27穴（p.150-163・完全収録） ----
+  {
+    id: 'kc-ki1', name: '湧泉', yomi: 'ゆうせん', meridian: '足の少陰腎経', ryaku: 'KI1', type: '腎経の井木穴',
+    location: '足底、足指屈曲時、足底の最陥凹部。足指を屈曲して、第2・第3指の間のみずかきと踵とを結ぶ線を3等分し、みずかきから3分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki2', name: '然谷', yomi: 'ねんこく', meridian: '足の少陰腎経', ryaku: 'KI2', type: '腎経の榮火穴',
+    location: '足内側、舟状骨粗面の下方、赤白肉際。内果の前下方で、舟状骨の尖ったところの直下、表裏の境目に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki3', name: '太谿', yomi: 'たいけい', meridian: '足の少陰腎経', ryaku: 'KI3', type: '腎の原穴・腎経の兪土穴',
+    location: '足関節後内側、内果尖とアキレス腱の間の陥凹部。内果尖とアキレス腱との間で、後脛骨動脈拍動部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki4', name: '大鍾', yomi: 'だいしょう', meridian: '足の少陰腎経', ryaku: 'KI4', type: '腎経の絡穴',
+    location: '足内側、内果後下方、踵骨上方、アキレス腱付着部内側前方の陥凹部。太谿の下方で踵骨上方、アキレス腱の前陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki5', name: '水泉', yomi: 'すいせん', meridian: '足の少陰腎経', ryaku: 'KI5', type: '腎経の郄穴',
+    location: '足内側、太谿の下方1寸、踵骨隆起前方の陥凹部。太谿の下方1寸の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki6', name: '照海', yomi: 'しょうかい', meridian: '足の少陰腎経', ryaku: 'KI6', type: '八脈交会穴',
+    location: '足内側、内果尖の下方1寸、内果下方の陥凹部。内果尖の下方1寸の陥凹部に取る（照海に対応する外側の経穴は申脈＝膀胱経である）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki7', name: '復溜', yomi: 'ふくりゅう', meridian: '足の少陰腎経', ryaku: 'KI7', type: '腎経の経金穴',
+    location: '下腿後内側、アキレス腱の前縁、内果尖の上方2寸。太谿の上方2寸で、アキレス腱と長指屈筋との間に取る（内果尖から膝窩横紋までの長さを1尺5寸とする。交信と同じ高さで、交信の後方5分にある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki8', name: '交信', yomi: 'こうしん', meridian: '足の少陰腎経', ryaku: 'KI8', type: '陰蹻脈の郄穴',
+    location: '下腿内側、脛骨内縁の後方の陥凹部、内果尖の上方2寸。復溜の前方5分、復溜と脛骨内縁後際との間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki9', name: '築賓', yomi: 'ちくひん', meridian: '足の少陰腎経', ryaku: 'KI9', type: '陰維脈の郄穴',
+    location: '下腿後内側、ヒラメ筋とアキレス腱の間、内果尖の上方5寸。太谿と陰谷を結ぶ線を3等分し、太谿から3分の1のところ、ヒラメ筋とアキレス腱との間に取る（太谿の上方5寸、蠡溝＝肝経と同じ高さにある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki10', name: '陰谷', yomi: 'いんこく', meridian: '足の少陰腎経', ryaku: 'KI10', type: '腎経の合水穴',
+    location: '膝後内側、半腱様筋腱の外縁、膝窩横紋上。膝関節を軽く屈曲したときにできる膝窩横紋上で、半腱様筋腱の外縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki11', name: '横骨', yomi: 'おうこつ', meridian: '足の少陰腎経', ryaku: 'KI11', type: null,
+    location: '下腹部、臍中央の下方5寸、前正中線の外方5分。曲骨（任脈）の外方5分に取る（腎経の腹部の経穴は、前正中線外方5分とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki12', name: '大赫', yomi: 'だいかく', meridian: '足の少陰腎経', ryaku: 'KI12', type: null,
+    location: '下腹部、臍中央の下方4寸、前正中線の外方5分。中極（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki13', name: '気穴', yomi: 'きけつ', meridian: '足の少陰腎経', ryaku: 'KI13', type: null,
+    location: '下腹部、臍中央の下方3寸、前正中線の外方5分。関元（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki14', name: '四満', yomi: 'しまん', meridian: '足の少陰腎経', ryaku: 'KI14', type: null,
+    location: '下腹部、臍中央の下方2寸、前正中線の外方5分。石門（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki15', name: '中注', yomi: 'ちゅうちゅう', meridian: '足の少陰腎経', ryaku: 'KI15', type: null,
+    location: '下腹部、臍中央の下方1寸、前正中線の外方5分。陰交（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki16', name: '肓兪', yomi: 'こうゆ', meridian: '足の少陰腎経', ryaku: 'KI16', type: null,
+    location: '上腹部、臍中央の外方5分。神闕（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki17', name: '商曲', yomi: 'しょうきょく', meridian: '足の少陰腎経', ryaku: 'KI17', type: null,
+    location: '上腹部、臍中央の上方2寸、前正中線の外方5分。下脘（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki18', name: '石関', yomi: 'せきかん', meridian: '足の少陰腎経', ryaku: 'KI18', type: null,
+    location: '上腹部、臍中央の上方3寸、前正中線の外方5分。建里（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki19', name: '陰都', yomi: 'いんと', meridian: '足の少陰腎経', ryaku: 'KI19', type: null,
+    location: '上腹部、臍中央の上方4寸、前正中線の外方5分。中脘（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki20', name: '腹通谷', yomi: 'ふくつうこく', meridian: '足の少陰腎経', ryaku: 'KI20', type: null,
+    location: '上腹部、臍中央の上方5寸、前正中線の外方5分。上脘（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki21', name: '幽門', yomi: 'ゆうもん', meridian: '足の少陰腎経', ryaku: 'KI21', type: null,
+    location: '上腹部、臍中央の上方6寸、前正中線の外方5分。巨闕（任脈）の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki22', name: '歩廊', yomi: 'ほろう', meridian: '足の少陰腎経', ryaku: 'KI22', type: null,
+    location: '前胸部、第5肋間、前正中線の外方2寸。第5肋間で前正中線の外方2寸に取る（歩廊から彧中までの経穴は、前正中線と乳頭線との中間の線と、各肋間との交点にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki23', name: '神封', yomi: 'しんぷう', meridian: '足の少陰腎経', ryaku: 'KI23', type: null,
+    location: '前胸部、第4肋間、前正中線の外方2寸。膻中（任脈）の外方2寸に取る（第4肋間の高さには前正中線から、神封、乳中＝胃経、天池＝心包経、天渓＝脾経、輒筋＝胆経、淵腋＝胆経が並ぶ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki24', name: '霊墟', yomi: 'れいきょ', meridian: '足の少陰腎経', ryaku: 'KI24', type: null,
+    location: '前胸部、第3肋間、前正中線の外方2寸。玉堂（任脈）の外方2寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki25', name: '神蔵', yomi: 'しんぞう', meridian: '足の少陰腎経', ryaku: 'KI25', type: null,
+    location: '前胸部、第2肋間、前正中線の外方2寸。紫宮（任脈）の外方2寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki26', name: '彧中', yomi: 'いくちゅう', meridian: '足の少陰腎経', ryaku: 'KI26', type: null,
+    location: '前胸部、第1肋間、前正中線の外方2寸。華蓋（任脈）の外方2寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-ki27', name: '兪府', yomi: 'ゆふ', meridian: '足の少陰腎経', ryaku: 'KI27', type: null,
+    location: '前胸部、鎖骨下縁、前正中線の外方2寸。前正中線の外方2寸で、鎖骨の下縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 手の厥陰心包経（PC）9穴（p.164-169・完全収録） ----
+  {
+    id: 'kc-pc1', name: '天池', yomi: 'てんち', meridian: '手の厥陰心包経', ryaku: 'PC1', type: null,
+    location: '前胸部、第4肋間、前正中線の外方5寸。乳頭の外方1寸で第4肋間、乳中（胃経）と天渓（脾経）との中点に取る（第4肋間の高さには前正中線から、膻中＝任脈、神封＝腎経、乳中＝胃経、天池、天渓＝脾経、輒筋＝胆経、淵腋＝胆経が並ぶ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc2', name: '天泉', yomi: 'てんせん', meridian: '手の厥陰心包経', ryaku: 'PC2', type: null,
+    location: '上腕前面、上腕二頭筋長頭と短頭の間、腋窩横紋前端の下方2寸。腋窩横紋前端の下方2寸、上腕二頭筋長頭と短頭との筋溝に取る（腋窩横紋前端から曲沢までの長さを9寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc3', name: '曲沢', yomi: 'きょくたく', meridian: '手の厥陰心包経', ryaku: 'PC3', type: '心包経の合水穴',
+    location: '肘前面、肘窩横紋上、上腕二頭筋腱内方の陥凹部。肘関節を屈曲して上腕二頭筋腱を緊張させ、その腱の内側陥凹中に取る（上腕動脈拍動部で、尺沢＝肺経と少海＝心経とのほぼ中点にあたる。曲沢から大陵までの長さを1尺2寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc4', name: '郄門', yomi: 'げきもん', meridian: '手の厥陰心包経', ryaku: 'PC4', type: '心包経の郄穴',
+    location: '前腕前面、長掌筋腱と橈側手根屈筋腱の間、手関節掌側横紋の上方5寸。曲沢と大陵とを結ぶ線の中点の下方1寸で、長掌筋腱と橈側手根屈筋腱との間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc5', name: '間使', yomi: 'かんし', meridian: '手の厥陰心包経', ryaku: 'PC5', type: '心包経の経金穴',
+    location: '前腕前面、長掌筋腱と橈側手根屈筋腱の間、手関節掌側横紋の上方3寸。大陵と曲沢とを結ぶ線を4等分し、大陵から4分の1のところ、長掌筋腱と橈側手根屈筋腱との間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc6', name: '内関', yomi: 'ないかん', meridian: '手の厥陰心包経', ryaku: 'PC6', type: '心包経の絡穴・八脈交会穴',
+    location: '前腕前面、長掌筋腱と橈側手根屈筋腱の間、手関節掌側横紋の上方2寸。大陵の上方2寸で、橈側手根屈筋腱と長掌筋腱との間に取る（内関に対応する後ろの経穴は外関＝三焦経である）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc7', name: '大陵', yomi: 'だいりょう', meridian: '手の厥陰心包経', ryaku: 'PC7', type: '心包の原穴・心包経の兪土穴',
+    location: '手関節前面、長掌筋腱と橈側手根屈筋腱の間、手関節掌側横紋上。手関節前面横紋の中央で、橈側手根屈筋腱と長掌筋腱との間に取る（長掌筋腱が不明瞭な場合は橈側手根屈筋腱の内側に取る。太淵＝肺経、大陵、神門＝心経は手関節掌側横紋上に並ぶ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc8', name: '労宮', yomi: 'ろうきゅう', meridian: '手の厥陰心包経', ryaku: 'PC8', type: '心包経の榮火穴',
+    location: '手掌、第2・第3中手骨間、中手指節関節の近位陥凹部。手掌で第2・第3中手骨間、手を握ったとき、手掌面に触れる示指頭と中指頭との間に取る（別説では第3・第4中手骨間、中指頭と薬指頭との間とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-pc9', name: '中衝', yomi: 'ちゅうしょう', meridian: '手の厥陰心包経', ryaku: 'PC9', type: '心包経の井木穴',
+    location: '中指、中指先端中央。中指先端の中央に取る（別説では末節骨橈側、爪甲角の近位外方1分＝指寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 手の少陽三焦経（TE）23穴（p.170-181・完全収録） ----
+  {
+    id: 'kc-te1', name: '関衝', yomi: 'かんしょう', meridian: '手の少陽三焦経', ryaku: 'TE1', type: '三焦経の井金穴',
+    location: '薬指、末節骨尺側、爪甲角から近位内方1分（指寸）、爪甲尺側縁の垂線と爪甲基底部の水平線との交点。薬指爪根部近位縁に引いた線と、内側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te2', name: '液門', yomi: 'えきもん', meridian: '手の少陽三焦経', ryaku: 'TE2', type: '三焦経の榮水穴',
+    location: '手背、薬指と小指の間、みずかきの近位陥凹部、赤白肉際。手を握り、第4・第5中手指節関節間の直下の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te3', name: '中渚', yomi: 'ちゅうしょ', meridian: '手の少陽三焦経', ryaku: 'TE3', type: '三焦経の兪木穴',
+    location: '手背、第4・第5中手骨間、第4中手指節関節の近位陥凹部。手を握り、第4中手指節関節の上の内側陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te4', name: '陽池', yomi: 'ようち', meridian: '手の少陽三焦経', ryaku: 'TE4', type: '三焦の原穴',
+    location: '手関節後面、総指伸筋腱の尺側陥凹部、手関節背側横紋上。手関節後面横紋のほぼ中央で、総指伸筋腱と小指伸筋腱との間の陥凹中に取る（陽渓＝大腸経、陽池、陽谷＝小腸経は手関節背側横紋上に並ぶ。陽池から肘頭までの長さを1尺2寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te5', name: '外関', yomi: 'がいかん', meridian: '手の少陽三焦経', ryaku: 'TE5', type: '三焦経の絡穴・八脈交会穴',
+    location: '前腕後面、橈骨と尺骨の骨間の中点、手関節背側横紋の上方2寸。陽池の上方2寸で、総指伸筋腱と小指伸筋腱との間に取る（外関に対応する前側の経穴は内関＝心包経である）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te6', name: '支溝', yomi: 'しこう', meridian: '手の少陽三焦経', ryaku: 'TE6', type: '三焦経の経火穴',
+    location: '前腕後面、橈骨と尺骨の骨間の中点、手関節背側横紋の上方3寸。陽池と肘頭とを結ぶ線を4等分し、陽池から4分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te7', name: '会宗', yomi: 'えそう', meridian: '手の少陽三焦経', ryaku: 'TE7', type: '三焦経の郄穴',
+    location: '前腕後面、尺骨の橈側縁、手関節背側横紋の上方3寸。支溝から小指伸筋腱を越えたところで、尺側手根伸筋との間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te8', name: '三陽絡', yomi: 'さんようらく', meridian: '手の少陽三焦経', ryaku: 'TE8', type: null,
+    location: '前腕後面、橈骨と尺骨の骨間の中点、手関節背側横紋の上方4寸。陽池と肘頭とを結ぶ線を3等分し、陽池から3分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te9', name: '四瀆', yomi: 'しとく', meridian: '手の少陽三焦経', ryaku: 'TE9', type: null,
+    location: '前腕後面、橈骨と尺骨の骨間の中点、肘頭の下方5寸。陽池と肘頭とを結ぶ線の中点の上方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te10', name: '天井', yomi: 'てんせい', meridian: '手の少陽三焦経', ryaku: 'TE10', type: '三焦経の合土穴',
+    location: '肘後面、肘頭の上方1寸、陥凹部。肘頭の上方1寸で、肘関節をやや屈曲したときにできる陥凹部（肘頭窩）に取る（肘頭から肩峰角までの長さを、上肢を下垂したとき1尺2寸、肩関節を90度外転したとき1尺とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te11', name: '清冷淵', yomi: 'せいれいえん', meridian: '手の少陽三焦経', ryaku: 'TE11', type: null,
+    location: '上腕後面、肘頭と肩峰角を結ぶ線上、肘頭の上方2寸。肘関節を伸展し、肘頭の上方2寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te12', name: '消濼', yomi: 'しょうれき', meridian: '手の少陽三焦経', ryaku: 'TE12', type: null,
+    location: '上腕後面、肘頭と肩峰角を結ぶ線上、肘頭の上方5寸。肘頭の上方5寸、上肢を下垂したとき肘頭と肩峰角とを結ぶ線の中点の下方1寸で、橈骨神経溝中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te13', name: '臑会', yomi: 'じゅえ', meridian: '手の少陽三焦経', ryaku: 'TE13', type: null,
+    location: '上腕後面、三角筋の後下縁、肩峰角の下方3寸。肩峰角の下方3寸で、三角筋の後下縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te14', name: '肩髎', yomi: 'けんりょう', meridian: '手の少陽三焦経', ryaku: 'TE14', type: null,
+    location: '肩周囲部、肩峰角と上腕骨大結節の間の陥凹部。肩関節を90度外転したとき、肩峰の前後に現れる2つの陥凹部のうち、後ろの陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te15', name: '天髎', yomi: 'てんりょう', meridian: '手の少陽三焦経', ryaku: 'TE15', type: null,
+    location: '肩甲部、肩甲骨上角の上方陥凹部。肩井（胆経）と曲垣（小腸経）との中点で、肩甲骨上角の上方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te16', name: '天牖', yomi: 'てんゆう', meridian: '手の少陽三焦経', ryaku: 'TE16', type: null,
+    location: '前頸部、下顎角と同じ高さ、胸鎖乳突筋後方の陥凹部。下顎角の後方で、胸鎖乳突筋の後方に取る（胸鎖乳突筋をはさんで天容＝小腸経と相対するところにあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te17', name: '翳風', yomi: 'えいふう', meridian: '手の少陽三焦経', ryaku: 'TE17', type: null,
+    location: '前頸部、耳垂後方、乳様突起下端前方の陥凹部。天容（小腸経）の上方で、乳様突起下端と下顎枝との間の陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te18', name: '瘈脈', yomi: 'けいみゃく', meridian: '手の少陽三焦経', ryaku: 'TE18', type: null,
+    location: '頭部、乳様突起の中央、翳風と角孫を結ぶ（耳の輪郭に沿った）曲線上、翳風から3分の1。翳風から角孫に至る円弧上で、翳風から3分の1のところに取る（耳介を隔てて外耳孔と相対するところにあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te19', name: '顱息', yomi: 'ろそく', meridian: '手の少陽三焦経', ryaku: 'TE19', type: null,
+    location: '頭部、翳風と角孫を結ぶ（耳の輪郭に沿った）曲線上で、翳風から3分の2。翳風から角孫に至る円弧上で、角孫から3分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te20', name: '角孫', yomi: 'かくそん', meridian: '手の少陽三焦経', ryaku: 'TE20', type: null,
+    location: '頭部、耳尖のあたるところ。耳を前方に折り曲げて、耳尖が頭に触れるところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te21', name: '耳門', yomi: 'じもん', meridian: '手の少陽三焦経', ryaku: 'TE21', type: null,
+    location: '顔面部、耳珠上の切痕と下顎骨の関節突起の間、陥凹部。耳珠の前上方で頬骨弓の後端に取る（聴宮＝小腸経の直上にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te22', name: '和髎', yomi: 'わりょう', meridian: '手の少陽三焦経', ryaku: 'TE22', type: null,
+    location: '頭部、もみあげの後方、耳介の付け根の前方、浅側頭動脈の後方。頬骨弓後端の上方で、浅側頭動脈拍動部の後方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-te23', name: '糸竹空', yomi: 'しちくくう', meridian: '手の少陽三焦経', ryaku: 'TE23', type: null,
+    location: '頭部、眉毛外端の陥凹部。眉毛の外端で、骨のくぼんだところに取る（瞳子髎＝胆経の直上にある）。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];

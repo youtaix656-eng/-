@@ -45,11 +45,11 @@ test('resolveKeizetsuTerm: フラッシュカードのある経穴はkind=card�
 });
 
 test('resolveKeizetsuTerm: 十二原穴はkind=pointで経絡名まで解決する', () => {
-  // 太淵・衝陽・神門はkeiketsuCards.jsにフラッシュカードとして追加済みのため、ここでは
-  // まだカード化されていない原穴（太谿＝足の少陰腎経）で確認する。
-  const r = resolveKeizetsuTerm('太谿');
+  // 太淵・衝陽・神門・太谿・大陵・陽池はkeiketsuCards.jsにフラッシュカードとして
+  // 追加済みのため、ここではまだカード化されていない原穴（丘墟＝足の少陽胆経）で確認する。
+  const r = resolveKeizetsuTerm('丘墟');
   assert.equal(r.kind, 'point');
-  assert.ok(r.roles.some((x) => x.meridian === 'KI' && x.role === '原穴' && x.meridianName === '足の少陰腎経'));
+  assert.ok(r.roles.some((x) => x.meridian === 'GB' && x.role === '原穴' && x.meridianName === '足の少陽胆経'));
 });
 
 test('resolveKeizetsuTerm: 経絡そのものはkind=meridian、督脈・任脈も解決できる', () => {
