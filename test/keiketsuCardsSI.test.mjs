@@ -37,8 +37,9 @@ test('小海（SI8・小腸経）と少海（HT3・心経）は同音異字の�
   assert.ok(htShokai.type.includes('心経'));
 });
 
-test('KEIKETSU_CARDS全体: 総数178枚でid・nameが重複しない', () => {
-  assert.equal(KEIKETSU_CARDS.length, 178);
+test('KEIKETSU_CARDS全体でid・nameが重複しない', () => {
+  // 総数は経脈を追加するたびに増えるため、ここでは重複の無さだけを確認する
+  // （正確な総数はkeiketsuCardsBL.test.mjs等、最新バッチのテストで確認する）。
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.id)).size, KEIKETSU_CARDS.length);
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.name)).size, KEIKETSU_CARDS.length);
 });

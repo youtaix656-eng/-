@@ -73,11 +73,13 @@ test('resolveKeizetsuTerm: 独自経穴を持たない奇経はkind=extra', () =
 });
 
 test('resolveKeizetsuTerm: 紛らわしい経穴の対はkind=confusable', () => {
-  // 少海（HT3）はkeiketsuCards.jsにフラッシュカードとして追加済みのため、ここでは
-  // まだ両側ともカード化されていない対（陽綱＝足の太陽膀胱経／陽交＝足の少陽胆経）で確認する。
-  const r = resolveKeizetsuTerm('陽綱');
+  // 少海・陽綱はkeiketsuCards.jsにフラッシュカードとして追加済みのため、ここでは
+  // 対の相手（懸釐＝足の少陽胆経、まだカード化されていない）で確認する。
+  // resolveKeizetsuTermは問い合わせた語（懸釐）自体の状態で解決するため、対の反対側
+  // （建里）が既にカード化されていても、懸釐自身が未収録なら引き続きconfusableになる。
+  const r = resolveKeizetsuTerm('懸釐');
   assert.equal(r.kind, 'confusable');
-  assert.ok(r.confusable.a === '陽綱' || r.confusable.b === '陽綱');
+  assert.ok(r.confusable.a === '懸釐' || r.confusable.b === '懸釐');
 });
 
 test('resolveKeizetsuTerm: 未収録の項目は正直にkind=noneを返す（捏造しない）', () => {

@@ -2,7 +2,7 @@
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
 // 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴＋
 // 手の陽明大腸経20穴＋足の陽明胃経45穴＋足の太陰脾経21穴＋手の少陰心経9穴＋
-// 手の太陽小腸経19穴の完全収録＝178枚。
+// 手の太陽小腸経19穴＋足の太陽膀胱経67穴の完全収録＝245枚。
 // 合谷・曲池・足三里・三陰交は仮サンプルと重複するため各経で新規追加枚数のみ
 // カウントしている）。
 //
@@ -24,6 +24,7 @@
 // 足の太陰脾経21穴の出典：同書 p.92-103。
 // 手の少陰心経9穴の出典：同書 p.104-109。
 // 手の太陽小腸経19穴の出典：同書 p.110-119。
+// 足の太陽膀胱経67穴の出典：同書 p.120-149。
 
 export const KEIKETSU_CARDS = [
   {
@@ -978,6 +979,343 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-si19', name: '聴宮', yomi: 'ちょうきゅう', meridian: '手の太陽小腸経', ryaku: 'SI19', type: null,
     location: '顔面部、耳珠中央の前縁と下顎骨関節突起の間の陥凹部。耳珠と下顎骨との間にある陥凹部で、下顎骨関節突起の後縁に取る（口をわずかに開けると取りやすい）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 足の太陽膀胱経（BL）67穴（p.120-149・完全収録） ----
+  {
+    id: 'kc-bl1', name: '睛明', yomi: 'せいめい', meridian: '足の太陽膀胱経', ryaku: 'BL1', type: null,
+    location: '顔面部、内眼角の内上方と眼窩内側壁の間の陥凹部。目を閉じて、内眼角の内上方1分の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl2', name: '攅竹', yomi: 'さんちく', meridian: '足の太陽膀胱経', ryaku: 'BL2', type: null,
+    location: '頭部、眉毛内端の陥凹部。睛明の直上で、眉毛内端、前頭切痕の陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl3', name: '眉衝', yomi: 'びしょう', meridian: '足の太陽膀胱経', ryaku: 'BL3', type: null,
+    location: '頭部、前頭切痕の上方、前髪際の後方5分。神庭（督脈）と曲差との中点に取る（前髪際の後方5分には前正中線から、神庭、眉衝、曲差、頭臨泣＝胆経、本神＝胆経、頭維＝胃経が並ぶ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl4', name: '曲差', yomi: 'きょくさ', meridian: '足の太陽膀胱経', ryaku: 'BL4', type: null,
+    location: '頭部、前髪際の後方5分、前正中線の外方1寸5分。神庭と頭維とを結ぶ線を3等分し、神庭から3分の1のところに取る（神庭、曲差、本神、頭維を等間隔に取る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl5', name: '五処', yomi: 'ごしょ', meridian: '足の太陽膀胱経', ryaku: 'BL5', type: null,
+    location: '頭部、前髪際の後方1寸、前正中線の外方1寸5分。上星（督脈）の外方1寸5分、曲差の後方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl6', name: '承光', yomi: 'しょうこう', meridian: '足の太陽膀胱経', ryaku: 'BL6', type: null,
+    location: '頭部、前髪際の後方2寸5分、前正中線の外方1寸5分。前正中線の外方1寸5分、五処の後方1寸5分に取る（五処と絡却とを結ぶ線を3等分し、五処から3分の1のところにあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl7', name: '通天', yomi: 'つうてん', meridian: '足の太陽膀胱経', ryaku: 'BL7', type: null,
+    location: '頭部、前髪際の後方4寸、前正中線の外方1寸5分。五処と絡却とを結ぶ線を3等分し、絡却から3分の1のところに取る（承光と絡却の中点にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl8', name: '絡却', yomi: 'らっきゃく', meridian: '足の太陽膀胱経', ryaku: 'BL8', type: null,
+    location: '頭部、前髪際の後方5寸5分、後正中線の外方1寸5分。百会の後方5分の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl9', name: '玉枕', yomi: 'ぎょくちん', meridian: '足の太陽膀胱経', ryaku: 'BL9', type: null,
+    location: '頭部、外後頭隆起上縁と同じ高さ、後正中線の外方1寸3分。脳戸（督脈）の外方1寸3分で、頭半棘筋膨隆部の外縁を通る垂線と上項線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl10', name: '天柱', yomi: 'てんちゅう', meridian: '足の太陽膀胱経', ryaku: 'BL10', type: null,
+    location: '後頸部、第2頸椎棘突起上縁と同じ高さ、僧帽筋外縁の陥凹部。瘂門（督脈）の外方で、頭半棘筋膨隆部の外縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl11', name: '大杼', yomi: 'だいじょ', meridian: '足の太陽膀胱経', ryaku: 'BL11', type: '八会穴の骨会',
+    location: '上背部、第1胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。陶道（督脈）の外方1寸5分に取る（大杼から白環兪までの経穴は、後正中線外方1寸5分とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl12', name: '風門', yomi: 'ふうもん', meridian: '足の太陽膀胱経', ryaku: 'BL12', type: null,
+    location: '上背部、第2胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。第2・第3胸椎棘突起間、外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl13', name: '肺兪', yomi: 'はいゆ', meridian: '足の太陽膀胱経', ryaku: 'BL13', type: '肺の背部兪穴',
+    location: '上背部、第3胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。身柱（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl14', name: '厥陰兪', yomi: 'けついんゆ', meridian: '足の太陽膀胱経', ryaku: 'BL14', type: '心包の背部兪穴',
+    location: '上背部、第4胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。第4・第5胸椎棘突起間、外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl15', name: '心兪', yomi: 'しんゆ', meridian: '足の太陽膀胱経', ryaku: 'BL15', type: '心の背部兪穴',
+    location: '上背部、第5胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。神道（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl16', name: '督兪', yomi: 'とくゆ', meridian: '足の太陽膀胱経', ryaku: 'BL16', type: null,
+    location: '上背部、第6胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。霊台（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl17', name: '膈兪', yomi: 'かくゆ', meridian: '足の太陽膀胱経', ryaku: 'BL17', type: '八会穴の血会',
+    location: '上背部、第7胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。至陽（督脈）の外方1寸5分に取る（肩甲骨下角は第7胸椎棘突起と同じ高さにある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl18', name: '肝兪', yomi: 'かんゆ', meridian: '足の太陽膀胱経', ryaku: 'BL18', type: '肝の背部兪穴',
+    location: '上背部、第9胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。筋縮（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl19', name: '胆兪', yomi: 'たんゆ', meridian: '足の太陽膀胱経', ryaku: 'BL19', type: '胆の背部兪穴',
+    location: '上背部、第10胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。中枢（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl20', name: '脾兪', yomi: 'ひゆ', meridian: '足の太陽膀胱経', ryaku: 'BL20', type: '脾の背部兪穴',
+    location: '上背部、第11胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。脊中（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl21', name: '胃兪', yomi: 'いゆ', meridian: '足の太陽膀胱経', ryaku: 'BL21', type: '胃の背部兪穴',
+    location: '上背部、第12胸椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。第12胸椎・第1腰椎棘突起間、外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl22', name: '三焦兪', yomi: 'さんしょうゆ', meridian: '足の太陽膀胱経', ryaku: 'BL22', type: '三焦の背部兪穴',
+    location: '腰部、第1腰椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。懸枢（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl23', name: '腎兪', yomi: 'じんゆ', meridian: '足の太陽膀胱経', ryaku: 'BL23', type: '腎の背部兪穴',
+    location: '腰部、第2腰椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。命門（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl24', name: '気海兪', yomi: 'きかいゆ', meridian: '足の太陽膀胱経', ryaku: 'BL24', type: null,
+    location: '腰部、第3腰椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。第3・第4腰椎棘突起間、外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl25', name: '大腸兪', yomi: 'だいちょうゆ', meridian: '足の太陽膀胱経', ryaku: 'BL25', type: '大腸の背部兪穴',
+    location: '腰部、第4腰椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。腰陽関（督脈）の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl26', name: '関元兪', yomi: 'かんげんゆ', meridian: '足の太陽膀胱経', ryaku: 'BL26', type: null,
+    location: '腰部、第5腰椎棘突起下縁と同じ高さ、後正中線の外方1寸5分。第5腰椎棘突起と正中仙骨稜との間、外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl27', name: '小腸兪', yomi: 'しょうちょうゆ', meridian: '足の太陽膀胱経', ryaku: 'BL27', type: '小腸の背部兪穴',
+    location: '仙骨部、第1後仙骨孔と同じ高さ、正中仙骨稜の外方1寸5分。上髎の高さで後正中線の外方1寸5分に取る（仙骨部の小腸兪から白環兪までと上髎から下髎までの経穴は、次髎を基準にする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl28', name: '膀胱兪', yomi: 'ぼうこうゆ', meridian: '足の太陽膀胱経', ryaku: 'BL28', type: '膀胱の背部兪穴',
+    location: '仙骨部、第2後仙骨孔と同じ高さ、正中仙骨稜の外方1寸5分。次髎の高さで後正中線の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl29', name: '中膂兪', yomi: 'ちゅうりょゆ', meridian: '足の太陽膀胱経', ryaku: 'BL29', type: null,
+    location: '仙骨部、第3後仙骨孔と同じ高さ、正中仙骨稜の外方1寸5分。中髎の高さで後正中線の外方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl30', name: '白環兪', yomi: 'はっかんゆ', meridian: '足の太陽膀胱経', ryaku: 'BL30', type: null,
+    location: '仙骨部、第4後仙骨孔と同じ高さ、正中仙骨稜の外方1寸5分。腰兪（督脈）の外方1寸5分に取る（下髎と同じ高さにある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl31', name: '上髎', yomi: 'じょうりょう', meridian: '足の太陽膀胱経', ryaku: 'BL31', type: null,
+    location: '仙骨部、第1後仙骨孔。次髎から撫で上げたとき、最初に触れる陥凹部に取る（上後腸骨稜の頂点の高さにあたる。左右の上髎・次髎・中髎・下髎の8穴を一般に八髎穴という）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl32', name: '次髎', yomi: 'じりょう', meridian: '足の太陽膀胱経', ryaku: 'BL32', type: null,
+    location: '仙骨部、第2後仙骨孔。上後腸骨棘下縁の高さで、上後腸骨棘と正中仙骨稜とのほぼ中央に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl33', name: '中髎', yomi: 'ちゅうりょう', meridian: '足の太陽膀胱経', ryaku: 'BL33', type: null,
+    location: '仙骨部、第3後仙骨孔。次髎から撫で下ろしたとき、最初に触れる陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl34', name: '下髎', yomi: 'げりょう', meridian: '足の太陽膀胱経', ryaku: 'BL34', type: null,
+    location: '仙骨部、第4後仙骨孔。次髎から撫で下ろしたとき、2つめに触れる陥凹部に取る（腰兪＝督脈の外方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl35', name: '会陽', yomi: 'えよう', meridian: '足の太陽膀胱経', ryaku: 'BL35', type: null,
+    location: '殿部、尾骨下端外方5分。伏臥位あるいは膝胸位にし、尾骨下端の外方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl36', name: '承扶', yomi: 'しょうふ', meridian: '足の太陽膀胱経', ryaku: 'BL36', type: null,
+    location: '殿部、殿溝の中点。大腿後面の中線と殿溝との交点に取る（承扶から委中までの長さを1尺4寸とする。深部に坐骨神経が通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl37', name: '殷門', yomi: 'いんもん', meridian: '足の太陽膀胱経', ryaku: 'BL37', type: null,
+    location: '大腿部後面、大腿二頭筋と半腱様筋の間、殿溝の下方6寸。承扶と委中とを結ぶ線の中点の上方1寸で、大腿二頭筋と半腱様筋との間に取る（深部に坐骨神経が通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl38', name: '浮郄', yomi: 'ふげき', meridian: '足の太陽膀胱経', ryaku: 'BL38', type: null,
+    location: '膝後面、大腿二頭筋腱の内縁、膝窩横紋の上方1寸。委陽から大腿二頭筋腱の内側縁に沿って上方1寸に取る（深部に総腓骨神経が通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl39', name: '委陽', yomi: 'いよう', meridian: '足の太陽膀胱経', ryaku: 'BL39', type: '三焦の下合穴',
+    location: '膝後外側、大腿二頭筋腱の内縁、膝窩横紋上。委中の外方で、大腿二頭筋腱の内側に取る（軽く膝関節を屈曲すると大腿二頭筋腱がよく現れる。深部に総腓骨神経が通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl40', name: '委中', yomi: 'いちゅう', meridian: '足の太陽膀胱経', ryaku: 'BL40', type: '膀胱経の合土穴・四総穴・膀胱の下合穴',
+    location: '膝後面、膝窩横紋の中点。膝を曲げたときにできる横紋の中央、膝窩動脈拍動部に取る（深部に脛骨神経が通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl41', name: '附分', yomi: 'ふぶん', meridian: '足の太陽膀胱経', ryaku: 'BL41', type: null,
+    location: '上背部、第2胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。第2・第3胸椎棘突起間、外方3寸に取る（肩甲骨の内側縁で肩甲棘内端の内上方にあたる。左右の肩甲棘内端縁の間を6寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl42', name: '魄戸', yomi: 'はっこ', meridian: '足の太陽膀胱経', ryaku: 'BL42', type: null,
+    location: '上背部、第3胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。身柱（督脈）の外方3寸に取る（肩甲骨の内側縁で肩甲棘内端の内下方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl43', name: '膏肓', yomi: 'こうこう', meridian: '足の太陽膀胱経', ryaku: 'BL43', type: null,
+    location: '上背部、第4胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。第4・第5胸椎棘突起間、外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl44', name: '神堂', yomi: 'しんどう', meridian: '足の太陽膀胱経', ryaku: 'BL44', type: null,
+    location: '上背部、第5胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。神道（督脈）の外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl45', name: '譩譆', yomi: 'いき', meridian: '足の太陽膀胱経', ryaku: 'BL45', type: null,
+    location: '上背部、第6胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。霊台（督脈）の外方3寸に取る（聴診三角にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl46', name: '膈関', yomi: 'かくかん', meridian: '足の太陽膀胱経', ryaku: 'BL46', type: null,
+    location: '上背部、第7胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。至陽（督脈）の外方3寸に取る（左右の肩甲骨下角を結んだ線のやや下方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl47', name: '魂門', yomi: 'こんもん', meridian: '足の太陽膀胱経', ryaku: 'BL47', type: null,
+    location: '上背部、第9胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。筋縮（督脈）の外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl48', name: '陽綱', yomi: 'ようこう', meridian: '足の太陽膀胱経', ryaku: 'BL48', type: null,
+    location: '上背部、第10胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。中枢（督脈）の外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl49', name: '意舎', yomi: 'いしゃ', meridian: '足の太陽膀胱経', ryaku: 'BL49', type: null,
+    location: '上背部、第11胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。脊中（督脈）の外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl50', name: '胃倉', yomi: 'いそう', meridian: '足の太陽膀胱経', ryaku: 'BL50', type: null,
+    location: '上背部、第12胸椎棘突起下縁と同じ高さ、後正中線の外方3寸。第12胸椎・第1腰椎棘突起間、外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl51', name: '肓門', yomi: 'こうもん', meridian: '足の太陽膀胱経', ryaku: 'BL51', type: null,
+    location: '腰部、第1腰椎棘突起下縁と同じ高さ、後正中線の外方3寸。懸枢（督脈）の外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl52', name: '志室', yomi: 'ししつ', meridian: '足の太陽膀胱経', ryaku: 'BL52', type: null,
+    location: '腰部、第2腰椎棘突起下縁と同じ高さ、後正中線の外方3寸。命門（督脈）の外方3寸に取る（第12肋骨端下縁の内方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl53', name: '胞肓', yomi: 'ほうこう', meridian: '足の太陽膀胱経', ryaku: 'BL53', type: null,
+    location: '殿部、第2後仙骨孔と同じ高さ、正中仙骨稜の外方3寸。次髎の高さで後正中線の外方3寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl54', name: '秩辺', yomi: 'ちっぺん', meridian: '足の太陽膀胱経', ryaku: 'BL54', type: null,
+    location: '殿部、第4後仙骨孔と同じ高さ、正中仙骨稜の外方3寸。腰兪（督脈）の外方3寸に取る（下髎と同じ高さにあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl55', name: '合陽', yomi: 'ごうよう', meridian: '足の太陽膀胱経', ryaku: 'BL55', type: null,
+    location: '下腿後面、腓腹筋外側頭と内側頭の間、膝窩横紋の下方2寸。委中と承山とを結ぶ線を4等分し、委中から4分の1のところに取る（膝窩中央から外果尖までの長さを1尺6寸、委中から承山までの長さを8寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl56', name: '承筋', yomi: 'しょうきん', meridian: '足の太陽膀胱経', ryaku: 'BL56', type: null,
+    location: '下腿後面、腓腹筋の両筋腹の間、膝窩横紋の下方5寸。委中と承山とを結ぶ線の中点の下方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl57', name: '承山', yomi: 'しょうざん', meridian: '足の太陽膀胱経', ryaku: 'BL57', type: null,
+    location: '下腿後面、腓腹筋筋腹とアキレス腱の移行部。委中の下方8寸に取る（アキレス腱の後面を指頭で撫で上げたとき、指が止まるところにあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl58', name: '飛揚', yomi: 'ひよう', meridian: '足の太陽膀胱経', ryaku: 'BL58', type: '膀胱経の絡穴',
+    location: '下腿後外側、腓腹筋外側頭下縁とアキレス腱の間、崑崙の上方7寸。崑崙の上方7寸、承山の外下方1寸、腓腹筋外側頭下縁とアキレス腱の間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl59', name: '跗陽', yomi: 'ふよう', meridian: '足の太陽膀胱経', ryaku: 'BL59', type: '陽蹻脈の郄穴',
+    location: '下腿後外側、腓骨とアキレス腱の間、崑崙の上方3寸。崑崙の上方3寸、腓骨とアキレス腱との間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl60', name: '崑崙', yomi: 'こんろん', meridian: '足の太陽膀胱経', ryaku: 'BL60', type: '膀胱経の経火穴',
+    location: '足関節後外側、外果尖とアキレス腱の間の陥凹部。外果尖とアキレス腱との間の陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl61', name: '僕参', yomi: 'ぼくしん', meridian: '足の太陽膀胱経', ryaku: 'BL61', type: null,
+    location: '足外側、崑崙の下方、踵骨外側、赤白肉際。外果尖の後下方、踵骨隆起の前下方にある陥凹中、表裏の境目に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl62', name: '申脈', yomi: 'しんみゃく', meridian: '足の太陽膀胱経', ryaku: 'BL62', type: '八脈交会穴',
+    location: '足外側、外果尖の直下、外果下縁と踵骨の間の陥凹部。外果尖の直下、外果下縁の下方陥凹部に取る（申脈に対応する内側の経穴は照海＝腎経である）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl63', name: '金門', yomi: 'きんもん', meridian: '足の太陽膀胱経', ryaku: 'BL63', type: '膀胱経の郄穴',
+    location: '足背、外果前縁の遠位、第5中足骨粗面の後方、立方骨下方の陥凹部。第5中足骨粗面の後方、立方骨下方（足底側）の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl64', name: '京骨', yomi: 'けいこつ', meridian: '足の太陽膀胱経', ryaku: 'BL64', type: '膀胱の原穴',
+    location: '足外側、第5中足骨粗面の遠位、赤白肉際。第5中足骨粗面の前縁、表裏の境目に取る（第5中足骨粗面は踵と第5中足指節関節のほぼ中央にある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl65', name: '束骨', yomi: 'そっこつ', meridian: '足の太陽膀胱経', ryaku: 'BL65', type: '膀胱経の兪木穴',
+    location: '足外側、第5中足指節関節外側の近位陥凹部、赤白肉際。第5中足骨の外側縁を後ろからつま先の方へ撫でていくと、指が止まるところ、表裏の境目に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl66', name: '足通谷', yomi: 'あしつうこく', meridian: '足の太陽膀胱経', ryaku: 'BL66', type: '膀胱経の榮水穴',
+    location: '足の第5指、第5中足指節関節外側の遠位陥凹部、赤白肉際。第5中足指節関節の外側を触察し、その前部に触れる陥凹中、表裏の境目に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-bl67', name: '至陰', yomi: 'しいん', meridian: '足の太陽膀胱経', ryaku: 'BL67', type: '膀胱経の井金穴',
+    location: '足の第5指、末節骨外側、爪甲角の近位外方1分（指寸）。足の第5指爪根部近位縁に引いた線と、外側縁に引いた線との交点に取る。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];
