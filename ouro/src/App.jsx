@@ -9,12 +9,13 @@ import { useStore } from './lib/useStore.js';
 import * as perf from './lib/perf.js';
 import { LOADERS, preloadView, preloadMany, preloadRuntime } from './lib/preload.js';
 import { useToast, Skeleton } from './components/ui.jsx';
-import { doneMessage } from './lib/resume.js';
+import { doneMessage } from './lib/announce.js';
 import Home from './components/Home.jsx';
 import Employees from './components/Employees.jsx';
 import KnowledgeView from './components/Knowledge.jsx';
 // 肖像の額縁は全員で1つを使い回すので、その定義だけ即時に読む
 import { PortraitSprite } from './components/Portrait.jsx';
+import ScrollArrows from './components/ScrollArrows.jsx';
 
 const TaskDetail = lazy(LOADERS.task);
 const EmployeeDetail = lazy(LOADERS.employee);
@@ -309,6 +310,9 @@ export default function App() {
           ▦ 会社（ダッシュボード・道具・承認・設定）
         </button>
       )}
+
+      {/* 長い画面を指ではらわずに動かせるように。動かない画面では出ない。 */}
+      <ScrollArrows view={view} />
 
       <nav className="nav">
         {NAV.map((n) => (

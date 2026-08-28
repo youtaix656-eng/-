@@ -57,12 +57,7 @@ export function finishedWhileAway(tasks = [], since = 0, now = Date.now()) {
     .sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 }
 
-/** 知らせの文言。1件と複数で言い方を変える（「1件の成果物」は不自然）。 */
-export function doneMessage(tasks = []) {
-  if (!tasks.length) return '';
-  if (tasks.length === 1) return '成果物が完成しました！';
-  return `成果物が${tasks.length}件 完成しました！`;
-}
+
 
 /** 経過（誰が・いつ・どれだけ）。画面で履歴として読める形にする。 */
 export function progressOf(task) {
@@ -84,3 +79,7 @@ export function progressOf(task) {
     error: s.error || null,
   }));
 }
+
+// 知らせの文は `lib/announce.js` へ分けた（起動時に読む量を減らすため）。
+// これまでどおり `resume.js` からも読めるように再輸出しておく。
+export { doneMessage } from './announce.js';

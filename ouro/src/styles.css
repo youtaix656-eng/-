@@ -774,6 +774,45 @@ select {
   margin: 0 0 14px;
 }
 
+/* ── 右端のスクロール矢印 ──
+   会社バー（39）より下に置く。モーダル（60）が開いたら隠れてよい。
+   新項目19：`backdrop-filter` と `will-change` は**付けない**。 */
+.scroll-arrows {
+  position: fixed;
+  right: 8px;
+  bottom: calc(var(--nav-h) + 104px + env(safe-area-inset-bottom, 0px));
+  z-index: 38;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scroll-arrows button {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.78);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.scroll-arrows button:hover:not(:disabled) {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 端まで来た側は、消さずに薄くする（位置が動くと押し損ねるため）。 */
+.scroll-arrows button:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
 /* ── トースト ── */
 .toast {
   position: fixed;

@@ -103,6 +103,7 @@ AI社員に仕事を依頼すると、社員どうしで引き継ぎながら仕
 | 84 | 社員に読ませた量（層ごとの内訳・知らせるだけ） | `lib/weight.js` |
 | 85 | 回し方（OODA 週1周／PDCA 月1周）を1段ずつ進める | `lib/loop.js` / `Ventures.jsx` |
 | 86 | 詰まっている段から、AI社員への依頼文を自動で組み立てる | `loop.loopRequest` |
+| 87 | 右端のスクロール矢印（長い画面を1画面ずつ動かす） | `components/ScrollArrows.jsx` |
 
 設計の全体像（アーキテクチャ・DBスキーマ・API・拡張時の注意点）は
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
