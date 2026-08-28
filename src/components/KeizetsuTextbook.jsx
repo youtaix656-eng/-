@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KEIZETSU_TEXTBOOK_SECTIONS } from '../data/keizetsuTextbookMap.js';
 import { computeSectionFrequency } from '../lib/keizetsuTextbookFreq.js';
 import { meridianNameById } from '../data/knowledgeBase.js';
+import { imagesInRange } from '../lib/keizetsuPageImages.js';
+import * as storage from '../lib/storage.js';
 
 const LEVEL_LABEL = { hot: '頻出', warm: 'よく出る', cool: 'たまに出る', none: '過去問での出題なし' };
 const LEVEL_ICON = { hot: '🔴', warm: '🟠', cool: '🟡', none: '⚪' };
@@ -12,6 +14,12 @@ const LEVEL_ICON = { hot: '🔴', warm: '🟠', cool: '🟡', none: '⚪' };
 export default function KeizetsuTextbook({ store, onNavigate }) {
   const questions = store?.questions || [];
   const [openId, setOpenId] = useState(null);
+  const [pageImages, setPageImages] = useState([]);
+  const [lightbox, setLightbox] = useState(null);
+
+  useEffect(() => {
+    storage.loadKeizetsuPageImages().then(setPageImages);
+  }, []);
 
   const sections = useMemo(
     () => computeSectionFrequency(KEIZETSU_TEXTBOOK_SECTIONS, questions),
@@ -46,34 +54,58 @@ export default function KeizetsuTextbook({ store, onNavigate }) {
       >
         📚 教科書ライブラリへ（原文を自分で貼り付けて保存）
       </button>
+      <button
+        type="button"
+        className="btn ghost block"
+        style={{ marginBottom: 12 }}
+        onClick={() => onNavigate && onNavigate('keizetsupageimages')}
+      >
+        📷 自分のページ写真を管理（この端末にのみ保存）
+      </button>
 
-      {sections.map((s) => (
-        <div key={s.id} className="kz-page kz-tb-section">
-          <button
-            type="button"
-            className="kz-tb-head"
-            onClick={() => setOpenId(openId === s.id ? null : s.id)}
-          >
-            <span className="kz-tb-pages">p.{s.pageStart}{s.pageEnd !== s.pageStart ? `–${s.pageEnd}` : ''}</span>
-            <span className="kz-tb-title">{s.title}</span>
-            <span className={`kz-freq kz-freq-${s.level}`} title={LEVEL_LABEL[s.level]}>
-              {LEVEL_ICON[s.level]} {s.count > 0 ? `${s.count}問` : LEVEL_LABEL[s.level]}
-            </span>
-          </button>
+      {sections.map((s) => {
+        const images = imagesInRange(pageImages, s.pageStart, s.pageEnd);
+        return (
+          <div key={s.id} className="kz-page kz-tb-section">
+            <button
+              type="button"
+              className="kz-tb-head"
+              onClick={() => setOpenId(openId === s.id ? null : s.id)}
+            >
+              <span className="kz-tb-pages">p.{s.pageStart}{s.pageEnd !== s.pageStart ? `–${s.pageEnd}` : ''}</span>
+              <span className="kz-tb-title">
+                {s.title}
+                {images.length > 0 && <span className="inline-note-dark"> 📷{images.length}</span>}
+              </span>
+              <span className={`kz-freq kz-freq-${s.level}`} title={LEVEL_LABEL[s.level]}>
+                {LEVEL_ICON[s.level]} {s.count > 0 ? `${s.count}問` : LEVEL_LABEL[s.level]}
+              </span>
+            </button>
 
-          {openId === s.id && (
-            <div className="kz-page-body">
-              <p className="kz-page-lead">{s.summary}</p>
-              {s.meridianId && (
-                <p className="inline-note-dark">経絡：{meridianNameById(s.meridianId)}（{s.meridianId}）</p>
-              )}
-              {s.roundsLabel && (
-                <p className="inline-note-dark">出題実績：{s.roundsLabel}</p>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
+            {openId === s.id && (
+              <div className="kz-page-body">
+                <p className="kz-page-lead">{s.summary}</p>
+                {s.meridianId && (
+                  <p className="inline-note-dark">経絡：{meridianNameById(s.meridianId)}（{s.meridianId}）</p>
+                )}
+                {s.roundsLabel && (
+                  <p className="inline-note-dark">出題実績：{s.roundsLabel}</p>
+                )}
+                {images.length > 0 && (
+                  <div className="photo-strip" style={{ marginTop: 10 }}>
+                    {images.map((img) => (
+                      <div className="photo-thumb" key={img.id}>
+                        <img src={img.dataUrl} alt={img.label || `p.${img.pageNumber}`} onClick={() => setLightbox(img.dataUrl)} />
+                        <div className="li-stat" style={{ marginTop: 4 }}>p.{img.pageNumber}{img.label ? `・${img.label}` : ''}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       <p className="inline-note" style={{ marginTop: 14 }}>
         ※ ページ範囲は教科書を読み直して確認した章立て・各経脈の開始ページに基づきます。
@@ -82,6 +114,13 @@ export default function KeizetsuTextbook({ store, onNavigate }) {
       <button className="btn ghost block" style={{ marginTop: 8 }} onClick={() => onNavigate && onNavigate('keizetsuindex')}>
         🔖 索引・目次（あ〜ん順）へ
       </button>
+
+      {lightbox && (
+        <div className="lightbox" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="拡大表示" />
+          <button className="lightbox-close" onClick={() => setLightbox(null)} aria-label="閉じる">✕</button>
+        </div>
+      )}
     </div>
   );
 }
