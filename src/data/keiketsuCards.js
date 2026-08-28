@@ -1,8 +1,9 @@
 // 経穴フラッシュカード（#7）。
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
 // 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴＋
-// 手の陽明大腸経20穴＋足の陽明胃経45穴の完全収録＝130枚。合谷・曲池・足三里は
-// 仮サンプルと重複するため各経で新規追加枚数のみカウントしている）。
+// 手の陽明大腸経20穴＋足の陽明胃経45穴＋足の太陰脾経21穴の完全収録＝150枚。
+// 合谷・曲池・足三里・三陰交は仮サンプルと重複するため各経で新規追加枚数のみ
+// カウントしている）。
 //
 // sourceIds: 出典ID（未設定=[]）。将来361穴へ拡充する時、内容を裏付けた出典
 // （例: lib/keiketsuLibrary.js に置いた教科書原文のページID、または書名）をここに残す。
@@ -19,6 +20,7 @@
 // 手の太陰肺経11穴の出典：同書 p.52-59。
 // 手の陽明大腸経20穴の出典：同書 p.60-71。
 // 足の陽明胃経45穴の出典：同書 p.72-91。
+// 足の太陰脾経21穴の出典：同書 p.92-103。
 
 export const KEIKETSU_CARDS = [
   {
@@ -725,6 +727,110 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-st45', name: '厲兌', yomi: 'れいだ', meridian: '足の陽明胃経', ryaku: 'ST45', type: '胃経の井金穴',
     location: '足の第2指、末節骨外側、爪甲角の近位外方1分。足の第2指爪根部近位縁に引いた線と外側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 足の太陰脾経（SP）21穴（p.92-103・完全収録） ----
+  // SP6（三陰交＝kc-saninkou）は既存の仮サンプルカードで収録済みのため、
+  // ここでは残り20穴を追加する（重複防止）。
+  {
+    id: 'kc-sp1', name: '隠白', yomi: 'いんぱく', meridian: '足の太陰脾経', ryaku: 'SP1', type: '脾経の井木穴',
+    location: '足の第1指、末節骨内側、爪甲角の近位内方1分。足の第1指爪根部近位縁に引いた線と内側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp2', name: '大都', yomi: 'だいと', meridian: '足の太陰脾経', ryaku: 'SP2', type: '脾経の榮火穴',
+    location: '足の第1指、第1中足指節関節内側の遠位陥凹部、赤白肉際。関節の内側を触察し前部に触れる陥凹中、表裏の境目に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp3', name: '太白', yomi: 'たいはく', meridian: '足の太陰脾経', ryaku: 'SP3', type: '脾の原穴・脾経の兪土穴',
+    location: '足内側、第1中足指節関節内側の近位陥凹部、赤白肉際。第1中足骨の内側縁を後ろからつま先の方へ撫でていき指が止まるところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp4', name: '公孫', yomi: 'こうそん', meridian: '足の太陰脾経', ryaku: 'SP4', type: '脾経の絡穴・八脈交会穴',
+    location: '足内側、第1中足骨底内側の遠位陥凹部、赤白肉際。太白から第1中足骨の内側縁に沿って後方へ撫で、指が止まるところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp5', name: '商丘', yomi: 'しょうきゅう', meridian: '足の太陰脾経', ryaku: 'SP5', type: '脾経の経金穴',
+    location: '足内側、内果の前下方、舟状骨粗面と内果尖の中央陥凹部。内果前縁を通る垂線と内果下縁を通る水平線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp7', name: '漏谷', yomi: 'ろうこく', meridian: '足の太陰脾経', ryaku: 'SP7', type: null,
+    location: '下腿内側（脛側）、脛骨内縁の後際、内果尖の上方6寸。内果尖と陰陵泉とを結ぶ線のほぼ中点の高さに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp8', name: '地機', yomi: 'ちき', meridian: '足の太陰脾経', ryaku: 'SP8', type: '脾経の郄穴',
+    location: '下腿内側（脛側）、脛骨内縁の後際、陰陵泉の下方3寸。内果尖と膝蓋骨尖とを結ぶ線を3等分し、膝蓋骨尖から3分の1の高さに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp9', name: '陰陵泉', yomi: 'いんりょうせん', meridian: '足の太陰脾経', ryaku: 'SP9', type: '脾経の合水穴',
+    location: '下腿内側（脛側）、脛骨内側顆下縁と脛骨内縁が接する陥凹部。脛骨内側縁を指頭で撫で上げ、指が止まるところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp10', name: '血海', yomi: 'けっかい', meridian: '足の太陰脾経', ryaku: 'SP10', type: null,
+    location: '大腿前内側、内側広筋隆起部、膝蓋骨底内端の上方2寸。膝蓋骨底内側端の上方2寸で内側広筋の隆起部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp11', name: '箕門', yomi: 'きもん', meridian: '足の太陰脾経', ryaku: 'SP11', type: null,
+    location: '大腿内側、膝蓋骨底内端と衝門を結ぶ線上、衝門から3分の1、縫工筋と長内転筋の間、大腿動脈拍動部。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp12', name: '衝門', yomi: 'しょうもん', meridian: '足の太陰脾経', ryaku: 'SP12', type: null,
+    location: '鼡径部、鼡径溝、大腿動脈拍動部の外方。曲骨（任脈）の外方で、府舎の内下方、大腿動脈拍動部の外方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp13', name: '府舎', yomi: 'ふしゃ', meridian: '足の太陰脾経', ryaku: 'SP13', type: null,
+    location: '下腹部、臍中央の下方4寸3分、前正中線の外方4寸。中極（任脈）の外方4寸のやや下方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp14', name: '腹結', yomi: 'ふっけつ', meridian: '足の太陰脾経', ryaku: 'SP14', type: null,
+    location: '下腹部、臍中央の下方1寸3分、前正中線の外方4寸。陰交（任脈）の外方4寸のやや下方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp15', name: '大横', yomi: 'だいおう', meridian: '足の太陰脾経', ryaku: 'SP15', type: null,
+    location: '上腹部、臍中央の外方4寸。神闕（任脈）の外方4寸に取る（肓兪＝腎経、天枢＝胃経と同じ高さ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp16', name: '腹哀', yomi: 'ふくあい', meridian: '足の太陰脾経', ryaku: 'SP16', type: null,
+    location: '上腹部、臍中央の上方3寸、前正中線の外方4寸。建里（任脈）の外方4寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp17', name: '食竇', yomi: 'しょくとく', meridian: '足の太陰脾経', ryaku: 'SP17', type: null,
+    location: '前胸部、第5肋間、前正中線の外方6寸。第5肋間に沿って前正中線外方6寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp18', name: '天渓', yomi: 'てんけい', meridian: '足の太陰脾経', ryaku: 'SP18', type: null,
+    location: '前胸部、第4肋間、前正中線の外方6寸。膻中（任脈）から第4肋間に沿って外方6寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp19', name: '胸郷', yomi: 'きょうきょう', meridian: '足の太陰脾経', ryaku: 'SP19', type: null,
+    location: '前胸部、第3肋間、前正中線の外方6寸。玉堂（任脈）から第3肋間に沿って外方6寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp20', name: '周栄', yomi: 'しゅうえい', meridian: '足の太陰脾経', ryaku: 'SP20', type: null,
+    location: '前胸部、第2肋間、前正中線の外方6寸。紫宮（任脈）から第2肋間に沿って外方6寸に取る（中府＝肺経の下方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-sp21', name: '大包', yomi: 'だいほう', meridian: '足の太陰脾経', ryaku: 'SP21', type: '脾の大絡の絡穴',
+    location: '側胸部、第6肋間、中腋窩線上。側臥して肩関節を外転させ、中腋窩線上で第6肋間の高さに取る。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];

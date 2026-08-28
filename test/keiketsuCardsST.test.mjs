@@ -50,8 +50,9 @@ test('下合穴（上巨虚＝大腸・下巨虚＝小腸・足三里＝胃）�
   assert.equal(bellyPoint.point, '足三里'); // 四総穴「肚腹は三里」＝ST36そのもの
 });
 
-test('KEIKETSU_CARDS全体: 総数130枚でid・nameが重複しない', () => {
-  assert.equal(KEIKETSU_CARDS.length, 130);
+test('KEIKETSU_CARDS全体でid・nameが重複しない', () => {
+  // 総数は経脈を追加するたびに増えるため、ここでは重複の無さだけを確認する
+  // （正確な総数はkeiketsuCardsSP.test.mjs等、最新バッチのテストで確認する）。
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.id)).size, KEIKETSU_CARDS.length);
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.name)).size, KEIKETSU_CARDS.length);
 });
