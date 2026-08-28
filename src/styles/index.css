@@ -2841,6 +2841,44 @@ code.block {
 
 .ana-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 
+/* ===== 右端のスクロール矢印 =====
+   縦に長い画面を、指で何度もはらわずに1画面ずつ動かすためのもの。
+   重なりはロードマップバー（28）より下。ミニプレーヤー（29）・下部ナビ（30）・
+   モーダル（70/100）が出たら、その下に隠れる。
+   横は、画面が広い時に本文の右端（--max-w の外側）へ寄せる。 */
+.scroll-arrows {
+  position: fixed;
+  right: max(8px, calc(50vw - var(--max-w) / 2 + 8px));
+  bottom: calc(var(--nav-h) + var(--roadmap-bar-h) + 64px + env(safe-area-inset-bottom, 0px));
+  z-index: 27;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scroll-arrows button {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+.scroll-arrows button:hover:not(:disabled) {
+  background: var(--navy-light);
+}
+/* 端まで来た側は、消さずに薄くする（位置が動くと押し損ねるため）。 */
+.scroll-arrows button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* ===== 音声ミニプレーヤー（画面遷移しても再生継続） ===== */
 .mini-player {
   position: fixed;
