@@ -22,6 +22,8 @@ import { parseSections, OUTPUT_SECTIONS, sectionByKey } from '../lib/outline.js'
 import { ticketOf, dueStateOf, DUE_LABELS, needsShare } from '../lib/ledger.js';
 import { progressOf } from '../lib/resume.js';
 import { checkSummary } from '../lib/checks.js';
+import { acceptReview, acceptLine, disagreeLine, ACCEPT_VALUES } from '../lib/accept.js';
+import { weightOf, weightLine } from '../lib/weight.js';
 import { checkEdited, MAX_SAMPLE_LEN, MAX_SAMPLES } from '../lib/style.js';
 
 export default function TaskDetail({ store, taskId, go }) {
@@ -105,6 +107,8 @@ export default function TaskDetail({ store, taskId, go }) {
           </button>
         </Card>
       )}
+
+      <WeightCard task={task} />
 
       <SectionTitle>経過（指示 → 成果物）</SectionTitle>
       <Card className="tight">
@@ -270,6 +274,7 @@ export default function TaskDetail({ store, taskId, go }) {
         <>
           <SectionTitle>会社としての提出物</SectionTitle>
           <CheckCard task={task} />
+          <AcceptCard task={task} store={store} />
           <PrePublishCard task={task} text={deliverable} store={store} go={go} />
           <Card>
             {/* 見出しは「提出物を書いた手順」の本文から拾う（連結文からは拾わない） */}
@@ -653,6 +658,115 @@ function toDateInput(ts) {
  * 「文章を出した＝完了」にしないための手順。読み取れなければ本文をそのまま出す
  * （勝手に「合格」にしない）。
  */
+/**
+ * 受け入れ確認——**人がやるテスト。**
+ *
+ * 完成条件の確認はAI社員がやっているが、自分たちの成果を自分たちで採点すると甘くなる。
+ * 作る値段が下がったぶん、確かめる人の重みが上がっている。
+ * **AIの答えでこちらを埋めない**（埋めると「見たつもり」になる）。
+ * **通せない関門にはしない**——付けなくても共有も知識化もできる。
+ */
+function AcceptCard({ task, store }) {
+  const review = acceptReview(task);
+  const [openNote, setOpenNote] = useState(null);
+  const [note, setNote] = useState('');
+  if (review.state === 'none') return null;
+
+  const set = (i, value, text = '') => {
+    store.setTaskAccept(task.id, i, value, text);
+    setOpenNote(null);
+    setNote('');
+  };
+
+  return (
+    <Card
+      glyph={review.state === 'passed' ? '☑' : review.state === 'failed' ? '⚠' : '☐'}
+      title={`自分の目で確かめる（${review.done}／${review.total}）`}
+    >
+      <p className="muted" style={{ marginTop: -6 }}>{acceptLine(review)}</p>
+      {disagreeLine(review) && (
+        <p className="muted" style={{ fontSize: 12.5 }}>{disagreeLine(review)}</p>
+      )}
+      {review.items.map((x) => (
+        <div key={x.i} className="card tight">
+          <p style={{ margin: '0 0 6px', fontSize: 13.5 }}>{x.text}</p>
+          <p className="muted" style={{ margin: '0 0 6px', fontSize: 11.5 }}>
+            {x.ai === null ? 'AIの確認：読み取れませんでした' : `AIの確認：${x.ai ? 'できている' : 'できていない'}`}
+            {x.aiReason ? `（${x.aiReason}）` : ''}
+          </p>
+          <div className="btn-row">
+            {Object.entries(ACCEPT_VALUES).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`btn small${x.human === key ? ' primary' : ''}`}
+                onClick={() => set(x.i, key)}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="btn ghost small"
+              onClick={() => { setOpenNote(openNote === x.i ? null : x.i); setNote(x.note || ''); }}
+            >
+              {x.note ? 'メモを直す' : 'メモ'}
+            </button>
+          </div>
+          {x.note && openNote !== x.i && (
+            <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{x.note}</p>
+          )}
+          {openNote === x.i && (
+            <div style={{ marginTop: 8 }}>
+              <Field label="どこが・どうなっていればよいか" hint="次に直すときに、この一文がそのまま指示になります。">
+                <input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
+              </Field>
+              <button type="button" className="btn small" onClick={() => set(x.i, x.human || 'ng', note)}>
+                メモを残す
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        AIの確認とは別に持っています。作った側が自分で採点すると甘くなるので、
+        ここに付けた答えの方を正とします。全部付けなくても先へ進めます。
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * 社員に読ませた量。**削らない・知らせるだけ。**
+ * 材料を足すほど賢くなるわけではなく、入れすぎたところで急に答えがぼやける。
+ * どこで増えているのかは入れた本人にしか見えないので、見えるようにする。
+ */
+function WeightCard({ task }) {
+  const w = weightOf(task);
+  if (!w.steps.length || !w.max) return null;
+  return (
+    <Card glyph="◐" title="社員に読ませた量">
+      <p className="muted" style={{ marginTop: -6 }}>{weightLine(w)}</p>
+      {/* 上の行は「1手順あたりの最大」、下の内訳は「全手順の合計」。
+          単位が違うので必ず書き分ける（数が合わないように見える）。 */}
+      <p className="muted" style={{ fontSize: 11.5, margin: '6px 0 2px' }}>
+        全手順を合わせた内訳（合計 {w.total.toLocaleString('ja-JP')}字）
+      </p>
+      {w.byLayer.slice(0, 5).map((l) => (
+        <p key={l.layer} className="muted" style={{ fontSize: 12, margin: '2px 0' }}>
+          ・{l.name}　{l.chars.toLocaleString('ja-JP')}字
+        </p>
+      ))}
+      {w.heavy && (
+        <p className="muted" style={{ fontSize: 11.5 }}>
+          知識を減らす・引き継ぎを「要点だけ」にする（設定）・依頼を分けると軽くなります。
+          こちらからは勝手に削りません（材料として使えなくなるため）。
+        </p>
+      )}
+    </Card>
+  );
+}
+
 function CheckCard({ task }) {
   const sum = checkSummary(task);
   if (sum.state === 'none') {

@@ -11,6 +11,13 @@
 
 export const MAX_CHECKS = 8;
 
+/**
+ * 完成の確認を任せる役職。**前から順に、雇っている方を使う**。
+ * テスターは「決めた条件を満たしているか」だけを見る専門なので先に置く。
+ * 雇っていない人が多いので、レビュアー（最初から居る6役職）へ必ず落ちる。
+ */
+export const CHECK_ROLE_IDS = ['tester', 'reviewer'];
+
 /** 完成条件の文を、1行ずつの確認項目に割る。 */
 export function parseChecklist(doneWhen) {
   const src = String(doneWhen || '').trim();

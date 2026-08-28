@@ -41,7 +41,7 @@ import { distill, extractUrls } from './distill.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
 import { decisionsFrom, decideDecision } from './decisions.js';
-import { addNote, removeNote, notesOf } from './memory.js';
+import { addNote, removeNote, notesOf } from './notes.js';
 import { normalizeRules, addRule, removeRule } from './rules.js';
 import { makeFunnel, normalizeFunnel } from './funnel.js';
 
@@ -1066,6 +1066,23 @@ export function useStore() {
       return patchTask(next);
     },
     [patchTask]
+  );
+
+  /**
+   * 受け入れ確認（人がやるテスト）の○×を書き込む。
+   * **AIの確認とは別に持つ**——自分たちの成果を自分たちで採点すると甘くなるので、
+   * 人の答えを正とする。AIの答えでこちらを埋めない。
+   */
+  const setTaskAccept = useCallback(
+    async (taskId, index, value, note = '') => {
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const { setAccept } = await import('./accept.js');
+      const next = { ...task, accept: setAccept(task, index, value, note) };
+      log({ actor: 'user', action: 'taskAccepted', target: task.title, detail: value });
+      return patchTask(next);
+    },
+    [patchTask, log]
   );
 
   /** 保留にする／解く（新規）。 */
@@ -2345,6 +2362,7 @@ export function useStore() {
     deleteTask,
     patchTask,
     setTaskMeta,
+    setTaskAccept,
     shareTask,
     flagTask,
     unflagTask: unflagTaskAction,

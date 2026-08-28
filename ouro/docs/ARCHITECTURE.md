@@ -510,6 +510,25 @@ sellReview(venture)           // 出す前の確認。数えるだけ・通せ�
 - **「自動で出す」は作らない**（規約違反でアカウントごと止まる）。
 - REST_KEYS のものは、**読み込みが済むまで「無い」と言い切らない**（`store.hydrated`）。
 
+### 6-15. 上流と下流（`lib/req.js` / `lib/accept.js` / `lib/weight.js`）
+
+```js
+reqReview({ request, spec })   // 6項目のうち足りないもの。AIを呼ばない・止めない
+acceptReview(task)             // 完成条件を人が○×。AIの答え(ai)と人の答え(human)を別に持つ
+setAccept(task, i, value, note)
+weightOf(task)                 // 層ごとの文字数。知らせるだけ・削らない
+
+CHECK_ROLE_IDS = ['tester', 'reviewer']  // テスター優先／最後は必ず core の役職
+```
+
+- **役職を足したら `data/employees.js` の `EXTRA_NAMES` も3名ずつ**
+  （役職数×席数より少ないと別の役職に同じ名前が回る）。`order` の重複も要注意。
+- 受け入れ確認は **AIの答えで人の欄を埋めない**。食い違いは「人が正」と出す。
+- 読ませた量は `memory.buildContext` → `workflow.applyStepResult` の順で手順に残る。
+  **「1手順あたりの最大」と「全手順の合計」を並べる時は必ず書き分ける。**
+- 社員の記憶は `lib/notes.js` に分けてある（`memory.js` からも再輸出）。
+  起動時に要るのは記憶の読み書きだけで、`buildContext` は実行時にしか要らない。
+
 ---
 
 ## 7. Knowledge Base 設計

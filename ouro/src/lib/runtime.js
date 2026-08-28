@@ -242,6 +242,8 @@ export async function runStep({
     citations: res.citations || [],
     usedKnowledgeIds: context.knowledgeIds,
     layers: context.layers,
+    // 社員が読んだ量（層ごと＋合計）。多いほど答えがぼやけるので、後から見られるようにする。
+    contextChars: context.chars || 0,
   };
   // 空の答えは覚えない（次も空を返してしまうため）
   if (key && out.text.trim()) writeCache(key, out);
