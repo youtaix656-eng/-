@@ -45,11 +45,11 @@ test('resolveKeizetsuTerm: フラッシュカードのある経穴はkind=card�
 });
 
 test('resolveKeizetsuTerm: 十二原穴はkind=pointで経絡名まで解決する', () => {
-  // 太淵・衝陽はkeiketsuCards.jsにフラッシュカードとして追加済みのため、ここでは
-  // まだカード化されていない原穴（神門＝手の少陰心経）で確認する。
-  const r = resolveKeizetsuTerm('神門');
+  // 太淵・衝陽・神門はkeiketsuCards.jsにフラッシュカードとして追加済みのため、ここでは
+  // まだカード化されていない原穴（太谿＝足の少陰腎経）で確認する。
+  const r = resolveKeizetsuTerm('太谿');
   assert.equal(r.kind, 'point');
-  assert.ok(r.roles.some((x) => x.meridian === 'HT' && x.role === '原穴' && x.meridianName === '手の少陰心経'));
+  assert.ok(r.roles.some((x) => x.meridian === 'KI' && x.role === '原穴' && x.meridianName === '足の少陰腎経'));
 });
 
 test('resolveKeizetsuTerm: 経絡そのものはkind=meridian、督脈・任脈も解決できる', () => {
@@ -73,9 +73,11 @@ test('resolveKeizetsuTerm: 独自経穴を持たない奇経はkind=extra', () =
 });
 
 test('resolveKeizetsuTerm: 紛らわしい経穴の対はkind=confusable', () => {
-  const r = resolveKeizetsuTerm('少海');
+  // 少海（HT3）はkeiketsuCards.jsにフラッシュカードとして追加済みのため、ここでは
+  // まだ両側ともカード化されていない対（陽綱＝足の太陽膀胱経／陽交＝足の少陽胆経）で確認する。
+  const r = resolveKeizetsuTerm('陽綱');
   assert.equal(r.kind, 'confusable');
-  assert.ok(r.confusable.a === '少海' || r.confusable.b === '少海');
+  assert.ok(r.confusable.a === '陽綱' || r.confusable.b === '陽綱');
 });
 
 test('resolveKeizetsuTerm: 未収録の項目は正直にkind=noneを返す（捏造しない）', () => {

@@ -47,8 +47,9 @@ test('章門（脾の募穴）はSPカードに含まれない（肝経＝LR上�
   assert.equal(muPointLocation.SP, 'LR');
 });
 
-test('KEIKETSU_CARDS全体: 総数150枚でid・nameが重複しない', () => {
-  assert.equal(KEIKETSU_CARDS.length, 150);
+test('KEIKETSU_CARDS全体でid・nameが重複しない', () => {
+  // 総数は経脈を追加するたびに増えるため、ここでは重複の無さだけを確認する
+  // （正確な総数はkeiketsuCardsSI.test.mjs等、最新バッチのテストで確認する）。
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.id)).size, KEIKETSU_CARDS.length);
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.name)).size, KEIKETSU_CARDS.length);
 });
