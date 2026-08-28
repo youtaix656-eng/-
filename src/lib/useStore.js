@@ -70,6 +70,7 @@ export function useStore() {
   const [auth, setAuthState] = useState(null); // 端末内ログイン鍵
   const [examResults, setExamResultsState] = useState([]); // 模試の結果履歴
   const [activity, setActivityState] = useState([]); // 直近の閲覧履歴（ホーム右上）
+  const [visitedViews, setVisitedViewsState] = useState([]); // 一度でも開いた画面（消えない集合、まだ使ったことのない機能の判定用）
   const [numberOverrides, setNumberOverridesState] = useState({}); // 数値ファクトの上書き（毎年更新）
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
@@ -77,6 +78,7 @@ export function useStore() {
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
   const [cloudAutoSyncToast, setCloudAutoSyncToast] = useState(0); // クラウド自動同期で他端末の進捗を取り込んだ回数
   const [cloudSyncStatus, setCloudSyncStatus] = useState(null); // { ok, at, pulled, error } | null（CloudBackup.jsxの状態表示用）
+  const [cloudAuthPaused, setCloudAuthPaused] = useState(false); // サイレント再ログイン失敗で自動同期を一時停止中か
   // ボイスクローン用APIキー（BYOK）。secretのため settings とは別保存＝バックアップ/同期対象外。
   const [voiceCloneApiKey, setVoiceCloneApiKeyState] = useState('');
   useEffect(() => {
@@ -85,6 +87,14 @@ export function useStore() {
   const saveVoiceCloneApiKey = useCallback((apiKey) => {
     setVoiceCloneApiKeyState(apiKey);
     storage.saveVoiceCloneSecret({ apiKey });
+  }, []);
+
+  useEffect(() => {
+    storage.loadCloudAuthPaused().then((v) => setCloudAuthPaused(!!v));
+  }, []);
+  const clearCloudAuthPause = useCallback(() => {
+    setCloudAuthPaused(false);
+    storage.saveCloudAuthPaused(false);
   }, []);
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
@@ -138,6 +148,7 @@ export function useStore() {
       const au = await storage.loadAuth();
       const er = await storage.loadExamResults();
       const act = await storage.loadActivity();
+      const vv = await storage.loadVisitedViews();
       const numOv = await storage.loadNumberOverrides();
       const [
         { default: eiseiQuestions, EISEI_VERSION },
@@ -344,6 +355,7 @@ export function useStore() {
       setAuthState(au || null);
       setExamResultsState(er || []);
       setActivityState(Array.isArray(act) ? act : []);
+      setVisitedViewsState(Array.isArray(vv) ? vv : []);
       setNumberOverridesState(numOv && typeof numOv === 'object' ? numOv : {});
       // 同梱の語呂合わせ（バッチ方式・増分）。DEFAULT_MNEMONICS_VERSION が上がるたびに
       // 未登録のキーワードだけ追加（既存ユーザーが編集・削除したものは上書きしない）。
@@ -437,6 +449,9 @@ export function useStore() {
     if (persist.current) storage.saveActivity(activity);
   }, [activity]);
   useEffect(() => {
+    if (persist.current) storage.saveVisitedViews(visitedViews);
+  }, [visitedViews]);
+  useEffect(() => {
     if (persist.current) storage.saveNumberOverrides(numberOverrides);
   }, [numberOverrides]);
   useEffect(() => {
@@ -463,6 +478,10 @@ export function useStore() {
     if (cloudSyncBusy.current) return { skipped: true, reason: 'busy' };
     const clientId = settings.googleDriveClientId;
     if (!clientId) return { skipped: true, reason: 'no-client-id' };
+    // サイレント再ログインが一度失敗したら、直すまで自動トリガーはポップアップを
+    // 出さずに黙って諦める（起動のたび・タブ復帰のたびにログイン画面が出る不具合の修正）。
+    // 手動操作（今すぐ同期・保存・復元・ログインし直す）はsilent=falseなのでここを通らない。
+    if (silent && cloudAuthPaused) return { skipped: true, reason: 'auth-paused' };
     cloudSyncBusy.current = true;
     try {
       const [gd, pm, meta] = await Promise.all([
@@ -516,16 +535,18 @@ export function useStore() {
         setSettings(merged.settings);
       }
       setCloudSyncStatus({ ok: true, at: newUpdatedAt, pulled });
+      if (cloudAuthPaused) { setCloudAuthPaused(false); storage.saveCloudAuthPaused(false); }
     } catch (e) {
       const gd = await import('./googleDrive.js').catch(() => null);
       const needsRelogin = gd && gd.isSilentAuthError(e);
       setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message, needsRelogin });
+      if (silent && needsRelogin) { setCloudAuthPaused(true); storage.saveCloudAuthPaused(true); }
       throw e;
     } finally {
       cloudSyncBusy.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, srs, history, memos, links, examResults, bookmarks, session]);
+  }, [settings, srs, history, memos, links, examResults, bookmarks, session, cloudAuthPaused]);
 
   // 「常に最新の状態」の各種自動トリガーが共有する間引き用の最終実行時刻。
   // 起動時同期もここに登録することで、起動直後にfocus/visibilitychangeが偶発的に
@@ -676,6 +697,11 @@ export function useStore() {
     });
   }, []);
   const clearActivity = useCallback(() => setActivityState([]), []);
+
+  const markViewVisited = useCallback((view) => {
+    if (!view) return;
+    setVisitedViewsState((cur) => (cur.includes(view) ? cur : [...cur, view]));
+  }, []);
 
   // 数値ファクトの上書き（毎年変わる数値を全科目まとめて更新するための単一窓口）
   const setNumberOverride = useCallback((id, patch) => {
@@ -1001,6 +1027,8 @@ export function useStore() {
     activity,
     logActivity,
     clearActivity,
+    visitedViews,
+    markViewVisited,
     numberOverrides,
     setNumberOverride,
     clearNumberOverride,
@@ -1030,6 +1058,8 @@ export function useStore() {
     clearCloudAutoSyncToast,
     cloudSyncStatus,
     syncCloudNow,
+    cloudAuthPaused,
+    clearCloudAuthPause,
     voiceCloneApiKey,
     saveVoiceCloneApiKey,
     settings,

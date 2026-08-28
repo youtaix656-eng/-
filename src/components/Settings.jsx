@@ -262,6 +262,8 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         importBackup={importBackup}
         cloudSyncStatus={store.cloudSyncStatus}
         syncCloudNow={store.syncCloudNow}
+        cloudAuthPaused={store.cloudAuthPaused}
+        clearCloudAuthPause={store.clearCloudAuthPause}
       />
 
       {/* ===== ボイスクローン（BYOK・任意／プライバシー方針の例外） ===== */}

@@ -166,6 +166,12 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [view]);
 
+  // 学習セッションが完了画面（行き止まり）になっているかどうか。完了済みセッションを
+  // 「前回開いていた画面」として復元・保存すると、タブの再読み込み（Androidが背面タブの
+  // プロセスを回収した場合など）のたびに毎回この完了画面へ戻ってしまい、他画面へ
+  // 移れないように見える不具合になる（終了する／もう一度以外に抜け道が無いため）。
+  const isDeadEndSession = (s) => !s || s.pos >= s.target;
+
   // 前回開いていた画面を復元（アプリを閉じて開き直しても続きから）
   const viewRestored = useRef(false);
   useEffect(() => {
@@ -173,8 +179,9 @@ export default function App() {
     let cancelled = false;
     loadLastView().then((v) => {
       if (cancelled) return;
-      // ハッシュ経由の取り込み等で既に他画面へ切り替わっている場合は尊重
-      if (v && typeof v === 'string' && v !== 'home') {
+      // ハッシュ経由の取り込み等で既に他画面へ切り替わっている場合は尊重。
+      // 完了済みセッションへの復元は行わない（行き止まりになるため）。
+      if (v && typeof v === 'string' && v !== 'home' && !(v === 'session' && isDeadEndSession(store.session))) {
         setView((cur) => (cur === 'home' ? v : cur));
       }
       // 復元が完了してから保存を有効化する（初期の 'home' で上書きしないため）
@@ -183,17 +190,29 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.loaded]);
 
-  // 画面を切り替えるたびに保存（復元完了後のみ）
+  // 画面を切り替えるたびに保存（復元完了後のみ）。完了済みセッションは「home」として
+  // 保存し、次回の復元が行き止まりの完了画面に落ちないようにする。
   useEffect(() => {
-    if (store.loaded && viewRestored.current) saveLastView(view);
-  }, [view, store.loaded]);
+    if (!store.loaded || !viewRestored.current) return;
+    const v = view === 'session' && isDeadEndSession(store.session) ? 'home' : view;
+    saveLastView(v);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, store.loaded, store.session]);
 
   // 直近の履歴に記録（ホーム以外の画面を開いたとき）。復元完了後のみ。
   useEffect(() => {
     if (!store.loaded || !viewRestored.current || view === 'home') return;
     store.logActivity(activityInfo(view));
+  }, [view, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 一度でも開いた画面を記録（消えない集合。「まだ使ったことのない機能」の判定用、
+  // Home.jsxのfeatureDiscoveryが参照する。activityと違い件数上限で古い訪問が消えない）。
+  useEffect(() => {
+    if (!store.loaded || !viewRestored.current) return;
+    store.markViewVisited(view);
   }, [view, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 端末だけに取り込む体験メモ（#notes=…）を反映したら知らせて画面を開く

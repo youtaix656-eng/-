@@ -11,7 +11,7 @@ import {
 // Googleドライブ（アプリ専用のappDataFolダー・ユーザーには見えない領域）への
 // クラウドバックアップ。他の機能と違いGoogleのサーバーと通信するため、
 // 既定ではオフ（クライアントID未設定の間は何も送信しない）で、注記も明示する。
-export default function CloudBackup({ settings, updateSettings, onToast, importBackup, cloudSyncStatus, syncCloudNow }) {
+export default function CloudBackup({ settings, updateSettings, onToast, importBackup, cloudSyncStatus, syncCloudNow, cloudAuthPaused, clearCloudAuthPause }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -21,6 +21,7 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
   const ensureToken = async () => {
     const token = await requestAccessToken(clientId);
     setSignedIn(true);
+    clearCloudAuthPause?.(); // 手動ログインが通ったので、自動同期の一時停止を解除する
     return token;
   };
 
@@ -196,21 +197,22 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
               </button>
             </div>
           )}
-          {settings.googleDriveAutoSync && cloudSyncStatus && (
+          {settings.googleDriveAutoSync && (cloudAuthPaused || cloudSyncStatus) && (
             <div style={{ marginTop: 6 }}>
-              {cloudSyncStatus.ok ? (
+              {cloudAuthPaused ? (
+                <div>
+                  <p className="inline-note">
+                    自動同期は再ログイン待ちで一時停止中です（ブラウザがログイン画面を自動で
+                    閉じた、またはブロックしたため）。ログイン画面が毎回勝手に出ることは
+                    ありません。下のボタンを一度押すと、以後また自動で同期されるようになります。
+                  </p>
+                  <button className="btn sm" onClick={doRelogin} disabled={busy}>🔑 ログインし直す</button>
+                </div>
+              ) : cloudSyncStatus.ok ? (
                 <p className="inline-note">
                   最終自動同期：{new Date(cloudSyncStatus.at).toLocaleString('ja-JP')}
                   {cloudSyncStatus.pulled ? '（他端末の進捗を反映しました）' : ''}
                 </p>
-              ) : cloudSyncStatus.needsRelogin ? (
-                <div>
-                  <p className="inline-note">
-                    自動同期には再ログインが必要です（ブラウザがログイン画面を自動で閉じたため）。
-                    下のボタンを一度押すと、以後また自動で同期されるようになります。
-                  </p>
-                  <button className="btn sm" onClick={doRelogin} disabled={busy}>🔑 ログインし直す</button>
-                </div>
               ) : (
                 <p className="inline-note">
                   自動同期を試みましたが失敗しました（{cloudSyncStatus.error || '不明なエラー'}）。次の機会に再試行します。
