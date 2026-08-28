@@ -187,7 +187,7 @@ export default function Flashcards({ store, onNavigate }) {
       {isKeiketsu && (
         <>
           <p className="inline-note" style={{ marginTop: 10 }}>
-            ※ 現在は{KEIKETSU_CARDS.length}枚（督脈28穴・任脈24穴・手の太陰肺経11穴・手の陽明大腸経20穴を完全収録）。今後361穴へ拡充していきます。
+            ※ 現在は{KEIKETSU_CARDS.length}枚（督脈28穴・任脈24穴・手の太陰肺経11穴・手の陽明大腸経20穴・足の陽明胃経45穴を完全収録）。今後361穴へ拡充していきます。
           </p>
           {/* 早見表（図や表も追加） */}
           <div className="section-label">📋 {YOUKETSU_TABLE.title}</div>

@@ -1,7 +1,8 @@
 // 経穴フラッシュカード（#7）。
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
 // 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴＋
-// 手の陽明大腸経20穴（うち合谷・曲池は仮サンプルと重複するため18枚追加）の完全収録＝86枚）。
+// 手の陽明大腸経20穴＋足の陽明胃経45穴の完全収録＝130枚。合谷・曲池・足三里は
+// 仮サンプルと重複するため各経で新規追加枚数のみカウントしている）。
 //
 // sourceIds: 出典ID（未設定=[]）。将来361穴へ拡充する時、内容を裏付けた出典
 // （例: lib/keiketsuLibrary.js に置いた教科書原文のページID、または書名）をここに残す。
@@ -17,6 +18,7 @@
 // 任脈24穴の出典：同書 p.42-51。
 // 手の太陰肺経11穴の出典：同書 p.52-59。
 // 手の陽明大腸経20穴の出典：同書 p.60-71。
+// 足の陽明胃経45穴の出典：同書 p.72-91。
 
 export const KEIKETSU_CARDS = [
   {
@@ -499,6 +501,230 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-li20', name: '迎香', yomi: 'げいこう', meridian: '手の陽明大腸経', ryaku: 'LI20', type: '別説あり（2説併記）',
     location: '顔面部、鼻唇溝中、鼻翼外縁中点と同じ高さ。〈別説〉鼻翼下縁の高さ。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 足の陽明胃経（ST）45穴（p.72-91・完全収録） ----
+  // ST36（足三里＝kc-sanri）は既存の仮サンプルカードで収録済みのため、
+  // ここでは残り44穴を追加する（重複防止）。
+  {
+    id: 'kc-st1', name: '承泣', yomi: 'しょうきゅう', meridian: '足の陽明胃経', ryaku: 'ST1', type: null,
+    location: '顔面部、眼球と眼窩下縁の間、瞳孔線上。正視させて瞳孔を通る垂線上で、眼球と眼窩下縁の間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st2', name: '四白', yomi: 'しはく', meridian: '足の陽明胃経', ryaku: 'ST2', type: null,
+    location: '顔面部、眼窩下孔部。正視させて承泣の下方で骨が陥凹しているところに取る（眼窩下神経の出る部）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st3', name: '巨髎', yomi: 'こりょう', meridian: '足の陽明胃経', ryaku: 'ST3', type: null,
+    location: '顔面部、瞳孔線上、鼻翼下縁と同じ高さ。瞳孔を通る垂線と、鼻翼下端から横に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st4', name: '地倉', yomi: 'ちそう', meridian: '足の陽明胃経', ryaku: 'ST4', type: null,
+    location: '顔面部、口角の外方4分（指寸）。鼻唇溝あるいはその延長線上に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st5', name: '大迎', yomi: 'だいげい', meridian: '足の陽明胃経', ryaku: 'ST5', type: null,
+    location: '顔面部、下顎角の前方、咬筋付着部の前方陥凹部、顔面動脈上。下顎角から下顎体に沿って指を前方に進め、顔面動脈拍動部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st6', name: '頬車', yomi: 'きょうしゃ', meridian: '足の陽明胃経', ryaku: 'ST6', type: null,
+    location: '顔面部、下顎角の前上方1横指（中指）。歯を噛み締めると咬筋が緊張し、力を抜くと陥凹するところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st7', name: '下関', yomi: 'げかん', meridian: '足の陽明胃経', ryaku: 'ST7', type: null,
+    location: '顔面部、頬骨弓の下縁中点と下顎切痕の間の陥凹部。口を閉じてできる陥凹に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st8', name: '頭維', yomi: 'ずい', meridian: '足の陽明胃経', ryaku: 'ST8', type: null,
+    location: '頭部、額角髪際の直上5分、前正中線の外方4寸5分。神庭（督脈）の外方4寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st9', name: '人迎', yomi: 'じんげい', meridian: '足の陽明胃経', ryaku: 'ST9', type: null,
+    location: '前頸部、甲状軟骨上縁と同じ高さ、胸鎖乳突筋の前縁、総頸動脈上。胸鎖乳突筋の前縁で総頸動脈拍動部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st10', name: '水突', yomi: 'すいとつ', meridian: '足の陽明胃経', ryaku: 'ST10', type: null,
+    location: '前頸部、輪状軟骨と同じ高さ、胸鎖乳突筋の前縁。人迎の下方で胸鎖乳突筋の前縁に取る（天鼎＝大腸経と同じ高さ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st11', name: '気舎', yomi: 'きしゃ', meridian: '足の陽明胃経', ryaku: 'ST11', type: null,
+    location: '前頸部、小鎖骨上窩で鎖骨胸骨端の上方、胸鎖乳突筋の胸骨頭と鎖骨頭の間の陥凹部。鎖骨内端の上部で胸鎖乳突筋の二頭間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st12', name: '欠盆', yomi: 'けつぼん', meridian: '足の陽明胃経', ryaku: 'ST12', type: null,
+    location: '前頸部、大鎖骨上窩、前正中線の外方4寸、鎖骨上方の陥凹部（肺尖部に近く気胸に注意）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st13', name: '気戸', yomi: 'きこ', meridian: '足の陽明胃経', ryaku: 'ST13', type: null,
+    location: '前胸部、鎖骨下縁、前正中線の外方4寸。鎖骨の下縁と乳頭線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st14', name: '庫房', yomi: 'こぼう', meridian: '足の陽明胃経', ryaku: 'ST14', type: null,
+    location: '前胸部、第1肋間、前正中線の外方4寸。華蓋（任脈）から第1肋間に沿って外方4寸、乳頭線上に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st15', name: '屋翳', yomi: 'おくえい', meridian: '足の陽明胃経', ryaku: 'ST15', type: null,
+    location: '前胸部、第2肋間、前正中線の外方4寸。紫宮（任脈）から第2肋間に沿って外方4寸、乳頭線上に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st16', name: '膺窓', yomi: 'ようそう', meridian: '足の陽明胃経', ryaku: 'ST16', type: null,
+    location: '前胸部、第3肋間、前正中線の外方4寸。玉堂（任脈）から第3肋間に沿って外方4寸、乳頭線上に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st17', name: '乳中', yomi: 'にゅうちゅう', meridian: '足の陽明胃経', ryaku: 'ST17', type: null,
+    location: '前胸部、乳頭中央。膻中（任脈）から第4肋間に沿って外方4寸、乳頭部中央に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st18', name: '乳根', yomi: 'にゅうこん', meridian: '足の陽明胃経', ryaku: 'ST18', type: null,
+    location: '前胸部、第5肋間、前正中線の外方4寸、乳頭線上（女性では乳房下縁の中点）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st19', name: '不容', yomi: 'ふよう', meridian: '足の陽明胃経', ryaku: 'ST19', type: null,
+    location: '上腹部、臍中央の上方6寸、前正中線の外方2寸。天枢の上方6寸、巨闕（任脈）の外方2寸で腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st20', name: '承満', yomi: 'しょうまん', meridian: '足の陽明胃経', ryaku: 'ST20', type: null,
+    location: '上腹部、臍中央の上方5寸、前正中線の外方2寸。天枢の上方5寸、上脘（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st21', name: '梁門', yomi: 'りょうもん', meridian: '足の陽明胃経', ryaku: 'ST21', type: null,
+    location: '上腹部、臍中央の上方4寸、前正中線の外方2寸。天枢の上方4寸、中脘（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st22', name: '関門', yomi: 'かんもん', meridian: '足の陽明胃経', ryaku: 'ST22', type: null,
+    location: '上腹部、臍中央の上方3寸、前正中線の外方2寸。天枢の上方3寸、建里（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st23', name: '太乙', yomi: 'たいいつ', meridian: '足の陽明胃経', ryaku: 'ST23', type: null,
+    location: '上腹部、臍中央の上方2寸、前正中線の外方2寸。天枢の上方2寸、下脘（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st24', name: '滑肉門', yomi: 'かつにくもん', meridian: '足の陽明胃経', ryaku: 'ST24', type: null,
+    location: '上腹部、臍中央の上方1寸、前正中線の外方2寸。天枢の上方1寸、水分（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st25', name: '天枢', yomi: 'てんすう', meridian: '足の陽明胃経', ryaku: 'ST25', type: '大腸の募穴',
+    location: '上腹部、臍中央の外方2寸。神闕（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st26', name: '外陵', yomi: 'がいりょう', meridian: '足の陽明胃経', ryaku: 'ST26', type: null,
+    location: '下腹部、臍中央の下方1寸、前正中線の外方2寸。天枢の下方1寸、陰交（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st27', name: '大巨', yomi: 'たいこ', meridian: '足の陽明胃経', ryaku: 'ST27', type: null,
+    location: '下腹部、臍中央の下方2寸、前正中線の外方2寸。天枢の下方2寸、石門（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st28', name: '水道', yomi: 'すいどう', meridian: '足の陽明胃経', ryaku: 'ST28', type: null,
+    location: '下腹部、臍中央の下方3寸、前正中線の外方2寸。天枢の下方3寸、関元（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st29', name: '帰来', yomi: 'きらい', meridian: '足の陽明胃経', ryaku: 'ST29', type: null,
+    location: '下腹部、臍中央の下方4寸、前正中線の外方2寸。天枢の下方4寸、中極（任脈）の外方2寸、腹直筋中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st30', name: '気衝', yomi: 'きしょう', meridian: '足の陽明胃経', ryaku: 'ST30', type: null,
+    location: '鼡径部、恥骨結合上縁と同じ高さ、前正中線の外方2寸、大腿動脈拍動部。天枢の下方5寸、曲骨（任脈）の外方2寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st31', name: '髀関', yomi: 'ひかん', meridian: '足の陽明胃経', ryaku: 'ST31', type: null,
+    location: '大腿前面、大腿直筋・縫工筋・大腿筋膜張筋の近位部の間の陥凹部。上前腸骨棘と膝蓋骨底外端とを結ぶ線上、大転子頂点の高さに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st32', name: '伏兎', yomi: 'ふくと', meridian: '足の陽明胃経', ryaku: 'ST32', type: null,
+    location: '大腿前外側、膝蓋骨底外端と上前腸骨棘を結ぶ線上、膝蓋骨底の上方6寸。膝蓋骨底外端から3分の1、大腿直筋の外縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st33', name: '陰市', yomi: 'いんし', meridian: '足の陽明胃経', ryaku: 'ST33', type: null,
+    location: '大腿前外側、大腿直筋腱の外側で膝蓋骨底の上方3寸。膝蓋骨底外端の上方3寸、大腿直筋腱の外側縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st34', name: '梁丘', yomi: 'りょうきゅう', meridian: '足の陽明胃経', ryaku: 'ST34', type: '胃経の郄穴',
+    location: '大腿前外側、外側広筋と大腿直筋外縁の間、膝蓋骨底の上方2寸。膝蓋骨底外端の上方2寸、外側広筋と大腿直筋腱との間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st35', name: '犢鼻', yomi: 'とくび', meridian: '足の陽明胃経', ryaku: 'ST35', type: null,
+    location: '膝前面、膝蓋靭帯外方の陥凹部。膝を軽く曲げたとき、膝蓋骨外下方にできる陥凹中に取る（犢鼻から解渓までの長さを1尺6寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st37', name: '上巨虚', yomi: 'じょうこきょ', meridian: '足の陽明胃経', ryaku: 'ST37', type: '大腸の下合穴',
+    location: '下腿前面、犢鼻と解渓を結ぶ線上、犢鼻の下方6寸。条口の上方2寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st38', name: '条口', yomi: 'じょうこう', meridian: '足の陽明胃経', ryaku: 'ST38', type: null,
+    location: '下腿前面、犢鼻と解渓を結ぶ線上、犢鼻の下方8寸。犢鼻と解渓との中点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st39', name: '下巨虚', yomi: 'げこきょ', meridian: '足の陽明胃経', ryaku: 'ST39', type: '小腸の下合穴',
+    location: '下腿前面、犢鼻と解渓を結ぶ線上、犢鼻の下方9寸。条口の下方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st40', name: '豊隆', yomi: 'ほうりゅう', meridian: '足の陽明胃経', ryaku: 'ST40', type: '胃経の絡穴',
+    location: '下腿前外側、前脛骨筋の外縁、外果尖の上方8寸。条口の外方1横指（中指）、前脛骨筋の外縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st41', name: '解渓', yomi: 'かいけい', meridian: '足の陽明胃経', ryaku: 'ST41', type: '胃経の経火穴',
+    location: '足関節前面中央の陥凹部、長母指伸筋腱と長指伸筋腱の間（内果尖と外果尖の中点にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st42', name: '衝陽', yomi: 'しょうよう', meridian: '足の陽明胃経', ryaku: 'ST42', type: '胃の原穴',
+    location: '足背、第2中足骨底と中間楔状骨の間、足背動脈拍動部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st43', name: '陥谷', yomi: 'かんこく', meridian: '足の陽明胃経', ryaku: 'ST43', type: '胃経の兪木穴',
+    location: '足背、第2・第3中足骨間、第2中足指節関節の近位陥凹部。第2中足指節関節の後外側陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st44', name: '内庭', yomi: 'ないてい', meridian: '足の陽明胃経', ryaku: 'ST44', type: '胃経の榮水穴',
+    location: '足背、第2・第3指間、みずかきの後縁、赤白肉際。第2・第3中足指節関節間の直前の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-st45', name: '厲兌', yomi: 'れいだ', meridian: '足の陽明胃経', ryaku: 'ST45', type: '胃経の井金穴',
+    location: '足の第2指、末節骨外側、爪甲角の近位外方1分。足の第2指爪根部近位縁に引いた線と外側縁に引いた線との交点に取る。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];
