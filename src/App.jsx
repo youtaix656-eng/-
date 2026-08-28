@@ -12,6 +12,7 @@ import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
+import ScrollArrows from './components/ScrollArrows.jsx';
 import AuthGate from './components/AuthGate.jsx';
 import Pomodoro from './components/Pomodoro.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
@@ -694,6 +695,11 @@ export default function App() {
       </main>
 
       {toast && <div className="toast">{toast}</div>}
+
+      {/* 右端のスクロール矢印：長い画面を1画面ずつ動かす。
+          **画面の分岐（renderView）の中に入れないこと**——入れるとその画面にしか出ない。
+          動かない画面では自分で消える。 */}
+      <ScrollArrows view={view} />
 
       {/* 音声ミニプレーヤー：他の画面へ移っても再生を続けられる（音声画面では非表示） */}
       <MiniPlayer hidden={view === 'audio'} onOpen={() => setView('audio')} lifted={view !== 'roadmap'} />
