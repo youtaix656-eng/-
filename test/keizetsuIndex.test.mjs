@@ -44,12 +44,15 @@ test('resolveKeizetsuTerm: フラッシュカードのある経穴はkind=card�
   assert.equal(r.card, KEIKETSU_CARDS.find((c) => c.name === '合谷'));
 });
 
-test('resolveKeizetsuTerm: 十二原穴はkind=pointで経絡名まで解決する', () => {
-  // 太淵・衝陽・神門・太谿・大陵・陽池はkeiketsuCards.jsにフラッシュカードとして
-  // 追加済みのため、ここではまだカード化されていない原穴（丘墟＝足の少陽胆経）で確認する。
+test('resolveKeizetsuTerm: 361穴が完全収録された結果、十二原穴はすべてkind=cardで解決する', () => {
+  // 2026-08-28、361穴の完全収録が完了。POINT_INDEX（原穴・絡穴・郄穴・募穴・兪穴・
+  // 四総穴）が指す経穴はすべてkeiketsuCards.jsのカードと重なったため、resolveKeizetsuTerm
+  // はcard判定を先に行う設計上、'point'は事実上到達しなくなった（roles自体は
+  // POINT_INDEXに残るので、カード側から要穴の役割を確認できることをここで確認する）。
   const r = resolveKeizetsuTerm('丘墟');
-  assert.equal(r.kind, 'point');
-  assert.ok(r.roles.some((x) => x.meridian === 'GB' && x.role === '原穴' && x.meridianName === '足の少陽胆経'));
+  assert.equal(r.kind, 'card');
+  assert.equal(r.card.meridian, '足の少陽胆経');
+  assert.ok(r.card.type.includes('原穴'));
 });
 
 test('resolveKeizetsuTerm: 経絡そのものはkind=meridian、督脈・任脈も解決できる', () => {
@@ -72,13 +75,15 @@ test('resolveKeizetsuTerm: 独自経穴を持たない奇経はkind=extra', () =
   assert.equal(r.extra.id, 'chong');
 });
 
-test('resolveKeizetsuTerm: 紛らわしい経穴の対はkind=confusable', () => {
-  // 少海・陽綱はkeiketsuCards.jsにフラッシュカードとして追加済みのため、ここでは
-  // 対の相手（懸釐＝足の少陽胆経、まだカード化されていない）で確認する。
-  // resolveKeizetsuTermは問い合わせた語（懸釐）自体の状態で解決するため、対の反対側
-  // （建里）が既にカード化されていても、懸釐自身が未収録なら引き続きconfusableになる。
+test('resolveKeizetsuTerm: 361穴完全収録後は紛らわしい経穴の対もkind=cardで解決するが、confusable情報は保持される', () => {
+  // 2026-08-28、361穴の完全収録が完了し、19組の紛らわしい経穴（confusablePoints）は
+  // 両側ともkeiketsuCards.jsのカードになった。resolveKeizetsuTermはcard判定を先に行う
+  // 設計のため、実在する経穴名で'confusable'は到達しなくなったが、card結果にも
+  // confusableフィールドが同梱される設計（findConfusableをcard分岐でも呼ぶ）ため、
+  // 「まぎらわしい対がある」という情報自体は失われていないことを確認する。
   const r = resolveKeizetsuTerm('懸釐');
-  assert.equal(r.kind, 'confusable');
+  assert.equal(r.kind, 'card');
+  assert.ok(r.confusable);
   assert.ok(r.confusable.a === '懸釐' || r.confusable.b === '懸釐');
 });
 

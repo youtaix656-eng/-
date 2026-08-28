@@ -100,7 +100,7 @@ export default function Flashcards({ store, onNavigate }) {
       <div className="field" style={{ marginBottom: 14 }}>
         <label>科目</label>
         <select value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value={KEIKETSU_MODE}>経穴カード（経絡・部位・主治／361穴へ拡充予定）</option>
+          <option value={KEIKETSU_MODE}>経穴カード（経絡・部位・主治／361穴完全収録）</option>
           {CHOICE_QUIZ_SUBJECTS.map((s) => (
             <option key={s.name} value={s.name}>{s.label}</option>
           ))}
@@ -187,7 +187,7 @@ export default function Flashcards({ store, onNavigate }) {
       {isKeiketsu && (
         <>
           <p className="inline-note" style={{ marginTop: 10 }}>
-            ※ 現在は{KEIKETSU_CARDS.length}枚（督脈28穴・任脈24穴・手の太陰肺経11穴・手の陽明大腸経20穴・足の陽明胃経45穴・足の太陰脾経21穴・手の少陰心経9穴・手の太陽小腸経19穴・足の太陽膀胱経67穴・足の少陰腎経27穴・手の厥陰心包経9穴・手の少陽三焦経23穴を完全収録）。今後361穴へ拡充していきます。
+            ※ 十四経脈361穴を完全収録済み（{KEIKETSU_CARDS.length}枚）。
           </p>
           {/* 早見表（図や表も追加） */}
           <div className="section-label">📋 {YOUKETSU_TABLE.title}</div>

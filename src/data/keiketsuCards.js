@@ -1,10 +1,10 @@
 // 経穴フラッシュカード（#7）。
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
-// 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴＋
+// 361穴を完全収録（仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴＋
 // 手の陽明大腸経20穴＋足の陽明胃経45穴＋足の太陰脾経21穴＋手の少陰心経9穴＋
 // 手の太陽小腸経19穴＋足の太陽膀胱経67穴＋足の少陰腎経27穴＋手の厥陰心包経9穴＋
-// 手の少陽三焦経23穴の完全収録＝304枚。
-// 合谷・曲池・足三里・三陰交は仮サンプルと重複するため各経で新規追加枚数のみ
+// 手の少陽三焦経23穴＋足の少陽胆経44穴＋足の厥陰肝経14穴＝361枚。2026-08-28完了。
+// 合谷・曲池・足三里・三陰交・太衝は仮サンプルと重複するため各経で新規追加枚数のみ
 // カウントしている）。
 //
 // sourceIds: 出典ID（未設定=[]）。将来361穴へ拡充する時、内容を裏付けた出典
@@ -29,6 +29,8 @@
 // 足の少陰腎経27穴の出典：同書 p.150-163。
 // 手の厥陰心包経9穴の出典：同書 p.164-169。
 // 手の少陽三焦経23穴の出典：同書 p.170-181。
+// 足の少陽胆経44穴の出典：同書 p.182-201。
+// 足の厥陰肝経14穴の出典：同書 p.202-208。
 
 export const KEIKETSU_CARDS = [
   {
@@ -1621,6 +1623,295 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-te23', name: '糸竹空', yomi: 'しちくくう', meridian: '手の少陽三焦経', ryaku: 'TE23', type: null,
     location: '頭部、眉毛外端の陥凹部。眉毛の外端で、骨のくぼんだところに取る（瞳子髎＝胆経の直上にある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 足の少陽胆経（GB）44穴（p.182-201・完全収録） ----
+  {
+    id: 'kc-gb1', name: '瞳子髎', yomi: 'どうしりょう', meridian: '足の少陽胆経', ryaku: 'GB1', type: null,
+    location: '頭部、外眼角の外方5分、陥凹部。外眼角の外方5分で、骨の少しくぼんだところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb2', name: '聴会', yomi: 'ちょうえ', meridian: '足の少陽胆経', ryaku: 'GB2', type: null,
+    location: '顔面部、珠間切痕と下顎骨関節突起の間、陥凹部。珠間切痕の直前陥凹中で、口を開くと深くくぼむところに取る（聴宮＝小腸経の直下にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb3', name: '上関', yomi: 'じょうかん', meridian: '足の少陽胆経', ryaku: 'GB3', type: '別名：客主人',
+    location: '頭部、頬骨弓中央の上際陥凹部。頬骨弓中央の上際に取る（頬骨弓をはさんで下関＝胃経の直上にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb4', name: '頷厭', yomi: 'がんえん', meridian: '足の少陽胆経', ryaku: 'GB4', type: null,
+    location: '頭部、頭維と曲鬢を結ぶ（側頭の髪際に沿った）曲線上、頭維から4分の1。側頭髪際にほぼ並行して、頭維（胃経）から曲鬢までをなだらかに結ぶ曲線上で、頭維から4分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb5', name: '懸顱', yomi: 'けんろ', meridian: '足の少陽胆経', ryaku: 'GB5', type: null,
+    location: '頭部、頭維と曲鬢を結ぶ（側頭の髪際に沿った）曲線上の中点。側頭髪際にほぼ並行して、頭維（胃経）から曲鬢までをなだらかに結ぶ曲線の中点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb6', name: '懸釐', yomi: 'けんり', meridian: '足の少陽胆経', ryaku: 'GB6', type: null,
+    location: '頭部、頭維と曲鬢を結ぶ（側頭の髪際に沿った）曲線上、頭維から4分の3。側頭髪際にほぼ並行して、頭維（胃経）から曲鬢までをなだらかに結ぶ曲線上で、曲鬢から4分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb7', name: '曲鬢', yomi: 'きょくびん', meridian: '足の少陽胆経', ryaku: 'GB7', type: null,
+    location: '頭部、もみあげ後縁の垂線と耳尖の水平線の交点。もみあげ後縁の上方で、耳尖の高さに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb8', name: '率谷', yomi: 'そっこく', meridian: '足の少陽胆経', ryaku: 'GB8', type: null,
+    location: '頭部、耳尖の直上、髪際の上方1寸5分。角孫（三焦経）の上方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb9', name: '天衝', yomi: 'てんしょう', meridian: '足の少陽胆経', ryaku: 'GB9', type: null,
+    location: '頭部、耳介の付け根の後縁の直上、髪際の上方2寸。率谷の後方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb10', name: '浮白', yomi: 'ふはく', meridian: '足の少陽胆経', ryaku: 'GB10', type: null,
+    location: '頭部、乳様突起の後上方、天衝と完骨を結ぶ（耳の輪郭に沿った）曲線上、天衝から3分の1。耳尖直後の髪際の後方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb11', name: '頭竅陰', yomi: 'あたまきょういん', meridian: '足の少陽胆経', ryaku: 'GB11', type: null,
+    location: '頭部、乳様突起の後上方、天衝と完骨を結ぶ（耳の輪郭に沿った）曲線上、天衝から3分の2。乳様突起の後上方で、完骨から天衝に向かって約3分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb12', name: '完骨', yomi: 'かんこつ', meridian: '足の少陽胆経', ryaku: 'GB12', type: null,
+    location: '前頭部、乳様突起の後下方、陥凹部。乳様突起の後下方陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb13', name: '本神', yomi: 'ほんじん', meridian: '足の少陽胆経', ryaku: 'GB13', type: null,
+    location: '頭部、前髪際の後方5分、前正中線の外方3寸。神庭（督脈）と頭維（胃経）とを結ぶ線を3等分し、頭維から3分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb14', name: '陽白', yomi: 'ようはく', meridian: '足の少陽胆経', ryaku: 'GB14', type: null,
+    location: '頭部、眉の上方1寸、瞳孔線上。眉毛中央の上方1寸、瞳孔を通る垂直線上で骨の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb15', name: '頭臨泣', yomi: 'あたまりんきゅう', meridian: '足の少陽胆経', ryaku: 'GB15', type: null,
+    location: '頭部、前髪際から入ること5分、瞳孔線上。神庭（督脈）と頭維（胃経）とを結ぶ線の中点に取る（瞳孔の直上にあたる。前髪際の後方5分には前正中線から、神庭、眉衝＝膀胱経、曲差＝膀胱経、頭臨泣、本神、頭維＝胃経が並ぶ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb16', name: '目窓', yomi: 'もくそう', meridian: '足の少陽胆経', ryaku: 'GB16', type: null,
+    location: '頭部、前髪際から入ること1寸5分、瞳孔線上。頭臨泣の後方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb17', name: '正営', yomi: 'しょうえい', meridian: '足の少陽胆経', ryaku: 'GB17', type: null,
+    location: '頭部、前髪際から入ること2寸5分、瞳孔線上。承光（膀胱経）の外方で、頭臨泣の後方2寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb18', name: '承霊', yomi: 'しょうれい', meridian: '足の少陽胆経', ryaku: 'GB18', type: null,
+    location: '頭部、前髪際から入ること4寸、瞳孔線上。通天（膀胱経）の外方で、正営の後方1寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb19', name: '脳空', yomi: 'のうくう', meridian: '足の少陽胆経', ryaku: 'GB19', type: null,
+    location: '頭部、外後頭隆起上縁と同じ高さ、風池の直上。上項線と風池を通る垂線との交点に取る（脳戸＝督脈、玉枕＝膀胱経と同じ高さにある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb20', name: '風池', yomi: 'ふうち', meridian: '足の少陽胆経', ryaku: 'GB20', type: null,
+    location: '前頸部、後頭骨の下方、胸鎖乳突筋と僧帽筋の起始部の間、陥凹部。風府（督脈）の外方で、僧帽筋と胸鎖乳突筋との間の陥凹中に取る（深部に椎骨動脈が通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb21', name: '肩井', yomi: 'けんせい', meridian: '足の少陽胆経', ryaku: 'GB21', type: null,
+    location: '後頭部、第7頸椎棘突起と肩峰外縁を結ぶ線上の中点。第7頸椎棘突起と肩峰外縁中央との中点に取る（天髎＝三焦経の上方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb22', name: '淵腋', yomi: 'えんえき', meridian: '足の少陽胆経', ryaku: 'GB22', type: null,
+    location: '側胸部、第4肋間、中腋窩線上。腋窩中央の下方で第4肋間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb23', name: '輒筋', yomi: 'ちょうきん', meridian: '足の少陽胆経', ryaku: 'GB23', type: null,
+    location: '側胸部、第4肋間、中腋窩線の前方1寸。淵腋の前方1寸で、天渓（脾経）との中点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb24', name: '日月', yomi: 'じつげつ', meridian: '足の少陽胆経', ryaku: 'GB24', type: '胆の募穴',
+    location: '前胸部、第7肋間、前正中線の外方4寸。乳頭中央の下方で、乳根（胃経）の2肋間下に取る（女性では鎖骨中線と第7肋間との交点に取る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb25', name: '京門', yomi: 'けいもん', meridian: '足の少陽胆経', ryaku: 'GB25', type: '腎の募穴',
+    location: '側腹部、第12肋骨端下縁。側臥して、第12肋骨下縁を脊柱側から押していくと前端に触れ、その下縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb26', name: '帯脈', yomi: 'たいみゃく', meridian: '足の少陽胆経', ryaku: 'GB26', type: null,
+    location: '側腹部、第11肋骨端下方、臍中央と同じ高さ。臍の中央を通る水平線と、第11肋骨端を通る垂線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb27', name: '五枢', yomi: 'ごすう', meridian: '足の少陽胆経', ryaku: 'GB27', type: null,
+    location: '下腹部、臍中央の下方3寸、上前腸骨棘の内方。関元（任脈）の外方で、帯脈の前下方、上前腸骨棘の内方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb28', name: '維道', yomi: 'いどう', meridian: '足の少陽胆経', ryaku: 'GB28', type: null,
+    location: '下腹部、上前腸骨棘の内下方5分。五枢の内下方5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb29', name: '居髎', yomi: 'きょりょう', meridian: '足の少陽胆経', ryaku: 'GB29', type: null,
+    location: '殿部、上前腸骨棘と大転子頂点の中点。維道の外下方で、上前腸骨棘と大転子の頂点との中点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb30', name: '環跳', yomi: 'かんちょう', meridian: '足の少陽胆経', ryaku: 'GB30', type: null,
+    location: '殿部、大転子の頂点と仙骨裂孔を結ぶ線上、大転子頂点から3分の1。仙骨裂孔（督脈の腰兪）と大転子の頂点とを結ぶ線を3等分し、大転子頂点から3分の1のところに取る（側臥し股関節を屈曲すると取穴しやすい。別説では大腿部、大転子の頂点と上前腸骨棘の間、大転子頂点から3分の1とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb31', name: '風市', yomi: 'ふうし', meridian: '足の少陽胆経', ryaku: 'GB31', type: null,
+    location: '大腿部外側、直立して腕を下垂し、手掌を大腿部に付けたとき、中指の先端があたる腸脛靭帯の後方陥凹部。直立して上肢を下垂したとき、大腿外側に中指頭があたるところで、腸脛靭帯と大腿二頭筋との間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb32', name: '中瀆', yomi: 'ちゅうとく', meridian: '足の少陽胆経', ryaku: 'GB32', type: null,
+    location: '大腿部外側、腸脛靭帯の後方で、膝窩横紋の上方7寸。膝窩横紋の上方7寸で、腸脛靭帯と大腿二頭筋との間に取る（大転子から膝窩中央までの長さを1尺9寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb33', name: '膝陽関', yomi: 'ひざようかん', meridian: '足の少陽胆経', ryaku: 'GB33', type: null,
+    location: '膝外側、大腿二頭筋腱と腸脛靭帯の間の陥凹部、大腿骨外側上顆の後上縁。中瀆から腸脛靭帯後縁に沿って下がると大腿骨外側上顆に触れ、その後上縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb34', name: '陽陵泉', yomi: 'ようりょうせん', meridian: '足の少陽胆経', ryaku: 'GB34', type: '胆経の合土穴・八会穴の筋会・胆の下合穴',
+    location: '下腿外側、腓骨頭前下方の陥凹部。下腿外側で腓骨頭の前下部、長腓骨筋腱の前縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb35', name: '陽交', yomi: 'ようこう', meridian: '足の少陽胆経', ryaku: 'GB35', type: '陽維脈の郄穴',
+    location: '下腿外側、腓骨の後方、外果尖の上方7寸。外果尖と膝窩横紋外端とを結ぶ線の中点の下方1寸の高さで、腓骨直後の陥凹部に取る（外丘と飛揚＝膀胱経との間にあたる。外果尖から膝窩横紋外端までの長さを1尺6寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb36', name: '外丘', yomi: 'がいきゅう', meridian: '足の少陽胆経', ryaku: 'GB36', type: '胆経の郄穴',
+    location: '下腿外側、腓骨の前方、外果尖の上方7寸。外果尖と膝窩横紋外端を結ぶ線上の中点の下方1寸の高さで、腓骨直前の陥凹部に取る（陽交と下巨虚＝胃経との間にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb37', name: '光明', yomi: 'こうめい', meridian: '足の少陽胆経', ryaku: 'GB37', type: '胆経の絡穴',
+    location: '下腿外側、腓骨の前方、外果尖の上方5寸。外果尖と膝窩横紋外端を結ぶ線上の外果尖の上方5寸の高さで、腓骨の前方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb38', name: '陽輔', yomi: 'ようほ', meridian: '足の少陽胆経', ryaku: 'GB38', type: '胆経の経火穴',
+    location: '下腿外側、腓骨の前方、外果尖の上方4寸。外果尖と膝窩横紋外端とを結ぶ線を4等分し、外果尖から4分の1のところ、腓骨の前方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb39', name: '懸鍾', yomi: 'けんしょう', meridian: '足の少陽胆経', ryaku: 'GB39', type: '八会穴の髄会',
+    location: '下腿外側、腓骨の前方、外果尖の上方3寸。外果尖の上方3寸で、腓骨の前方に取る（跗陽＝膀胱経の前方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb40', name: '丘墟', yomi: 'きゅうきょ', meridian: '足の少陽胆経', ryaku: 'GB40', type: '胆の原穴',
+    location: '足関節前外側、長指伸筋腱外側の陥凹部、外果尖の前下方。抵抗に抗して足の第2指から第5指を伸展させると長指伸筋腱がはっきり現れ、その外側陥凹中に取る（外果尖の前下方にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb41', name: '足臨泣', yomi: 'あしりんきゅう', meridian: '足の少陽胆経', ryaku: 'GB41', type: '胆経の兪木穴・八脈交会穴',
+    location: '足背、第4・第5中足骨底接合部の遠位、第5指の長指伸筋腱外側の陥凹部。第4・第5中足骨間を指頭で撫で上げたとき、指が止まるところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb42', name: '地五会', yomi: 'ちごえ', meridian: '足の少陽胆経', ryaku: 'GB42', type: null,
+    location: '足背、第4・第5中足骨間、第4中足指節関節の近位陥凹部。第4中足指節関節の後外側陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb43', name: '侠渓', yomi: 'きょうけい', meridian: '足の少陽胆経', ryaku: 'GB43', type: '胆経の榮水穴',
+    location: '足背、第4・第5指間、みずかきの近位、赤白肉際。第4・第5中足指節関節間の直前の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-gb44', name: '足竅陰', yomi: 'あしきょういん', meridian: '足の少陽胆経', ryaku: 'GB44', type: '胆経の井金穴',
+    location: '足の第4指、末節骨外側、爪甲角の近位外方1分（指寸）、爪甲外側縁の垂線と爪甲基底部の水平線との交点。足の第4指爪根部近位縁に引いた線と、外側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 足の厥陰肝経（LR）14穴（p.202-208・完全収録） ----
+  {
+    id: 'kc-lr1', name: '大敦', yomi: 'だいとん', meridian: '足の厥陰肝経', ryaku: 'LR1', type: '肝経の井木穴',
+    location: '足の第1指、末節骨外側、爪甲角の近位外方1分（指寸）、爪甲外側縁の垂線と爪甲基底部の水平線との交点。足の第1指爪根部近位縁に引いた線と、外側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr2', name: '行間', yomi: 'こうかん', meridian: '足の厥陰肝経', ryaku: 'LR2', type: '肝経の榮火穴',
+    location: '足背、第1・第2指間、みずかきの近位、赤白肉際。第1・第2中足指節関節の直前の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr4', name: '中封', yomi: 'ちゅうほう', meridian: '足の厥陰肝経', ryaku: 'LR4', type: '肝経の経金穴',
+    location: '足関節前内側、前脛骨筋腱内側の陥凹部、内果尖の前方。内果尖の前方で、前脛骨筋腱の内側陥凹中に取る（解渓＝胃経と商丘＝脾経との間にあたる）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr5', name: '蠡溝', yomi: 'れいこう', meridian: '足の厥陰肝経', ryaku: 'LR5', type: '肝経の絡穴',
+    location: '下腿前内側、脛骨内側面の中央、内果尖の上方5寸。内果尖と膝蓋骨尖とを結ぶ線を3等分し、内果尖から3分の1のところ、脛骨の前縁と内側縁との中間に取る（内果尖から膝蓋骨尖までの長さを1尺5寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr6', name: '中都', yomi: 'ちゅうと', meridian: '足の厥陰肝経', ryaku: 'LR6', type: '肝経の郄穴',
+    location: '下腿前内側、脛骨内側面の中央、内果尖の上方7寸。内果尖と膝蓋骨尖とを結ぶ線の中点の下方5分、脛骨の前縁と内側縁との中間に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr7', name: '膝関', yomi: 'しつかん', meridian: '足の厥陰肝経', ryaku: 'LR7', type: null,
+    location: '下腿脛骨面、脛骨内側顆の下方、陰陵泉の後方1寸。陰陵泉（脾経）の後方1寸で、脛骨内側顆の下方に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr8', name: '曲泉', yomi: 'きょくせん', meridian: '足の厥陰肝経', ryaku: 'LR8', type: '肝経の合水穴',
+    location: '膝内側、半腱・半膜様筋腱内側の陥凹部、膝窩横紋の内側端。膝関節を屈曲し、膝窩横紋の内端で最も明らかに触れる腱の内側陥凹中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr9', name: '陰包', yomi: 'いんぽう', meridian: '足の厥陰肝経', ryaku: 'LR9', type: null,
+    location: '大腿部内側、薄筋と縫工筋の間、膝蓋骨底の上方4寸。曲泉の上方、膝蓋骨底上方4寸の高さで、薄筋と縫工筋との間に取る（膝蓋骨上縁から恥骨結合上縁までの長さを1尺8寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr10', name: '足五里', yomi: 'あしごり', meridian: '足の厥陰肝経', ryaku: 'LR10', type: null,
+    location: '大腿部内側、気衝の下方3寸、動脈拍動部。大腿内側の上部で気衝（胃経）の下方3寸、動脈拍動部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr11', name: '陰廉', yomi: 'いんれん', meridian: '足の厥陰肝経', ryaku: 'LR11', type: null,
+    location: '大腿部内側、気衝の下方2寸。大腿内側の上部で気衝（胃経）の外下方2寸に取る（長内転筋の外方にある）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr12', name: '急脈', yomi: 'きゅうみゃく', meridian: '足の厥陰肝経', ryaku: 'LR12', type: null,
+    location: '鼡径部、恥骨結合上縁と同じ高さ、前正中線の外方2寸5分。曲骨（任脈）の外方2寸5分に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr13', name: '章門', yomi: 'しょうもん', meridian: '足の厥陰肝経', ryaku: 'LR13', type: '脾の募穴・八会穴の臓会',
+    location: '側腹部、第11肋骨端下縁。側臥して、第11肋骨前端の下縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-lr14', name: '期門', yomi: 'きもん', meridian: '足の厥陰肝経', ryaku: 'LR14', type: '肝の募穴',
+    location: '前胸部、第6肋間、前正中線の外方4寸。乳頭中央の下方で、乳根（胃経）の1肋間下に取る（巨闕＝任脈の外方4寸にあたる。女性では鎖骨中線と第6肋間の交点に取る）。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];
