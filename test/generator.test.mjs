@@ -44,11 +44,28 @@ test('どの生成器でも、選択肢に重複が出ない（乱数を多く�
   }
 });
 
+/**
+ * 設問に含まれる名前から、元のデータを引く。
+ *
+ * **単純な includes で先頭一致を取ってはいけない。**「気海兪」の設問が
+ * 「気海」に、「関元兪」が「関元」に当たってしまい、別の経穴のカードを
+ * 正解として比べることになる（実際にこの取り違えでテストがランダムに落ちた）。
+ * いちばん長く一致した名前を採る。
+ */
+function findByName(list, question) {
+  let hit = null;
+  for (const x of list) {
+    if (!x.name || !question.includes(x.name)) continue;
+    if (!hit || x.name.length > hit.name.length) hit = x;
+  }
+  return hit;
+}
+
 test('経絡→原穴の生成は KB と正解が一致する', () => {
   // meridianToYuan だけを大量生成し、正解がKBの原穴と一致することを確認
   for (let i = 0; i < 30; i++) {
     const q = GENERATORS.meridianToYuan.fn();
-    const m = meridians.find((x) => q.question.includes(x.name));
+    const m = findByName(meridians, q.question);
     assert.ok(m, '経絡名が設問に含まれる');
     assert.equal(q.choices[q.answer], yuanPoints[m.id]);
   }
@@ -81,7 +98,7 @@ test('経穴カード→経絡の生成はkeiketsuCards.jsと正解が一致す�
   for (let i = 0; i < 30; i++) {
     const q = GENERATORS.keiketsuMeridian.fn();
     assert.ok(q, 'カードが4枚以上あるので必ず生成される');
-    const c = KEIKETSU_CARDS.find((x) => q.question.includes(x.name));
+    const c = findByName(KEIKETSU_CARDS, q.question);
     assert.ok(c, '経穴名が設問に含まれる');
     assert.equal(q.choices[q.answer], c.meridian);
     assert.equal(new Set(q.choices).size, q.choices.length);
@@ -92,7 +109,7 @@ test('経穴カード→取穴部位の生成はkeiketsuCards.jsと正解が一�
   for (let i = 0; i < 30; i++) {
     const q = GENERATORS.keiketsuLocation.fn();
     assert.ok(q);
-    const c = KEIKETSU_CARDS.find((x) => q.question.includes(x.name));
+    const c = findByName(KEIKETSU_CARDS, q.question);
     assert.ok(c, '経穴名が設問に含まれる');
     assert.equal(q.choices[q.answer], c.location);
     assert.equal(new Set(q.choices).size, q.choices.length);
@@ -139,7 +156,7 @@ test('奇経八脈の所属穴数の生成はknowledgeBase.jsと正解が一致�
   for (let i = 0; i < 30; i++) {
     const q = GENERATORS.extraMeridianCount.fn();
     assert.ok(q);
-    const e = extraMeridianPoints.find((x) => q.question.includes(x.name));
+    const e = findByName(extraMeridianPoints, q.question);
     assert.ok(e, '奇経名が設問に含まれる');
     assert.equal(q.choices[q.answer], String(e.count));
     assert.equal(new Set(q.choices).size, q.choices.length);
