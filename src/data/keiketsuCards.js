@@ -1,6 +1,7 @@
 // 経穴フラッシュカード（#7）。
 // 表＝経穴名／裏＝経絡・分類・部位（取穴）・主治。figure は図（任意）。
-// 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴の完全収録＝68枚）。
+// 361穴へ拡充中（現状：仮サンプル5枚＋督脈28穴＋任脈24穴＋手の太陰肺経11穴＋
+// 手の陽明大腸経20穴（うち合谷・曲池は仮サンプルと重複するため18枚追加）の完全収録＝86枚）。
 //
 // sourceIds: 出典ID（未設定=[]）。将来361穴へ拡充する時、内容を裏付けた出典
 // （例: lib/keiketsuLibrary.js に置いた教科書原文のページID、または書名）をここに残す。
@@ -15,13 +16,14 @@
 // 督脈28穴の出典：新版 経絡経穴概論（第2版）p.26-39。
 // 任脈24穴の出典：同書 p.42-51。
 // 手の太陰肺経11穴の出典：同書 p.52-59。
+// 手の陽明大腸経20穴の出典：同書 p.60-71。
 
 export const KEIKETSU_CARDS = [
   {
     id: 'kc-goukoku',
     name: '合谷',
     yomi: 'ごうこく',
-    meridian: '手陽明大腸経',
+    meridian: '手の陽明大腸経',
     ryaku: 'LI4',
     type: '原穴',
     location: '第1・第2中手骨間、第2中手骨中点の橈側。',
@@ -33,7 +35,7 @@ export const KEIKETSU_CARDS = [
     id: 'kc-sanri',
     name: '足三里',
     yomi: 'あしさんり',
-    meridian: '足陽明胃経',
+    meridian: '足の陽明胃経',
     ryaku: 'ST36',
     type: '合土穴・胃の下合穴',
     location: '犢鼻（膝眼）の下3寸、脛骨稜の外方1寸、前脛骨筋上。',
@@ -45,7 +47,7 @@ export const KEIKETSU_CARDS = [
     id: 'kc-kyokuchi',
     name: '曲池',
     yomi: 'きょくち',
-    meridian: '手陽明大腸経',
+    meridian: '手の陽明大腸経',
     ryaku: 'LI11',
     type: '合土穴',
     location: '肘を曲げてできる横紋の外端（尺沢と上腕骨外側上顆を結ぶ中点）。',
@@ -57,7 +59,7 @@ export const KEIKETSU_CARDS = [
     id: 'kc-saninkou',
     name: '三陰交',
     yomi: 'さんいんこう',
-    meridian: '足太陰脾経',
+    meridian: '足の太陰脾経',
     ryaku: 'SP6',
     type: '脾・肝・腎の交会穴',
     location: '内果尖の上3寸、脛骨内縁の後際。',
@@ -69,7 +71,7 @@ export const KEIKETSU_CARDS = [
     id: 'kc-taisho',
     name: '太衝',
     yomi: 'たいしょう',
-    meridian: '足厥陰肝経',
+    meridian: '足の厥陰肝経',
     ryaku: 'LR3',
     type: '原穴・兪土穴',
     location: '足背、第1・第2中足骨間の後方の陥凹部。',
@@ -403,6 +405,100 @@ export const KEIKETSU_CARDS = [
   {
     id: 'kc-lu11', name: '少商', yomi: 'しょうしょう', meridian: '手の太陰肺経', ryaku: 'LU11', type: '肺経の井木穴',
     location: '母指、末節骨橈側、爪甲角の近位外方1分。母指爪根部近位縁に引いた線と外側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+
+  // ---- 手の陽明大腸経（LI）20穴（p.60-71・完全収録） ----
+  // LI4（合谷＝kc-goukoku）とLI11（曲池＝kc-kyokuchi）は既存の仮サンプルカードで
+  // 収録済みのため、ここでは残り18穴を追加する（重複防止）。
+  {
+    id: 'kc-li1', name: '商陽', yomi: 'しょうよう', meridian: '手の陽明大腸経', ryaku: 'LI1', type: '大腸経の井金穴',
+    location: '示指、末節骨橈側、爪甲角の近位外方1分。示指爪根部近位縁に引いた線と外側縁に引いた線との交点に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li2', name: '二間', yomi: 'じかん', meridian: '手の陽明大腸経', ryaku: 'LI2', type: '大腸経の榮水穴',
+    location: '示指、第2中手指節関節橈側の遠位陥凹部、赤白肉際。関節の外側を触診し、下部に触れる陥凹中、表裏の境目に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li3', name: '三間', yomi: 'さんかん', meridian: '手の陽明大腸経', ryaku: 'LI3', type: '大腸経の兪木穴',
+    location: '手背、第2中手指節関節橈側の近位陥凹部。第2中手骨の外側縁を指頭で撫で下ろし、指が止まるところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li5', name: '陽渓', yomi: 'ようけい', meridian: '手の陽明大腸経', ryaku: 'LI5', type: '大腸経の経火穴',
+    location: '手関節後外側、タバコ窩（橈骨小窩）の陥凹部、手関節背側横紋橈側。長母指伸筋腱と短母指伸筋腱の間で、母指を十分に外転・伸展させたときにできる（陽渓から曲池までの長さを1尺2寸とする）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li6', name: '偏歴', yomi: 'へんれき', meridian: '手の陽明大腸経', ryaku: 'LI6', type: '大腸経の絡穴',
+    location: '前腕後外側、陽渓と曲池を結ぶ線上、手関節背側横紋の上方3寸。陽渓と曲池を4等分し、陽渓から4分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li7', name: '温溜', yomi: 'おんる', meridian: '手の陽明大腸経', ryaku: 'LI7', type: '大腸経の郄穴',
+    location: '前腕後外側、陽渓と曲池を結ぶ線上、手関節背側横紋の上方5寸。陽渓と曲池の中点の下方1寸に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li8', name: '下廉', yomi: 'げれん', meridian: '手の陽明大腸経', ryaku: 'LI8', type: null,
+    location: '前腕後外側、陽渓と曲池を結ぶ線上、肘窩横紋の下方4寸。陽渓と曲池を3等分し、曲池から3分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li9', name: '上廉', yomi: 'じょうれん', meridian: '手の陽明大腸経', ryaku: 'LI9', type: null,
+    location: '前腕後外側、陽渓と曲池を結ぶ線上、肘窩横紋の下方3寸。陽渓と曲池を4等分し、曲池から4分の1のところに取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li10', name: '手三里', yomi: 'てさんり', meridian: '手の陽明大腸経', ryaku: 'LI10', type: null,
+    location: '前腕後外側、陽渓と曲池を結ぶ線上、肘窩横紋の下方2寸（曲池の下方2寸）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li12', name: '肘髎', yomi: 'ちゅうりょう', meridian: '手の陽明大腸経', ryaku: 'LI12', type: null,
+    location: '肘後外側、上腕骨外側上顆の上縁、外側顆上稜の前縁。曲池の後上方で、上腕骨の外側顆上稜の前縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li13', name: '手五里', yomi: 'てごり', meridian: '手の陽明大腸経', ryaku: 'LI13', type: null,
+    location: '上腕外側、曲池と肩髃を結ぶ線上、肘窩横紋の上方3寸。上腕三頭筋の外側縁に取る（深部を橈骨神経幹が通る）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li14', name: '臂臑', yomi: 'ひじゅ', meridian: '手の陽明大腸経', ryaku: 'LI14', type: null,
+    location: '上腕外側、三角筋前縁、曲池の上方7寸。三角筋の前縁に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li15', name: '肩髃', yomi: 'けんぐう', meridian: '手の陽明大腸経', ryaku: 'LI15', type: '陽蹻脈の所属経穴（借穴）',
+    location: '肩周囲部、肩峰外縁の前端と上腕骨大結節の間の陥凹部。肩関節を90度外転したとき、肩峰の前後にできる2つの陥凹部のうち前の陥凹部に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li16', name: '巨骨', yomi: 'ここつ', meridian: '手の陽明大腸経', ryaku: 'LI16', type: '陽蹻脈の所属経穴（借穴）',
+    location: '肩周囲部、鎖骨の肩峰端と肩甲棘の間の陥凹部。棘上窩の外側で、鎖骨肩峰端と肩甲棘との間、肩鎖関節の後内方陥中に取る。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li17', name: '天鼎', yomi: 'てんてい', meridian: '手の陽明大腸経', ryaku: 'LI17', type: null,
+    location: '前頸部、輪状軟骨と同じ高さ、胸鎖乳突筋の後縁。扶突の下方で胸鎖乳突筋の後縁に取る（水突＝胃経と同じ高さ）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li18', name: '扶突', yomi: 'ふとつ', meridian: '手の陽明大腸経', ryaku: 'LI18', type: null,
+    location: '前頸部、甲状軟骨上縁と同じ高さ、胸鎖乳突筋の前縁と後縁の間。下顎角の直下で胸鎖乳突筋中、人迎（胃経）の外方に取る（深部に内頸静脈があるため刺鍼に注意）。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li19', name: '禾髎', yomi: 'かりょう', meridian: '手の陽明大腸経', ryaku: 'LI19', type: '別説あり（2説併記）',
+    location: '顔面部、人中溝中点と同じ高さ、鼻孔外縁の下方。水溝（督脈）の外方5分に取る。〈別説〉人中溝の上から3分の1と同じ高さ。',
+    shuji: null, figure: null, sourceIds: [],
+  },
+  {
+    id: 'kc-li20', name: '迎香', yomi: 'げいこう', meridian: '手の陽明大腸経', ryaku: 'LI20', type: '別説あり（2説併記）',
+    location: '顔面部、鼻唇溝中、鼻翼外縁中点と同じ高さ。〈別説〉鼻翼下縁の高さ。',
     shuji: null, figure: null, sourceIds: [],
   },
 ];

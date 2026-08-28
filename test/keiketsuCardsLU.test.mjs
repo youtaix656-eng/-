@@ -34,8 +34,9 @@ test('LUの要穴（原穴・絡穴・郄穴・募穴）はknowledgeBase.jsと�
   assert.equal(headNeck.point, byRyaku.LU7.name); // 四総穴「頭項は列欠」
 });
 
-test('KEIKETSU_CARDS全体でid・nameが重複しない（既存5枚＋督脈28穴＋任脈24穴＋肺経11穴）', () => {
-  assert.equal(KEIKETSU_CARDS.length, 68);
+test('KEIKETSU_CARDS全体でid・nameが重複しない', () => {
+  // 総数は経脈を追加するたびに増えるため、ここでは重複の無さだけを確認する
+  // （正確な総数はkeiketsuCardsLI.test.mjs等、最新バッチのテストで確認する）。
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.id)).size, KEIKETSU_CARDS.length);
   assert.equal(new Set(KEIKETSU_CARDS.map((c) => c.name)).size, KEIKETSU_CARDS.length);
 });
