@@ -13,10 +13,19 @@
 import { mask } from './privacy.js';
 
 let seq = 0;
-function newId(now) {
+
+/**
+ * 見立ての id を作る。
+ * **画面側でも同じものを使う**——新しく保存した直後に「編集中」へ移るには、
+ * 保存する前に id が決まっている必要がある（保存の戻り値を待つと、
+ * React の更新の順番によっては受け取れないことがある）。
+ */
+export function newCaseId(now = Date.now()) {
   seq += 1;
   return `c${now}-${seq}`;
 }
+
+const newId = newCaseId;
 
 /** 呼び名の上限（長い本文を貼り付けて記録にしてしまわないため） */
 export const LABEL_MAX = 40;

@@ -151,7 +151,7 @@ src/lib/yomi.js       読み・並び・行分け（全アプリ共通の目次�
 ```bash
 npm install
 npm run dev      # 開発サーバー
-npm test         # node --test（160件）
+npm test         # node --test（162件）
 npm run build    # dist/ へ
 ```
 

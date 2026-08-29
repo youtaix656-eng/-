@@ -9,7 +9,7 @@ import {
 import { firstMove, untried, summarize, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
 import { TACTIC_MAP, akaNameOf, tacticLabel } from '../data/tactics.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
-import { displayName, LABEL_MAX } from '../lib/cases.js';
+import { displayName, LABEL_MAX, newCaseId } from '../lib/cases.js';
 import { caseToText, copyText } from '../lib/personExport.js';
 import { GLYPHS } from '../data/glyphs.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
@@ -220,6 +220,8 @@ export default function People({
   function openCase(c) {
     setEditingId(c.id);
     setChecked(c.checkedIds);
+    // 選んだふるまいのある型をたたんだままにしない（何を選んだか見えなくなる）
+    setOpenGroups([...new Set(c.checkedIds.map((id) => id.split(':')[0]))]);
     setLabel(c.label);
     setNote(c.note);
     setScene(c.sceneId || '');
@@ -231,13 +233,18 @@ export default function People({
   function newCase() {
     setEditingId('');
     setChecked([]);
+    setOpenGroups([]);
     setLabel('');
     setNote('');
     setSaved(false);
   }
 
   function save() {
-    onSaveCase({ id: editingId || undefined, label, note, sceneId: scene, checkedIds: checked });
+    // 新しく作る時も先に id を決めておき、保存後は「編集中」へ移す。
+    // そうしないと、もう一度押した時に同じ人の見立てがもう1件できてしまう。
+    const id = editingId || newCaseId();
+    onSaveCase({ id, label, note, sceneId: scene, checkedIds: checked });
+    setEditingId(id);
     setSaved(true);
   }
 

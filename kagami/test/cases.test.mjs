@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { makeCase, updateCase, sortCases, displayName, LABEL_MAX, NOTE_MAX } from '../src/lib/cases.js';
+import { makeCase, updateCase, sortCases, displayName, newCaseId, LABEL_MAX, NOTE_MAX } from '../src/lib/cases.js';
 import { analyzePerson } from '../src/lib/analysis.js';
 import { PERSON_TYPES, allBehaviors } from '../src/data/people.js';
 
@@ -91,4 +91,22 @@ test('保存したふるまいの id は、いまのカタログに実在する'
 test('保存はネットワークに触れない', () => {
   const src = readFileSync(new URL('../src/lib/cases.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|https?:\/\//);
+});
+
+test('id は外からも作れる（保存した直後に編集中へ移るため）', () => {
+  const a = newCaseId();
+  const b = newCaseId();
+  assert.notEqual(a, b, 'id が重複しています');
+  assert.match(a, /^c\d+-\d+$/);
+  // その id で作れば、同じ id の見立てになる
+  assert.equal(makeCase({ id: a }).id, a);
+});
+
+test('同じ id で保存し直すと、増えずに書き換わる', () => {
+  const id = newCaseId();
+  const first = makeCase({ id, label: '1回目', checkedIds: ['a:0'] });
+  const second = updateCase(first, { label: '2回目', checkedIds: ['a:0', 'a:1'] });
+  assert.equal(second.id, first.id, '別の見立てになっています');
+  assert.equal(second.label, '2回目');
+  assert.equal(second.checkedIds.length, 2);
 });
