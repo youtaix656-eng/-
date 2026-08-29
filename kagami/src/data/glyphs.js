@@ -35,6 +35,7 @@ export const GLYPHS = {
   infinity: '∞',
   lines: '≡',
   house: '⌂',
+  piece: '☖',
 };
 
 /** 画面に出してよい印（テストが使う） */

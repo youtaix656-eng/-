@@ -89,6 +89,14 @@ export default function Home({ onGo, records }) {
           </button>
         </li>
         <li>
+          <button className="item" onClick={() => onGo('people')}>
+            <span className="t">{GLYPHS.piece} 人間分析</span>
+            <span className="s">
+              気になる相手との距離の決め方。年齢や性別ではなく、ふるまいで見る。
+            </span>
+          </button>
+        </li>
+        <li>
           <button className="item" onClick={() => onGo('myths')}>
             <span className="t">{GLYPHS.cross} 当てにならない見抜き方</span>
             <span className="s">

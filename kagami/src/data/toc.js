@@ -13,6 +13,7 @@ import { TACTICS, CATEGORIES } from './tactics.js';
 import { REPLIES } from './replies.js';
 import { HABITS } from './habits.js';
 import { MYTHS } from './myths.js';
+import { PERSON_TYPES, CORES } from './people.js';
 import { STATES } from './states.js';
 import { SOURCES } from './sources.js';
 import { GLYPHS } from './glyphs.js';
@@ -27,6 +28,8 @@ export const TOC_CATEGORIES = [
   { id: 'habit', label: 'つけこまれやすい形', icon: GLYPHS.circlePlus, view: 'habits' },
   { id: 'state', label: '自分の中で起きること', icon: GLYPHS.moonWax, view: 'habits' },
   { id: 'myth', label: '当てにならない見抜き方', icon: GLYPHS.cross, view: 'myths' },
+  { id: 'person', label: '人間分析', icon: GLYPHS.piece, view: 'people' },
+  { id: 'core', label: '共通する芯', icon: GLYPHS.star, view: 'people' },
   { id: 'source', label: '出典', icon: GLYPHS.dagger, view: 'sources' },
 ];
 
@@ -130,6 +133,32 @@ export function buildTocEntries() {
       view: 'myths',
       anchor: `toc-myth-${m.id}`,
       targetId: m.id,
+    });
+  }
+
+  for (const t of PERSON_TYPES) {
+    entries.push({
+      id: `person-${t.id}`,
+      category: 'person',
+      title: t.name,
+      reading: t.reading || '',
+      sub: t.summary,
+      view: 'people',
+      anchor: `toc-person-${t.id}`,
+      targetId: t.id,
+    });
+  }
+
+  for (const c of CORES) {
+    entries.push({
+      id: `core-${c.id}`,
+      category: 'core',
+      title: c.label,
+      reading: c.reading || '',
+      sub: c.summary,
+      view: 'people',
+      anchor: `toc-core-${c.id}`,
+      targetId: c.id,
     });
   }
 

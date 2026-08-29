@@ -7,6 +7,7 @@ import Tactics from './components/Tactics.jsx';
 import Replies from './components/Replies.jsx';
 import Habits from './components/Habits.jsx';
 import Myths from './components/Myths.jsx';
+import People from './components/People.jsx';
 import Sources from './components/Sources.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
 import Records from './components/Records.jsx';
@@ -16,6 +17,7 @@ const NAV = [
   { id: 'home', label: 'ホーム', icon: GLYPHS.sun },
   { id: 'check', label: '調べる', icon: GLYPHS.circleDouble },
   { id: 'tactics', label: '型', icon: GLYPHS.moonWane },
+  { id: 'people', label: '人', icon: GLYPHS.piece },
   { id: 'records', label: '記録', icon: GLYPHS.reference },
   { id: 'toc', label: '目次', icon: GLYPHS.lines },
 ];
@@ -68,6 +70,9 @@ export default function App() {
       {view === 'sources' && <Sources focus={focus} onFocusDone={clearFocus} />}
       {view === 'toc' && <TableOfContents onGo={goFromToc} />}
       {view === 'myths' && <Myths focus={focus} onFocusDone={clearFocus} />}
+      {view === 'people' && (
+        <People focus={focus} onFocusDone={clearFocus} onGoTactic={(id) => go('tactics', id)} />
+      )}
       {view === 'records' && (
         <Records
           records={store.records}

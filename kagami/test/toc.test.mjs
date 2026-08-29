@@ -7,6 +7,7 @@ import { REPLIES } from '../src/data/replies.js';
 import { HABITS } from '../src/data/habits.js';
 import { MYTHS } from '../src/data/myths.js';
 import { STATES } from '../src/data/states.js';
+import { PERSON_TYPES, CORES } from '../src/data/people.js';
 import { SOURCES } from '../src/data/sources.js';
 
 test('目次のタイトルは重複しない', () => {
@@ -40,7 +41,7 @@ test('reading はひらがなだけ（カタカナ・漢字・英数字を混ぜ
 });
 
 test('カテゴリは定義済みで、飛び先の画面と anchor を持つ', () => {
-  const views = new Set(['tactics', 'replies', 'habits', 'myths', 'sources']);
+  const views = new Set(['tactics', 'replies', 'habits', 'myths', 'people', 'sources']);
   for (const e of TOC_ENTRIES) {
     const cat = TOC_CATEGORY_MAP[e.category];
     assert.ok(cat, `${e.title}: 未知のカテゴリ ${e.category}`);
@@ -59,11 +60,13 @@ test('目次はすべてのデータ（型・別名・まとまり・返し方�
   assert.equal(count('habit'), HABITS.length);
   assert.equal(count('state'), STATES.length);
   assert.equal(count('myth'), MYTHS.length);
+  assert.equal(count('person'), PERSON_TYPES.length);
+  assert.equal(count('core'), CORES.length);
   assert.equal(count('source'), SOURCES.length);
   assert.equal(
     TOC_ENTRIES.length,
     TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + HABITS.length +
-      STATES.length + MYTHS.length + SOURCES.length,
+      STATES.length + MYTHS.length + PERSON_TYPES.length + CORES.length + SOURCES.length,
   );
 });
 
