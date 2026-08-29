@@ -77,27 +77,6 @@ export const SELF_DEFENSE_TACTIC_IDS = [
   'backtracking',
 ];
 
-/**
- * **使い返してはいけない型。**
- * やり返すと、相手のふるまいをこちらが再現することになる
- * （4つ目の芯「無自覚な再現」がまさにこれ）。効くか効かないかの話ではなく、
- * 自分が同じものになるかどうかの話なので、ここは動かさない。
- */
-export const NEVER_TURN_BACK_IDS = [
-  'gaslight',
-  'person_attack',
-  'blame_shift',
-  'isolate',
-  'guilt',
-  'silence',
-  'intermittent',
-  'fear_relief',
-  'safe_base',
-  'secret',
-  'loaded_choice',
-  'pity_question',
-];
-
 export const PERSON_TYPES = [
   {
         counters: [

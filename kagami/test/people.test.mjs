@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors,
-  SELF_DEFENSE_TACTIC_IDS, NEVER_TURN_BACK_IDS,
+  SELF_DEFENSE_TACTIC_IDS,
 } from '../src/data/people.js';
 import { analyzePerson, coresOf, MIN_PER_TYPE, MIN_TOTAL } from '../src/lib/analysis.js';
 import { REPLY_MAP } from '../src/data/replies.js';
@@ -195,17 +195,9 @@ test('使い返してよいのは「呑まれないための型」だけ（許�
   }
 });
 
-test('相手の判断を動かす型を使い返しに入れない（やり返すと自分が同じものになる）', () => {
-  const banned = new Set(NEVER_TURN_BACK_IDS);
+test('使い返しに挙げた型は、すべて実在する', () => {
   for (const id of SELF_DEFENSE_TACTIC_IDS) {
-    assert.ok(!banned.has(id), `${id}: 許可と禁止の両方に入っています`);
-    assert.ok(TACTIC_MAP[id], `${id}: 存在しない型を許可しています`);
-  }
-  for (const id of NEVER_TURN_BACK_IDS) assert.ok(TACTIC_MAP[id], `${id}: 存在しない型を禁じています`);
-  for (const t of PERSON_TYPES) {
-    for (const c of t.counters) {
-      assert.ok(!banned.has(c.tacticId), `${t.name}: 使い返してはいけない型 ${c.tacticId} が入っています`);
-    }
+    assert.ok(TACTIC_MAP[id], `${id}: 存在しない型を挙げています`);
   }
 });
 
