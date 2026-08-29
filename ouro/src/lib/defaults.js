@@ -57,5 +57,11 @@ export function makeSettings() {
     notifyDone: false,
     // 走っている間、画面を眠らせない。電池を食うので既定オフ。
     keepAwake: false,
+    // あなたの1時間をいくらと置くか（円）。0 は未入力。
+    // **相場や平均賃金を初期値に入れないこと**——手元に無い基準になる。
+    // 0 のあいだは金額を出さず、時間だけを出す（lib/offload.js）。
+    hourlyYen: 0,
+    // 月の売上（円）。0 は未入力。浮いた額が売上の何%かを出すときにだけ使う。
+    monthRevenueYen: 0,
   };
 }

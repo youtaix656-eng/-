@@ -7,24 +7,13 @@
 // **案件の締切は events に複製しない。** deals から毎回導く
 // （二重管理にすると、締切を直したのにカレンダーが古いままになる）。
 
-import { newId } from './id.js';
+// 予定1件の作り方は eventItem.js にある（起動時に読む量を増やさないための切り出し）。
+// ここからも再輸出するので、カレンダー側の import は今までどおりでよい。
+import { DAY_MS, EVENT_KINDS, startOfDay, makeEvent } from './eventItem.js';
 
-export const DAY_MS = 86400000;
+export { DAY_MS, EVENT_KINDS, startOfDay, makeEvent };
+
 export const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-export const EVENT_KINDS = [
-  { id: 'plan', name: '予定', glyph: '■', reading: 'よてい' },
-  { id: 'deliver', name: '納品', glyph: '▲', reading: 'のうひん' },
-  { id: 'contact', name: '連絡・営業', glyph: '✉', reading: 'れんらくえいぎょう' },
-  { id: 'rest', name: '休み', glyph: '○', reading: 'やすみ' },
-];
-
-/** その日の 0:00 のミリ秒。 */
-export function startOfDay(ts) {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
 
 export function sameDay(a, b) {
   return startOfDay(a) === startOfDay(b);
@@ -67,21 +56,6 @@ export function monthMatrix(year, month) {
   const weeks = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
   return weeks;
-}
-
-export function makeEvent({ title, at, kind = 'plan', dealId = null, note = '' }) {
-  const clean = String(title || '').trim();
-  if (!clean) throw new Error('予定の内容を入れてください');
-  return {
-    id: newId('ev'),
-    title: clean.slice(0, 60),
-    at: startOfDay(at || Date.now()),
-    kind: EVENT_KINDS.some((k) => k.id === kind) ? kind : 'plan',
-    dealId,
-    note: String(note || '').slice(0, 300),
-    done: false,
-    createdAt: Date.now(),
-  };
 }
 
 /**

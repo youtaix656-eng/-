@@ -289,6 +289,7 @@ CSV まわり（`lib/ledgerCsv.js`・`lib/csv.js`）と台帳の画面は分け�
 | 要件・受け入れ確認・読ませた量／**役職を3つ追加** | +1.0KB（roster が 11.4→12.2KB） | 社員の記憶を `lib/notes.js` へ分け、`memory.js`＋`untrusted.js` を起動時の束から外した（−1.7KB） | **109.4KB** |
 | 回し方（OODA／PDCA） | ±0（全部 lazy の Ventures 側） | — | 109.7KB |
 | **右端のスクロール矢印**（全画面に出るので即時） | +0.4KB（JS＋CSS） | 知らせの文を `lib/announce.js` へ分け、`resume.js` を起動時の束から外した（−0.3KB） | **109.8KB** |
+| **任せたら月いくら浮くか**（`lib/offload.js`＋会社画面のカード） | +0.3KB（`useStore` の操作と保存キー。offload.js 自体は会社画面が lazy なので入らない） | 予定1件を作る `makeEvent` を `lib/eventItem.js` へ分け、**lazy なカレンダーの `schedule.js` を起動時の束から外した**（−0.9KB） | **109.2KB** |
 
 **目安は 111 → 110 へ下げた。** 役職を足すと `roster` チャンクが必ず増えるので、
 足す時は同時に「起動時に読まなくてよいもの」を1つ探して外すこと。

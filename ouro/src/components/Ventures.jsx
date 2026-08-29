@@ -631,7 +631,7 @@ function RiskCard({ venture, store, toast }) {
         <p key={q.id} className="muted" style={{ fontSize: 12.5 }}>・{q.care}</p>
       ))}
       <button type="button" className="btn ghost block" onClick={() => setOpen(!open)}>
-        {open ? '閉じる' : review.answered ? '答えを見直す' : '5つの問いに答える'}
+        {open ? '閉じる' : review.answered ? '答えを見直す' : `${review.total}つの問いに答える`}
       </button>
       {open && (
         <div style={{ marginTop: 8 }}>

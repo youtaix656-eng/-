@@ -1,7 +1,7 @@
 // 会社の画面。ダッシュボード・道具・承認・監査ログ・設定への入口。
 
 import { useEffect, useState } from 'react';
-import { Card, Row, SectionTitle, Stat, Spark } from './ui.jsx';
+import { Card, Row, SectionTitle, Stat, Spark, Field } from './ui.jsx';
 import { cycleStats, growthSeries } from '../lib/cycle.js';
 import { verifiedRate } from '../lib/knowledge.js';
 import { usd, relTime } from '../lib/format.js';
@@ -14,6 +14,7 @@ import { briefLines } from '../lib/brief.js';
 import { recentDecisions } from '../lib/decisions.js';
 import { engineStats, cheapestUsed, unreliable } from '../lib/engineStats.js';
 import { handworkSplit, handworkLine } from '../lib/handwork.js';
+import { offloadReview, offloadLine, offloadAdvice, CHORE_WHO } from '../lib/offload.js';
 import { spentTodayOf, dailyCap, monthlyCap } from '../lib/permissions.js';
 
 export default function Company({ store, go }) {
@@ -254,6 +255,9 @@ export default function Company({ store, go }) {
         </p>
       </Card>
 
+      <SectionTitle>任せたら、月いくら浮くか</SectionTitle>
+      <OffloadCard store={store} />
+
       {decisions.length > 0 && (
         <>
           <SectionTitle>決まったこと</SectionTitle>
@@ -386,6 +390,135 @@ function StorageCard() {
           いっぱいになると新しい保存ができなくなります。
         </p>
       )}
+    </Card>
+  );
+}
+
+/**
+ * 手でやっている作業の棚卸し。**「便利になった」ではなく引き算で出す。**
+ * 時給・売上はユーザーが入れる（相場を初期値に置かない）。
+ * 読み込みが済むまで「まだ書き出していません」と言い切らない（項目138）。
+ */
+function OffloadCard({ store }) {
+  const { settings, chores, hydrated, updateSettings, addChore, updateChore, removeChore } = store;
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ title: '', minutes: '', timesPerMonth: '' });
+
+  const review = offloadReview({
+    chores: chores || [],
+    hourlyYen: settings.hourlyYen,
+    revenueYen: settings.monthRevenueYen,
+  });
+  const advice = offloadAdvice(review);
+  const yen = (n) => `\u00a5${Math.round(n).toLocaleString('ja-JP')}`;
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    addChore(form);
+    setForm({ title: '', minutes: '', timesPerMonth: '' });
+  };
+
+  return (
+    <Card className="tight">
+      <p className="muted" style={{ marginTop: 0 }}>
+        {hydrated ? offloadLine(review) : '\u8aad\u307f\u8fbc\u307f\u4e2d\u3067\u3059\u2026'}
+      </p>
+
+      <div className="stats">
+        <Stat value={`${Math.round(review.mineHours * 10) / 10}h`} label="自分の手（月）" />
+        <Stat value={review.mineYen === null ? '—' : yen(review.mineYen)} label="その金額（目安）" />
+        <Stat value={review.netYen === null ? '—' : yen(review.netYen)} label="任せて浮いた" />
+        <Stat value={review.marginPct === null ? '—' : `${review.marginPct}%`} label="売上に対して" />
+      </div>
+
+      <Field label="あなたの時給（円）" hint="相場や平均は使いません。入っていない間は、金額を出さずに時間だけ出します。">
+        <input
+          type="number"
+          min="0"
+          value={settings.hourlyYen || ''}
+          placeholder="未入力"
+          onChange={(e) => updateSettings({ hourlyYen: Number(e.target.value) || 0 })}
+        />
+      </Field>
+      <Field label="月の売上（円・任意）" hint="入れると、浮いた額が売上の何%にあたるかを出します。">
+        <input
+          type="number"
+          min="0"
+          value={settings.monthRevenueYen || ''}
+          placeholder="未入力"
+          onChange={(e) => updateSettings({ monthRevenueYen: Number(e.target.value) || 0 })}
+        />
+      </Field>
+
+      <button className="ghost" onClick={() => setOpen(!open)}>
+        {open ? '閉じる' : `作業を書き出す（${review.counted}件）`}
+      </button>
+
+      {open && (
+        <>
+          <form onSubmit={submit} style={{ marginTop: 10 }}>
+            <Field label="くり返している手作業">
+              <input
+                value={form.title}
+                placeholder="例：請求書の手打ち"
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+              />
+            </Field>
+            <Field label="1回あたり（分）">
+              <input
+                type="number"
+                min="0"
+                value={form.minutes}
+                onChange={(e) => setForm({ ...form, minutes: e.target.value })}
+              />
+            </Field>
+            <Field label="月に何回">
+              <input
+                type="number"
+                min="0"
+                value={form.timesPerMonth}
+                onChange={(e) => setForm({ ...form, timesPerMonth: e.target.value })}
+              />
+            </Field>
+            <button type="submit" disabled={!form.title.trim()}>この作業を足す</button>
+          </form>
+
+          {(chores || []).map((c) => (
+            <div key={c.id} className="card tight" style={{ marginTop: 8 }}>
+              <strong>{c.title}</strong>
+              <p className="muted" style={{ fontSize: 11.5, margin: '4px 0' }}>
+                月 {Math.round(((c.minutes * c.timesPerMonth) / 60) * 10) / 10}時間
+                （{c.minutes}分 × {c.timesPerMonth}回）／ {CHORE_WHO[c.who]}
+              </p>
+              <button
+                className="ghost"
+                onClick={() => updateChore(c.id, { who: c.who === 'me' ? 'ai' : 'me' })}
+              >
+                {c.who === 'me' ? 'AI社員に任せた' : '自分でやっているに戻す'}
+              </button>
+              <button className="ghost" onClick={() => removeChore(c.id)}>消す</button>
+              {c.who === 'ai' && (
+                <Field label="この作業の月のAI費用（円・分かれば）" hint="入っていないと「浮いた額」が多めに出ます。">
+                  <input
+                    type="number"
+                    min="0"
+                    value={c.aiCostYen || ''}
+                    placeholder="未入力"
+                    onChange={(e) => updateChore(c.id, { aiCostYen: Number(e.target.value) || 0 })}
+                  />
+                </Field>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+
+      {advice.map((a) => (
+        <p key={a.title} className="muted" style={{ fontSize: 11.5 }}>
+          <strong style={{ color: '#fff' }}>{a.title}</strong>：{a.body}
+        </p>
+      ))}
     </Card>
   );
 }
