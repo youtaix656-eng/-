@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS } from '../src/lib/cognitiveProfile.js';
+import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS, GROWTH_AREAS, DEPRIORITIZED_TYPES } from '../src/lib/cognitiveProfile.js';
 import featureRegistry from '../src/data/featureRegistry.js';
 
 const KNOWN_VIEWS = new Set(featureRegistry.map((f) => f.view));
@@ -50,6 +50,40 @@ test('cognitiveProfile: 最短ルート・避けたほうがよい学習法が�
 });
 
 test('cognitiveProfile: 個人名を含まない（公開リポジトリのため）', () => {
-  const text = JSON.stringify({ PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS });
+  const text = JSON.stringify({ PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, GROWTH_AREAS, DEPRIORITIZED_TYPES });
   assert.ok(!text.includes('小島'), '個人名が含まれている');
+});
+
+test('cognitiveProfile: GROWTH_AREASが必須フィールドとトレーニングを備える', () => {
+  assert.ok(GROWTH_AREAS.length > 0);
+  GROWTH_AREAS.forEach((g) => {
+    assert.ok(g.id, 'idが空');
+    assert.ok(g.rank, `${g.id}: rankが空`);
+    assert.ok(g.type, `${g.id}: typeが空`);
+    assert.ok(g.reason, `${g.id}: reasonが空`);
+    assert.ok(g.frequency, `${g.id}: frequencyが空`);
+    assert.ok(Array.isArray(g.trainings) && g.trainings.length > 0, `${g.id}: trainingsが空`);
+    g.trainings.forEach((t) => {
+      assert.ok(t.title, `${g.id}: trainingのtitleが空`);
+      assert.ok(t.desc, `${g.id}/${t.title}: descが空`);
+      assert.ok(Array.isArray(t.links) && t.links.length > 0, `${g.id}/${t.title}: linksが空`);
+      t.links.forEach((l) => {
+        assert.ok(KNOWN_VIEWS.has(l.view), `${g.id}/${t.title}: view "${l.view}" がfeatureRegistry.jsに存在しない`);
+        assert.ok(l.label, `${g.id}/${t.title}: リンクのlabelが空`);
+      });
+    });
+  });
+});
+
+test('cognitiveProfile: GROWTH_AREASのidが重複しない', () => {
+  const ids = GROWTH_AREAS.map((g) => g.id);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('cognitiveProfile: DEPRIORITIZED_TYPESが空でなく理由を備える', () => {
+  assert.ok(DEPRIORITIZED_TYPES.length > 0);
+  DEPRIORITIZED_TYPES.forEach((d) => {
+    assert.ok(d.type, 'typeが空');
+    assert.ok(d.reason, `${d.type}: reasonが空`);
+  });
 });

@@ -1,4 +1,4 @@
-import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS } from '../lib/cognitiveProfile.js';
+import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS, GROWTH_AREAS, DEPRIORITIZED_TYPES } from '../lib/cognitiveProfile.js';
 
 // 認知特性チェック（本田40式＋対話診断）の結果をもとに、
 // このアプリのどの機能をどう使うと定着しやすいかを提案する画面。
@@ -29,6 +29,36 @@ export default function CognitiveStyleGuide({ onNavigate }) {
         {PROFILE.weaknesses.map((w) => (
           <p key={w.type} className="inline-note" style={{ marginTop: 0, marginBottom: 6, opacity: 0.85 }}>
             ☆ {w.type}：{w.note}
+          </p>
+        ))}
+      </div>
+
+      {GROWTH_AREAS.map((g) => (
+        <div className="card" key={g.id}>
+          <div className="section-label" style={{ marginTop: 0 }}>{g.rank}：{g.type}を伸ばす</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>{g.reason}</p>
+          {g.trainings.map((t, i) => (
+            <div key={t.title} style={{ marginTop: i === 0 ? 12 : 14, paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : '1px solid var(--border, #333)' }}>
+              <p style={{ fontWeight: 600, marginTop: 0, marginBottom: 2 }}>{t.title}</p>
+              <p className="hint" style={{ marginTop: 0 }}>{t.desc}</p>
+              <div className="btn-row" style={{ marginTop: 6 }}>
+                {t.links.map((l) => (
+                  <button key={l.view + l.label} className="btn sm" onClick={() => onNavigate?.(l.view)}>
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <p className="hint" style={{ marginTop: 12 }}>⏱ {g.frequency}</p>
+        </div>
+      ))}
+
+      <div className="card">
+        <div className="section-label" style={{ marginTop: 0 }}>優先度を下げたタイプ（参考）</div>
+        {DEPRIORITIZED_TYPES.map((d) => (
+          <p key={d.type} className="inline-note" style={{ marginTop: 0, marginBottom: 6, opacity: 0.85 }}>
+            {d.type}：{d.reason}
           </p>
         ))}
       </div>
