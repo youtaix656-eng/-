@@ -71,7 +71,14 @@ export default function App() {
       {view === 'toc' && <TableOfContents onGo={goFromToc} />}
       {view === 'myths' && <Myths focus={focus} onFocusDone={clearFocus} />}
       {view === 'people' && (
-        <People focus={focus} onFocusDone={clearFocus} onGoTactic={(id) => go('tactics', id)} />
+        <People
+          focus={focus}
+          onFocusDone={clearFocus}
+          onGoTactic={(id) => go('tactics', id)}
+          cases={store.cases}
+          onSaveCase={store.saveCase}
+          onRemoveCase={store.removeCase}
+        />
       )}
       {view === 'records' && (
         <Records
@@ -86,6 +93,7 @@ export default function App() {
           setSetting={store.setSetting}
           onClearAll={store.clearAll}
           recordCount={store.records.length}
+          caseCount={store.cases.length}
           storageSize={store.storageSize}
         />
       )}

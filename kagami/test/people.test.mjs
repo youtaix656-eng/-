@@ -121,7 +121,7 @@ test('芯は数えるだけにせず、当たった芯の一覧を返す', () =>
   assert.equal(new Set(cores).size, cores.length, '芯が重複しています');
 });
 
-test('結果を保存しない・ネットワークに触れない', () => {
+test('見立ての計算と型のデータは、保存にもネットワークにも触れない（保存は cases.js に分けてある）', () => {
   for (const f of ['../src/lib/analysis.js', '../src/data/people.js', '../src/components/People.jsx']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/, `${f}: ネットワークに触れています`);

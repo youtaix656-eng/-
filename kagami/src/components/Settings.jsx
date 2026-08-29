@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
 
-export default function Settings({ settings, setSetting, onClearAll, recordCount, storageSize }) {
+export default function Settings({ settings, setSetting, onClearAll, recordCount, caseCount = 0, storageSize }) {
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -36,7 +36,8 @@ export default function Settings({ settings, setSetting, onClearAll, recordCount
       <div className="card">
         <h3>保存されているもの</h3>
         <p className="tiny">
-          記録 {recordCount}件・約{Math.max(1, Math.round(storageSize() / 1024))}KB（端末内）。
+          記録 {recordCount}件・人間分析の見立て {caseCount}件・
+          約{Math.max(1, Math.round(storageSize() / 1024))}KB（端末内）。
           このアプリはサーバーを持たないので、端末を変えるとデータは引き継がれません。
         </p>
         {!confirming ? (
@@ -47,7 +48,7 @@ export default function Settings({ settings, setSetting, onClearAll, recordCount
           </div>
         ) : (
           <div className="note warn">
-            記録{recordCount}件と設定をすべて消します。元に戻せません。
+            記録{recordCount}件・見立て{caseCount}件と設定をすべて消します。元に戻せません。
             <div className="row end" style={{ marginTop: 8 }}>
               <button className="ghost" onClick={() => setConfirming(false)}>
                 やめる

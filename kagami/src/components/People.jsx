@@ -1,15 +1,27 @@
 import React, { useMemo, useState } from 'react';
 import { PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors } from '../data/people.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
+import { displayName, LABEL_MAX } from '../lib/cases.js';
 import { repliesOf } from '../data/replies.js';
 import { TACTIC_MAP } from '../data/tactics.js';
 import { GLYPHS } from '../data/glyphs.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { useFocusJump } from './useFocusJump.js';
 
-export default function People({ focus, onFocusDone, onGoTactic }) {
+function when(at) {
+  const d = new Date(at);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+export default function People({ focus, onFocusDone, onGoTactic, cases = [], onSaveCase, onRemoveCase }) {
   const [checked, setChecked] = useState([]);
   const [open, setOpen] = useState('');
+  const [label, setLabel] = useState('');
+  const [note, setNote] = useState('');
+  const [editingId, setEditingId] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState('');
   const [scene, setScene] = useState(() => (SCENES.some((sc) => sc.id === focus) ? focus : ''));
   // 型と芯が同じ画面にあるので、どちらの飛び先かを id から決める
   // （癖・状態の画面と同じ形。片方だけ直すと必ず取りこぼす）
@@ -34,6 +46,31 @@ export default function People({ focus, onFocusDone, onGoTactic }) {
 
   function toggle(id) {
     setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+    setSaved(false);
+  }
+
+  /** 保存してある見立てを開いて、続きから直す */
+  function openCase(c) {
+    setEditingId(c.id);
+    setChecked(c.checkedIds);
+    setLabel(c.label);
+    setNote(c.note);
+    setScene(c.sceneId || '');
+    setSaved(false);
+    window.scrollTo(0, 0);
+  }
+
+  function newCase() {
+    setEditingId('');
+    setChecked([]);
+    setLabel('');
+    setNote('');
+    setSaved(false);
+  }
+
+  function save() {
+    onSaveCase({ id: editingId || undefined, label, note, sceneId: scene, checkedIds: checked });
+    setSaved(true);
   }
 
   return (
@@ -80,8 +117,8 @@ export default function People({ focus, onFocusDone, onGoTactic }) {
       </div>
       <p className="tiny">
         思い当たるものではなく、<strong>実際に見たもの</strong>だけを選んでください。
-        {MIN_TOTAL}つ以上で見立てが出ます。<strong>この画面の内容は保存しません</strong>——
-        端末の中に人物の記録を作らないためです。
+        {MIN_TOTAL}つ以上で見立てが出ます。選んだだけでは残りません——
+        <strong>下の「この見立てを残す」を押した時だけ</strong>この端末に保存します。
       </p>
 
       <div className="card">
@@ -206,6 +243,97 @@ export default function People({ focus, onFocusDone, onGoTactic }) {
             </div>
           ))}
         </>
+      )}
+
+      <div className="card">
+        <h3>{editingId ? 'この見立てを直す' : 'この見立てを残す'}</h3>
+        <p className="tiny">
+          残るのは<strong>チェックした内容だけ</strong>で、判定は開くたびに計算し直します
+          （あとから型が増えても、過去の見立てを読み直せます）。
+          <br />
+          <strong>端末を人に見られる可能性があるなら、本名ではなく呼び名を。</strong>
+          「職場のAさん」で十分です。電話番号・メール・リンクが混ざっていたら自動で伏せます。
+        </p>
+
+        <input
+          type="text"
+          value={label}
+          maxLength={LABEL_MAX}
+          onChange={(e) => {
+            setLabel(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="呼び名（例：職場のAさん／空でも残せます）"
+        />
+        <textarea
+          style={{ minHeight: 80, marginTop: 10 }}
+          value={note}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="メモ（いつ・どこで・何があったか。任意）"
+        />
+
+        <div className="row end" style={{ marginTop: 10 }}>
+          {editingId && (
+            <button className="ghost" onClick={newCase}>
+              新しく作る
+            </button>
+          )}
+          <button className="primary" onClick={save} disabled={checked.length === 0 || saved}>
+            {saved ? '保存しました' : editingId ? '上書きして保存' : 'この見立てを残す'}
+          </button>
+        </div>
+      </div>
+
+      <h2>保存してある見立て（{cases.length}）</h2>
+      <Rule mark={GLYPHS.reference} />
+
+      {cases.length === 0 ? (
+        <p className="tiny">まだありません。上で選んで「この見立てを残す」を押すと、ここに並びます。</p>
+      ) : (
+        <ul className="list">
+          {cases.map((c) => (
+            <li key={c.id}>
+              <button className="item" onClick={() => openCase(c)}>
+                <span className="t">
+                  {GLYPHS.piece} {displayName(c)}
+                  {c.id === editingId && <span className="badge" style={{ marginLeft: 8 }}>編集中</span>}
+                </span>
+                <span className="s">
+                  {c.sceneId && SCENE_MAP[c.sceneId] ? `${SCENE_MAP[c.sceneId].label}・` : ''}
+                  ふるまい{c.checkedIds.length}件・{when(c.updatedAt)}
+                  {c.note ? `／${c.note.slice(0, 24)}` : ''}
+                </span>
+              </button>
+              <div className="row end" style={{ paddingBottom: 8 }}>
+                {confirmDelete === c.id ? (
+                  <>
+                    <span className="tiny">元に戻せません。</span>
+                    <button className="ghost" onClick={() => setConfirmDelete('')}>
+                      やめる
+                    </button>
+                    <button
+                      className="danger"
+                      onClick={() => {
+                        onRemoveCase(c.id);
+                        if (editingId === c.id) newCase();
+                        setConfirmDelete('');
+                      }}
+                    >
+                      消す
+                    </button>
+                  </>
+                ) : (
+                  <button className="danger ghost" onClick={() => setConfirmDelete(c.id)}>
+                    消す
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
 
       <h2>3つの芯</h2>
