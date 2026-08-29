@@ -5,6 +5,7 @@ import Home from './components/Home.jsx';
 import Check from './components/Check.jsx';
 import Tactics from './components/Tactics.jsx';
 import Replies from './components/Replies.jsx';
+import Habits from './components/Habits.jsx';
 import Sources from './components/Sources.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
 import Records from './components/Records.jsx';
@@ -60,6 +61,9 @@ export default function App() {
       )}
       {view === 'tactics' && <Tactics focus={focus} onFocusDone={clearFocus} />}
       {view === 'replies' && <Replies focus={focus} onFocusDone={clearFocus} />}
+      {view === 'habits' && (
+        <Habits focus={focus} onFocusDone={clearFocus} onGoTactic={(id) => go('tactics', id)} />
+      )}
       {view === 'sources' && <Sources focus={focus} onFocusDone={clearFocus} />}
       {view === 'toc' && <TableOfContents onGo={goFromToc} />}
       {view === 'records' && (

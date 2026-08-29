@@ -81,6 +81,14 @@ export default function Home({ onGo, records }) {
           </button>
         </li>
         <li>
+          <button className="item" onClick={() => onGo('habits')}>
+            <span className="t">{GLYPHS.circlePlus} つけこまれやすい形</span>
+            <span className="s">
+              相手の型ではなく、自分の側の癖。落ち度ではなく「使いやすい形」の話。
+            </span>
+          </button>
+        </li>
+        <li>
           <button className="item" onClick={() => onGo('records')}>
             <span className="t">{GLYPHS.reference} 記録（{records.length}件）</span>
             <span className="s">争うためではなく、あとから自分が迷わないために。</span>

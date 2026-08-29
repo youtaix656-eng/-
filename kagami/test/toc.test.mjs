@@ -4,6 +4,7 @@ import { TOC_ENTRIES, TOC_CATEGORY_MAP, tocSections, filterToc, duplicateTitles 
 import { readingInfo, OTHER_GROUP, GROUP_ORDER } from '../src/lib/yomi.js';
 import { TACTICS, CATEGORIES } from '../src/data/tactics.js';
 import { REPLIES } from '../src/data/replies.js';
+import { HABITS } from '../src/data/habits.js';
 import { SOURCES } from '../src/data/sources.js';
 
 test('目次のタイトルは重複しない', () => {
@@ -37,7 +38,7 @@ test('reading はひらがなだけ（カタカナ・漢字・英数字を混ぜ
 });
 
 test('カテゴリは定義済みで、飛び先の画面と anchor を持つ', () => {
-  const views = new Set(['tactics', 'replies', 'sources']);
+  const views = new Set(['tactics', 'replies', 'habits', 'sources']);
   for (const e of TOC_ENTRIES) {
     const cat = TOC_CATEGORY_MAP[e.category];
     assert.ok(cat, `${e.title}: 未知のカテゴリ ${e.category}`);
@@ -53,10 +54,11 @@ test('目次はすべてのデータ（型・別名・まとまり・返し方�
   assert.equal(count('alias'), aliases);
   assert.equal(count('group'), CATEGORIES.length);
   assert.equal(count('reply'), REPLIES.length);
+  assert.equal(count('habit'), HABITS.length);
   assert.equal(count('source'), SOURCES.length);
   assert.equal(
     TOC_ENTRIES.length,
-    TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + SOURCES.length,
+    TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + HABITS.length + SOURCES.length,
   );
 });
 
@@ -70,7 +72,16 @@ test('別名の項目は、実在する型へ飛ぶ', () => {
 
 test('世に出回っている呼び名を目次から引ける', () => {
   const titles = new Set(TOC_ENTRIES.map((e) => e.title));
-  for (const w of ['間欠強化', '希少性の原理', 'ツァイガルニク効果', '感情ジェットコースター効果', '安全基地効果', 'サード・アイ', '沈黙の圧力', '捕食者のテンポ']) {
+  const want = [
+    '間欠強化', '間欠効果', '希少性の原理', 'ツァイガルニク効果', '感情ジェットコースター効果',
+    '安全基地効果', 'サード・アイ', '沈黙の圧力', '捕食者のテンポ',
+    'イエスセット話法', 'ドア・イン・ザ・フェイス', '両面提示', 'ネーム・コーリング',
+    'カクテルパーティー効果', 'バックトラッキング', 'プラットフォール効果', 'アンダードッグ効果',
+    'ウィンザー効果', 'アンカリング効果', 'フット・イン・ザ・ドア', 'ラベリング効果',
+    'フォールス・コンセンサス', '同調圧力', 'サンクコスト効果', '自己開示の返報性',
+    'ベンジャミン・フランクリン効果',
+  ];
+  for (const w of want) {
     assert.ok(titles.has(w), `目次から「${w}」を引けません`);
   }
 });

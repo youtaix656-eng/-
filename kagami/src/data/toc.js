@@ -11,6 +11,7 @@
 
 import { TACTICS, CATEGORIES } from './tactics.js';
 import { REPLIES } from './replies.js';
+import { HABITS } from './habits.js';
 import { SOURCES } from './sources.js';
 import { GLYPHS } from './glyphs.js';
 import { buildKanaIndex } from '../lib/yomi.js';
@@ -21,6 +22,7 @@ export const TOC_CATEGORIES = [
   { id: 'alias', label: '別の呼び名', icon: GLYPHS.pointer, view: 'tactics' },
   { id: 'group', label: '型のまとまり', icon: GLYPHS.star, view: 'tactics' },
   { id: 'reply', label: '返し方', icon: GLYPHS.circle, view: 'replies' },
+  { id: 'habit', label: 'つけこまれやすい形', icon: GLYPHS.circlePlus, view: 'habits' },
   { id: 'source', label: '出典', icon: GLYPHS.dagger, view: 'sources' },
 ];
 
@@ -85,6 +87,19 @@ export function buildTocEntries() {
       view: 'replies',
       anchor: `toc-reply-${r.id}`,
       targetId: r.id,
+    });
+  }
+
+  for (const h of HABITS) {
+    entries.push({
+      id: `habit-${h.id}`,
+      category: 'habit',
+      title: h.title,
+      reading: h.reading || '',
+      sub: h.summary,
+      view: 'habits',
+      anchor: `toc-habit-${h.id}`,
+      targetId: h.id,
     });
   }
 
