@@ -6,7 +6,7 @@
 // どちらも「もっと頑張る」では避けられないので、**始める前に自分で答えておく。**
 //
 // 決まりごと：
-//  ・**AIを呼ばない。** 5つの問いに自分で答えるだけ。
+//  ・**AIを呼ばない。** いくつかの問いに自分で答えるだけ。
 //  ・**採点しない・総合判定を出さない。** 「危険度72点」のような数字は、
 //    手元に無い基準（他社の事例・業界平均）が無いと出せない。無いものは出さない。
 //  ・**答えないことを責めない。** 分からない（unknown）が既定で、そのままでも先へ進める。
@@ -16,7 +16,8 @@
 export const RISK_ANSWERS = { yes: 'はい', no: 'いいえ', unknown: 'わからない' };
 
 /**
- * 5つの問い。
+ * 問いの一覧。**件数は必ず RISK_QUESTIONS.length から出す**
+ * （文言に数を直接書くと、問いを足したときに画面だけ古い数のまま残る）。
  *  careWhen … この答えだった時に「気をつける側」として出す
  *  care     … その時にやること（**やめろとは言わない**）
  */
@@ -56,6 +57,15 @@ export const RISK_QUESTIONS = [
     careWhen: 'no',
     care: '自分の現場で見たこと・自分が失敗したことを1つ入れるだけで、代わりが利かなくなります。',
   },
+  {
+    id: 'seen',
+    q: '同じことをやっている人を、実際に3人見ましたか？',
+    why: 'AIは「速く走る」ほうには効きますが、走り出す前に一度止まる材料はくれません。'
+      + '1人も見つからない時は、誰もやらない理由（需要が無い・規約で無理）が先にあることが多いです。',
+    careWhen: 'no',
+    care: '3人だけ探して、どこで・いくらで・何を出しているか見てください。'
+      + '見つかれば「やってよい」と分かり、見つからなければ、なぜ誰もやっていないかを先に考えられます。',
+  },
 ];
 
 export function normalizeRisks(risks) {
@@ -87,9 +97,9 @@ export function riskReview(venture) {
 /** 画面に出す1行。 */
 export function riskLine(review) {
   if (!review) return '';
-  if (!review.answered) return '5つとも、まだ答えていません。始める前に1分で答えられます。';
+  if (!review.answered) return `${review.total}つとも、まだ答えていません。始める前に1分で答えられます。`;
   if (review.cares.length === 0 && !review.unanswered.length) {
-    return '5つとも答えました。気をつける所は、いまのところありません。';
+    return `${review.total}つとも答えました。気をつける所は、いまのところありません。`;
   }
   const parts = [];
   if (review.cares.length) parts.push(`気をつける所が${review.cares.length}つ`);

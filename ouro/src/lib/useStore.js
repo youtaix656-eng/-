@@ -71,7 +71,9 @@ import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
 import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { loadCharacterDetails } from '../data/characters.js';
-import { makeEvent } from './schedule.js';
+// **予定1件を作るためだけに schedule.js を読まない**（カレンダーの組み立てまで付いてきて、
+// lazy なはずのカレンダーぶんが起動時の束へ入る）。切り出した小さい方だけを読む。
+import { makeEvent } from './eventItem.js';
 
 // 新項目04：初期データの組み立て（seed.js）と社員プリセット（data/employees.js）は
 // 「会社を作る」「社員を雇う」時にしか要らない。毎回の起動で読むのをやめ、
@@ -135,6 +137,9 @@ const REST_KEYS = [
   // 回し方の周回。事業の画面でしか使わないので後回しでよい。
   // **読み込みが済むまで「まだ回していない」と言い切らないこと**（項目138）。
   KEYS.loops,
+  // 手でやっている作業の書き出し。会社画面でしか使わないので後回しでよい。
+  // **読み込みが済むまで「まだ書き出していません」と言い切らないこと**（項目138）。
+  KEYS.chores,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -159,6 +164,7 @@ const EMPTY = {
   patterns: [],
   style: [],
   loops: [],
+  chores: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -994,6 +1000,43 @@ export function useStore() {
     async (id) => {
       const { removeSample } = await import('./style.js');
       put(KEYS.style, removeSample(stateRef.current.style, id));
+    },
+    [put]
+  );
+
+  // ── 手でやっている作業（任せたら月いくら浮くか）──
+  // **勝手に任せない。** ここは書き出して数えるだけで、実行は依頼画面から人が押す。
+
+  const addChore = useCallback(
+    async (data) => {
+      const { makeChore, MAX_CHORES } = await import('./offload.js');
+      const made = makeChore(data || {});
+      if (!made) return null;
+      const list = stateRef.current.chores || [];
+      if (list.length >= MAX_CHORES) return null;
+      put(KEYS.chores, [made, ...list]);
+      log({ actor: 'user', action: 'choreAdded', target: made.title });
+      return made;
+    },
+    [put, log]
+  );
+
+  // 形の整えは読む側（offloadReview → normalizeChores）が必ず通すので、ここではしない。
+  const updateChore = useCallback(
+    (id, patch) => {
+      put(
+        KEYS.chores,
+        (stateRef.current.chores || []).map((c) =>
+          c.id === id ? { ...c, ...patch, id: c.id, updatedAt: Date.now() } : c
+        )
+      );
+    },
+    [put]
+  );
+
+  const removeChore = useCallback(
+    (id) => {
+      put(KEYS.chores, (stateRef.current.chores || []).filter((c) => c.id !== id));
     },
     [put]
   );
@@ -2456,6 +2499,9 @@ export function useStore() {
     addStyleSample,
     updateStyleSample,
     removeStyleSample,
+    addChore,
+    updateChore,
+    removeChore,
     updatePattern: updatePatternAction,
     removePattern: removePatternAction,
     // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）
