@@ -385,6 +385,16 @@ export const SOURCES = [
     note: '逃げられない状況が長く続いた人に何が起きるかを扱った本。切り離し・自分を責める・感覚の鈍りなどを、その人の弱さではなく状況への反応として書いている。',
   },
   {
+    id: 'felitti_1998',
+    tocTitle: '子ども時代の逆境と、その後',
+    reading: 'こどもじだいのぎゃっきょうとそのご',
+    title: 'Relationship of childhood abuse and household dysfunction to many of the leading causes of death in adults (ACE Study)',
+    author: 'Felitti, V. J. ほか',
+    year: 1998,
+    kind: '論文',
+    note: '子ども時代の逆境の多さと、大人になってからの健康の問題とに結びつきがあることを大規模に調べたもの。集団として見た時の傾向であって、目の前の一人の過去を、いまのふるまいから逆算できるという話ではない。',
+  },
+  {
     id: 'tokushoho',
     tocTitle: '特定商取引法（クーリング・オフ）',
     reading: 'とくていしょうとりひきほう',

@@ -7,6 +7,8 @@ import { REPLY_MAP, REPLIES } from '../src/data/replies.js';
 import { detectTactics } from '../src/lib/detect.js';
 import { MYTHS } from '../src/data/myths.js';
 import { STATES } from '../src/data/states.js';
+import { PERSON_TYPES } from '../src/data/people.js';
+import { HABITS } from '../src/data/habits.js';
 
 test('型の id・名前は重複しない', () => {
   const ids = TACTICS.map((t) => t.id);
@@ -132,19 +134,23 @@ test('効き目の大きさを断定しない（「◯％の人が従う」の�
   }
 });
 
-test('出典と返し方に、使われていないものが残っていない', () => {
+test('出典と返し方に、どこからも使われていないものが残っていない', () => {
   const usedSources = new Set([
     ...TACTICS.flatMap((t) => t.sourceIds),
     ...MYTHS.flatMap((m) => m.sourceIds || []),
     ...STATES.flatMap((st) => st.sourceIds || []),
   ]);
-  const usedReplies = new Set(TACTICS.flatMap((t) => t.replyIds));
+  const usedReplies = new Set([
+    ...TACTICS.flatMap((t) => t.replyIds),
+    ...PERSON_TYPES.flatMap((t) => t.replyIds || []),
+    ...HABITS.flatMap((h) => h.replyIds || []),
+  ]);
   for (const s of SOURCES) {
     // 相談窓口は返し方（window）からも参照されるので、型からの参照が無くてもよい
     if (s.kind === '相談窓口' || s.kind === '法令・公的制度') continue;
     assert.ok(usedSources.has(s.id), `出典「${s.tocTitle}」がどの型からも参照されていません`);
   }
-  for (const r of REPLIES) assert.ok(usedReplies.has(r.id), `返し方「${r.tocTitle}」がどの型からも参照されていません`);
+  for (const r of REPLIES) assert.ok(usedReplies.has(r.id), `返し方「${r.tocTitle}」がどこからも参照されていません`);
 });
 
 test('返し方に「言い返して勝つ」ための言葉を置かない', () => {
