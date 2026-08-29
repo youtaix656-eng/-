@@ -53,6 +53,14 @@ export const CATEGORIES = [
     summary: '「この関係が終わる」を代償にして従わせる型。近い相手ほど効いてしまう。',
   },
   {
+    id: 'rank',
+    reading: 'じょうげをつくる',
+    label: '上下をつくる（ふるまい）',
+    icon: GLYPHS.triangleDown,
+    summary:
+      'ここだけは言葉ではなく、間・目線・動く速さで効く型。貼った文面からは見つからないので、見分け方を読んで覚えるしかない。',
+  },
+  {
     id: 'money',
     reading: 'おかねのはんだんをまげる',
     label: 'お金の判断を曲げる',
@@ -70,6 +78,7 @@ export const TACTICS = [
     name: '期限で急がせる',
     reading: 'きげんでいそがせる',
     category: 'pressure',
+    channel: 'text',
     summary: '「今日中」「この場で」と区切って、考える時間を渡さない。',
     why: '急いでいるときの判断は、ふだんの判断とは別のものになる。中身を良くするより、考える時間を削るほうが簡単に通る。',
     signs: [
@@ -87,6 +96,7 @@ export const TACTICS = [
     name: '帰らせない・長引かせる',
     reading: 'かえらせないながびかせる',
     category: 'pressure',
+    channel: 'text',
     summary: '話を切り上げさせず、疲れて判断が雑になるまで続ける。',
     why: '長く話すほど「早く終わらせたい」が強くなり、終わらせる一番早い方法が「うなずくこと」になる。',
     signs: [
@@ -104,6 +114,7 @@ export const TACTICS = [
     name: '断る選択肢を消す',
     reading: 'ことわるせんたくしをけす',
     category: 'pressure',
+    channel: 'text',
     summary: 'AとBのどちらかを選ばせて、「どちらも選ばない」を無いことにする。',
     why: '選んでいる感じがあると、決めさせられたことに気づきにくい。実際には「やらない」がいつでも三つ目の選択肢としてある。',
     signs: [
@@ -121,6 +132,7 @@ export const TACTICS = [
     name: '不安をあおる',
     reading: 'ふあんをあおる',
     category: 'pressure',
+    channel: 'text',
     summary: '「このままだと大変なことになる」と言い、その解決策として自分の提案を置く。',
     why: '不安は行動を早めるが、確かめる手順を飛ばす。不安をつくった人と、解決策を売る人が同じかどうかを見るとよい。',
     signs: [
@@ -140,6 +152,7 @@ export const TACTICS = [
     name: '先に与えて借りを作る',
     reading: 'さきにあたえてかりをつくる',
     category: 'exchange',
+    channel: 'text',
     summary: '頼んでいない物・好意を先に渡し、断りにくくする。',
     why: 'もらったら返したくなるのは自然なこと。その自然さを、こちらが頼んでいないものに対して使われる。',
     signs: [
@@ -157,6 +170,7 @@ export const TACTICS = [
     name: '小さな承諾から始める',
     reading: 'ちいさなしょうだくからはじめる',
     category: 'exchange',
+    channel: 'text',
     summary: 'ごく軽い頼みを引き受けさせ、そのあと本題を出す。',
     why: '一度引き受けると「引き受ける側の自分」になり、次を断ると自分が変わったように感じてしまう。',
     signs: [
@@ -174,6 +188,7 @@ export const TACTICS = [
     name: '大きな要求のあとで譲る',
     reading: 'おおきなようきゅうのあとでゆずる',
     category: 'exchange',
+    channel: 'text',
     summary: 'まず断られる要求を出し、次に本命を「譲歩」として出す。',
     why: '相手が譲ったように見えると、こちらも譲らないと悪い気がする。最初の要求は断られるために出されている。',
     signs: [
@@ -191,6 +206,7 @@ export const TACTICS = [
     name: '前に言ったことで縛る',
     reading: 'まえにいったことでしばる',
     category: 'exchange',
+    channel: 'text',
     summary: '以前の発言を持ち出し、考えを変えることを「筋が通らないこと」に見せる。',
     why: '人は自分の言ったことと合わない行動を取りにくい。だが、前提が変われば考えが変わるのはふつうのこと。',
     signs: [
@@ -208,6 +224,7 @@ export const TACTICS = [
     name: 'あとから条件を足す',
     reading: 'あとからじょうけんをたす',
     category: 'exchange',
+    channel: 'text',
     summary: '良い条件で承諾させてから、費用や手間を後出しする。',
     why: '決めたあとは、条件が悪くなっても決め直すのが面倒になる。決め直してよい。',
     signs: [
@@ -227,6 +244,7 @@ export const TACTICS = [
     name: 'みんなやっていると言う',
     reading: 'みんなやっているという',
     category: 'crowd',
+    channel: 'text',
     summary: '多数派であることを、正しさの代わりに置く。',
     why: '判断に迷うとき、人は周りを見る。だが「多くの人がしている」は「自分に合っている」とは別のこと。',
     signs: [
@@ -244,6 +262,7 @@ export const TACTICS = [
     name: '肩書で押す',
     reading: 'かたがきでおす',
     category: 'crowd',
+    channel: 'text',
     summary: '資格・役職・専門家の名前を出して、中身の説明の代わりにする。',
     why: '肩書があると、内容を確かめずに受け入れやすくなる。肩書は「その人が正しい」ではなく「その分野を学んだ」というだけ。',
     signs: [
@@ -261,6 +280,7 @@ export const TACTICS = [
     name: '確かめられない数字で押す',
     reading: 'たしかめられないすうじでおす',
     category: 'crowd',
+    channel: 'text',
     summary: '出どころのない「◯％」「実績◯件」を根拠として出す。',
     why: '数字は強く見えるが、出どころが無ければ意味は無い。強い言葉と確かな根拠は別のもの。',
     signs: [
@@ -277,7 +297,9 @@ export const TACTICS = [
     id: 'favor',
     name: '特別扱いをほのめかす',
     reading: 'とくべつあつかいをほのめかす',
+    aka: [{ name: '特別感・唯一感', reading: 'とくべつかんゆいいつかん' }],
     category: 'crowd',
+    channel: 'text',
     summary: '「あなただから」と言って、断ることを関係の否定に見せる。',
     why: '好意を向けられた相手には断りにくい。その好意が、断られたときに残るかどうかを見るとよい。',
     signs: [
@@ -297,6 +319,7 @@ export const TACTICS = [
     name: '記憶違いだと言う',
     reading: 'きおくちがいだという',
     category: 'self',
+    channel: 'text',
     summary: '起きたことを「無かった」「勘違い」と繰り返し、自分の記憶を信じられなくする。',
     why: '記憶は思い出すたびに揺れる。そこを繰り返し突かれると、確かめる基準を相手に預けてしまう。',
     signs: [
@@ -314,6 +337,7 @@ export const TACTICS = [
     name: '怒らせたのはあなただと言う',
     reading: 'おこらせたのはあなただという',
     category: 'self',
+    channel: 'text',
     summary: '自分のふるまいの理由を、相手の側に置く。',
     why: '「原因は自分」と思うと、相手のふるまいを問題として見られなくなる。きっかけと責任は別のもの。',
     signs: [
@@ -331,6 +355,7 @@ export const TACTICS = [
     name: '人格そのものを否定する',
     reading: 'じんかくそのものをひていする',
     category: 'self',
+    channel: 'text',
     summary: 'やったことではなく、その人がどういう人間かを問題にする。',
     why: 'ふるまいは変えられるが、人格を否定されると変えようがない。直しようのない指摘は、直させるためのものではない。',
     signs: [
@@ -348,6 +373,7 @@ export const TACTICS = [
     name: '答えを含んだ質問をする',
     reading: 'こたえをふくんだしつもんをする',
     category: 'self',
+    channel: 'text',
     summary: '「そう思いますよね？」の形で、同意を答えの形にして渡す。',
     why: '質問の言い回しだけで、思い出す内容そのものが変わることがある。うなずいた瞬間に、それが自分の意見になる。',
     signs: [
@@ -365,6 +391,7 @@ export const TACTICS = [
     name: '誰にでも当たる言葉を当てる',
     reading: 'だれにでもあたることばをあてる',
     category: 'self',
+    channel: 'text',
     summary: '多くの人に当てはまる言葉を伝え、見抜かれた感覚を作る。',
     why: '「自分のことだ」と感じると、そのあとの話も当たっている気がしてくる。当たったのは言葉の広さであって、こちらのことではない。',
     signs: [
@@ -382,6 +409,7 @@ export const TACTICS = [
     name: '冗談だったことにする',
     reading: 'じょうだんだったことにする',
     category: 'self',
+    channel: 'text',
     summary: '傷つく言葉を言ったあと、受け取り方の問題にすり替える。',
     why: '「冗談」と言われると、傷ついたこと自体が落ち度になる。言った言葉は、冗談でも言われた事実として残る。',
     signs: [
@@ -401,6 +429,7 @@ export const TACTICS = [
     name: '罪悪感で縛る',
     reading: 'ざいあくかんでしばる',
     category: 'bond',
+    channel: 'text',
     summary: 'してもらったことを持ち出し、断ることを「恩を返さないこと」にする。',
     why: '受けた好意は本物でも、それを断る理由の否定に使えるとは限らない。好意と要求は別々に見てよい。',
     signs: [
@@ -418,6 +447,7 @@ export const TACTICS = [
     name: '関係を切るとほのめかす',
     reading: 'かんけいをきるとほのめかす',
     category: 'bond',
+    channel: 'text',
     summary: '別れる・辞めさせる・縁を切る、を出して従わせる。',
     why: '関係を失う不安は、条件の良し悪しを見えなくする。関係を保つために従い続ける形は、そのあとも同じ形で続く。',
     signs: [
@@ -434,7 +464,9 @@ export const TACTICS = [
     id: 'silence',
     name: '黙って罰する',
     reading: 'だまってばっする',
+    aka: [{ name: 'サイレント・トリートメント', reading: 'さいれんととりーとめんと' }],
     category: 'bond',
+    channel: 'text',
     summary: '無視・返事をしないことで、理由を言わずに罰を与える。',
     why: '何が悪かったか言われないので、こちらが推測して先回りするしかなくなる。推測して謝るほど、その形は強くなる。',
     signs: [
@@ -452,6 +484,7 @@ export const TACTICS = [
     name: '他の人と比べる',
     reading: 'ほかのひととくらべる',
     category: 'bond',
+    channel: 'text',
     summary: '第三者を持ち出し、その人と競わせる形にする。',
     why: '比べられると、相手の要求ではなく他人との差を埋めることが目的になってしまう。比べる相手は相手が選んでいる。',
     signs: [
@@ -469,6 +502,7 @@ export const TACTICS = [
     name: '周りから引き離す',
     reading: 'まわりからひきはなす',
     category: 'bond',
+    channel: 'text',
     summary: '家族・友人・同僚と会うことを、少しずつ減らさせる。',
     why: '外の目が無くなると、何がふつうかを相手の言葉だけで決めることになる。孤立は結果ではなく、先に作られることがある。',
     signs: [
@@ -486,6 +520,7 @@ export const TACTICS = [
     name: '秘密を作らせる',
     reading: 'ひみつをつくらせる',
     category: 'bond',
+    channel: 'text',
     summary: '「誰にも言わないで」と約束させ、外に出せないようにする。',
     why: '外に話せない話は、確かめようがない。秘密にしてほしい理由が「相手のため」なら、それは相手の都合。',
     signs: [
@@ -502,7 +537,9 @@ export const TACTICS = [
     id: 'intermittent',
     name: '急に優しくなる',
     reading: 'きゅうにやさしくなる',
+    aka: [{ name: '間欠強化', reading: 'かんけつきょうか' }, { name: '断続的な強化', reading: 'だんぞくてきなきょうか' }],
     category: 'bond',
+    channel: 'text',
     summary: '厳しさと優しさを不規則に入れ替え、次の優しさを待たせる。',
     why: 'いつも優しいより、たまにしか優しくないほうが、かえって離れがたくなる。良かった日を数えるほど、悪い日が見えなくなる。',
     signs: [
@@ -516,12 +553,137 @@ export const TACTICS = [
     sourceIds: ['ferster_skinner_1957', 'dv_soudan_plus'],
   },
 
+  {
+    id: 'zeigarnik',
+    name: 'わざと終わらせない',
+    reading: 'わざとおわらせない',
+    aka: [{ name: 'ツァイガルニク効果', reading: 'つぁいがるにくこうか' }],
+    category: 'bond',
+    channel: 'text',
+    summary: '認めそうで認めない、決めそうで決めない。「あと少し」の状態のまま止めておく。',
+    why:
+      '終わったことより終わっていないことのほうが頭に残り続ける。届きそうで届かないと、そのことを考えている時間が延び、判断がその一点に寄っていく。',
+    signs: [
+      '評価や返事が、いつも「もう少し」で止まる',
+      '条件を満たしても、そのたびに新しい条件が出てくる',
+      'はっきり断られないので、こちらから離れられない',
+    ],
+    lines: ['あと一歩なんだけどね', '今回は保留にしておきます', 'もう少しで認められるところまで来ている'],
+    cues: ['あと一歩', 'もう少しで', '保留に', 'あと少しで', '惜しい', 'そこまで来て', '次第では'],
+    replyIds: ['pause', 'takeout', 'third'],
+    sourceIds: ['zeigarnik_1927'],
+  },
+  {
+    id: 'fear_relief',
+    name: '不安にさせてから安心させる',
+    reading: 'ふあんにさせてからあんしんさせる',
+    aka: [{ name: '感情ジェットコースター効果', reading: 'かんじょうじぇっとこーすたーこうか' }],
+    category: 'bond',
+    channel: 'text',
+    summary: 'まず突き放したり脅したりして、そのあとで安心させる。安心した直後に本題が来る。',
+    why:
+      '不安から解放された直後は、ほっとして守りがいちばん緩む。安定しているだけでは起きないことが、揺さぶられた直後には起きる。',
+    signs: [
+      '悪い知らせのすぐあとに、良い話や頼みごとが来る',
+      '「怒っていない」と言われるまでの時間が、毎回わざとらしく長い',
+      '振り回されたあとほど、相手が大事な人に思えてくる',
+    ],
+    lines: ['さっきは驚かせてごめん、本当は怒っていない', '実は大丈夫だったよ。ところで一つお願いが'],
+    cues: ['さっきは驚かせ', '実は大丈夫', '怒っていないよ', '心配させたけど', 'ところで一つお願い', 'ほっとした'],
+    replyIds: ['pause', 'record', 'third'],
+    sourceIds: ['dolinski_nawrat_1998'],
+  },
+  {
+    id: 'safe_base',
+    name: '唯一の逃げ場になる',
+    reading: 'ゆいいつのにげばになる',
+    aka: [{ name: '安全基地効果', reading: 'あんぜんきちこうか' }, { name: 'セーフベース理論', reading: 'せーふべーすりろん' }],
+    category: 'bond',
+    channel: 'text',
+    summary: '「ここにいれば大丈夫」を作り、ほかに戻れる場所を無くしていく。',
+    why:
+      '人には戻れる拠り所が要る——それ自体は健やかなこと。だが拠り所が一人だけになると、その人を失うことが世界を失うことになり、何を言われても離れられなくなる。',
+    signs: [
+      '安心できるのがその人といる時だけになっている',
+      '「外の人には分からない」「ここが一番安全」が繰り返される',
+      '逃げ場をくれる人と、逃げたくなる原因をつくる人が同じ',
+    ],
+    lines: ['ここにいれば大丈夫', '君を分かってあげられるのは私だけ', '外に出たって同じことの繰り返しだよ'],
+    cues: ['ここにいれば', '分かるのは私だけ', '私だけは', '居場所は', '外に出ても', 'ここが一番'],
+    replyIds: ['third', 'record', 'window'],
+    sourceIds: ['bowlby_1988'],
+  },
+
+  // ── 上下をつくる（ふるまい。言葉ではないので文面からは見つからない） ──
+  {
+    id: 'stare',
+    name: '眉間を見つめ続ける',
+    reading: 'みけんをみつめつづける',
+    aka: [{ name: 'サード・アイ', reading: 'さーどあい' }],
+    category: 'rank',
+    channel: 'behavior',
+    summary: '目ではなく眉のあいだを、表情を変えずに見続ける。見られた側は落ち着かなくなる。',
+    why:
+      '見つめ続けられると、こちらは目を逸らす側になる。逸らした側が下に感じるので、話す前から上下がついてしまう。ただし、目線と力関係の結びつきは思われているほど強くない、という研究のまとめもある。',
+    signs: [
+      'まばたきが少なく、視線が顔の一点から動かない',
+      '目が合っている感じがしないのに、見られている感じだけが強い',
+      'こちらが話している間もずっと表情が動かない',
+    ],
+    lines: [],
+    cues: [],
+    replyIds: ['pause', 'leave', 'record'],
+    sourceIds: ['dovidio_ellyson_1982', 'hall_2005'],
+  },
+  {
+    id: 'silence_pressure',
+    name: '答える前に間を置く',
+    reading: 'こたえるまえにまをおく',
+    aka: [{ name: '沈黙の圧力', reading: 'ちんもくのあつりょく' }],
+    category: 'rank',
+    channel: 'behavior',
+    summary: '質問されてもすぐに答えず、数秒だまってから話し始める。相手はその数秒で落ち着かなくなる。',
+    why:
+      '会話に短い沈黙が入るだけで、受け入れられていない感じが強まる。埋めたくなった側が先に話し、条件を譲るのはたいてい先に話したほう。',
+    signs: [
+      '毎回きまって同じ長さの間が入る（考えている間ではなく型になっている）',
+      '沈黙のあいだ、こちらの様子だけを見ている',
+      'こちらが沈黙を埋めて話したことを、材料として使われる',
+    ],
+    lines: [],
+    cues: [],
+    replyIds: ['pause', 'no_reason', 'record'],
+    sourceIds: ['koudenburg_2011'],
+  },
+  {
+    id: 'slow_tempo',
+    name: 'わざとゆっくり動く',
+    reading: 'わざとゆっくりうごく',
+    aka: [{ name: '捕食者のテンポ', reading: 'ほしょくしゃのてんぽ' }],
+    category: 'rank',
+    channel: 'behavior',
+    summary: '話す速さ・振り向く動き・まばたきまで遅くして、落ち着いて見せる。',
+    why:
+      '急いでいない人は余裕があるように見え、こちらの話す速さまで引きずられる。落ち着いて見えることと、正しいことや誠実であることは別。',
+    signs: [
+      '内容は薄いのに、間の取り方だけが妙に堂々としている',
+      'こちらが早口になっているのに気づく',
+      '答えを引き延ばすことと、考えていることの区別がつかない',
+    ],
+    lines: [],
+    cues: [],
+    replyIds: ['pause', 'fact', 'record'],
+    sourceIds: ['hall_2005'],
+  },
+
   // ── お金の判断を曲げる ────────────────────────────
   {
     id: 'scarcity',
     name: '残りわずかだと言う',
     reading: 'のこりわずかだという',
+    aka: [{ name: '希少性の原理', reading: 'きしょうせいのげんり' }],
     category: 'money',
+    channel: 'text',
     summary: '数や枠を限って見せ、手に入らなくなる不安で判断を早めさせる。',
     why: '手に入りにくいものは良く見える。だが、少ないことと自分に必要なことは関係がない。',
     signs: [
@@ -539,6 +701,7 @@ export const TACTICS = [
     name: 'ここまで払ったのにと言う',
     reading: 'ここまではらったのにという',
     category: 'money',
+    channel: 'text',
     summary: 'すでに使ったお金・時間を持ち出し、やめることを損に見せる。',
     why: 'すでに払ったものは、続けても戻らない。判断に使えるのは「これから先」の分だけ。',
     signs: [
@@ -554,6 +717,20 @@ export const TACTICS = [
 ];
 
 export const TACTIC_MAP = Object.fromEntries(TACTICS.map((t) => [t.id, t]));
+
+/**
+ * 文面から調べられる型（言葉として現れるもの）。
+ * **判定に渡すのは必ずこちら**——ふるまいの型は言葉ではないので、
+ * 貼った文面から見つかるふりをしてはいけない。
+ */
+export function textTactics() {
+  return TACTICS.filter((t) => t.channel === 'text');
+}
+
+/** 言葉ではない型（間・目線・動く速さ）。一覧と目次には出るが、判定には出てこない */
+export function behaviorTactics() {
+  return TACTICS.filter((t) => t.channel === 'behavior');
+}
 
 /** カテゴリ id → その型の配列（カタログの並び順のまま） */
 export function tacticsInCategory(categoryId) {

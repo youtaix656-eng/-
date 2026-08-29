@@ -10,6 +10,9 @@
 //      読み込みごと落ちる（他アプリで実際に踏んだ）。ここは indexOf だけで足りる。
 //   4. **当たらなかった時も黙らない。** status を必ず返し、画面が
 //      「短すぎて調べられなかった」「当たらなかった」を言い分ける。
+//   5. **読めないものを読めるふりをしない。** 間・目線・動く速さで効く型
+//      （channel: 'behavior'）は言葉として現れないので、**ここでは絶対に返さない**。
+//      渡されても外す。画面の側で「文面からは分からない型が別にある」と伝える。
 
 /** これより短い文面では判定しない（短いほど、たまたま当たるだけになる） */
 export const MIN_TEXT = 8;
@@ -89,6 +92,7 @@ export function detectTactics(text, tactics = []) {
 
   const matches = [];
   tactics.forEach((tactic, order) => {
+    if (tactic.channel === 'behavior') return; // 言葉ではないものを言葉から当てない
     const hits = [];
     const cues = [];
     for (const cue of tactic.cues || []) {

@@ -37,6 +37,36 @@ body {
 
 #root { min-height: 100vh; }
 
+/* ── 地の質感（炭で擦ったような粒とにじみ） ──────────
+ * **画像ファイルを持たない。** 粒は SVG の feTurbulence をその場で描いて敷く
+ * （feColorMatrix の saturate 0 で灰色にするので、色は入らない）。
+ * 文字の読みやすさを壊さないよう、粒はごく薄く・動かさない。 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.055;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* にじみ（中心が明るく、縁へ落ちる）。参考にした図版の暗さの付き方 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 22%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(ellipse 100% 80% at 50% 45%, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55) 78%);
+}
+
+#root { position: relative; z-index: 1; }
+
+
 /* ── 版の縁（参考画像の二重の枠） ───────────────── */
 .app {
   position: relative;
@@ -172,6 +202,45 @@ textarea::placeholder { color: var(--ink-faint); }
 textarea:focus, input:focus, select:focus { outline: 1px solid var(--ink); outline-offset: 2px; }
 label.check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin: 12px 0; }
 label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
+
+
+/* ── 開いた型は「図版の札」として見せる（参考にした画像の組み方） ──
+ * 題は中央・明朝で大きく、その下に一行の要約。**本文は左寄せのまま**——
+ * 長い日本語を中央寄せにすると急に読みにくくなる。 */
+.card.opened .card-head { flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.card.opened .card-head > div { text-align: center; }
+.card.opened .plate-title {
+  font-size: 1.35rem;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  margin: 6px 0 2px;
+}
+.card.opened .plate-glyph {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+.card.opened .plate-summary {
+  text-align: center;
+  max-width: 30em;
+  margin: 10px auto 4px;
+}
+.card.opened {
+  background:
+    radial-gradient(ellipse 90% 50% at 50% 0%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 70%),
+    var(--plate-soft);
+  border-color: var(--line-strong);
+}
+.card .aka { display: block; margin-top: 2px; }
+.behavior-note {
+  border: 1px dashed var(--line);
+  border-radius: 2px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
 
 /* ── 印つきの小さな札 ──────────────────────── */
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }

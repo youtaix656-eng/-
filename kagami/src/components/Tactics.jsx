@@ -27,7 +27,9 @@ export default function Tactics({ focus, onFocusDone }) {
       <div className="head">
         <EyeSigil size={64} className="sigil" />
         <h1>操作の型</h1>
-        <p>{TACTICS.length}件。名前がつくと、その場で気づけるようになります。</p>
+        <p>
+          {TACTICS.length}件。名前がつくと、その場で気づけるようになります。
+        </p>
       </div>
       <Rule mark={GLYPHS.moonWane} />
 

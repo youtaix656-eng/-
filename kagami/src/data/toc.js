@@ -18,6 +18,7 @@ import { buildKanaIndex } from '../lib/yomi.js';
 /** 目次のカテゴリ（表示順・色分けに使う） */
 export const TOC_CATEGORIES = [
   { id: 'tactic', label: '操作の型', icon: GLYPHS.moonWane, view: 'tactics' },
+  { id: 'alias', label: '別の呼び名', icon: GLYPHS.pointer, view: 'tactics' },
   { id: 'group', label: '型のまとまり', icon: GLYPHS.star, view: 'tactics' },
   { id: 'reply', label: '返し方', icon: GLYPHS.circle, view: 'replies' },
   { id: 'source', label: '出典', icon: GLYPHS.dagger, view: 'sources' },
@@ -35,11 +36,30 @@ export function buildTocEntries() {
       category: 'tactic',
       title: t.name,
       reading: t.reading || '',
-      sub: CATEGORIES.find((c) => c.id === t.category)?.label || '',
+      sub: [CATEGORIES.find((c) => c.id === t.category)?.label, ...(t.aka || []).map((a) => a.name)]
+        .filter(Boolean)
+        .join('・'),
       view: 'tactics',
       anchor: `toc-tactic-${t.id}`,
       targetId: t.id,
     });
+  }
+
+  // 世に出回っている呼び名からも引けるようにする（索引の「→ 見よ」項目）。
+  // **読みは aka に持たせる**（ここで推定しない）。
+  for (const t of TACTICS) {
+    for (const a of t.aka || []) {
+      entries.push({
+        id: `alias-${t.id}-${a.name}`,
+        category: 'alias',
+        title: a.name,
+        reading: a.reading || '',
+        sub: `→ ${t.name}`,
+        view: 'tactics',
+        anchor: `toc-tactic-${t.id}`,
+        targetId: t.id,
+      });
+    }
   }
 
   for (const c of CATEGORIES) {

@@ -7,20 +7,31 @@ import { sourcesOf } from '../data/sources.js';
 export default function TacticCard({ tactic, cues = [], open, onToggle, id }) {
   const cat = CATEGORY_MAP[tactic.category];
   return (
-    <div className="card" id={id}>
+    <div className={`card ${open ? "opened" : ""}`} id={id}>
       <div className="card-head">
         <div>
-          <h3 style={{ marginBottom: 2 }}>
-            {cat?.icon} {tactic.name}
+          {open && <span className="plate-glyph">{cat?.icon}</span>}
+          <h3 className={open ? 'plate-title' : ''} style={{ marginBottom: 2 }}>
+            {open ? tactic.name : `${cat?.icon} ${tactic.name}`}
           </h3>
           <span className="tiny">{cat?.label}</span>
+          {tactic.aka && tactic.aka.length > 0 && (
+            <span className="tiny aka">別名：{tactic.aka.map((a) => a.name).join('・')}</span>
+          )}
         </div>
         <button className="ghost" onClick={onToggle} aria-expanded={!!open}>
           {open ? '閉じる' : 'くわしく'}
         </button>
       </div>
 
-      <p>{tactic.summary}</p>
+      <p className={open ? "plate-summary" : ""}>{tactic.summary}</p>
+
+      {tactic.channel === 'behavior' && (
+        <p className="tiny behavior-note">
+          これは言葉ではなく<strong>間・目線・動く速さ</strong>で効く型です。
+          貼った文面からは見つかりません——見分け方を読んで覚えるほうが確かです。
+        </p>
+      )}
 
       {cues.length > 0 && (
         <>
@@ -49,12 +60,16 @@ export default function TacticCard({ tactic, cues = [], open, onToggle, id }) {
             ))}
           </ul>
 
-          <h3>こういう形で言われる</h3>
-          <ul className="muted">
-            {tactic.lines.map((l) => (
-              <li key={l}>「{l}」</li>
-            ))}
-          </ul>
+          {tactic.lines.length > 0 && (
+            <>
+              <h3>こういう形で言われる</h3>
+              <ul className="muted">
+                {tactic.lines.map((l) => (
+                  <li key={l}>「{l}」</li>
+                ))}
+              </ul>
+            </>
+          )}
 
           <h3>できること</h3>
           <ul>

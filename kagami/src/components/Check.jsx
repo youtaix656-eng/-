@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { TACTICS } from '../data/tactics.js';
+import { TACTICS, behaviorTactics } from '../data/tactics.js';
 import { detectTactics, splitByHighlight, MIN_TEXT } from '../lib/detect.js';
 import { summarizePersonal } from '../lib/privacy.js';
 import { PLACES } from '../lib/records.js';
@@ -24,6 +24,7 @@ export default function Check({ mode = 'received', onChangeMode, onSave, setting
   const personal = useMemo(() => summarizePersonal(text), [text]);
 
   const draft = mode === 'draft';
+  const unreadable = behaviorTactics();
 
   function save() {
     onSave({
@@ -161,6 +162,17 @@ export default function Check({ mode = 'received', onChangeMode, onSave, setting
           )}
         </>
       )}
+      {(result.status === 'ok' || result.status === 'none') && (
+        <div className="card quiet">
+          <p className="tiny" style={{ margin: 0 }}>
+            なお、<strong>文面からは見つからない型が{unreadable.length}件</strong>あります（
+            {unreadable.map((t) => t.name).join('・')}）。
+            間・目線・動く速さで効くもので、言葉として残らないので調べようがありません。
+            「型」の一覧の<strong>上下をつくる（ふるまい）</strong>に見分け方を書いています。
+          </p>
+        </div>
+      )}
+
     </>
   );
 }

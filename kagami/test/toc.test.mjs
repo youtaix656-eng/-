@@ -46,13 +46,33 @@ test('カテゴリは定義済みで、飛び先の画面と anchor を持つ', 
   }
 });
 
-test('目次はすべてのデータ（型・まとまり・返し方・出典）を漏れなく載せる', () => {
+test('目次はすべてのデータ（型・別名・まとまり・返し方・出典）を漏れなく載せる', () => {
   const count = (id) => TOC_ENTRIES.filter((e) => e.category === id).length;
+  const aliases = TACTICS.reduce((n, t) => n + (t.aka || []).length, 0);
   assert.equal(count('tactic'), TACTICS.length);
+  assert.equal(count('alias'), aliases);
   assert.equal(count('group'), CATEGORIES.length);
   assert.equal(count('reply'), REPLIES.length);
   assert.equal(count('source'), SOURCES.length);
-  assert.equal(TOC_ENTRIES.length, TACTICS.length + CATEGORIES.length + REPLIES.length + SOURCES.length);
+  assert.equal(
+    TOC_ENTRIES.length,
+    TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + SOURCES.length,
+  );
+});
+
+test('別名の項目は、実在する型へ飛ぶ', () => {
+  const ids = new Set(TACTICS.map((t) => t.id));
+  for (const e of TOC_ENTRIES.filter((x) => x.category === 'alias')) {
+    assert.ok(ids.has(e.targetId), `${e.title}: 飛び先の型 ${e.targetId} がありません`);
+    assert.match(e.sub, /^→ /, `${e.title}: 「→ 型名」の形になっていません`);
+  }
+});
+
+test('世に出回っている呼び名を目次から引ける', () => {
+  const titles = new Set(TOC_ENTRIES.map((e) => e.title));
+  for (const w of ['間欠強化', '希少性の原理', 'ツァイガルニク効果', '感情ジェットコースター効果', '安全基地効果', 'サード・アイ', '沈黙の圧力', '捕食者のテンポ']) {
+    assert.ok(titles.has(w), `目次から「${w}」を引けません`);
+  }
 });
 
 test('セクションの並びは あ〜ん → A〜Z → その他 の順', () => {
