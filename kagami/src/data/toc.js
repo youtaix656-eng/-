@@ -31,6 +31,7 @@ export const TOC_CATEGORIES = [
   { id: 'person', label: '人間分析', icon: GLYPHS.piece, view: 'people' },
   { id: 'core', label: '共通する芯', icon: GLYPHS.star, view: 'people' },
   { id: 'scene', label: '場面', icon: GLYPHS.house, view: 'people' },
+  { id: 'lookup', label: 'さがす入口', icon: GLYPHS.circleDouble, view: 'people' },
   { id: 'source', label: '出典', icon: GLYPHS.dagger, view: 'sources' },
 ];
 
@@ -175,6 +176,19 @@ export function buildTocEntries() {
       targetId: sc.id,
     });
   }
+
+  // ふるまい79項目そのものは目次に載せない（読みを1件ずつ持たせないと
+  // 「その他」行に落ちるため）。代わりに、さがす画面への入口を1つ置く。
+  entries.push({
+    id: 'lookup-behaviors',
+    category: 'lookup',
+    title: 'ふるまいでさがす',
+    reading: 'ふるまいでさがす',
+    sub: `人間分析の${PERSON_TYPES.reduce((n, t) => n + t.behaviors.length, 0)}項目を、言葉で引く`,
+    view: 'people',
+    anchor: 'toc-lookup',
+    targetId: 'lookup',
+  });
 
   for (const s of SOURCES) {
     entries.push({

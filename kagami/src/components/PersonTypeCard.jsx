@@ -1,6 +1,7 @@
 import React from 'react';
 import { CORE_MAP, SCENE_MAP } from '../data/people.js';
 import { TACTIC_MAP } from '../data/tactics.js';
+import CounterList from './CounterList.jsx';
 import { repliesOf } from '../data/replies.js';
 import { GLYPHS } from '../data/glyphs.js';
 
@@ -9,7 +10,10 @@ import { GLYPHS } from '../data/glyphs.js';
  * （画面ごとに書くと、片方だけ直したときに必ず食い違う）。
  * matched を渡すと「あなたが選んだふるまい」を、渡さなければ全ふるまいを出す。
  */
-export default function PersonTypeCard({ type, matched, open, onToggle, onGoTactic, id }) {
+export default function PersonTypeCard({
+  type, matched, open, onToggle, onGoTactic, id,
+  scene = '', tries = [], hidden = [], onTry, onHide, caseId = '', showCounters = false,
+}) {
   return (
     <div className={`card ${open ? 'opened' : ''}`} id={id}>
       <div className="card-head">
@@ -47,6 +51,22 @@ export default function PersonTypeCard({ type, matched, open, onToggle, onGoTact
       <h3>取れる距離</h3>
       <p>{type.distance}</p>
 
+      {(showCounters || open) && (
+        <>
+          <h3>黒い心理学で返すなら</h3>
+          <CounterList
+            type={type}
+            scene={scene}
+            tries={tries}
+            hidden={hidden}
+            onTry={onTry}
+            onHide={onHide}
+            onGoTactic={onGoTactic}
+            caseId={caseId}
+          />
+        </>
+      )}
+
       {open && (
         <>
           <h3>なぜ消耗するのか</h3>
@@ -62,19 +82,6 @@ export default function PersonTypeCard({ type, matched, open, onToggle, onGoTact
               </ul>
             </>
           )}
-
-          <h3>黒い心理学で返すなら</h3>
-          <p className="tiny">こちらが呑まれないための型を挙げています。</p>
-          <ul>
-            {type.counters.map((c) => (
-              <li key={c.tacticId}>
-                <button className="chip" style={{ marginRight: 6 }} onClick={() => onGoTactic(c.tacticId)}>
-                  {TACTIC_MAP[c.tacticId]?.name || c.tacticId}
-                </button>
-                {c.how}
-              </li>
-            ))}
-          </ul>
 
           <h3>使える返し方</h3>
           <ul>

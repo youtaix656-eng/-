@@ -63,12 +63,13 @@ test('目次はすべてのデータ（型・別名・まとまり・返し方�
   assert.equal(count('person'), PERSON_TYPES.length);
   assert.equal(count('core'), CORES.length);
   assert.equal(count('scene'), SCENES.length);
+  assert.equal(count('lookup'), 1, 'ふるまいをさがす入口');
   assert.equal(count('source'), SOURCES.length);
   assert.equal(
     TOC_ENTRIES.length,
     TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + HABITS.length +
       STATES.length + MYTHS.length + PERSON_TYPES.length + CORES.length + SCENES.length +
-      SOURCES.length,
+      1 + SOURCES.length,
   );
 });
 

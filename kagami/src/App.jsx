@@ -78,6 +78,10 @@ export default function App() {
           cases={store.cases}
           onSaveCase={store.saveCase}
           onRemoveCase={store.removeCase}
+          tries={store.tries}
+          onAddTry={store.addTry}
+          personView={store.personView}
+          onSetPersonView={store.setPersonView}
         />
       )}
       {view === 'records' && (

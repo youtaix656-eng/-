@@ -34,10 +34,17 @@ export function caseToText(input = {}) {
   if (matches.length === 0) {
     out.push('（同じ型のふるまいが2つ以上そろっていません。問題がないという意味ではありません）');
   }
+  const tries = input.tries || [];
   for (const m of matches) {
     out.push(`○ ${m.type.name}`);
     for (const b of m.behaviors) out.push(`  ・${b}`);
     out.push(`  取れる距離：${line(m.type.distance)}`);
+    for (const c of m.type.counters || []) {
+      const mine = tries.filter((t) => t.tacticId === c.tacticId);
+      const mark = mine.length ? `（${mine.length}回試した）` : '';
+      out.push(`  ▷ ${line(c.how)}${mark}`);
+      if (c.script) out.push(`    「${line(c.script)}」`);
+    }
   }
 
   if (line(input.note)) {

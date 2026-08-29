@@ -1,7 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import {
   PERSON_TYPES, PERSON_TYPE_MAP, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors,
+  COUNTER_BEST_SCENES,
 } from '../data/people.js';
+import {
+  terms, haystackOf, matchesAll, splitByHit, suggestTerms, pushHistory, QUICK_TERMS,
+} from '../lib/personSearch.js';
+import { firstMove, untried, summarize, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
+import { TACTIC_MAP } from '../data/tactics.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
 import { displayName, LABEL_MAX } from '../lib/cases.js';
 import { caseToText, copyText } from '../lib/personExport.js';
@@ -18,12 +24,18 @@ function when(at) {
 
 const norm = (s) => String(s || '').toLowerCase();
 
-export default function People({ focus, onFocusDone, onGoTactic, cases = [], onSaveCase, onRemoveCase }) {
+export default function People({
+  focus, onFocusDone, onGoTactic, cases = [], onSaveCase, onRemoveCase,
+  tries = [], onAddTry, personView = {}, onSetPersonView,
+}) {
   const [checked, setChecked] = useState([]);
   const [open, setOpen] = useState('');
   const [catalogOpen, setCatalogOpen] = useState('');
-  const [scene, setScene] = useState(() => (SCENES.some((sc) => sc.id === focus) ? focus : ''));
-  const [core, setCore] = useState('');
+  const [scene, setSceneState] = useState(() =>
+    SCENES.some((sc) => sc.id === focus) ? focus : personView.scene || '',
+  );
+  const [core, setCoreState] = useState(personView.core || '');
+  const [caseType, setCaseType] = useState('');
   const [query, setQuery] = useState('');
   const [onlyChecked, setOnlyChecked] = useState(false);
   const [openGroups, setOpenGroups] = useState([]);
@@ -60,17 +72,37 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
     [scene, core],
   );
 
+  const words = useMemo(() => terms(query), [query]);
+
   /** チェック欄に出すふるまい（しぼり込み＋検索＋選んだものだけ） */
   const shownBehaviors = useMemo(() => {
     const typeIds = new Set(shownTypes.map((t) => t.id));
-    const q = norm(query).trim();
     return behaviors.filter((b) => {
       if (!typeIds.has(b.typeId)) return false;
       if (onlyChecked && !checked.includes(b.id)) return false;
-      if (!q) return true;
-      return norm(b.text).includes(q) || norm(PERSON_TYPE_MAP[b.typeId]?.name).includes(q);
+      if (words.length === 0) return true;
+      const type = PERSON_TYPE_MAP[b.typeId];
+      const hay = haystackOf(b, {
+        type,
+        coreLabels: (type?.cores || []).map((c) => CORE_MAP[c].label),
+        sceneLabels: (type?.scenes || []).map((x) => SCENE_MAP[x].label),
+      });
+      return matchesAll(hay, words);
     });
-  }, [behaviors, shownTypes, query, onlyChecked, checked]);
+  }, [behaviors, shownTypes, words, onlyChecked, checked]);
+
+  /** 0件のときの近い候補（勝手に検索し直さず、出すだけ） */
+  const corpus = useMemo(
+    () => [
+      ...PERSON_TYPES.map((t) => ({ label: t.name, hay: t.reading })),
+      ...QUICK_TERMS.map((t) => ({ label: t, hay: t })),
+    ],
+    [],
+  );
+  const nearby = useMemo(
+    () => (words.length && shownBehaviors.length === 0 ? suggestTerms(query, corpus) : []),
+    [words, shownBehaviors, query, corpus],
+  );
 
   /** 型ごとにまとめる（アコーディオンの中身） */
   const groups = useMemo(() => {
@@ -80,10 +112,12 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
       list.push(b);
       byType.set(b.typeId, list);
     }
+    const picked = new Set(checked.map((id) => id.split(':')[0]));
     return shownTypes
       .filter((t) => byType.has(t.id))
-      .map((t) => ({ type: t, items: byType.get(t.id) }));
-  }, [shownBehaviors, shownTypes]);
+      .map((t) => ({ type: t, items: byType.get(t.id) }))
+      .sort((a, b) => (picked.has(b.type.id) ? 1 : 0) - (picked.has(a.type.id) ? 1 : 0));
+  }, [shownBehaviors, shownTypes, checked]);
 
   // 検索中・「選んだものだけ」の時は、たたまずに開いておく（探しに来ているので）
   const forceOpen = !!query.trim() || onlyChecked;
@@ -97,23 +131,87 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
 
   const shownCases = useMemo(() => {
     const q = norm(caseQuery).trim();
+    const textOf = new Map(behaviors.map((b) => [b.id, b.text]));
     const list = cases.filter((c) => {
+      if (caseType && !c.checkedIds.some((id) => id.startsWith(`${caseType}:`))) return false;
       if (!q) return true;
       const scLabel = c.sceneId && SCENE_MAP[c.sceneId] ? SCENE_MAP[c.sceneId].label : '';
-      return norm(displayName(c)).includes(q) || norm(c.note).includes(q) || norm(scLabel).includes(q);
+      const body = c.checkedIds.map((id) => textOf.get(id) || '').join(' ');
+      return (
+        norm(displayName(c)).includes(q) ||
+        norm(c.note).includes(q) ||
+        norm(scLabel).includes(q) ||
+        norm(body).includes(q)
+      );
     });
     if (caseSort === 'name') {
       return [...list].sort((a, b) => displayName(a).localeCompare(displayName(b), 'ja'));
     }
     if (caseSort === 'created') return [...list].sort((a, b) => b.createdAt - a.createdAt);
     return list; // 既定は更新の新しい順（呼び出し元が並べたものをそのまま使う）
-  }, [cases, caseQuery, caseSort]);
+  }, [cases, caseQuery, caseSort, caseType, behaviors]);
+
+  // 前回のしぼり込みを覚えておく（次に開いた時に戻す）
+  const setScene = (v) => {
+    setSceneState(v);
+    onSetPersonView?.({ scene: v });
+  };
+  const setCore = (v) => {
+    setCoreState(v);
+    onSetPersonView?.({ core: v });
+  };
+  const hidden = personView.hidden || [];
+  const history = personView.history || [];
+
+  function rememberQuery(q) {
+    if (q && q.trim()) onSetPersonView?.({ history: pushHistory(history, q.trim()) });
+  }
+
+  function hideCounter(tacticId) {
+    if (tacticId === null) onSetPersonView?.({ hidden: [] });
+    else onSetPersonView?.({ hidden: [...new Set([...hidden, tacticId])] });
+  }
 
   function toggle(id) {
     setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
     setSaved(false);
     setCopied(false);
   }
+
+  const first = useMemo(() => firstMove(result.matches), [result]);
+  const trySum = useMemo(() => summarize(tries), [tries]);
+  const notTried = useMemo(() => {
+    const all = result.matches.flatMap((m) => m.type.counters);
+    const seen = new Set();
+    return untried(all, tries).filter((c) => (seen.has(c.tacticId) ? false : seen.add(c.tacticId)));
+  }, [result, tries]);
+
+  /**
+   * 今日試す1つ——保存した見立てのうち、いちばん最近直したものから、
+   * まだ試していない手をひとつ。**選び直しの候補を並べない**（1つに絞らないと動けない）。
+   */
+  const todays = useMemo(() => {
+    for (const c of cases) {
+      const ids = new Set(c.checkedIds.map((id) => id.split(':')[0]));
+      const cs = PERSON_TYPES.filter((t) => ids.has(t.id)).flatMap((t) => t.counters);
+      const rest = untried(cs, tries);
+      if (rest.length > 0) return { c, counter: rest[0] };
+    }
+    return null;
+  }, [cases, tries]);
+
+  /** 対応策の逆引き（この手はどの型に効くか） */
+  const reverse = useMemo(() => {
+    const map = new Map();
+    for (const t of PERSON_TYPES) {
+      for (const c of t.counters) {
+        const cur = map.get(c.tacticId) || { tacticId: c.tacticId, types: [] };
+        cur.types.push(t.name);
+        map.set(c.tacticId, cur);
+      }
+    }
+    return [...map.values()].sort((a, b) => b.types.length - a.types.length);
+  }, []);
 
   function toggleGroup(id) {
     setOpenGroups((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]));
@@ -151,6 +249,7 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
         sceneLabel: scene && SCENE_MAP[scene] ? SCENE_MAP[scene].label : '',
         behaviors: checkedTexts,
         matches: result.matches,
+        tries,
       }),
     );
     setCopied(ok ? 'done' : 'fail');
@@ -193,6 +292,7 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
           {GLYPHS.squareFilled} 選択 <strong>{checked.length}</strong> 件
           {result.status === 'few' && `／あと${MIN_TOTAL - checked.length}件で見立て`}
           {result.status === 'ok' && `／近い型 ${result.matches.length}件`}
+          {words.length > 0 && `／さがした結果 ${shownBehaviors.length}件`}
           {editingId && <span className="badge" style={{ marginLeft: 8 }}>編集中</span>}
         </span>
         <span className="row" style={{ gap: 6 }}>
@@ -217,10 +317,46 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
 
       <input
         type="text"
+        id="toc-lookup"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="ふるまいをさがす（例：機嫌／約束／謝）"
+        onBlur={() => rememberQuery(query)}
+        placeholder="ふるまいをさがす（読みでも引けます。スペースで2語以上）"
       />
+
+      <div className="chips">
+        {QUICK_TERMS.map((t) => (
+          <button key={t} className={`chip ${query === t ? 'on' : ''}`} onClick={() => { setQuery(t); rememberQuery(t); }}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {history.length > 0 && (
+        <div className="chips">
+          <span className="tiny">最近さがした語：</span>
+          {history.map((h) => (
+            <button key={h} className="chip" onClick={() => setQuery(h)}>
+              {h}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {nearby.length > 0 && (
+        <div className="card quiet">
+          <p className="muted">
+            「{query}」では見つかりませんでした。この語ではどうですか：
+          </p>
+          <div className="chips">
+            {nearby.map((n) => (
+              <button key={n} className="chip" onClick={() => setQuery(n)}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <p className="tiny" id="toc-scenes" style={{ margin: '10px 0 4px' }}>
         どこで起きたことか
@@ -286,6 +422,7 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
                 {isOpen ? GLYPHS.triangleDown : GLYPHS.pointer} {g.type.name}
               </span>
               <span className="s">
+                {words.length > 0 && `${g.items.length}件該当・`}
                 {picked > 0 ? `${picked} / ${g.items.length} 件` : `${g.items.length} 件`}
               </span>
             </button>
@@ -293,7 +430,13 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
               g.items.map((b) => (
                 <label className="check" key={b.id}>
                   <input type="checkbox" checked={checked.includes(b.id)} onChange={() => toggle(b.id)} />
-                  <span>{b.text}</span>
+                  <span>
+                    {words.length === 0
+                      ? b.text
+                      : splitByHit(b.text, words).map((part, i) =>
+                          part.hit ? <mark key={i}>{part.text}</mark> : <span key={i}>{part.text}</span>,
+                        )}
+                  </span>
                 </label>
               ))}
           </div>
@@ -345,6 +488,32 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
             </div>
           )}
 
+          {first && (
+            <div className="card">
+              <h3>まず1つだけやるなら</h3>
+              <div className="row" style={{ gap: 8 }}>
+                <button className="chip on" onClick={() => onGoTactic(first.tacticId)}>
+                  {TACTIC_MAP[first.tacticId]?.name || first.tacticId}
+                </button>
+                {first.sharedBy > 1 && (
+                  <span className="tiny">当たった{first.sharedBy}つの型に共通して出てくる手</span>
+                )}
+              </div>
+              <p style={{ margin: '8px 0 4px' }}>{first.how}</p>
+              <p className="script">「{first.script}」</p>
+              <p className="tiny">
+                いくつも同時にやろうとすると続きません。今日はこれだけ、で十分です。
+              </p>
+            </div>
+          )}
+
+          {notTried.length > 0 && (
+            <p className="tiny">
+              まだ試していない手が{notTried.length}件あります：
+              {notTried.slice(0, 4).map((c) => TACTIC_MAP[c.tacticId]?.name).join('／')}
+            </p>
+          )}
+
           {result.matches.map((m) => (
             <PersonTypeCard
               key={m.type.id}
@@ -353,6 +522,13 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
               open={open === m.type.id}
               onToggle={() => setOpen(open === m.type.id ? '' : m.type.id)}
               onGoTactic={onGoTactic}
+              showCounters
+              scene={scene}
+              tries={tries}
+              hidden={hidden}
+              onTry={onAddTry}
+              onHide={hideCounter}
+              caseId={editingId}
             />
           ))}
         </>
@@ -422,6 +598,20 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
             placeholder="呼び名・メモ・場面でさがす"
           />
           <div className="chips">
+            <button className={`chip ${caseType === '' ? 'on' : ''}`} onClick={() => setCaseType('')}>
+              型で絞らない
+            </button>
+            {PERSON_TYPES.filter((t) => cases.some((c) => c.checkedIds.some((id) => id.startsWith(`${t.id}:`)))).map((t) => (
+              <button
+                key={t.id}
+                className={`chip ${caseType === t.id ? 'on' : ''}`}
+                onClick={() => setCaseType(caseType === t.id ? '' : t.id)}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+          <div className="chips">
             {[
               ['updated', '直した順'],
               ['created', '作った順'],
@@ -479,6 +669,54 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
         </>
       )}
 
+      {todays && (
+        <div className="card">
+          <h3>今日試す1つ</h3>
+          <p className="tiny">
+            保存してある「{displayName(todays.c)}」から、まだ試していない手をひとつ。
+          </p>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="chip on" onClick={() => onGoTactic(todays.counter.tacticId)}>
+              {TACTIC_MAP[todays.counter.tacticId]?.name || todays.counter.tacticId}
+            </button>
+            <button className="ghost" onClick={() => openCase(todays.c)}>
+              この見立てを開く
+            </button>
+          </div>
+          <p style={{ margin: '8px 0 4px' }}>{todays.counter.how}</p>
+          <p className="script">「{todays.counter.script}」</p>
+        </div>
+      )}
+
+      <h2>手から引く（逆引き）</h2>
+      <Rule mark={GLYPHS.circlePlus} />
+      <p className="tiny">
+        ひとつの手が、どの型に出てくるか。自分の記録がある手には回数も出ます。
+      </p>
+      <ul className="list">
+        {reverse.map((r) => {
+          const s2 = trySum.get(r.tacticId);
+          return (
+            <li key={r.tacticId}>
+              <button className="item" onClick={() => onGoTactic(r.tacticId)}>
+                <span className="t">
+                  {GLYPHS.circlePlus} {TACTIC_MAP[r.tacticId]?.name || r.tacticId}
+                  {s2 && s2.total >= MIN_TRIES && (
+                    <span className="badge" style={{ marginLeft: 8 }}>
+                      {s2.total}回 {GLYPHS.circle}{s2.ok}／{GLYPHS.cross}{s2.ng}
+                    </span>
+                  )}
+                </span>
+                <span className="s">
+                  {r.types.length}の型に出てくる：{r.types.slice(0, 3).join('／')}
+                  {r.types.length > 3 && ` ほか${r.types.length - 3}`}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
       <h2>型の一覧（{shownTypes.length}／{PERSON_TYPES.length}）</h2>
       <Rule mark={GLYPHS.moonWane} />
       <p className="tiny">
@@ -493,6 +731,11 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
           open={catalogOpen === t.id}
           onToggle={() => setCatalogOpen(catalogOpen === t.id ? '' : t.id)}
           onGoTactic={onGoTactic}
+          scene={scene}
+          tries={tries}
+          hidden={hidden}
+          onTry={onAddTry}
+          onHide={hideCounter}
         />
       ))}
 

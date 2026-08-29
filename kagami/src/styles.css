@@ -440,3 +440,18 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
 .group-head:hover { background: rgba(235, 235, 235, 0.05); border: 0; }
 .group-head .t { letter-spacing: 0.04em; }
 .group-head .s { color: var(--ink-dim); font-size: .8rem; white-space: nowrap; }
+
+/* 対応策ひとつぶん（人間分析） */
+.counter {
+  border-top: 1px solid var(--line);
+  padding: 12px 0 10px;
+}
+.counter:first-of-type { border-top: 0; }
+.counter .script {
+  font-family: var(--serif);
+  font-size: .95rem;
+  border-left: 2px solid var(--ink-faint);
+  padding: 2px 0 2px 12px;
+  margin: 6px 0;
+  color: var(--ink);
+}

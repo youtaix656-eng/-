@@ -3,10 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { load, save, clear, storageSize } from './storage.js';
 import { makeRecord, sortRecords } from './records.js';
 import { makeCase, updateCase, sortCases } from './cases.js';
+import { makeTry } from './tried.js';
 
 const EMPTY = {
   records: [],
   cases: [],
+  tries: [],
+  personView: { scene: '', core: '', history: [], hidden: [] },
   settings: {
     keepRaw: false, // 記録するとき本文をそのまま残すか（既定は伏せる）
     seenIntro: false,
@@ -21,6 +24,8 @@ export function useStore() {
       ...loaded,
       records: Array.isArray(loaded.records) ? loaded.records : [],
       cases: Array.isArray(loaded.cases) ? loaded.cases : [],
+      tries: Array.isArray(loaded.tries) ? loaded.tries : [],
+      personView: { ...EMPTY.personView, ...(loaded.personView || {}) },
       settings: { ...EMPTY.settings, ...(loaded.settings || {}) },
     };
   });
@@ -55,6 +60,21 @@ export function useStore() {
     setState((s) => ({ ...s, cases: s.cases.filter((c) => c.id !== id) }));
   }, []);
 
+  const addTry = useCallback((input) => {
+    const t = makeTry(input);
+    setState((s) => ({ ...s, tries: [t, ...s.tries] }));
+    return t;
+  }, []);
+
+  const removeTry = useCallback((id) => {
+    setState((s) => ({ ...s, tries: s.tries.filter((t) => t.id !== id) }));
+  }, []);
+
+  /** 人間分析のしぼり込み・検索履歴・隠した手を覚えておく */
+  const setPersonView = useCallback((patch) => {
+    setState((s) => ({ ...s, personView: { ...s.personView, ...patch } }));
+  }, []);
+
   const setSetting = useCallback((key, value) => {
     setState((s) => ({ ...s, settings: { ...s.settings, [key]: value } }));
   }, []);
@@ -75,6 +95,11 @@ export function useStore() {
     removeRecord,
     saveCase,
     removeCase,
+    tries: state.tries,
+    addTry,
+    removeTry,
+    personView: state.personView,
+    setPersonView,
     setSetting,
     clearAll,
     storageSize,

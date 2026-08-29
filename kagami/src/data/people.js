@@ -77,14 +77,26 @@ export const SELF_DEFENSE_TACTIC_IDS = [
   'backtracking',
 ];
 
+/**
+ * その手が特に合いやすい場面。**並べ替えにだけ使う**——
+ * 効き目の大きさではなく、場面が合っているかどうかの目安。
+ */
+export const COUNTER_BEST_SCENES = {
+  silence_pressure: ['work', 'street', 'home'],
+  slow_tempo: ['work', 'street', 'home'],
+  stare: ['street', 'work'],
+  two_sided: ['work'],
+  framing: ['street', 'work', 'home'],
+  anchoring: ['work', 'home'],
+  presupposition: ['work', 'home', 'street', 'kids'],
+  deadline: ['work', 'home', 'kids'],
+  false_choice: ['work', 'home'],
+  backtracking: ['work'],
+};
+
 export const PERSON_TYPES = [
   {
-        counters: [
-      { tacticId: 'backtracking', how: '言われた条件を、その場で同じ言葉にして返す。相手の口から二度言わせると、あとで話が変わりにくい。' },
-      { tacticId: 'deadline', how: 'こちらから「いつまでに文字で」と期限を切る。口約束のまま置かない。' },
-      { tacticId: 'anchoring', how: '金額や範囲を先に自分から出して、あとから動かす余地を減らす。' },
-    ],
-id: 'unstable_words',
+    id: 'unstable_words',
     name: '言うことが変わる',
     reading: 'いうことがかわる',
     scenes: ['work', 'home', 'street', 'online'],
@@ -102,16 +114,28 @@ id: 'unstable_words',
     ],
     distance:
       '口約束で進めない。決めたことをその場で文字にして相手にも渡す。渡せない相手なら、その相手とは決めごとをしない。',
+    counters: [
+      {
+        tacticId: 'backtracking',
+        how: '言われた条件を、その場で同じ言葉にして返す。相手の口から二度言わせると、あとで話が変わりにくい。',
+        script: 'いま伺ったのは、金額が◯円で期日が◯日、ということでよろしいですか。',
+      },
+      {
+        tacticId: 'deadline',
+        how: 'こちらから「いつまでに文字で」と期限を切る。口約束のまま置かない。',
+        script: '今週の金曜までに、その内容を書いたものをいただけますか。',
+      },
+      {
+        tacticId: 'anchoring',
+        how: '金額や範囲を先に自分から出して、あとから動かす余地を減らす。',
+        script: 'こちらで出せるのは◯円まで、期日は◯日までです。',
+      },
+    ],
     replyIds: ['record', 'takeout', 'pause'],
     relatedTacticIds: ['gaslight', 'consistency', 'lowball'],
   },
   {
-        counters: [
-      { tacticId: 'stare', how: '態度が変わった瞬間に、目を逸らさない。気づいていることが伝わるだけでよく、言葉にしなくていい。' },
-      { tacticId: 'backtracking', how: '陰で言われたことを、本人の前で同じ言葉のまま確かめる。' },
-      { tacticId: 'slow_tempo', how: '相手の勢いに合わせて早口にならない。速さを合わせた側が呑まれる。' },
-    ],
-id: 'two_faced',
+    id: 'two_faced',
     name: '相手によって態度を変える',
     reading: 'あいてによってたいどをかえる',
     scenes: ['work', 'home', 'street', 'online'],
@@ -131,16 +155,28 @@ id: 'two_faced',
     ],
     distance:
       'その人が自分より弱い立場の人にどう接するかを見る。そこが本当の態度。こちらに向けられている好意を、判断の材料にしない。',
+    counters: [
+      {
+        tacticId: 'stare',
+        how: '態度が変わった瞬間に、目を逸らさない。気づいていることが伝わるだけでよく、言葉にしなくていい。',
+        script: '（言葉は足さず、目を逸らさずにひと呼吸置く）',
+      },
+      {
+        tacticId: 'backtracking',
+        how: '陰で言われたことを、本人の前で同じ言葉のまま確かめる。',
+        script: '「◯◯だ」と伺ったのですが、その理解で合っていますか。',
+      },
+      {
+        tacticId: 'slow_tempo',
+        how: '相手の勢いに合わせて早口にならない。速さを合わせた側が呑まれる。',
+        script: 'そうですか。……少し考えます。',
+      },
+    ],
     replyIds: ['third', 'record', 'pause'],
     relatedTacticIds: ['windsor', 'triangulate', 'isolate'],
   },
   {
-        counters: [
-      { tacticId: 'slow_tempo', how: '機嫌に合わせて自分の動く速さを変えない。合わせた時点で、機嫌が道具として効いてしまう。' },
-      { tacticId: 'silence_pressure', how: '察して沈黙を埋めない。黙って待つ。' },
-      { tacticId: 'presupposition', how: '「この話はここまで」と決まったこととして置いて離れる。' },
-    ],
-id: 'mood_rules',
+    id: 'mood_rules',
     name: '機嫌で場を動かす',
     reading: 'きげんでばをうごかす',
     scenes: ['work', 'home', 'street'],
@@ -157,16 +193,28 @@ id: 'mood_rules',
     ],
     distance:
       '機嫌は相手のもので、こちらが預かるものではない。察して先回りするのをやめ、言葉で言われたことにだけ答える。',
+    counters: [
+      {
+        tacticId: 'slow_tempo',
+        how: '機嫌に合わせて自分の動く速さを変えない。合わせた時点で、機嫌が道具として効いてしまう。',
+        script: '（急がず、いつもと同じ速さで手を動かす）',
+      },
+      {
+        tacticId: 'silence_pressure',
+        how: '察して沈黙を埋めない。黙って待つ。',
+        script: '（察して埋めず、相手が言葉にするまで待つ）',
+      },
+      {
+        tacticId: 'presupposition',
+        how: '「この話はここまで」と決まったこととして置いて離れる。',
+        script: 'この話は今日はここまでにします。失礼します。',
+      },
+    ],
     replyIds: ['leave', 'record', 'third'],
     relatedTacticIds: ['silence', 'blame_shift', 'intermittent'],
   },
   {
-        counters: [
-      { tacticId: 'presupposition', how: '断りを交渉ごとにしない。「しません」を、決まったこととして置く。' },
-      { tacticId: 'silence_pressure', how: '押し返された時にすぐ答えない。同じ言葉を、間を置いて繰り返す。' },
-      { tacticId: 'deadline', how: '「今日は決めません」と自分の側から区切る。' },
-    ],
-id: 'crosses_line',
+    id: 'crosses_line',
     name: '「やめて」が効かない',
     reading: 'やめてがきかない',
     scenes: ['work', 'home', 'street', 'kids', 'online'],
@@ -183,16 +231,28 @@ id: 'crosses_line',
     ],
     distance:
       '理由を足さない。同じ言葉で短く繰り返す。それでも続くなら、話し合いではなく、会う回数と場面を減らす。',
+    counters: [
+      {
+        tacticId: 'presupposition',
+        how: '断りを交渉ごとにしない。「しません」を、決まったこととして置く。',
+        script: 'それはしません。',
+      },
+      {
+        tacticId: 'silence_pressure',
+        how: '押し返された時にすぐ答えない。同じ言葉を、間を置いて繰り返す。',
+        script: '（間を置いて、同じ言葉をもう一度）それはしません。',
+      },
+      {
+        tacticId: 'deadline',
+        how: '「今日は決めません」と自分の側から区切る。',
+        script: '今日は決めません。',
+      },
+    ],
     replyIds: ['no_reason', 'record', 'leave'],
     relatedTacticIds: ['foot_in_door', 'just_joking', 'presupposition'],
   },
   {
-        counters: [
-      { tacticId: 'framing', how: '答える範囲を自分で決めて、その枠の中だけで答える。嘘をつく必要はない。' },
-      { tacticId: 'silence_pressure', how: 'すぐ答えない。間があくと、相手のほうが話題を変えることが多い。' },
-      { tacticId: 'slow_tempo', how: '質問の速さに巻き込まれない。一つずつ、ゆっくり返す。' },
-    ],
-id: 'pries',
+    id: 'pries',
     name: '踏み込んで聞いてくる',
     reading: 'ふみこんできいてくる',
     scenes: ['work', 'home', 'street', 'online'],
@@ -209,16 +269,28 @@ id: 'pries',
     ],
     distance:
       '「その話はしません」で足りる。理由を言うと理由を崩しにこられる。話したことが誰に伝わったかを一度確かめる。',
+    counters: [
+      {
+        tacticId: 'framing',
+        how: '答える範囲を自分で決めて、その枠の中だけで答える。嘘をつく必要はない。',
+        script: '仕事のことでしたらお話しできます。',
+      },
+      {
+        tacticId: 'silence_pressure',
+        how: 'すぐ答えない。間があくと、相手のほうが話題を変えることが多い。',
+        script: '（すぐ答えず、ひと呼吸置いてから）そうですね。',
+      },
+      {
+        tacticId: 'slow_tempo',
+        how: '質問の速さに巻き込まれない。一つずつ、ゆっくり返す。',
+        script: 'えーと……。（ゆっくり返して、次の質問の間を空ける）',
+      },
+    ],
     replyIds: ['vague', 'ask_back', 'no_reason', 'record', 'third'],
     relatedTacticIds: ['secret', 'pratfall', 'favor'],
   },
   {
-        counters: [
-      { tacticId: 'deadline', how: '「相談してから決めます」と、自分の側に時間を確保する。' },
-      { tacticId: 'anchoring', how: '会う頻度やお金の範囲を、こちらから先に線として出す。' },
-      { tacticId: 'two_sided', how: '外の人と会う話は、都合の悪い点も自分から添えて先に出す。反対の材料を先に使い切る。' },
-    ],
-id: 'controls',
+    id: 'controls',
     name: '決めさせない・囲い込む',
     reading: 'きめさせないかこいこむ',
     scenes: ['home', 'work'],
@@ -234,16 +306,28 @@ id: 'controls',
     ],
     distance:
       'この人以外に話せる相手を、いま一人つくる。判断が正しいかではなく、相談先が一つしかない状態そのものを崩す。',
+    counters: [
+      {
+        tacticId: 'deadline',
+        how: '「相談してから決めます」と、自分の側に時間を確保する。',
+        script: '相談してから決めますので、来週まで待ってください。',
+      },
+      {
+        tacticId: 'anchoring',
+        how: '会う頻度やお金の範囲を、こちらから先に線として出す。',
+        script: '会うのは週に一度まで、と決めています。',
+      },
+      {
+        tacticId: 'two_sided',
+        how: '外の人と会う話は、都合の悪い点も自分から添えて先に出す。反対の材料を先に使い切る。',
+        script: '確かに出かけると家のことは遅れます。そのうえで行ってきます。',
+      },
+    ],
     replyIds: ['third', 'window', 'record'],
     relatedTacticIds: ['isolate', 'safe_base', 'secret'],
   },
   {
-        counters: [
-      { tacticId: 'backtracking', how: '決まったことを、その場で言葉にして返して残す。あとで「そうは言っていない」を成り立たなくする。' },
-      { tacticId: 'two_sided', how: 'こちらの案の弱いところを先に自分で言い、崩す材料を渡さない。' },
-      { tacticId: 'anchoring', how: '謝罪ではなく「次はどうするか」の基準を先に置く。' },
-    ],
-id: 'never_wrong',
+    id: 'never_wrong',
     name: '非を認めない',
     reading: 'ひをみとめない',
     scenes: ['work', 'home', 'street', 'kids'],
@@ -261,16 +345,28 @@ id: 'never_wrong',
     ],
     distance:
       '言葉で判断しない。同じことが次に起きるかどうかだけを見る。二回目からは、期待ではなく段取りで対処する。',
+    counters: [
+      {
+        tacticId: 'backtracking',
+        how: '決まったことを、その場で言葉にして返して残す。あとで「そうは言っていない」を成り立たなくする。',
+        script: '「次は◯◯する」ということでよろしいですね。書き留めておきます。',
+      },
+      {
+        tacticId: 'two_sided',
+        how: 'こちらの案の弱いところを先に自分で言い、崩す材料を渡さない。',
+        script: 'この案は◯◯が弱いところです。そのうえでこう進めたいと思っています。',
+      },
+      {
+        tacticId: 'anchoring',
+        how: '謝罪ではなく「次はどうするか」の基準を先に置く。',
+        script: '次に同じことが起きたら、◯◯という形にしましょう。',
+      },
+    ],
     replyIds: ['record', 'takeout', 'third'],
     relatedTacticIds: ['blame_shift', 'person_attack', 'peak_end'],
   },
   {
-        counters: [
-      { tacticId: 'false_choice', how: '気持ちの話に移る前に、選べる二つを出して、起きたことの話に戻す。' },
-      { tacticId: 'slow_tempo', how: '泣かれても責められても、話す速さを変えない。' },
-      { tacticId: 'presupposition', how: '「この件はこう進めます」と置く。責める話にしないほうが、話が終わる。' },
-    ],
-id: 'victim',
+    id: 'victim',
     name: 'すぐ被害者の側に回る',
     reading: 'すぐひがいしゃのがわにまわる',
     scenes: ['work', 'home', 'kids'],
@@ -286,16 +382,28 @@ id: 'victim',
     ],
     distance:
       '起きたことと、気持ちの話を分ける。分けられない相手とは、その場で解決しようとせず、記録して日を改める。',
+    counters: [
+      {
+        tacticId: 'false_choice',
+        how: '気持ちの話に移る前に、選べる二つを出して、起きたことの話に戻す。',
+        script: '今日決めたいのは、AかBかの一点だけです。どちらにしますか。',
+      },
+      {
+        tacticId: 'slow_tempo',
+        how: '泣かれても責められても、話す速さを変えない。',
+        script: '（責められても、同じ速さで）はい。……では、その件は。',
+      },
+      {
+        tacticId: 'presupposition',
+        how: '「この件はこう進めます」と置く。責める話にしないほうが、話が終わる。',
+        script: 'この件はこう進めます。責める話ではありません。',
+      },
+    ],
     replyIds: ['record', 'third', 'pause'],
     relatedTacticIds: ['blame_shift', 'guilt', 'pity_question'],
   },
   {
-        counters: [
-      { tacticId: 'anchoring', how: '引き受ける範囲を、頼まれる前に自分から数字で出しておく。' },
-      { tacticId: 'deadline', how: '「今週ぶんだけ」と、引き受ける時に終わりを一緒に言う。' },
-      { tacticId: 'false_choice', how: '全部か無しかにしない。こちらが出せる二つを示して、その中から選ばせる。' },
-    ],
-id: 'takes_only',
+    id: 'takes_only',
     name: 'もらって当然・人任せ',
     reading: 'もらってとうぜんひとまかせ',
     scenes: ['work', 'home', 'kids'],
@@ -312,16 +420,28 @@ id: 'takes_only',
     ],
     distance:
       '引き受ける時に、範囲と終わりを一緒に言う。貸すのは、返ってこなくても関係が壊れない額まで。',
+    counters: [
+      {
+        tacticId: 'anchoring',
+        how: '引き受ける範囲を、頼まれる前に自分から数字で出しておく。',
+        script: '引き受けられるのは、今週は◯時間までです。',
+      },
+      {
+        tacticId: 'deadline',
+        how: '「今週ぶんだけ」と、引き受ける時に終わりを一緒に言う。',
+        script: '今週ぶんだけやります。来週はできません。',
+      },
+      {
+        tacticId: 'false_choice',
+        how: '全部か無しかにしない。こちらが出せる二つを示して、その中から選ばせる。',
+        script: 'AかBならできます。両方は無理です。',
+      },
+    ],
     replyIds: ['no_reason', 'takeout', 'pause'],
     relatedTacticIds: ['reciprocity', 'needed', 'labeling'],
   },
   {
-        counters: [
-      { tacticId: 'presupposition', how: '注意役を引き受けず、「そちらにお伝えします」と決まったこととして動く。' },
-      { tacticId: 'deadline', how: 'いつまでに止まらなければ誰に伝えるかを、先に自分の中で決めておく。' },
-      { tacticId: 'anchoring', how: '何が困っているかを、感想ではなく具体（回数・時間・場所）で先に出す。' },
-    ],
-id: 'looks_away',
+    id: 'looks_away',
     name: '見て見ぬふりをする',
     reading: 'みてみぬふりをする',
     scenes: ['kids', 'work', 'street'],
@@ -339,16 +459,28 @@ id: 'looks_away',
     ],
     distance:
       'その場で相手を変えようとしない。店員・管理者・主催者など、その場を預かっている人に伝える。注意役を自分で引き受けない。',
+    counters: [
+      {
+        tacticId: 'presupposition',
+        how: '注意役を引き受けず、「そちらにお伝えします」と決まったこととして動く。',
+        script: '恐れ入ります、お店の方にお伝えしますね。',
+      },
+      {
+        tacticId: 'deadline',
+        how: 'いつまでに止まらなければ誰に伝えるかを、先に自分の中で決めておく。',
+        script: '（あと5分で止まらなければ店員に言う、と自分の中で決めておく）',
+      },
+      {
+        tacticId: 'anchoring',
+        how: '何が困っているかを、感想ではなく具体（回数・時間・場所）で先に出す。',
+        script: '今30分ほど、この場所で続いています。',
+      },
+    ],
     replyIds: ['leave', 'record', 'window'],
     relatedTacticIds: ['blame_shift', 'just_joking', 'guilt'],
   },
   {
-        counters: [
-      { tacticId: 'backtracking', how: '口頭で決まったことを言葉にして返し、記録の残る形に移す。' },
-      { tacticId: 'framing', how: '「気に入られているか」ではなく「決まりごとはどうなっているか」の枠で話す。' },
-      { tacticId: 'two_sided', how: '自分の案の弱点を先に言って、外す口実を減らす。' },
-    ],
-id: 'favoritism',
+    id: 'favoritism',
     name: 'えこひいきする・派閥をつくる',
     reading: 'えこひいきするはばつをつくる',
     scenes: ['work', 'kids', 'street'],
@@ -364,16 +496,28 @@ id: 'favoritism',
     ],
     distance:
       '気に入られようとする方向に力を使わない。決まったことは記録に残る形で受け取り、口頭で済まされたら自分から文字にして確認する。',
+    counters: [
+      {
+        tacticId: 'backtracking',
+        how: '口頭で決まったことを言葉にして返し、記録の残る形に移す。',
+        script: 'いま決まったのは◯◯ということですね。あとで共有しておきます。',
+      },
+      {
+        tacticId: 'framing',
+        how: '「気に入られているか」ではなく「決まりごとはどうなっているか」の枠で話す。',
+        script: 'これは決まりごととしては、どうなっていますか。',
+      },
+      {
+        tacticId: 'two_sided',
+        how: '自分の案の弱点を先に言って、外す口実を減らす。',
+        script: 'この案は◯◯が足りていません。そこを承知のうえで出します。',
+      },
+    ],
     replyIds: ['record', 'takeout', 'third'],
     relatedTacticIds: ['isolate', 'favor', 'triangulate'],
   },
   {
-        counters: [
-      { tacticId: 'anchoring', how: '決めてよい範囲を、始める前に数字と線で出す。' },
-      { tacticId: 'deadline', how: '口を出せる締め切りを先に決める（この日以降は変えません、と置く）。' },
-      { tacticId: 'backtracking', how: '途中の変更指示をそのまま言葉にして返し、いつ誰が言ったかを残す。' },
-    ],
-id: 'micromanages',
+    id: 'micromanages',
     name: '任せた後から口を出す',
     reading: 'まかせたあとからくちをだす',
     scenes: ['work', 'home'],
@@ -389,16 +533,28 @@ id: 'micromanages',
     ],
     distance:
       '決めてよい範囲を先に、文字にして確かめる。それが出てこない仕事は、引き受ける量のほうを減らす。',
+    counters: [
+      {
+        tacticId: 'anchoring',
+        how: '決めてよい範囲を、始める前に数字と線で出す。',
+        script: 'ここまでは私が決めて進めます。ここから先は相談します。',
+      },
+      {
+        tacticId: 'deadline',
+        how: '口を出せる締め切りを先に決める（この日以降は変えません、と置く）。',
+        script: '◯日以降は変えられません。それまでにお願いします。',
+      },
+      {
+        tacticId: 'backtracking',
+        how: '途中の変更指示をそのまま言葉にして返し、いつ誰が言ったかを残す。',
+        script: '「◯◯に変える」ということですね。いつの時点の指示か控えておきます。',
+      },
+    ],
     replyIds: ['takeout', 'pause', 'record'],
     relatedTacticIds: ['presupposition', 'needed', 'consistency'],
   },
   {
-        counters: [
-      { tacticId: 'presupposition', how: '気持ちの話をせず「これはやめてください」を、決まったこととして置く。' },
-      { tacticId: 'silence_pressure', how: '「そんなつもりは」と言われても、すぐ引き取らない。' },
-      { tacticId: 'backtracking', how: '言われた言い訳をそのまま返す。こちらが折れて終わる形にしない。' },
-    ],
-id: 'unaware',
+    id: 'unaware',
     name: '悪気がないので止まらない',
     reading: 'わるぎがないのでとまらない',
     scenes: ['work', 'street', 'kids', 'home'],
@@ -414,16 +570,28 @@ id: 'unaware',
     ],
     distance:
       '気持ちの話をしない。やめてほしい行為だけを一つ、短く伝える。それでも続くなら、伝わらない相手として扱いを変える（その場を預かっている人に伝える・回数を減らす）。',
+    counters: [
+      {
+        tacticId: 'presupposition',
+        how: '気持ちの話をせず「これはやめてください」を、決まったこととして置く。',
+        script: 'それはやめてください。',
+      },
+      {
+        tacticId: 'silence_pressure',
+        how: '「そんなつもりは」と言われても、すぐ引き取らない。',
+        script: '（「そんなつもりは」と言われても、すぐ引き取らずに待つ）',
+      },
+      {
+        tacticId: 'backtracking',
+        how: '言われた言い訳をそのまま返す。こちらが折れて終わる形にしない。',
+        script: '「悪気はなかった」ということですね。それでも、やめてください。',
+      },
+    ],
     replyIds: ['record', 'third', 'window'],
     relatedTacticIds: ['just_joking', 'blame_shift', 'labeling'],
   },
   {
-        counters: [
-      { tacticId: 'framing', how: '正しさの話に乗らず「うちはこうしています」の枠に置き換える。' },
-      { tacticId: 'silence_pressure', how: '勧められても、すぐ賛成も反対もしない。' },
-      { tacticId: 'slow_tempo', how: '勢いに合わせない。合わせるほど、断る所がなくなる。' },
-    ],
-id: 'one_right_way',
+    id: 'one_right_way',
     name: '自分のやり方だけが正しいとする',
     reading: 'じぶんのやりかただけがただしいとする',
     scenes: ['home', 'work', 'street', 'kids'],
@@ -439,16 +607,28 @@ id: 'one_right_way',
     ],
     distance:
       '合わせない。「うちはこうしています」で終わらせ、理由も反論も足さない。会う場所と回数のほうを調整する。',
+    counters: [
+      {
+        tacticId: 'framing',
+        how: '正しさの話に乗らず「うちはこうしています」の枠に置き換える。',
+        script: 'うちはこうしています。',
+      },
+      {
+        tacticId: 'silence_pressure',
+        how: '勧められても、すぐ賛成も反対もしない。',
+        script: 'そうなんですね。（賛成も反対もせず、間を置く）',
+      },
+      {
+        tacticId: 'slow_tempo',
+        how: '勢いに合わせない。合わせるほど、断る所がなくなる。',
+        script: 'なるほど。……そうですか。',
+      },
+    ],
     replyIds: ['vague', 'no_reason', 'pause'],
     relatedTacticIds: ['social_proof', 'labeling', 'consistency'],
   },
   {
-        counters: [
-      { tacticId: 'deadline', how: '会う前に終わりの時刻を決めて、先に伝えておく。' },
-      { tacticId: 'false_choice', how: '話題を二つ出して、悪口以外のほうへ振り替える。' },
-      { tacticId: 'slow_tempo', how: '巻き込まれて同じ速さで話さない。' },
-    ],
-id: 'drains',
+    id: 'drains',
     name: '一緒にいると削られる',
     reading: 'いっしょにいるとけずられる',
     scenes: ['work', 'home', 'street', 'online'],
@@ -469,6 +649,23 @@ id: 'drains',
     ],
     distance:
       '会う回数と長さを先に決めてから会う。理由を説明できなくてよい。会ったあとに残るもので決めてよい。',
+    counters: [
+      {
+        tacticId: 'deadline',
+        how: '会う前に終わりの時刻を決めて、先に伝えておく。',
+        script: '今日は1時間で失礼しますね。',
+      },
+      {
+        tacticId: 'false_choice',
+        how: '話題を二つ出して、悪口以外のほうへ振り替える。',
+        script: 'その話はさておき、◯◯と△△ならどちらが良さそうですか。',
+      },
+      {
+        tacticId: 'slow_tempo',
+        how: '巻き込まれて同じ速さで話さない。',
+        script: 'そうなんですね。……（同じ速さに引き込まれない）',
+      },
+    ],
     replyIds: ['leave', 'pause', 'third'],
     relatedTacticIds: ['triangulate', 'person_attack', 'social_proof'],
   },

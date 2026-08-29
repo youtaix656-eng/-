@@ -1,0 +1,107 @@
+import React, { useState } from 'react';
+import { TACTIC_MAP } from '../data/tactics.js';
+import { COUNTER_BEST_SCENES, SCENE_MAP } from '../data/people.js';
+import { orderCounters, summarize, triesOf, RESULTS, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
+import { GLYPHS } from '../data/glyphs.js';
+
+/**
+ * 「黒い心理学で返すなら」の一覧。**見立てと型の一覧で同じものを使う。**
+ * 並べ替えは lib/tried.js に任せる（画面で順番を決めない）。
+ */
+export default function CounterList({
+  type, scene = '', tries = [], hidden = [], onTry, onHide, onGoTactic, caseId = '',
+}) {
+  const [memo, setMemo] = useState('');
+  const [explain, setExplain] = useState('');
+  const sum = summarize(tries);
+  const ordered = orderCounters(type.counters, { tries, scene, bestScenes: COUNTER_BEST_SCENES });
+  const shown = ordered.filter((c) => !hidden.includes(c.tacticId));
+  const hiddenCount = ordered.length - shown.length;
+
+  return (
+    <>
+      <p className="tiny">こちらが呑まれないための型を挙げています。</p>
+
+      <input
+        type="text"
+        value={memo}
+        maxLength={200}
+        onChange={(e) => setMemo(e.target.value)}
+        placeholder="ひとこと（任意。次に「やってみた」を押すと一緒に残ります）"
+        style={{ marginBottom: 4 }}
+      />
+
+      {shown.map((c) => {
+        const s = sum.get(c.tacticId);
+        const mine = triesOf(tries, c.tacticId);
+        const fits = scene && (COUNTER_BEST_SCENES[c.tacticId] || []).includes(scene);
+        return (
+          <div className="counter" key={c.tacticId}>
+            <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
+              <button className="chip on" onClick={() => onGoTactic(c.tacticId)}>
+                {TACTIC_MAP[c.tacticId]?.name || c.tacticId}
+              </button>
+              <span className="tiny">
+                {fits && `${SCENE_MAP[scene].label}向き `}
+                {s
+                  ? `${s.total}回試した${s.total >= MIN_TRIES ? `（${GLYPHS.circle}${s.ok}／${GLYPHS.cross}${s.ng}）` : ''}`
+                  : 'まだ試していない'}
+              </span>
+            </div>
+
+            <p style={{ margin: '6px 0' }}>{c.how}</p>
+            <p className="script">「{c.script}」</p>
+
+            <div className="row" style={{ gap: 6, marginTop: 6 }}>
+              <span className="tiny">やってみた：</span>
+              {RESULTS.map((r) => (
+                <button
+                  key={r.id}
+                  className="chip"
+                  onClick={() => {
+                    onTry({ tacticId: c.tacticId, typeId: type.id, caseId, result: r.id, note: memo });
+                    setMemo('');
+                  }}
+                >
+                  {r.mark} {r.label}
+                </button>
+              ))}
+              <button className="chip" onClick={() => setExplain(explain === c.tacticId ? '' : c.tacticId)}>
+                {explain === c.tacticId ? '説明を閉じる' : 'この型の説明'}
+              </button>
+              <button className="chip" onClick={() => onHide(c.tacticId)}>
+                {GLYPHS.cross} 隠す
+              </button>
+            </div>
+
+            {explain === c.tacticId && TACTIC_MAP[c.tacticId] && (
+              <div className="note" style={{ margin: '8px 0' }}>
+                <strong>{TACTIC_MAP[c.tacticId].name}</strong>
+                <br />
+                {TACTIC_MAP[c.tacticId].summary}
+                <br />
+                <span className="tiny">{TACTIC_MAP[c.tacticId].why}</span>
+              </div>
+            )}
+
+            {mine.length > 0 && (
+              <p className="tiny" style={{ marginTop: 4 }}>
+                {mine.slice(0, 3).map((t) => `${RESULT_MAP[t.result].mark}${t.note ? ` ${t.note}` : ''}`).join(' ／ ')}
+                {mine.length > 3 && ` ほか${mine.length - 3}件`}
+              </p>
+            )}
+          </div>
+        );
+      })}
+
+      {hiddenCount > 0 && (
+        <p className="tiny">
+          合わないので隠している手が{hiddenCount}件あります。
+          <button className="chip" style={{ marginLeft: 6 }} onClick={() => onHide(null)}>
+            戻す
+          </button>
+        </p>
+      )}
+    </>
+  );
+}
