@@ -104,14 +104,29 @@ jobs:
         run: npm run build
         working-directory: ouro
 
+      # ライフハック検索（Vite + React JSX）を /lifehack-search サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (ライフハック検索)
+        run: npm ci
+        working-directory: lifehack-search
+
+      - name: Test (ライフハック検索)
+        run: npm test
+        working-directory: lifehack-search
+
+      - name: Build (ライフハック検索 / /lifehack-search)
+        run: npm run build
+        working-directory: lifehack-search
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/lifehack-search
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
           cp -r henkaku-note/dist dist/henkaku-note
           cp -r ouro/dist dist/ouro
+          cp -r lifehack-search/dist dist/lifehack-search
           touch dist/.nojekyll
 
       - name: Upload artifact

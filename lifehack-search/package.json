@@ -1,0 +1,21 @@
+{
+  "name": "lifehack-search",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ライフハック検索 — キーワードで暮らしの工夫を引く（端末内保存のみ）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
