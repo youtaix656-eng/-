@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS } from '../src/lib/cognitiveProfile.js';
+import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS } from '../src/lib/cognitiveProfile.js';
 import featureRegistry from '../src/data/featureRegistry.js';
 
 const KNOWN_VIEWS = new Set(featureRegistry.map((f) => f.view));
@@ -38,6 +38,11 @@ test('cognitiveProfile: 各リンク先のviewはfeatureRegistry.jsに実在す�
 
 test('cognitiveProfile: 環境アドバイスが空でない', () => {
   assert.ok(ENVIRONMENT_TIPS.length > 0);
+});
+
+test('cognitiveProfile: 最短ルート・避けたほうがよい学習法が空でない', () => {
+  assert.ok(SHORTEST_ROUTE.length > 0);
+  assert.ok(AVOID_METHODS.length > 0);
 });
 
 test('cognitiveProfile: 個人名を含まない（公開リポジトリのため）', () => {

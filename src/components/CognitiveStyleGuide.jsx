@@ -1,4 +1,4 @@
-import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS } from '../lib/cognitiveProfile.js';
+import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS } from '../lib/cognitiveProfile.js';
 
 // 認知特性チェック（本田40式＋対話診断）の結果をもとに、
 // このアプリのどの機能をどう使うと定着しやすいかを提案する画面。
@@ -29,6 +29,20 @@ export default function CognitiveStyleGuide({ onNavigate }) {
           <p key={w.type} className="inline-note" style={{ marginTop: 0, marginBottom: 6, opacity: 0.85 }}>
             ☆ {w.type}：{w.note}
           </p>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="section-label" style={{ marginTop: 0 }}>最短ルート（この順で組み合わせる）</div>
+        {SHORTEST_ROUTE.map((step, i) => (
+          <p key={i} style={{ fontWeight: 600, marginTop: i === 0 ? 0 : 4, marginBottom: 0 }}>{step}</p>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="section-label" style={{ marginTop: 0, color: 'var(--warn, #e0a800)' }}>労力対効果が低い学習法（他を優先）</div>
+        {AVOID_METHODS.map((m, i) => (
+          <p key={i} className="inline-note" style={{ marginTop: i === 0 ? 0 : 4 }}>✕ {m}</p>
         ))}
       </div>
 
