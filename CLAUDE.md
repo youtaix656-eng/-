@@ -680,7 +680,21 @@ Ouro 項目32と同じ線）。**同じ型を二度足さない**——間欠強
   `git push origin HEAD:main` で main を fast-forward してデプロイ（ユーザー了承済みの運用）。
 - コンテナが作業ツリーを古いコミットへ戻すことがある。正は origin。
   `git fetch && git reset --hard origin/<branch>` で復旧してから作業する。
-- 変更後は必ず最新URLを出す。読みやすい写真を使う。
+- **変更後は必ず最新URLを出す（ユーザー指定・2026-08-29 に「これからは毎回URLだして」と再指示）。**
+  返答の最後に、触ったアプリの公開URLを毎回そのまま書く。省略しない。
+  まだ main に入っていない（＝公開されていない）ときも**URLは出したうえで、
+  「main に入るまでは404」と一行そえる**——URLだけ出して公開済みのように見せない。
+  同梱アプリのURL一覧：
+  | アプリ | URL |
+  |---|---|
+  | 鍼灸国試 対策アプリ（ルート） | https://youtaix656-eng.github.io/-/ |
+  | るるくる業務マニュアル | https://youtaix656-eng.github.io/-/rirakuru |
+  | 分割睡眠トラッカー | https://youtaix656-eng.github.io/-/sleep-tracker |
+  | 腰痛ナビ | https://youtaix656-eng.github.io/-/youtsu-navi |
+  | 変革ノート | https://youtaix656-eng.github.io/-/henkaku-note |
+  | Ouro | https://youtaix656-eng.github.io/-/ouro |
+  | 鏡（かがみ） | https://youtaix656-eng.github.io/-/kagami |
+- 読みやすい写真を使う。
 
 ## 継続して意識する開発方針（ユーザー指定・重要）
 1. **全科目のコンテンツ拡充＋網羅管理** — 14科目（下記「科目一覧」参照）を拡充。
