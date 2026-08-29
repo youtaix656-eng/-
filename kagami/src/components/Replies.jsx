@@ -1,6 +1,8 @@
 import React from 'react';
 import { REPLIES } from '../data/replies.js';
 import { useFocusJump } from './useFocusJump.js';
+import { EyeSigil, Rule } from './Ornament.jsx';
+import { GLYPHS } from '../data/glyphs.js';
 
 export default function Replies({ focus, onFocusDone }) {
   useFocusJump(focus ? `toc-reply-${focus}` : '', onFocusDone);
@@ -8,9 +10,11 @@ export default function Replies({ focus, onFocusDone }) {
   return (
     <>
       <div className="head">
+        <EyeSigil size={64} className="sigil" />
         <h1>返し方</h1>
         <p>相手を言い負かす言葉は置いていません。自分の側だけでできることを集めています。</p>
       </div>
+      <Rule mark={GLYPHS.circle} />
 
       <div className="note">
         言い返して勝つ形は、立場が弱い側ほど不利になります（言い返せる関係なら、そもそも困っていません）。

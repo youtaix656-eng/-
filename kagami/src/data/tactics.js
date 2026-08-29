@@ -14,47 +14,49 @@
 //   6. cues は**その型に特徴的な言い回し**だけ。「ありがとう」のような
 //      どこにでも出る語を入れると、何を貼っても全部の型が当たって役に立たなくなる。
 
+import { GLYPHS } from './glyphs.js';
+
 export const CATEGORIES = [
   {
     id: 'pressure',
     reading: 'いそがせるおいこむ',
     label: '急がせる・追い込む',
-    icon: '⏱',
+    icon: GLYPHS.triangle,
     summary: '考える時間を渡さないことで成り立つ型。時間を取り戻すだけで形が崩れる。',
   },
   {
     id: 'exchange',
     reading: 'かしかりにする',
     label: '貸し借りにする',
-    icon: '🤝',
+    icon: GLYPHS.circlePlus,
     summary: '断ることを「借りを返さないこと」に見せかける型。貸し借りは相手が一方的に作れる。',
   },
   {
     id: 'crowd',
     reading: 'まわりのちからをつかう',
     label: '周りの力を使う',
-    icon: '👥',
+    icon: GLYPHS.star,
     summary: '自分で確かめていないものを根拠に見せる型。出どころを聞くと形が見える。',
   },
   {
     id: 'self',
     reading: 'じぶんのかんかくをうたがわせる',
     label: '自分の感覚を疑わせる',
-    icon: '🌫',
+    icon: GLYPHS.moonWane,
     summary: '判断する力そのものを揺らす型。長く続くと自分の記憶を信じられなくなる。',
   },
   {
     id: 'bond',
     reading: 'かんけいをひとじちにする',
     label: '関係を人質にする',
-    icon: '🔗',
+    icon: GLYPHS.infinity,
     summary: '「この関係が終わる」を代償にして従わせる型。近い相手ほど効いてしまう。',
   },
   {
     id: 'money',
     reading: 'おかねのはんだんをまげる',
     label: 'お金の判断を曲げる',
-    icon: '💸',
+    icon: GLYPHS.sun,
     summary: '損得の見え方をずらす型。同じ金額でも、見せ方で判断が変わる。',
   },
 ];

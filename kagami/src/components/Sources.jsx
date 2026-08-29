@@ -2,6 +2,8 @@ import React from 'react';
 import { SOURCES } from '../data/sources.js';
 import { TACTICS } from '../data/tactics.js';
 import { useFocusJump } from './useFocusJump.js';
+import { EyeSigil, Rule } from './Ornament.jsx';
+import { GLYPHS } from '../data/glyphs.js';
 
 export default function Sources({ focus, onFocusDone }) {
   useFocusJump(focus ? `toc-source-${focus}` : '', onFocusDone);
@@ -9,9 +11,11 @@ export default function Sources({ focus, onFocusDone }) {
   return (
     <>
       <div className="head">
+        <EyeSigil size={64} className="sigil" />
         <h1>出典</h1>
         <p>{SOURCES.length}件。どの型がどこから来ているかを辿れるようにしています。</p>
       </div>
+      <Rule mark={GLYPHS.dagger} />
 
       <div className="note">
         <strong>URL を載せていません。</strong>その場で確かめられない状態でそれらしいリンクを書くと、

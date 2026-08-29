@@ -8,7 +8,7 @@ export default function TacticCard({ tactic, cues = [], open, onToggle, id }) {
   const cat = CATEGORY_MAP[tactic.category];
   return (
     <div className="card" id={id}>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="card-head">
         <div>
           <h3 style={{ marginBottom: 2 }}>
             {cat?.icon} {tactic.name}

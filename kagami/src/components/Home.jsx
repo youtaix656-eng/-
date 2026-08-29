@@ -1,14 +1,30 @@
 import React from 'react';
 import { TACTICS, CATEGORIES, tacticsInCategory } from '../data/tactics.js';
 import { REPLIES } from '../data/replies.js';
+import { GLYPHS } from '../data/glyphs.js';
+import { Ouroboros, CrossMark, Rule } from './Ornament.jsx';
 
 export default function Home({ onGo, records }) {
   return (
     <>
-      <div className="head">
-        <h1>鏡（かがみ）</h1>
-        <p>「そう言われると断りにくい」の正体に、名前をつける。</p>
+      <div className="plate-mark">
+        <div className="corners">
+          <CrossMark />
+          <Ouroboros size={172} />
+          <CrossMark />
+        </div>
       </div>
+
+      <div className="head" style={{ paddingTop: 0 }}>
+        <h1>鏡</h1>
+        <p className="title-greek">ΚΑΓΑΜΙ</p>
+        <p style={{ marginTop: 10 }}>
+          「そう言われると断りにくい」の正体に、
+          <br />
+          名前をつける。
+        </p>
+      </div>
+      <Rule mark={GLYPHS.star} />
 
       <div className="card">
         <p>
@@ -33,6 +49,7 @@ export default function Home({ onGo, records }) {
       </div>
 
       <h2>型のまとまり</h2>
+      <Rule mark={GLYPHS.moonWane} />
       <ul className="list">
         {CATEGORIES.map((c) => (
           <li key={c.id}>
@@ -47,16 +64,17 @@ export default function Home({ onGo, records }) {
       </ul>
 
       <h2>できること</h2>
+      <Rule mark={GLYPHS.circle} />
       <ul className="list">
         <li>
           <button className="item" onClick={() => onGo('replies')}>
-            <span className="t">🛡 返し方（{REPLIES.length}件）</span>
+            <span className="t">{GLYPHS.circle} 返し方（{REPLIES.length}件）</span>
             <span className="s">言い負かす言葉は置いていません。相手の同意が要らないことだけ。</span>
           </button>
         </li>
         <li>
           <button className="item" onClick={() => onGo('check', 'draft')}>
-            <span className="t">🪞 自分の言い方を見る</span>
+            <span className="t">{GLYPHS.moonWax} 自分の言い方を見る</span>
             <span className="s">
               これから送る文章を貼る。使う癖は、そのまま人に向く癖になります。
             </span>
@@ -64,19 +82,19 @@ export default function Home({ onGo, records }) {
         </li>
         <li>
           <button className="item" onClick={() => onGo('records')}>
-            <span className="t">📝 記録（{records.length}件）</span>
+            <span className="t">{GLYPHS.reference} 記録（{records.length}件）</span>
             <span className="s">争うためではなく、あとから自分が迷わないために。</span>
           </button>
         </li>
         <li>
           <button className="item" onClick={() => onGo('sources')}>
-            <span className="t">📚 出典</span>
+            <span className="t">{GLYPHS.dagger} 出典</span>
             <span className="s">どの型がどこから来ているかを辿れます。</span>
           </button>
         </li>
         <li>
           <button className="item" onClick={() => onGo('settings')}>
-            <span className="t">⚙️ 設定</span>
+            <span className="t">{GLYPHS.circleCross} 設定</span>
             <span className="s">記録の残し方・データを消す。</span>
           </button>
         </li>

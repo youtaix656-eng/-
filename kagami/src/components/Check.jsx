@@ -3,6 +3,8 @@ import { TACTICS } from '../data/tactics.js';
 import { detectTactics, splitByHighlight, MIN_TEXT } from '../lib/detect.js';
 import { summarizePersonal } from '../lib/privacy.js';
 import { PLACES } from '../lib/records.js';
+import { GLYPHS } from '../data/glyphs.js';
+import { EyeSigil, Rule } from './Ornament.jsx';
 import TacticCard from './TacticCard.jsx';
 
 /**
@@ -36,6 +38,7 @@ export default function Check({ mode = 'received', onChangeMode, onSave, setting
   return (
     <>
       <div className="head">
+        <EyeSigil size={70} className="sigil" />
         <h1>{draft ? '自分の言い方を見る' : '貼って調べる'}</h1>
         <p>
           {draft
@@ -101,6 +104,7 @@ export default function Check({ mode = 'received', onChangeMode, onSave, setting
       {result.status === 'ok' && (
         <>
           <h2>当たったところ</h2>
+          <Rule mark={GLYPHS.star} />
           <div className="excerpt">
             {parts.map((p, i) => (p.hit ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>))}
           </div>

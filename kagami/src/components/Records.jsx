@@ -1,6 +1,8 @@
 import React from 'react';
 import { PLACE_MAP, countByTactic, countByPlace } from '../lib/records.js';
 import { TACTIC_MAP } from '../data/tactics.js';
+import { EyeSigil, Rule } from './Ornament.jsx';
+import { GLYPHS } from '../data/glyphs.js';
 
 function when(at) {
   const d = new Date(at);
@@ -15,9 +17,11 @@ export default function Records({ records, onRemove, onGoCheck }) {
   return (
     <>
       <div className="head">
+        <EyeSigil size={64} className="sigil" />
         <h1>記録</h1>
         <p>{records.length}件。すべてこの端末の中だけにあります。</p>
       </div>
+      <Rule mark={GLYPHS.reference} />
 
       {records.length === 0 ? (
         <div className="card quiet">

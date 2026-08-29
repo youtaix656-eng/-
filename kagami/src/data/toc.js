@@ -12,14 +12,15 @@
 import { TACTICS, CATEGORIES } from './tactics.js';
 import { REPLIES } from './replies.js';
 import { SOURCES } from './sources.js';
+import { GLYPHS } from './glyphs.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 
 /** 目次のカテゴリ（表示順・色分けに使う） */
 export const TOC_CATEGORIES = [
-  { id: 'tactic', label: '操作の型', icon: '🎭', view: 'tactics' },
-  { id: 'group', label: '型のまとまり', icon: '🗂', view: 'tactics' },
-  { id: 'reply', label: '返し方', icon: '🛡', view: 'replies' },
-  { id: 'source', label: '出典', icon: '📚', view: 'sources' },
+  { id: 'tactic', label: '操作の型', icon: GLYPHS.moonWane, view: 'tactics' },
+  { id: 'group', label: '型のまとまり', icon: GLYPHS.star, view: 'tactics' },
+  { id: 'reply', label: '返し方', icon: GLYPHS.circle, view: 'replies' },
+  { id: 'source', label: '出典', icon: GLYPHS.dagger, view: 'sources' },
 ];
 
 export const TOC_CATEGORY_MAP = Object.fromEntries(TOC_CATEGORIES.map((c) => [c.id, c]));

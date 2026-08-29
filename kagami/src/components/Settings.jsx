@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { EyeSigil, Rule } from './Ornament.jsx';
+import { GLYPHS } from '../data/glyphs.js';
 
 export default function Settings({ settings, setSetting, onClearAll, recordCount, storageSize }) {
   const [confirming, setConfirming] = useState(false);
@@ -6,9 +8,11 @@ export default function Settings({ settings, setSetting, onClearAll, recordCount
   return (
     <>
       <div className="head">
+        <EyeSigil size={64} className="sigil" />
         <h1>設定</h1>
         <p>このアプリのデータは、この端末から出ません。</p>
       </div>
+      <Rule mark={GLYPHS.circleCross} />
 
       <div className="card">
         <h3>記録の残し方</h3>

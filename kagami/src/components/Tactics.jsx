@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { TACTICS, CATEGORIES, tacticsInCategory } from '../data/tactics.js';
 import { useFocusJump } from './useFocusJump.js';
 import TacticCard from './TacticCard.jsx';
+import { EyeSigil, Rule } from './Ornament.jsx';
+import { GLYPHS } from '../data/glyphs.js';
 
 export default function Tactics({ focus, onFocusDone }) {
   const [category, setCategory] = useState('');
@@ -23,9 +25,11 @@ export default function Tactics({ focus, onFocusDone }) {
   return (
     <>
       <div className="head">
+        <EyeSigil size={64} className="sigil" />
         <h1>操作の型</h1>
         <p>{TACTICS.length}件。名前がつくと、その場で気づけるようになります。</p>
       </div>
+      <Rule mark={GLYPHS.moonWane} />
 
       <div className="chips">
         <button className={`chip ${category === '' ? 'on' : ''}`} onClick={() => setCategory('')}>

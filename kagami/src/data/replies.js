@@ -9,12 +9,14 @@
 //
 // もう一つの約束: **「これを言えば解決する」と書かない。** 出せるのは選択肢だけ。
 
+import { GLYPHS } from './glyphs.js';
+
 export const REPLIES = [
   {
     id: 'pause',
     tocTitle: 'いま決めない',
     reading: 'いまきめない',
-    icon: '⏸',
+    icon: GLYPHS.circle,
     summary: '「いま決めません」とだけ言って、その場で答えを出さない。',
     detail:
       '急がせる型のほとんどは、考える時間を渡さないことで成り立っている。理由を説明しなくてよい——理由を言うと、その理由への反論が返ってくる。',
@@ -24,7 +26,7 @@ export const REPLIES = [
     id: 'no_reason',
     tocTitle: '理由を言わずに断る',
     reading: 'りゆうをいわずにことわる',
-    icon: '🚪',
+    icon: GLYPHS.cross,
     summary: '断るのに理由はいらない。理由を出すと、そこを崩しにこられる。',
     detail:
       '「お金がない」と言えば分割の話に、「時間がない」と言えば短時間の話になる。断る側は理由を用意しなくてよい。',
@@ -34,7 +36,7 @@ export const REPLIES = [
     id: 'takeout',
     tocTitle: '書面でもらう',
     reading: 'しょめんでもらう',
-    icon: '📄',
+    icon: GLYPHS.square,
     summary: '口で言われた条件を、そのまま書いたものをもらう。',
     detail:
       'あとから条件を足す型・話がすり替わる型に効く。書けないと言われたら、それ自体が判断の材料になる。',
@@ -44,7 +46,7 @@ export const REPLIES = [
     id: 'record',
     tocTitle: '日時と言われたことを残す',
     reading: 'にちじといわれたことをのこす',
-    icon: '📝',
+    icon: GLYPHS.reference,
     summary: 'いつ・どこで・何を言われたかを、その日のうちに書いておく。',
     detail:
       '「そんなことは言っていない」と言われる型に効く。記憶は思い出すたびに書き換わるので、争うためではなく自分が迷わないために残す。このアプリの「記録」からも残せる。',
@@ -54,7 +56,7 @@ export const REPLIES = [
     id: 'third',
     tocTitle: '関係のない人に話す',
     reading: 'かんけいのないひとにはなす',
-    icon: '👤',
+    icon: GLYPHS.diamondOutline,
     summary: 'その場にいない、利害のない人に、事実だけを話してみる。',
     detail:
       '孤立させる型・自分の感覚を疑わせる型は、外の目が入るだけで形が見える。相手を悪く言う必要はなく、やりとりをそのまま伝えるだけでよい。',
@@ -64,7 +66,7 @@ export const REPLIES = [
     id: 'fact',
     tocTitle: '数字の出どころを聞く',
     reading: 'すうじのでどころをきく',
-    icon: '🔍',
+    icon: GLYPHS.circleDot,
     summary: '「◯％」「実績◯件」の元になった資料を聞く。',
     detail:
       '出どころを聞かれて答えられない数字は、判断の材料にしない。強い言葉と確かな根拠は別のもの。',
@@ -74,7 +76,7 @@ export const REPLIES = [
     id: 'leave',
     tocTitle: 'その場を離れる',
     reading: 'そのばをはなれる',
-    icon: '🏃',
+    icon: GLYPHS.pointer,
     summary: '話を切り上げて物理的に離れる。うまく終わらせなくてよい。',
     detail:
       '長く話すほど不利になる場がある（帰らせない・囲む・深夜まで続ける）。きれいに終わらせようとして残るより、途中で切って出るほうがよい。',
@@ -84,7 +86,7 @@ export const REPLIES = [
     id: 'window',
     tocTitle: '相談窓口に聞く',
     reading: 'そうだんまどぐちにきく',
-    icon: '☎️',
+    icon: GLYPHS.starOutline,
     summary: '自分で決めきれないことは、決めなくてよい。外に聞く。',
     detail:
       '契約・勧誘のことは消費生活センター（188）、急を要しない警察への相談は #9110、家庭内の支配や暴力は DV相談＋。※番号や名称は変わることがあるので、公式の案内で確かめてから使う。',

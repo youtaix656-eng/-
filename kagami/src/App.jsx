@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { GLYPHS } from './data/glyphs.js';
 import { useStore } from './lib/useStore.js';
 import Home from './components/Home.jsx';
 import Check from './components/Check.jsx';
@@ -10,11 +11,11 @@ import Records from './components/Records.jsx';
 import Settings from './components/Settings.jsx';
 
 const NAV = [
-  { id: 'home', label: 'ホーム', icon: '🏠' },
-  { id: 'check', label: '調べる', icon: '🔎' },
-  { id: 'tactics', label: '型', icon: '🎭' },
-  { id: 'records', label: '記録', icon: '📝' },
-  { id: 'toc', label: '目次', icon: '📇' },
+  { id: 'home', label: 'ホーム', icon: GLYPHS.sun },
+  { id: 'check', label: '調べる', icon: GLYPHS.circleDouble },
+  { id: 'tactics', label: '型', icon: GLYPHS.moonWane },
+  { id: 'records', label: '記録', icon: GLYPHS.reference },
+  { id: 'toc', label: '目次', icon: GLYPHS.lines },
 ];
 
 export default function App() {

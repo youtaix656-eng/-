@@ -10,14 +10,15 @@
 //      いつ・どこで・どの型の言い回しに当たったか・自分がどうしたか、だけ。
 
 import { mask } from './privacy.js';
+import { GLYPHS } from '../data/glyphs.js';
 
 /** 場面（自由記述にしない＝氏名が書き込まれる欄を作らない） */
 export const PLACES = [
-  { id: 'work', label: '職場・仕事', icon: '🏢' },
-  { id: 'home', label: '家庭・親しい人', icon: '🏠' },
-  { id: 'deal', label: '勧誘・取引', icon: '🧾' },
-  { id: 'online', label: 'ネット・SNS', icon: '📱' },
-  { id: 'other', label: 'その他', icon: '•' },
+  { id: 'work', label: '職場・仕事', icon: GLYPHS.squareFilled },
+  { id: 'home', label: '家庭・親しい人', icon: GLYPHS.house },
+  { id: 'deal', label: '勧誘・取引', icon: GLYPHS.diamond },
+  { id: 'online', label: 'ネット・SNS', icon: GLYPHS.diamondInset },
+  { id: 'other', label: 'その他', icon: GLYPHS.squareSmall },
 ];
 
 export const PLACE_MAP = Object.fromEntries(PLACES.map((p) => [p.id, p]));

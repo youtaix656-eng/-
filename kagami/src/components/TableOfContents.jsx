@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { TOC_ENTRIES, TOC_CATEGORIES, TOC_CATEGORY_MAP, tocSections, filterToc } from '../data/toc.js';
+import { EyeSigil, Rule } from './Ornament.jsx';
+import { GLYPHS } from '../data/glyphs.js';
 
 export default function TableOfContents({ onGo }) {
   const [query, setQuery] = useState('');
@@ -17,9 +19,11 @@ export default function TableOfContents({ onGo }) {
   return (
     <>
       <div className="head">
+        <EyeSigil size={64} className="sigil" />
         <h1>目次</h1>
         <p>{TOC_ENTRIES.length}項目。あ〜ん → A〜Z の読み順。</p>
       </div>
+      <Rule mark={GLYPHS.lines} />
 
       <input
         type="text"
