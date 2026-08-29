@@ -1,9 +1,18 @@
-import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS, GROWTH_AREAS, DEPRIORITIZED_TYPES } from '../lib/cognitiveProfile.js';
+import { useMemo } from 'react';
+import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS, GROWTH_AREAS, DEPRIORITIZED_TYPES, TRAINING_GAMES } from '../lib/cognitiveProfile.js';
 
 // 認知特性チェック（本田40式＋対話診断）の結果をもとに、
 // このアプリのどの機能をどう使うと定着しやすいかを提案する画面。
 // 名前などの個人情報は表示しない（公開リポジトリのため、内容のみ扱う）。
-export default function CognitiveStyleGuide({ onNavigate }) {
+export default function CognitiveStyleGuide({ onNavigate, onOpenTraining }) {
+  const trainingsBySection = useMemo(() => {
+    const map = new Map();
+    for (const g of TRAINING_GAMES) {
+      if (!map.has(g.section)) map.set(g.section, []);
+      map.get(g.section).push(g);
+    }
+    return map;
+  }, []);
   return (
     <div className="view">
       <h2 className="view-title">あなたの学習スタイル</h2>
@@ -30,6 +39,25 @@ export default function CognitiveStyleGuide({ onNavigate }) {
           <p key={w.type} className="inline-note" style={{ marginTop: 0, marginBottom: 6, opacity: 0.85 }}>
             ☆ {w.type}：{w.note}
           </p>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="section-label" style={{ marginTop: 0 }}>🎮 認知特性トレーニング</div>
+        <p className="inline-note" style={{ marginTop: 0 }}>
+          鍼灸国家試験の問題演習とは切り離した、認知特性そのものを鍛える専用のミニトレーニングです。
+          得意な特性をさらに伸ばすもの・苦手な特性を鍛えるものに分けています。
+        </p>
+        {[...trainingsBySection.entries()].map(([section, games]) => (
+          <div key={section} style={{ marginTop: 10 }}>
+            <p style={{ fontWeight: 700, marginBottom: 4 }}>{section}</p>
+            {games.map((g) => (
+              <div key={g.id} className="btn-row" style={{ marginTop: 4, alignItems: 'center' }}>
+                <button className="btn sm" onClick={() => onOpenTraining?.(g.mode)}>▶ {g.title}</button>
+                <span className="hint" style={{ margin: 0 }}>{g.type}</span>
+              </div>
+            ))}
+          </div>
         ))}
       </div>
 

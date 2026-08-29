@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS, GROWTH_AREAS, DEPRIORITIZED_TYPES } from '../src/lib/cognitiveProfile.js';
+import { PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, SHORTEST_ROUTE, AVOID_METHODS, GROWTH_AREAS, DEPRIORITIZED_TYPES, TRAINING_GAMES } from '../src/lib/cognitiveProfile.js';
+
+// CognitiveTraining.jsx が実装しているモードの一覧（cognitiveProfile.js の
+// TRAINING_GAMES.mode が指す先）。新しいゲームを追加したら両方を更新すること。
+const IMPLEMENTED_MODES = new Set([
+  'spatial-memory', 'sequence-memory', 'story-builder', 'assoc-chain',
+  'read-copy', 'summarize', 'fill-blank', 'kanji-breakdown', 'shadowing', 'qa-pacing',
+]);
 import featureRegistry from '../src/data/featureRegistry.js';
 
 const KNOWN_VIEWS = new Set(featureRegistry.map((f) => f.view));
@@ -50,8 +57,34 @@ test('cognitiveProfile: 最短ルート・避けたほうがよい学習法が�
 });
 
 test('cognitiveProfile: 個人名を含まない（公開リポジトリのため）', () => {
-  const text = JSON.stringify({ PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, GROWTH_AREAS, DEPRIORITIZED_TYPES });
+  const text = JSON.stringify({ PROFILE, RECOMMENDATIONS, ENVIRONMENT_TIPS, GROWTH_AREAS, DEPRIORITIZED_TYPES, TRAINING_GAMES });
   assert.ok(!text.includes('小島'), '個人名が含まれている');
+});
+
+test('cognitiveProfile: TRAINING_GAMESが必須フィールドを備え、CognitiveTraining.jsxに実装がある', () => {
+  assert.ok(TRAINING_GAMES.length > 0);
+  TRAINING_GAMES.forEach((g) => {
+    assert.ok(g.id, 'idが空');
+    assert.ok(g.mode, `${g.id}: modeが空`);
+    assert.ok(g.section, `${g.id}: sectionが空`);
+    assert.ok(g.type, `${g.id}: typeが空`);
+    assert.ok(g.title, `${g.id}: titleが空`);
+    assert.ok(g.desc, `${g.id}: descが空`);
+    assert.ok(IMPLEMENTED_MODES.has(g.mode), `${g.id}: mode "${g.mode}" がCognitiveTraining.jsxに実装されていない`);
+  });
+});
+
+test('cognitiveProfile: TRAINING_GAMESのid・modeが重複しない', () => {
+  const ids = TRAINING_GAMES.map((g) => g.id);
+  const modes = TRAINING_GAMES.map((g) => g.mode);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(new Set(modes).size, modes.length);
+});
+
+test('cognitiveProfile: TRAINING_GAMESは「得意を伸ばす」「苦手を鍛える」の両方を含む', () => {
+  const sections = new Set(TRAINING_GAMES.map((g) => g.section));
+  assert.ok(sections.has('得意を伸ばす'));
+  assert.ok(sections.has('苦手を鍛える'));
 });
 
 test('cognitiveProfile: GROWTH_AREASが必須フィールドとトレーニングを備える', () => {
