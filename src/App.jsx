@@ -60,6 +60,7 @@ const KeizetsuTextbook = lazy(() => import('./components/KeizetsuTextbook.jsx'))
 const KeizetsuPageImages = lazy(() => import('./components/KeizetsuPageImages.jsx'));
 const Faq = lazy(() => import('./components/Faq.jsx'));
 const CognitiveStyleGuide = lazy(() => import('./components/CognitiveStyleGuide.jsx'));
+const CognitiveTraining = lazy(() => import('./components/CognitiveTraining.jsx'));
 
 function ViewLoading() {
   return (
@@ -123,6 +124,7 @@ const VIEW_TITLES = {
   features: '全機能一覧',
   faq: '鍼灸国試アプリ Q&A',
   cognitivestyle: 'あなたの学習スタイル',
+  cognitivetraining: '認知特性トレーニング',
   toc: '目次',
   settings: '設定',
 };
@@ -148,6 +150,7 @@ export default function App() {
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
+  const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
@@ -347,6 +350,10 @@ export default function App() {
   const jumpToRoadmapLevel = (levelId) => {
     setFocusRoadmapLevel(levelId);
     setView('roadmap');
+  };
+  const jumpToTraining = (mode) => {
+    setFocusTrainingMode(mode);
+    setView('cognitivetraining');
   };
   const startCustomQuiz = (questionsList) => {
     setQuizQuestions(questionsList);
@@ -600,7 +607,14 @@ export default function App() {
       case 'faq':
         return <Faq />;
       case 'cognitivestyle':
-        return <CognitiveStyleGuide onNavigate={setView} />;
+        return <CognitiveStyleGuide onNavigate={setView} onOpenTraining={jumpToTraining} />;
+      case 'cognitivetraining':
+        return (
+          <CognitiveTraining
+            initialMode={focusTrainingMode}
+            onConsumeInitialMode={() => setFocusTrainingMode(null)}
+          />
+        );
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':

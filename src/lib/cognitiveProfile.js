@@ -233,3 +233,90 @@ export const RECOMMENDATIONS = [
 export const ENVIRONMENT_TIPS = [
   '学習中はBGM・環境音を避け、無音の環境のほうが集中しやすい傾向があります（サウンドタイプが弱いため）。',
 ];
+
+// 認知特性そのものを鍛える専用トレーニング（CognitiveTraining.jsx）。
+// 鍼灸国家試験の問題演習とは切り離した、認知特性ジムのような位置づけ。
+// mode は CognitiveTraining.jsx 側のゲーム識別子と対応させる
+// （cognitiveProfile.test.mjs が両者の対応を機械チェックする）。
+export const TRAINING_GAMES = [
+  {
+    id: 'spatial-memory',
+    mode: 'spatial-memory',
+    section: '得意を伸ばす',
+    type: '3D（空間）タイプ',
+    title: '空間記憶ゲーム',
+    desc: '光るマスの位置と順番を覚えて、同じ順にタップする（グリッド記憶チャレンジ）。',
+  },
+  {
+    id: 'sequence-memory',
+    mode: 'sequence-memory',
+    section: '得意を伸ばす',
+    type: '3D（空間）×体感タイプ',
+    title: '順序記憶ゲーム',
+    desc: '1つずつ表示される言葉を、あとで同じ順番に並べて再現する。',
+  },
+  {
+    id: 'story-builder',
+    mode: 'story-builder',
+    section: '得意を伸ばす',
+    type: 'ファンタジー（物語）タイプ',
+    title: '物語生成トレーニング',
+    desc: 'ランダムな3つのお題語をつなげて、即興で短い物語を作る。',
+  },
+  {
+    id: 'assoc-chain',
+    mode: 'assoc-chain',
+    section: '得意を伸ばす',
+    type: '辞書引き（言語抽象）タイプ',
+    title: '連想チェーンゲーム',
+    desc: '出されたお題から連想する言葉を次々つなげ、制限時間内にできるだけ長いチェーンを作る。',
+  },
+  {
+    id: 'read-copy',
+    mode: 'read-copy',
+    section: '苦手を鍛える',
+    type: '辞書（文字）タイプ',
+    title: '音読＆書き取りトレーナー',
+    desc: '好きな文章を貼り付けて読み上げ、そのあと記憶を頼りに書き取って答え合わせする（音読筆写法）。',
+  },
+  {
+    id: 'summarize',
+    mode: 'summarize',
+    section: '苦手を鍛える',
+    type: '辞書（文字）タイプ',
+    title: '要約再構成トレーナー',
+    desc: '貼り付けた文章を隠し、3行で要約してから元の文章と見比べる。',
+  },
+  {
+    id: 'fill-blank',
+    mode: 'fill-blank',
+    section: '苦手を鍛える',
+    type: '辞書（文字）タイプ',
+    title: '穴埋めセルフテスト（テキスト版）',
+    desc: '貼り付けた文章の好きな部分を自分で空欄にして、あとで埋める練習ができる。',
+  },
+  {
+    id: 'kanji-breakdown',
+    mode: 'kanji-breakdown',
+    section: '苦手を鍛える',
+    type: '辞書（文字）タイプ',
+    title: '語源・部首分解ノート',
+    desc: '専門用語を1文字ずつに分解し、自分なりの意味・覚え方を書き添える。',
+  },
+  {
+    id: 'shadowing',
+    mode: 'shadowing',
+    section: '苦手を鍛える',
+    type: 'ラジオ（聴覚言語）タイプ',
+    title: 'シャドーイング練習ガイド',
+    desc: '文章を読み上げながら、一定のリズムで復唱するタイミングを視覚的にガイドする。',
+  },
+  {
+    id: 'qa-pacing',
+    mode: 'qa-pacing',
+    section: '苦手を鍛える',
+    type: 'ラジオ（聴覚言語）タイプ',
+    title: 'Q&Aテンポ切り替えモード',
+    desc: '問題文と答えを登録し、「講義形式（続けて読む）」と「Q&A形式（問いの後に間を置く）」を聴き比べる。',
+  },
+];
