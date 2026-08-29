@@ -130,3 +130,10 @@ test('瓶の蓋は、その場で出てくる言い方どれでも引ける（�
     assert.ok(rows.some((r) => ids.has(r.hack.id)), `「${word}」で瓶の蓋の項目が出ない`);
   }
 });
+
+test('危ないことの言葉（割れる・やけど・破片）からも引ける', () => {
+  for (const word of ['やけど', '破片', '割れ']) {
+    const rows = searchHacks(HACKS, word);
+    assert.ok(rows.length > 0, `「${word}」で0件`);
+  }
+});

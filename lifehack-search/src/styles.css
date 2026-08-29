@@ -96,6 +96,10 @@ code { background: var(--accent-weak); padding: 1px 5px; border-radius: 5px; fon
 .card-head { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .chip { font-size: .75rem; color: #fff; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
 .chip.ghost { background: var(--card); color: var(--muted); border: 1px solid var(--line); }
+.chip.risk { background: #fdf0e6; color: #8a4b22; border: 1px solid #e0b48c; }
+@media (prefers-color-scheme: dark) {
+  .chip.risk { background: #3a2a1c; color: #f0c79c; border-color: #6b4a2c; }
+}
 
 /* 一覧 */
 .list { display: flex; flex-direction: column; gap: 10px; }
@@ -154,6 +158,12 @@ button.back { background: none; border: none; color: var(--accent); cursor: poin
 .detail section.caution { background: #fff4f1; border: 1px solid #e8c3ba; border-radius: 12px; padding: 4px 12px 10px; }
 .detail section.basis { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px 10px; }
 .basis-label { font-weight: 600; margin-bottom: 2px; }
+.detail section.prep { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px 10px; }
+.detail section.caution h4 { font-size: .92rem; margin: 12px 0 4px; }
+.checklist, .donts { margin: 6px 0; padding-left: 1.2em; }
+.checklist li, .donts li { margin: 5px 0; }
+.checklist { list-style: '☐ '; }
+.donts { list-style: '✕ '; }
 @media (prefers-color-scheme: dark) {
   .detail section.caution { background: #33221f; border-color: #5c3a33; }
 }

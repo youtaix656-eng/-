@@ -8,7 +8,17 @@ import { OVERPROMISE_WORDS, CAUTION_WORDS } from '../data/schema.js';
 
 /** 1件ぶんの本文（見張りの対象になる場所だけ） */
 export function textOf(hack) {
-  return [hack.title, hack.summary, ...(hack.steps || []), hack.why, hack.caution].filter(Boolean).join('\n');
+  return [
+    hack.title,
+    hack.summary,
+    ...(hack.steps || []),
+    ...(hack.prep || []),
+    ...(hack.donts || []),
+    hack.why,
+    hack.caution,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**

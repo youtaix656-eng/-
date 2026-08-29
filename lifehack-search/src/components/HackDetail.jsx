@@ -1,6 +1,6 @@
 import React from 'react';
 import Highlight from './Highlight.jsx';
-import { CATEGORY_MAP, EFFORT_LABELS, BASIS_KINDS } from '../data/schema.js';
+import { CATEGORY_MAP, EFFORT_LABELS, BASIS_KINDS, RISK_LABEL } from '../data/schema.js';
 import { hackById } from '../data/hacks.js';
 import { TRIED_STATUS } from '../lib/useStore.js';
 
@@ -29,6 +29,7 @@ export default function HackDetail({ id, query = '', store, onBack, onOpen, onSe
         <span className="chip" style={{ background: category.color }}>{category.icon} {category.label}</span>
         <span className="chip ghost">{effort.icon} {effort.label}</span>
         {hack.time ? <span className="chip ghost">⏳ {hack.time}</span> : null}
+        {hack.risk ? <span className="chip risk">{RISK_LABEL.icon} {RISK_LABEL.label}</span> : null}
       </div>
 
       <h2><Highlight text={hack.title} query={query} /></h2>
@@ -41,6 +42,17 @@ export default function HackDetail({ id, query = '', store, onBack, onOpen, onSe
       >
         {favorite ? '★ 気になるに入れています（押すと外す）' : '☆ 気になるに入れる'}
       </button>
+
+      {(hack.prep || []).length > 0 ? (
+        <section className="prep">
+          <h3>はじめる前に確かめること</h3>
+          <ul className="checklist">
+            {hack.prep.map((item, i) => (
+              <li key={i}><Highlight text={item} query={query} /></li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section>
         <h3>やり方</h3>
@@ -56,10 +68,20 @@ export default function HackDetail({ id, query = '', store, onBack, onOpen, onSe
         <p><Highlight text={hack.why} query={query} /></p>
       </section>
 
-      {hack.caution ? (
+      {hack.caution || (hack.donts || []).length > 0 ? (
         <section className="caution">
           <h3>⚠ 気をつけること</h3>
-          <p><Highlight text={hack.caution} query={query} /></p>
+          {hack.caution ? <p><Highlight text={hack.caution} query={query} /></p> : null}
+          {(hack.donts || []).length > 0 ? (
+            <>
+              <h4>やってはいけないこと</h4>
+              <ul className="donts">
+                {hack.donts.map((item, i) => (
+                  <li key={i}><Highlight text={item} query={query} /></li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </section>
       ) : null}
 

@@ -58,6 +58,33 @@ test('からだ・不調の項目には気をつけることが必ずある（�
   }
 });
 
+test('けがのおそれがある工夫（risk）は、確かめること・やってはいけないこと・気をつけることが必ずある', () => {
+  const risky = HACKS.filter((h) => h.risk);
+  assert.ok(risky.length > 0);
+  for (const hack of risky) {
+    assert.ok(Array.isArray(hack.prep) && hack.prep.length > 0, `${hack.id}: prep`);
+    assert.ok(Array.isArray(hack.donts) && hack.donts.length > 0, `${hack.id}: donts`);
+    assert.ok(hack.caution, `${hack.id}: caution`);
+  }
+});
+
+test('やってはいけないことは「危険です」で終わらせず、何が起きるかまで書く', () => {
+  for (const hack of HACKS) {
+    for (const line of hack.donts || []) {
+      assert.ok(line.length >= 12, `${hack.id}: 短すぎる「${line}」`);
+      assert.doesNotMatch(line, /^危険/u, `${hack.id}: ${line}`);
+    }
+  }
+});
+
+test('力・熱を使う工夫には、やめて切り替える先がある（開くまで続ける形にしない）', () => {
+  for (const hack of HACKS) {
+    if (!hack.risk) continue;
+    const text = [...(hack.steps || []), ...(hack.donts || []), hack.caution].filter(Boolean).join('\n');
+    assert.match(text, /やめ|切り替え|休/u, `${hack.id}: 途中でやめる案内が無い`);
+  }
+});
+
 test('関連（related）は実在する id を指す', () => {
   for (const hack of HACKS) {
     for (const id of hack.related || []) {

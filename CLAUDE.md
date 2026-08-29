@@ -14,7 +14,7 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 | `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向けアセスメント支援。腰痛／肩こり・頸部痛／膝痛。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
 | `henkaku-note/` | `/henkaku-note` | 変革ノート（自己改革カレンダー。ゴーストモード7ステップの習慣トラッカー。Vite + React + TypeScript・PWA・端末内保存のみ）。詳細は `henkaku-note/README.md` |
 | `ouro/` | `/ouro` | Ouro（自分専用のAI会社。AI社員に仕事を依頼し、成果が知識資産として積み上がる Knowledge OS。Vite + React JSX・端末内保存・BYOK）。詳細は `ouro/README.md` と `ouro/docs/ARCHITECTURE.md` |
-| `lifehack-search/` | `/lifehack-search` | ライフハック検索（困った時の言葉から暮らし・仕事の工夫を引く小さな辞典。77件×12カテゴリ。Vite + React JSX・端末内保存のみ）。詳細は `lifehack-search/README.md` |
+| `lifehack-search/` | `/lifehack-search` | ライフハック検索（困った時の言葉から暮らし・仕事の工夫を引く小さな辞典。78件×12カテゴリ。Vite + React JSX・端末内保存のみ）。詳細は `lifehack-search/README.md` |
 
 腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
 医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、
@@ -636,6 +636,15 @@ undefined になり、値段の位置が永久に出ない（実際に踏んだ�
 目次は `src/data/toc.js` が各データから自動生成する（書き写さない）。
 10. `src/lib/storage.js` はネットワークに触れない。「今日の1つ」は**日付から導く**（乱数を使わない。
 毎回変わると見比べも共有もできない）。日付は端末の時刻で見る（`new Date('YYYY-MM-DD')` を使わない）。
+11. **けがのおそれがある工夫（`risk: true`）は、やり方だけ書かない**（2026-08-29 追加。瓶の蓋で必要になった）。
+`prep`（始める前に確かめること）・`donts`（やってはいけないこと）・`caution` の3つを必ず持つ。
+**「危険です」で終わらせず、何が起きるかまで書く**（割れて手を切る・急な温度差で割れる・空回りして
+手をぶつける）。**やめて切り替える先を必ず書く**——けがは「あと一回」で起きるので、「開くまで続ける」
+形の工夫を置かない。`data.test.mjs` が prep/donts/caution の有無・donts の長さ・切り替え先の
+言葉（やめ／切り替え／休）を機械チェックする。`prep`／`donts` は検索の対象にも入れる
+（`search.js` の `FIELD_WEIGHTS`＝steps と同じ重み。「やけど」「破片」から引けるようにするため）。
+危ない工夫を並べる時は**降りるための項目を1つ置く**（`home-jar-stop`。`dailyPick:false` で
+「今日の1つ」には出さない＝試す工夫ではなく前提のため。`body-unusual-pain` と同じ形）。
 テストは `lifehack-search/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）

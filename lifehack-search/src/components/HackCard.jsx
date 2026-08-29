@@ -1,6 +1,6 @@
 import React from 'react';
 import Highlight from './Highlight.jsx';
-import { CATEGORY_MAP, EFFORT_LABELS } from '../data/schema.js';
+import { CATEGORY_MAP, EFFORT_LABELS, RISK_LABEL } from '../data/schema.js';
 
 /** 一覧に出す1件。押すと詳しく見る画面へ。 */
 export default function HackCard({ hack, query = '', onOpen, favorite, onToggleFavorite, tried, usedSynonym }) {
@@ -15,6 +15,7 @@ export default function HackCard({ hack, query = '', onOpen, favorite, onToggleF
           </span>
           <span className="chip ghost">{effort.icon} {effort.label}</span>
           {hack.time ? <span className="chip ghost">⏳ {hack.time}</span> : null}
+          {hack.risk ? <span className="chip risk">{RISK_LABEL.icon} {RISK_LABEL.label}</span> : null}
         </div>
         <h3>
           <Highlight text={hack.title} query={query} />
