@@ -57,9 +57,55 @@ export const SCENES = [
 
 export const SCENE_MAP = Object.fromEntries(SCENES.map((s) => [s.id, s]));
 
+/**
+ * 自分を守るために使い返してよい型（`counters` に書けるのはこの中だけ）。
+ *
+ * 線の引き方：**こちらが呑まれないための型だけ**を入れる。
+ * 相手の判断をこちらの都合のいい方へ動かす型（借りを作る・レッテルを貼る・
+ * 罪悪感で縛る等）は入れない。それは守りではなく、こちらが仕掛ける側に回ること。
+ */
+export const SELF_DEFENSE_TACTIC_IDS = [
+  'silence_pressure',
+  'slow_tempo',
+  'stare',
+  'two_sided',
+  'framing',
+  'anchoring',
+  'presupposition',
+  'deadline',
+  'false_choice',
+  'backtracking',
+];
+
+/**
+ * **使い返してはいけない型。**
+ * やり返すと、相手のふるまいをこちらが再現することになる
+ * （4つ目の芯「無自覚な再現」がまさにこれ）。効くか効かないかの話ではなく、
+ * 自分が同じものになるかどうかの話なので、ここは動かさない。
+ */
+export const NEVER_TURN_BACK_IDS = [
+  'gaslight',
+  'person_attack',
+  'blame_shift',
+  'isolate',
+  'guilt',
+  'silence',
+  'intermittent',
+  'fear_relief',
+  'safe_base',
+  'secret',
+  'loaded_choice',
+  'pity_question',
+];
+
 export const PERSON_TYPES = [
   {
-    id: 'unstable_words',
+        counters: [
+      { tacticId: 'backtracking', how: '言われた条件を、その場で同じ言葉にして返す。相手の口から二度言わせると、あとで話が変わりにくい。' },
+      { tacticId: 'deadline', how: 'こちらから「いつまでに文字で」と期限を切る。口約束のまま置かない。' },
+      { tacticId: 'anchoring', how: '金額や範囲を先に自分から出して、あとから動かす余地を減らす。' },
+    ],
+id: 'unstable_words',
     name: '言うことが変わる',
     reading: 'いうことがかわる',
     scenes: ['work', 'home', 'street', 'online'],
@@ -81,7 +127,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['gaslight', 'consistency', 'lowball'],
   },
   {
-    id: 'two_faced',
+        counters: [
+      { tacticId: 'stare', how: '態度が変わった瞬間に、目を逸らさない。気づいていることが伝わるだけでよく、言葉にしなくていい。' },
+      { tacticId: 'backtracking', how: '陰で言われたことを、本人の前で同じ言葉のまま確かめる。' },
+      { tacticId: 'slow_tempo', how: '相手の勢いに合わせて早口にならない。速さを合わせた側が呑まれる。' },
+    ],
+id: 'two_faced',
     name: '相手によって態度を変える',
     reading: 'あいてによってたいどをかえる',
     scenes: ['work', 'home', 'street', 'online'],
@@ -105,7 +156,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['windsor', 'triangulate', 'isolate'],
   },
   {
-    id: 'mood_rules',
+        counters: [
+      { tacticId: 'slow_tempo', how: '機嫌に合わせて自分の動く速さを変えない。合わせた時点で、機嫌が道具として効いてしまう。' },
+      { tacticId: 'silence_pressure', how: '察して沈黙を埋めない。黙って待つ。' },
+      { tacticId: 'presupposition', how: '「この話はここまで」と決まったこととして置いて離れる。' },
+    ],
+id: 'mood_rules',
     name: '機嫌で場を動かす',
     reading: 'きげんでばをうごかす',
     scenes: ['work', 'home', 'street'],
@@ -126,7 +182,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['silence', 'blame_shift', 'intermittent'],
   },
   {
-    id: 'crosses_line',
+        counters: [
+      { tacticId: 'presupposition', how: '断りを交渉ごとにしない。「しません」を、決まったこととして置く。' },
+      { tacticId: 'silence_pressure', how: '押し返された時にすぐ答えない。同じ言葉を、間を置いて繰り返す。' },
+      { tacticId: 'deadline', how: '「今日は決めません」と自分の側から区切る。' },
+    ],
+id: 'crosses_line',
     name: '「やめて」が効かない',
     reading: 'やめてがきかない',
     scenes: ['work', 'home', 'street', 'kids', 'online'],
@@ -147,7 +208,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['foot_in_door', 'just_joking', 'presupposition'],
   },
   {
-    id: 'pries',
+        counters: [
+      { tacticId: 'framing', how: '答える範囲を自分で決めて、その枠の中だけで答える。嘘をつく必要はない。' },
+      { tacticId: 'silence_pressure', how: 'すぐ答えない。間があくと、相手のほうが話題を変えることが多い。' },
+      { tacticId: 'slow_tempo', how: '質問の速さに巻き込まれない。一つずつ、ゆっくり返す。' },
+    ],
+id: 'pries',
     name: '踏み込んで聞いてくる',
     reading: 'ふみこんできいてくる',
     scenes: ['work', 'home', 'street', 'online'],
@@ -168,7 +234,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['secret', 'pratfall', 'favor'],
   },
   {
-    id: 'controls',
+        counters: [
+      { tacticId: 'deadline', how: '「相談してから決めます」と、自分の側に時間を確保する。' },
+      { tacticId: 'anchoring', how: '会う頻度やお金の範囲を、こちらから先に線として出す。' },
+      { tacticId: 'two_sided', how: '外の人と会う話は、都合の悪い点も自分から添えて先に出す。反対の材料を先に使い切る。' },
+    ],
+id: 'controls',
     name: '決めさせない・囲い込む',
     reading: 'きめさせないかこいこむ',
     scenes: ['home', 'work'],
@@ -188,7 +259,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['isolate', 'safe_base', 'secret'],
   },
   {
-    id: 'never_wrong',
+        counters: [
+      { tacticId: 'backtracking', how: '決まったことを、その場で言葉にして返して残す。あとで「そうは言っていない」を成り立たなくする。' },
+      { tacticId: 'two_sided', how: 'こちらの案の弱いところを先に自分で言い、崩す材料を渡さない。' },
+      { tacticId: 'anchoring', how: '謝罪ではなく「次はどうするか」の基準を先に置く。' },
+    ],
+id: 'never_wrong',
     name: '非を認めない',
     reading: 'ひをみとめない',
     scenes: ['work', 'home', 'street', 'kids'],
@@ -210,7 +286,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['blame_shift', 'person_attack', 'peak_end'],
   },
   {
-    id: 'victim',
+        counters: [
+      { tacticId: 'false_choice', how: '気持ちの話に移る前に、選べる二つを出して、起きたことの話に戻す。' },
+      { tacticId: 'slow_tempo', how: '泣かれても責められても、話す速さを変えない。' },
+      { tacticId: 'presupposition', how: '「この件はこう進めます」と置く。責める話にしないほうが、話が終わる。' },
+    ],
+id: 'victim',
     name: 'すぐ被害者の側に回る',
     reading: 'すぐひがいしゃのがわにまわる',
     scenes: ['work', 'home', 'kids'],
@@ -230,7 +311,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['blame_shift', 'guilt', 'pity_question'],
   },
   {
-    id: 'takes_only',
+        counters: [
+      { tacticId: 'anchoring', how: '引き受ける範囲を、頼まれる前に自分から数字で出しておく。' },
+      { tacticId: 'deadline', how: '「今週ぶんだけ」と、引き受ける時に終わりを一緒に言う。' },
+      { tacticId: 'false_choice', how: '全部か無しかにしない。こちらが出せる二つを示して、その中から選ばせる。' },
+    ],
+id: 'takes_only',
     name: 'もらって当然・人任せ',
     reading: 'もらってとうぜんひとまかせ',
     scenes: ['work', 'home', 'kids'],
@@ -251,7 +337,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['reciprocity', 'needed', 'labeling'],
   },
   {
-    id: 'looks_away',
+        counters: [
+      { tacticId: 'presupposition', how: '注意役を引き受けず、「そちらにお伝えします」と決まったこととして動く。' },
+      { tacticId: 'deadline', how: 'いつまでに止まらなければ誰に伝えるかを、先に自分の中で決めておく。' },
+      { tacticId: 'anchoring', how: '何が困っているかを、感想ではなく具体（回数・時間・場所）で先に出す。' },
+    ],
+id: 'looks_away',
     name: '見て見ぬふりをする',
     reading: 'みてみぬふりをする',
     scenes: ['kids', 'work', 'street'],
@@ -273,7 +364,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['blame_shift', 'just_joking', 'guilt'],
   },
   {
-    id: 'favoritism',
+        counters: [
+      { tacticId: 'backtracking', how: '口頭で決まったことを言葉にして返し、記録の残る形に移す。' },
+      { tacticId: 'framing', how: '「気に入られているか」ではなく「決まりごとはどうなっているか」の枠で話す。' },
+      { tacticId: 'two_sided', how: '自分の案の弱点を先に言って、外す口実を減らす。' },
+    ],
+id: 'favoritism',
     name: 'えこひいきする・派閥をつくる',
     reading: 'えこひいきするはばつをつくる',
     scenes: ['work', 'kids', 'street'],
@@ -293,7 +389,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['isolate', 'favor', 'triangulate'],
   },
   {
-    id: 'micromanages',
+        counters: [
+      { tacticId: 'anchoring', how: '決めてよい範囲を、始める前に数字と線で出す。' },
+      { tacticId: 'deadline', how: '口を出せる締め切りを先に決める（この日以降は変えません、と置く）。' },
+      { tacticId: 'backtracking', how: '途中の変更指示をそのまま言葉にして返し、いつ誰が言ったかを残す。' },
+    ],
+id: 'micromanages',
     name: '任せた後から口を出す',
     reading: 'まかせたあとからくちをだす',
     scenes: ['work', 'home'],
@@ -313,7 +414,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['presupposition', 'needed', 'consistency'],
   },
   {
-    id: 'unaware',
+        counters: [
+      { tacticId: 'presupposition', how: '気持ちの話をせず「これはやめてください」を、決まったこととして置く。' },
+      { tacticId: 'silence_pressure', how: '「そんなつもりは」と言われても、すぐ引き取らない。' },
+      { tacticId: 'backtracking', how: '言われた言い訳をそのまま返す。こちらが折れて終わる形にしない。' },
+    ],
+id: 'unaware',
     name: '悪気がないので止まらない',
     reading: 'わるぎがないのでとまらない',
     scenes: ['work', 'street', 'kids', 'home'],
@@ -333,7 +439,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['just_joking', 'blame_shift', 'labeling'],
   },
   {
-    id: 'one_right_way',
+        counters: [
+      { tacticId: 'framing', how: '正しさの話に乗らず「うちはこうしています」の枠に置き換える。' },
+      { tacticId: 'silence_pressure', how: '勧められても、すぐ賛成も反対もしない。' },
+      { tacticId: 'slow_tempo', how: '勢いに合わせない。合わせるほど、断る所がなくなる。' },
+    ],
+id: 'one_right_way',
     name: '自分のやり方だけが正しいとする',
     reading: 'じぶんのやりかただけがただしいとする',
     scenes: ['home', 'work', 'street', 'kids'],
@@ -353,7 +464,12 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['social_proof', 'labeling', 'consistency'],
   },
   {
-    id: 'drains',
+        counters: [
+      { tacticId: 'deadline', how: '会う前に終わりの時刻を決めて、先に伝えておく。' },
+      { tacticId: 'false_choice', how: '話題を二つ出して、悪口以外のほうへ振り替える。' },
+      { tacticId: 'slow_tempo', how: '巻き込まれて同じ速さで話さない。' },
+    ],
+id: 'drains',
     name: '一緒にいると削られる',
     reading: 'いっしょにいるとけずられる',
     scenes: ['work', 'home', 'street', 'online'],

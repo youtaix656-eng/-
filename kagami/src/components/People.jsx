@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors } from '../data/people.js';
+import {
+  PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors, NEVER_TURN_BACK_IDS,
+} from '../data/people.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
 import { displayName, LABEL_MAX } from '../lib/cases.js';
 import { repliesOf } from '../data/replies.js';
@@ -179,7 +181,7 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
               <strong>{cores.map((c) => CORE_MAP[c].label).join('・')}</strong>
               <br />
               <span className="tiny">
-                この3つは、性別も年代も関係なく共通するところです。いくつ当たったかは数えません。
+                これは性別も年代も関係なく共通するところです。いくつ当たったかは数えません。
               </span>
             </div>
           )}
@@ -220,6 +222,27 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
                 <>
                   <h3>なぜ消耗するのか</h3>
                   <p>{m.type.why}</p>
+
+                  <h3>黒い心理学で返すなら</h3>
+                  <p className="tiny">
+                    こちらが呑まれないための型だけを挙げています。
+                    <strong>相手の判断を動かす型（罪悪感で縛る・記憶を疑わせる・孤立させる等）は入れていません</strong>
+                    ——やり返すと、相手のふるまいをこちらが繰り返すことになるからです（芯の「無自覚な再現」）。
+                  </p>
+                  <ul>
+                    {m.type.counters.map((c) => (
+                      <li key={c.tacticId}>
+                        <button
+                          className="chip"
+                          style={{ marginRight: 6 }}
+                          onClick={() => onGoTactic(c.tacticId)}
+                        >
+                          {TACTIC_MAP[c.tacticId]?.name || c.tacticId}
+                        </button>
+                        {c.how}
+                      </li>
+                    ))}
+                  </ul>
 
                   <h3>使える返し方</h3>
                   <ul>
@@ -336,10 +359,18 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
         </ul>
       )}
 
-      <h2>3つの芯</h2>
+      <div className="note warn">
+        <strong>使い返してはいけない型があります。</strong>
+        記憶を疑わせる・人格を否定する・罪悪感で縛る・孤立させる・黙って罰する・
+        急に優しくなる、といった型（全{NEVER_TURN_BACK_IDS.length}件）は、
+        効くかどうかではなく<strong>自分が同じものになるかどうか</strong>の問題なので、
+        使い返しには入れていません。
+      </div>
+
+      <h2>共通する芯</h2>
       <Rule mark={GLYPHS.star} />
       <p className="tiny">
-        性別・年代を問わず共通するのは、この3つでした。どれか1つでも当てはまらない人なら、
+        性別・年代を問わず共通するのは、この{CORES.length}つでした。どれか1つでも当てはまらない人なら、
         話し合いが成り立つことが多くあります。
       </p>
       {CORES.map((c) => (

@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors } from '../src/data/people.js';
+import {
+  PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors,
+  SELF_DEFENSE_TACTIC_IDS, NEVER_TURN_BACK_IDS,
+} from '../src/data/people.js';
 import { analyzePerson, coresOf, MIN_PER_TYPE, MIN_TOTAL } from '../src/lib/analysis.js';
 import { REPLY_MAP } from '../src/data/replies.js';
 import { TACTIC_MAP } from '../src/data/tactics.js';
@@ -168,5 +171,50 @@ test('元にした文章のふるまいが、どこかの型に入っている�
   ];
   for (const [name, re] of must) {
     assert.match(all, re, `「${name}」がどの型にも入っていません`);
+  }
+});
+
+test('使い返し（counters）は、すべての型が持つ', () => {
+  for (const t of PERSON_TYPES) {
+    assert.ok(t.counters && t.counters.length > 0, `${t.name}: 黒い心理学での対応策がありません`);
+    for (const c of t.counters) {
+      assert.ok(c.tacticId && c.how, `${t.name}: counters に型と使い方の両方が要ります`);
+      assert.ok(TACTIC_MAP[c.tacticId], `${t.name}: 存在しない型 ${c.tacticId}`);
+    }
+  }
+});
+
+test('使い返してよいのは「呑まれないための型」だけ（許可した一覧の中から）', () => {
+  for (const t of PERSON_TYPES) {
+    for (const c of t.counters) {
+      assert.ok(
+        SELF_DEFENSE_TACTIC_IDS.includes(c.tacticId),
+        `${t.name}: 「${TACTIC_MAP[c.tacticId].name}」は使い返しの一覧にありません`,
+      );
+    }
+  }
+});
+
+test('相手の判断を動かす型を使い返しに入れない（やり返すと自分が同じものになる）', () => {
+  const banned = new Set(NEVER_TURN_BACK_IDS);
+  for (const id of SELF_DEFENSE_TACTIC_IDS) {
+    assert.ok(!banned.has(id), `${id}: 許可と禁止の両方に入っています`);
+    assert.ok(TACTIC_MAP[id], `${id}: 存在しない型を許可しています`);
+  }
+  for (const id of NEVER_TURN_BACK_IDS) assert.ok(TACTIC_MAP[id], `${id}: 存在しない型を禁じています`);
+  for (const t of PERSON_TYPES) {
+    for (const c of t.counters) {
+      assert.ok(!banned.has(c.tacticId), `${t.name}: 使い返してはいけない型 ${c.tacticId} が入っています`);
+    }
+  }
+});
+
+test('使い返しの説明も、相手の同意が要らないことにする', () => {
+  const needsOther = /分からせ|納得させ|反省させ|謝らせ|改めさせ|変えさせる|やめさせる|言い負か|論破/;
+  for (const t of PERSON_TYPES) {
+    for (const c of t.counters) {
+      const m = c.how.match(needsOther);
+      assert.ok(!m, `${t.name}: 「${m && m[0]}」は相手の同意が要ります`);
+    }
   }
 });
