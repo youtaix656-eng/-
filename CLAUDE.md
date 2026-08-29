@@ -14,7 +14,7 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 | `youtsu-navi/` | `/youtsu-navi` | 腰痛ナビ（有資格者向けアセスメント支援。腰痛／肩こり・頸部痛／膝痛。Vite + React JSX・端末内保存のみ）。詳細は `youtsu-navi/README.md` |
 | `henkaku-note/` | `/henkaku-note` | 変革ノート（自己改革カレンダー。ゴーストモード7ステップの習慣トラッカー。Vite + React + TypeScript・PWA・端末内保存のみ）。詳細は `henkaku-note/README.md` |
 | `ouro/` | `/ouro` | Ouro（自分専用のAI会社。AI社員に仕事を依頼し、成果が知識資産として積み上がる Knowledge OS。Vite + React JSX・端末内保存・BYOK）。詳細は `ouro/README.md` と `ouro/docs/ARCHITECTURE.md` |
-| `lifehack-search/` | `/lifehack-search` | ライフハック検索（困った時の言葉から暮らし・仕事の工夫を引く小さな辞典。72件×12カテゴリ。Vite + React JSX・端末内保存のみ）。詳細は `lifehack-search/README.md` |
+| `lifehack-search/` | `/lifehack-search` | ライフハック検索（困った時の言葉から暮らし・仕事の工夫を引く小さな辞典。77件×12カテゴリ。Vite + React JSX・端末内保存のみ）。詳細は `lifehack-search/README.md` |
 
 腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
 医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、

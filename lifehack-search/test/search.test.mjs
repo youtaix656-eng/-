@@ -45,6 +45,7 @@ test('困っている時の言葉（言い換え）から引ける — これが
     ['イライラ', 'mind'],
     ['捨てられない', 'tidy'],
     ['むだづかい', 'money'],
+    ['あかない', 'home'],
   ];
   for (const [word, category] of cases) {
     const rows = searchHacks(HACKS, word);
@@ -118,4 +119,14 @@ test('色付けは元の文章をそのまま復元できる', () => {
 test('色付けは言い換えの語にも付く（当たった理由が見える）', () => {
   const parts = highlightParts('眠れない時は一度ベッドから出る', 'ねむれない');
   assert.ok(parts.some((p) => p.hit && p.text.includes('眠れない')));
+});
+
+test('瓶の蓋は、その場で出てくる言い方どれでも引ける（ふた・キャップ・あかない・ジャム）', () => {
+  const ids = new Set(searchHacks(HACKS, '瓶の蓋').map((r) => r.hack.id));
+  assert.ok(ids.size >= 5);
+  for (const word of ['あかない', 'ふた', 'キャップ', 'ジャム', '固い', '握力']) {
+    const rows = searchHacks(HACKS, word);
+    assert.ok(rows.length > 0, `「${word}」で0件`);
+    assert.ok(rows.some((r) => ids.has(r.hack.id)), `「${word}」で瓶の蓋の項目が出ない`);
+  }
 });
