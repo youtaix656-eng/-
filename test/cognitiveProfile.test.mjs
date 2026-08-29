@@ -12,6 +12,10 @@ test('cognitiveProfile: PROFILEに見出し・要約・強み・弱みがある'
   assert.ok(PROFILE.weaknesses.length > 0);
 });
 
+test('cognitiveProfile: PROFILE.insight（タイプ間の関連性の補足）がある', () => {
+  assert.ok(PROFILE.insight && PROFILE.insight.length > 0);
+});
+
 test('cognitiveProfile: 各推奨事項が必須フィールドを備える', () => {
   RECOMMENDATIONS.forEach((r) => {
     assert.ok(r.id, 'idが空');

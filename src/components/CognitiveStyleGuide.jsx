@@ -16,6 +16,7 @@ export default function CognitiveStyleGuide({ onNavigate }) {
         <div className="section-label" style={{ marginTop: 0 }}>総合プロファイル</div>
         <p style={{ fontWeight: 700, fontSize: '1.05em' }}>{PROFILE.headline}</p>
         <p className="inline-note" style={{ marginTop: 0 }}>{PROFILE.summary}</p>
+        {PROFILE.insight && <p className="hint">{PROFILE.insight}</p>}
 
         <div className="section-label">得意なタイプ</div>
         {PROFILE.strengths.map((s) => (
