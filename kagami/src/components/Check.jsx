@@ -167,8 +167,8 @@ export default function Check({ mode = 'received', onChangeMode, onSave, setting
           <p className="tiny" style={{ margin: 0 }}>
             なお、<strong>文面からは見つからない型が{unreadable.length}件</strong>あります（
             {unreadable.map((t) => t.name).join('・')}）。
-            間・目線・動く速さで効くもので、言葉として残らないので調べようがありません。
-            「型」の一覧の<strong>上下をつくる（ふるまい）</strong>に見分け方を書いています。
+            間・目線・動く速さ・会う回数で効くもので、言葉として残らないので調べようがありません。
+            「型」の一覧に見分け方を書いています。
           </p>
         </div>
       )}

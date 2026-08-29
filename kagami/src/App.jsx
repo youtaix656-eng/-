@@ -6,6 +6,7 @@ import Check from './components/Check.jsx';
 import Tactics from './components/Tactics.jsx';
 import Replies from './components/Replies.jsx';
 import Habits from './components/Habits.jsx';
+import Myths from './components/Myths.jsx';
 import Sources from './components/Sources.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
 import Records from './components/Records.jsx';
@@ -66,6 +67,7 @@ export default function App() {
       )}
       {view === 'sources' && <Sources focus={focus} onFocusDone={clearFocus} />}
       {view === 'toc' && <TableOfContents onGo={goFromToc} />}
+      {view === 'myths' && <Myths focus={focus} onFocusDone={clearFocus} />}
       {view === 'records' && (
         <Records
           records={store.records}

@@ -5,6 +5,8 @@ import { TACTICS, CATEGORIES, CATEGORY_MAP, tacticsInCategory, textTactics, beha
 import { SOURCE_MAP, SOURCES } from '../src/data/sources.js';
 import { REPLY_MAP, REPLIES } from '../src/data/replies.js';
 import { detectTactics } from '../src/lib/detect.js';
+import { MYTHS } from '../src/data/myths.js';
+import { STATES } from '../src/data/states.js';
 
 test('型の id・名前は重複しない', () => {
   const ids = TACTICS.map((t) => t.id);
@@ -131,7 +133,11 @@ test('効き目の大きさを断定しない（「◯％の人が従う」の�
 });
 
 test('出典と返し方に、使われていないものが残っていない', () => {
-  const usedSources = new Set(TACTICS.flatMap((t) => t.sourceIds));
+  const usedSources = new Set([
+    ...TACTICS.flatMap((t) => t.sourceIds),
+    ...MYTHS.flatMap((m) => m.sourceIds || []),
+    ...STATES.flatMap((st) => st.sourceIds || []),
+  ]);
   const usedReplies = new Set(TACTICS.flatMap((t) => t.replyIds));
   for (const s of SOURCES) {
     // 相談窓口は返し方（window）からも参照されるので、型からの参照が無くてもよい

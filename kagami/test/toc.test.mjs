@@ -5,6 +5,8 @@ import { readingInfo, OTHER_GROUP, GROUP_ORDER } from '../src/lib/yomi.js';
 import { TACTICS, CATEGORIES } from '../src/data/tactics.js';
 import { REPLIES } from '../src/data/replies.js';
 import { HABITS } from '../src/data/habits.js';
+import { MYTHS } from '../src/data/myths.js';
+import { STATES } from '../src/data/states.js';
 import { SOURCES } from '../src/data/sources.js';
 
 test('目次のタイトルは重複しない', () => {
@@ -38,7 +40,7 @@ test('reading はひらがなだけ（カタカナ・漢字・英数字を混ぜ
 });
 
 test('カテゴリは定義済みで、飛び先の画面と anchor を持つ', () => {
-  const views = new Set(['tactics', 'replies', 'habits', 'sources']);
+  const views = new Set(['tactics', 'replies', 'habits', 'myths', 'sources']);
   for (const e of TOC_ENTRIES) {
     const cat = TOC_CATEGORY_MAP[e.category];
     assert.ok(cat, `${e.title}: 未知のカテゴリ ${e.category}`);
@@ -47,7 +49,7 @@ test('カテゴリは定義済みで、飛び先の画面と anchor を持つ', 
   }
 });
 
-test('目次はすべてのデータ（型・別名・まとまり・返し方・出典）を漏れなく載せる', () => {
+test('目次はすべてのデータ（型・別名・まとまり・返し方・癖・状態・見抜き方・出典）を漏れなく載せる', () => {
   const count = (id) => TOC_ENTRIES.filter((e) => e.category === id).length;
   const aliases = TACTICS.reduce((n, t) => n + (t.aka || []).length, 0);
   assert.equal(count('tactic'), TACTICS.length);
@@ -55,10 +57,13 @@ test('目次はすべてのデータ（型・別名・まとまり・返し方�
   assert.equal(count('group'), CATEGORIES.length);
   assert.equal(count('reply'), REPLIES.length);
   assert.equal(count('habit'), HABITS.length);
+  assert.equal(count('state'), STATES.length);
+  assert.equal(count('myth'), MYTHS.length);
   assert.equal(count('source'), SOURCES.length);
   assert.equal(
     TOC_ENTRIES.length,
-    TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + HABITS.length + SOURCES.length,
+    TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + HABITS.length +
+      STATES.length + MYTHS.length + SOURCES.length,
   );
 });
 

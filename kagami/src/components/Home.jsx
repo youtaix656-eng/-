@@ -82,9 +82,17 @@ export default function Home({ onGo, records }) {
         </li>
         <li>
           <button className="item" onClick={() => onGo('habits')}>
-            <span className="t">{GLYPHS.circlePlus} つけこまれやすい形</span>
+            <span className="t">{GLYPHS.circlePlus} 自分の側で起きること</span>
             <span className="s">
-              相手の型ではなく、自分の側の癖。落ち度ではなく「使いやすい形」の話。
+              つけこまれやすい形と、長く続いた時に起きること。落ち度の話ではない。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button className="item" onClick={() => onGo('myths')}>
+            <span className="t">{GLYPHS.cross} 当てにならない見抜き方</span>
+            <span className="s">
+              「本音が読める」とされているもの。信じると、何もしていない人を疑ってしまう。
             </span>
           </button>
         </li>

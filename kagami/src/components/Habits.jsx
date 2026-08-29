@@ -1,5 +1,7 @@
 import React from 'react';
 import { HABITS } from '../data/habits.js';
+import { STATES, STATES_NOTE } from '../data/states.js';
+import { sourcesOf } from '../data/sources.js';
 import { TACTIC_MAP } from '../data/tactics.js';
 import { repliesOf } from '../data/replies.js';
 import { GLYPHS } from '../data/glyphs.js';
@@ -7,14 +9,23 @@ import { EyeSigil, Rule } from './Ornament.jsx';
 import { useFocusJump } from './useFocusJump.js';
 
 export default function Habits({ focus, onFocusDone, onGoTactic }) {
-  useFocusJump(focus ? `toc-habit-${focus}` : '', onFocusDone);
+  // 癖と状態が同じ画面にあるので、どちらの飛び先かを id から決める
+  const anchor = focus
+    ? STATES.some((st) => st.id === focus)
+      ? `toc-state-${focus}`
+      : `toc-habit-${focus}`
+    : '';
+  useFocusJump(anchor, onFocusDone);
 
   return (
     <>
       <div className="head">
         <EyeSigil size={64} className="sigil" />
-        <h1>つけこまれやすい形</h1>
-        <p>相手の型ではなく、自分の側の癖。{HABITS.length}件。</p>
+        <h1>自分の側で起きること</h1>
+        <p>
+          相手の型ではなく、自分の側のこと。つけこまれやすい形が{HABITS.length}件、
+          長く続いた時に起きることが{STATES.length}件。
+        </p>
       </div>
       <Rule mark={GLYPHS.circlePlus} />
 
@@ -24,6 +35,9 @@ export default function Habits({ focus, onFocusDone, onGoTactic }) {
         直す義務はありませんし、性格を変える話でもありません。
         変えられるのは<strong>その場での一手</strong>だけです。
       </div>
+
+      <h2>つけこまれやすい形</h2>
+      <Rule mark={GLYPHS.circlePlus} />
 
       {HABITS.map((h) => (
         <div className="card" key={h.id} id={`toc-habit-${h.id}`}>
@@ -66,6 +80,34 @@ export default function Habits({ focus, onFocusDone, onGoTactic }) {
           </div>
         </div>
       ))}
+      <h2>長く続いた時に起きること</h2>
+      <Rule mark={GLYPHS.moonWane} />
+
+      <div className="note warn">{STATES_NOTE}</div>
+
+      {STATES.map((st) => (
+        <div className="card" key={st.id} id={`toc-state-${st.id}`}>
+          <h3>
+            {st.title} {st.check && <span className="badge">※要確認</span>}
+          </h3>
+          <p>{st.summary}</p>
+          <p className="muted">{st.detail}</p>
+          <ul className="tiny">
+            {sourcesOf(st.sourceIds).map((s) => (
+              <li key={s.id}>
+                {s.title}（{[s.author, s.year].filter(Boolean).join(', ')}）
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      <div className="note warn">
+        身の危険を感じるとき、その場から離れられないとき、つらさが続くときは、
+        このアプリではなく人に頼ってください。緊急のときは110番。急を要しない警察への相談は #9110、
+        家庭内の支配や暴力は DV相談＋。
+        <span className="tiny">※番号・名称は変わることがあります。公式の案内で確かめてから使ってください。</span>
+      </div>
     </>
   );
 }

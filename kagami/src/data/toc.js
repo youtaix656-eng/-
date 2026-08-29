@@ -12,6 +12,8 @@
 import { TACTICS, CATEGORIES } from './tactics.js';
 import { REPLIES } from './replies.js';
 import { HABITS } from './habits.js';
+import { MYTHS } from './myths.js';
+import { STATES } from './states.js';
 import { SOURCES } from './sources.js';
 import { GLYPHS } from './glyphs.js';
 import { buildKanaIndex } from '../lib/yomi.js';
@@ -23,6 +25,8 @@ export const TOC_CATEGORIES = [
   { id: 'group', label: '型のまとまり', icon: GLYPHS.star, view: 'tactics' },
   { id: 'reply', label: '返し方', icon: GLYPHS.circle, view: 'replies' },
   { id: 'habit', label: 'つけこまれやすい形', icon: GLYPHS.circlePlus, view: 'habits' },
+  { id: 'state', label: '自分の中で起きること', icon: GLYPHS.moonWax, view: 'habits' },
+  { id: 'myth', label: '当てにならない見抜き方', icon: GLYPHS.cross, view: 'myths' },
   { id: 'source', label: '出典', icon: GLYPHS.dagger, view: 'sources' },
 ];
 
@@ -100,6 +104,32 @@ export function buildTocEntries() {
       view: 'habits',
       anchor: `toc-habit-${h.id}`,
       targetId: h.id,
+    });
+  }
+
+  for (const st of STATES) {
+    entries.push({
+      id: `state-${st.id}`,
+      category: 'state',
+      title: st.title,
+      reading: st.reading || '',
+      sub: st.summary,
+      view: 'habits',
+      anchor: `toc-state-${st.id}`,
+      targetId: st.id,
+    });
+  }
+
+  for (const m of MYTHS) {
+    entries.push({
+      id: `myth-${m.id}`,
+      category: 'myth',
+      title: m.title,
+      reading: m.reading || '',
+      sub: m.claim,
+      view: 'myths',
+      anchor: `toc-myth-${m.id}`,
+      targetId: m.id,
     });
   }
 
