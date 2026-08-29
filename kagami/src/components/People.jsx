@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors } from '../data/people.js';
+import {
+  PERSON_TYPES, PERSON_TYPE_MAP, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors,
+} from '../data/people.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
 import { displayName, LABEL_MAX } from '../lib/cases.js';
-import { repliesOf } from '../data/replies.js';
-import { TACTIC_MAP } from '../data/tactics.js';
+import { caseToText, copyText } from '../lib/personExport.js';
 import { GLYPHS } from '../data/glyphs.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { useFocusJump } from './useFocusJump.js';
+import PersonTypeCard from './PersonTypeCard.jsx';
 
 function when(at) {
   const d = new Date(at);
@@ -14,17 +16,28 @@ function when(at) {
   return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+const norm = (s) => String(s || '').toLowerCase();
+
 export default function People({ focus, onFocusDone, onGoTactic, cases = [], onSaveCase, onRemoveCase }) {
   const [checked, setChecked] = useState([]);
   const [open, setOpen] = useState('');
+  const [catalogOpen, setCatalogOpen] = useState('');
+  const [scene, setScene] = useState(() => (SCENES.some((sc) => sc.id === focus) ? focus : ''));
+  const [core, setCore] = useState('');
+  const [query, setQuery] = useState('');
+  const [onlyChecked, setOnlyChecked] = useState(false);
+  const [openGroups, setOpenGroups] = useState([]);
+  // 保存まわり
   const [label, setLabel] = useState('');
   const [note, setNote] = useState('');
   const [editingId, setEditingId] = useState('');
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState('');
-  const [scene, setScene] = useState(() => (SCENES.some((sc) => sc.id === focus) ? focus : ''));
+  const [caseQuery, setCaseQuery] = useState('');
+  const [caseSort, setCaseSort] = useState('updated');
+  const [copied, setCopied] = useState(false);
+
   // 型と芯が同じ画面にあるので、どちらの飛び先かを id から決める
-  // （癖・状態の画面と同じ形。片方だけ直すと必ず取りこぼす）
   const anchor = focus
     ? SCENES.some((sc) => sc.id === focus)
       ? 'toc-scenes'
@@ -34,22 +47,78 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
     : '';
   useFocusJump(anchor, onFocusDone);
 
-  // 場面でしぼる（元の文章の章立てを「どこで起きたか」として残したもの）
-  const behaviors = useMemo(() => {
-    const all = allBehaviors();
-    if (!scene) return all;
-    const ids = new Set(PERSON_TYPES.filter((t) => (t.scenes || []).includes(scene)).map((t) => t.id));
-    return all.filter((b) => ids.has(b.typeId));
-  }, [scene]);
+  const behaviors = useMemo(() => allBehaviors(), []);
+
+  /** 場面・芯でしぼった型 */
+  const shownTypes = useMemo(
+    () =>
+      PERSON_TYPES.filter((t) => {
+        if (scene && !(t.scenes || []).includes(scene)) return false;
+        if (core && !(t.cores || []).includes(core)) return false;
+        return true;
+      }),
+    [scene, core],
+  );
+
+  /** チェック欄に出すふるまい（しぼり込み＋検索＋選んだものだけ） */
+  const shownBehaviors = useMemo(() => {
+    const typeIds = new Set(shownTypes.map((t) => t.id));
+    const q = norm(query).trim();
+    return behaviors.filter((b) => {
+      if (!typeIds.has(b.typeId)) return false;
+      if (onlyChecked && !checked.includes(b.id)) return false;
+      if (!q) return true;
+      return norm(b.text).includes(q) || norm(PERSON_TYPE_MAP[b.typeId]?.name).includes(q);
+    });
+  }, [behaviors, shownTypes, query, onlyChecked, checked]);
+
+  /** 型ごとにまとめる（アコーディオンの中身） */
+  const groups = useMemo(() => {
+    const byType = new Map();
+    for (const b of shownBehaviors) {
+      const list = byType.get(b.typeId) || [];
+      list.push(b);
+      byType.set(b.typeId, list);
+    }
+    return shownTypes
+      .filter((t) => byType.has(t.id))
+      .map((t) => ({ type: t, items: byType.get(t.id) }));
+  }, [shownBehaviors, shownTypes]);
+
+  // 検索中・「選んだものだけ」の時は、たたまずに開いておく（探しに来ているので）
+  const forceOpen = !!query.trim() || onlyChecked;
+
   const result = useMemo(() => analyzePerson(checked, PERSON_TYPES), [checked]);
   const cores = useMemo(() => coresOf(result.matches), [result]);
+  const checkedTexts = useMemo(() => {
+    const map = new Map(behaviors.map((b) => [b.id, b.text]));
+    return checked.map((id) => map.get(id)).filter(Boolean);
+  }, [checked, behaviors]);
+
+  const shownCases = useMemo(() => {
+    const q = norm(caseQuery).trim();
+    const list = cases.filter((c) => {
+      if (!q) return true;
+      const scLabel = c.sceneId && SCENE_MAP[c.sceneId] ? SCENE_MAP[c.sceneId].label : '';
+      return norm(displayName(c)).includes(q) || norm(c.note).includes(q) || norm(scLabel).includes(q);
+    });
+    if (caseSort === 'name') {
+      return [...list].sort((a, b) => displayName(a).localeCompare(displayName(b), 'ja'));
+    }
+    if (caseSort === 'created') return [...list].sort((a, b) => b.createdAt - a.createdAt);
+    return list; // 既定は更新の新しい順（呼び出し元が並べたものをそのまま使う）
+  }, [cases, caseQuery, caseSort]);
 
   function toggle(id) {
     setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
     setSaved(false);
+    setCopied(false);
   }
 
-  /** 保存してある見立てを開いて、続きから直す */
+  function toggleGroup(id) {
+    setOpenGroups((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]));
+  }
+
   function openCase(c) {
     setEditingId(c.id);
     setChecked(c.checkedIds);
@@ -57,6 +126,7 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
     setNote(c.note);
     setScene(c.sceneId || '');
     setSaved(false);
+    setCopied(false);
     window.scrollTo(0, 0);
   }
 
@@ -72,6 +142,28 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
     onSaveCase({ id: editingId || undefined, label, note, sceneId: scene, checkedIds: checked });
     setSaved(true);
   }
+
+  async function copyResult() {
+    const ok = await copyText(
+      caseToText({
+        label,
+        note,
+        sceneLabel: scene && SCENE_MAP[scene] ? SCENE_MAP[scene].label : '',
+        behaviors: checkedTexts,
+        matches: result.matches,
+      }),
+    );
+    setCopied(ok ? 'done' : 'fail');
+  }
+
+  function clearFilters() {
+    setQuery('');
+    setScene('');
+    setCore('');
+    setOnlyChecked(false);
+  }
+
+  const filtering = !!(query.trim() || scene || core || onlyChecked);
 
   return (
     <>
@@ -95,11 +187,43 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
         分けているのは<strong>ふるまい</strong>だけです。
       </div>
 
+      {/* 選択中の件数を、スクロールしても見える所に置く */}
+      <div className="pick-bar">
+        <span>
+          {GLYPHS.squareFilled} 選択 <strong>{checked.length}</strong> 件
+          {result.status === 'few' && `／あと${MIN_TOTAL - checked.length}件で見立て`}
+          {result.status === 'ok' && `／近い型 ${result.matches.length}件`}
+          {editingId && <span className="badge" style={{ marginLeft: 8 }}>編集中</span>}
+        </span>
+        <span className="row" style={{ gap: 6 }}>
+          {checked.length > 0 && (
+            <button className="ghost" onClick={() => setChecked([])}>
+              全部はずす
+            </button>
+          )}
+          <button className="ghost" onClick={() => document.getElementById('sec-result')?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>
+            見立てへ
+          </button>
+        </span>
+      </div>
+
       <h2>見たものにチェック</h2>
       <Rule mark={GLYPHS.square} />
+      <p className="tiny">
+        思い当たるものではなく、<strong>実際に見たもの</strong>だけを選んでください。
+        {MIN_TOTAL}つ以上で見立てが出ます。選んだだけでは残りません——
+        <strong>下の「この見立てを残す」を押した時だけ</strong>この端末に保存します。
+      </p>
 
-      <p className="tiny" id="toc-scenes" style={{ marginBottom: 4 }}>
-        どこで起きたことか（しぼりたい時だけ。チェックは外れません）
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="ふるまいをさがす（例：機嫌／約束／謝）"
+      />
+
+      <p className="tiny" id="toc-scenes" style={{ margin: '10px 0 4px' }}>
+        どこで起きたことか
       </p>
       <div className="chips">
         <button className={`chip ${scene === '' ? 'on' : ''}`} onClick={() => setScene('')}>
@@ -115,30 +239,68 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
           </button>
         ))}
       </div>
-      <p className="tiny">
-        思い当たるものではなく、<strong>実際に見たもの</strong>だけを選んでください。
-        {MIN_TOTAL}つ以上で見立てが出ます。選んだだけでは残りません——
-        <strong>下の「この見立てを残す」を押した時だけ</strong>この端末に保存します。
-      </p>
 
-      <div className="card">
-        {behaviors.map((b) => (
-          <label className="check" key={b.id}>
-            <input type="checkbox" checked={checked.includes(b.id)} onChange={() => toggle(b.id)} />
-            <span>{b.text}</span>
-          </label>
+      <p className="tiny" style={{ margin: '10px 0 4px' }}>
+        どの芯にあたるか
+      </p>
+      <div className="chips">
+        <button className={`chip ${core === '' ? 'on' : ''}`} onClick={() => setCore('')}>
+          すべて
+        </button>
+        {CORES.map((c) => (
+          <button
+            key={c.id}
+            className={`chip ${core === c.id ? 'on' : ''}`}
+            onClick={() => setCore(core === c.id ? '' : c.id)}
+          >
+            {c.label}
+          </button>
         ))}
       </div>
 
-      {checked.length > 0 && (
-        <div className="row end">
-          <button className="ghost" onClick={() => setChecked([])}>
-            全部はずす
+      <div className="chips">
+        <button className={`chip ${onlyChecked ? 'on' : ''}`} onClick={() => setOnlyChecked((v) => !v)}>
+          選んだものだけ（{checked.length}）
+        </button>
+        {filtering && (
+          <button className="chip" onClick={clearFilters}>
+            {GLYPHS.cross} しぼり込みを外す
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
-      <h2>見立て</h2>
+      <p className="tiny">
+        {behaviors.length}項目のうち <strong>{shownBehaviors.length}件</strong>を表示／
+        {groups.length}の型
+      </p>
+
+      {groups.length === 0 && <p className="muted">見つかりませんでした。しぼり込みを外してみてください。</p>}
+
+      {groups.map((g) => {
+        const isOpen = forceOpen || openGroups.includes(g.type.id);
+        const picked = g.items.filter((b) => checked.includes(b.id)).length;
+        return (
+          <div className="card quiet" key={g.type.id}>
+            <button className="group-head" onClick={() => toggleGroup(g.type.id)} aria-expanded={isOpen}>
+              <span className="t">
+                {isOpen ? GLYPHS.triangleDown : GLYPHS.pointer} {g.type.name}
+              </span>
+              <span className="s">
+                {picked > 0 ? `${picked} / ${g.items.length} 件` : `${g.items.length} 件`}
+              </span>
+            </button>
+            {isOpen &&
+              g.items.map((b) => (
+                <label className="check" key={b.id}>
+                  <input type="checkbox" checked={checked.includes(b.id)} onChange={() => toggle(b.id)} />
+                  <span>{b.text}</span>
+                </label>
+              ))}
+          </div>
+        );
+      })}
+
+      <h2 id="sec-result">見立て</h2>
       <Rule mark={GLYPHS.piece} />
 
       {result.status === 'empty' && (
@@ -175,8 +337,7 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
         <>
           {cores.length > 0 && (
             <div className="note">
-              触れている芯：
-              <strong>{cores.map((c) => CORE_MAP[c].label).join('・')}</strong>
+              触れている芯：<strong>{cores.map((c) => CORE_MAP[c].label).join('・')}</strong>
               <br />
               <span className="tiny">
                 これは性別も年代も関係なく共通するところです。いくつ当たったかは数えません。
@@ -185,79 +346,14 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
           )}
 
           {result.matches.map((m) => (
-            <div className="card" key={m.type.id} id={`toc-person-${m.type.id}`}>
-              <div className="card-head">
-                <div>
-                  <h3 style={{ marginBottom: 2 }}>
-                    {GLYPHS.piece} {m.type.name}
-                  </h3>
-                  <span className="tiny">
-                    {(m.type.cores || []).map((c) => CORE_MAP[c].label).join('・') || '3つの芯には収まらない型'}
-                    {' ／ '}
-                    {(m.type.scenes || []).map((x) => SCENE_MAP[x].label).join('・')}
-                  </span>
-                </div>
-                <button className="ghost" onClick={() => setOpen(open === m.type.id ? '' : m.type.id)}>
-                  {open === m.type.id ? '閉じる' : 'くわしく'}
-                </button>
-              </div>
-
-              <p>{m.type.summary}</p>
-
-              <p className="tiny" style={{ marginBottom: 2 }}>
-                あなたが選んだふるまい
-              </p>
-              <ul className="tiny">
-                {m.behaviors.map((b) => (
-                  <li key={b}>{b}</li>
-                ))}
-              </ul>
-
-              <h3>取れる距離</h3>
-              <p>{m.type.distance}</p>
-
-              {open === m.type.id && (
-                <>
-                  <h3>なぜ消耗するのか</h3>
-                  <p>{m.type.why}</p>
-
-                  <h3>黒い心理学で返すなら</h3>
-                  <p className="tiny">こちらが呑まれないための型を挙げています。</p>
-                  <ul>
-                    {m.type.counters.map((c) => (
-                      <li key={c.tacticId}>
-                        <button
-                          className="chip"
-                          style={{ marginRight: 6 }}
-                          onClick={() => onGoTactic(c.tacticId)}
-                        >
-                          {TACTIC_MAP[c.tacticId]?.name || c.tacticId}
-                        </button>
-                        {c.how}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <h3>使える返し方</h3>
-                  <ul>
-                    {repliesOf(m.type.replyIds).map((r) => (
-                      <li key={r.id}>
-                        {r.icon} <strong>{r.tocTitle}</strong> — {r.summary}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <h3>組み合わせて出てくる型</h3>
-                  <div className="chips">
-                    {m.type.relatedTacticIds.map((id) => (
-                      <button key={id} className="chip" onClick={() => onGoTactic(id)}>
-                        {TACTIC_MAP[id]?.name || id}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            <PersonTypeCard
+              key={m.type.id}
+              type={m.type}
+              matched={m.behaviors}
+              open={open === m.type.id}
+              onToggle={() => setOpen(open === m.type.id ? '' : m.type.id)}
+              onGoTactic={onGoTactic}
+            />
           ))}
         </>
       )}
@@ -298,10 +394,18 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
               新しく作る
             </button>
           )}
+          <button className="ghost" onClick={copyResult} disabled={checked.length === 0}>
+            {copied === 'done' ? 'コピーしました' : copied === 'fail' ? 'コピーできません' : '文章にしてコピー'}
+          </button>
           <button className="primary" onClick={save} disabled={checked.length === 0 || saved}>
             {saved ? '保存しました' : editingId ? '上書きして保存' : 'この見立てを残す'}
           </button>
         </div>
+        {copied === 'fail' && (
+          <p className="tiny">
+            この環境ではコピーが使えません（端末やブラウザの設定によります）。保存のほうは使えます。
+          </p>
+        )}
       </div>
 
       <h2>保存してある見立て（{cases.length}）</h2>
@@ -310,48 +414,87 @@ export default function People({ focus, onFocusDone, onGoTactic, cases = [], onS
       {cases.length === 0 ? (
         <p className="tiny">まだありません。上で選んで「この見立てを残す」を押すと、ここに並びます。</p>
       ) : (
-        <ul className="list">
-          {cases.map((c) => (
-            <li key={c.id}>
-              <button className="item" onClick={() => openCase(c)}>
-                <span className="t">
-                  {GLYPHS.piece} {displayName(c)}
-                  {c.id === editingId && <span className="badge" style={{ marginLeft: 8 }}>編集中</span>}
-                </span>
-                <span className="s">
-                  {c.sceneId && SCENE_MAP[c.sceneId] ? `${SCENE_MAP[c.sceneId].label}・` : ''}
-                  ふるまい{c.checkedIds.length}件・{when(c.updatedAt)}
-                  {c.note ? `／${c.note.slice(0, 24)}` : ''}
-                </span>
+        <>
+          <input
+            type="text"
+            value={caseQuery}
+            onChange={(e) => setCaseQuery(e.target.value)}
+            placeholder="呼び名・メモ・場面でさがす"
+          />
+          <div className="chips">
+            {[
+              ['updated', '直した順'],
+              ['created', '作った順'],
+              ['name', '呼び名順'],
+            ].map(([id, lbl]) => (
+              <button key={id} className={`chip ${caseSort === id ? 'on' : ''}`} onClick={() => setCaseSort(id)}>
+                {lbl}
               </button>
-              <div className="row end" style={{ paddingBottom: 8 }}>
-                {confirmDelete === c.id ? (
-                  <>
-                    <span className="tiny">元に戻せません。</span>
-                    <button className="ghost" onClick={() => setConfirmDelete('')}>
-                      やめる
-                    </button>
-                    <button
-                      className="danger"
-                      onClick={() => {
-                        onRemoveCase(c.id);
-                        if (editingId === c.id) newCase();
-                        setConfirmDelete('');
-                      }}
-                    >
+            ))}
+          </div>
+
+          {shownCases.length === 0 && <p className="muted">見つかりませんでした。</p>}
+
+          <ul className="list">
+            {shownCases.map((c) => (
+              <li key={c.id}>
+                <button className="item" onClick={() => openCase(c)}>
+                  <span className="t">
+                    {GLYPHS.piece} {displayName(c)}
+                    {c.id === editingId && <span className="badge" style={{ marginLeft: 8 }}>編集中</span>}
+                  </span>
+                  <span className="s">
+                    {c.sceneId && SCENE_MAP[c.sceneId] ? `${SCENE_MAP[c.sceneId].label}・` : ''}
+                    ふるまい{c.checkedIds.length}件・{when(c.updatedAt)}
+                    {c.note ? `／${c.note.slice(0, 24)}` : ''}
+                  </span>
+                </button>
+                <div className="row end" style={{ paddingBottom: 8 }}>
+                  {confirmDelete === c.id ? (
+                    <>
+                      <span className="tiny">元に戻せません。</span>
+                      <button className="ghost" onClick={() => setConfirmDelete('')}>
+                        やめる
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() => {
+                          onRemoveCase(c.id);
+                          if (editingId === c.id) newCase();
+                          setConfirmDelete('');
+                        }}
+                      >
+                        消す
+                      </button>
+                    </>
+                  ) : (
+                    <button className="danger ghost" onClick={() => setConfirmDelete(c.id)}>
                       消す
                     </button>
-                  </>
-                ) : (
-                  <button className="danger ghost" onClick={() => setConfirmDelete(c.id)}>
-                    消す
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
+
+      <h2>型の一覧（{shownTypes.length}／{PERSON_TYPES.length}）</h2>
+      <Rule mark={GLYPHS.moonWane} />
+      <p className="tiny">
+        見立てが出ていなくても、ここから全部読めます。上のしぼり込み（場面・芯・さがす）がそのまま効きます。
+      </p>
+
+      {shownTypes.map((t) => (
+        <PersonTypeCard
+          key={t.id}
+          id={`toc-person-${t.id}`}
+          type={t}
+          open={catalogOpen === t.id}
+          onToggle={() => setCatalogOpen(catalogOpen === t.id ? '' : t.id)}
+          onGoTactic={onGoTactic}
+        />
+      ))}
 
       <h2>共通する芯</h2>
       <Rule mark={GLYPHS.star} />

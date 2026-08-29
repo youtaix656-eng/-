@@ -6,6 +6,7 @@ import {
   SELF_DEFENSE_TACTIC_IDS,
 } from '../src/data/people.js';
 import { analyzePerson, coresOf, MIN_PER_TYPE, MIN_TOTAL } from '../src/lib/analysis.js';
+import { caseToText } from '../src/lib/personExport.js';
 import { REPLY_MAP } from '../src/data/replies.js';
 import { TACTIC_MAP } from '../src/data/tactics.js';
 
@@ -128,7 +129,9 @@ test('見立ての計算と型のデータは、保存にもネットワーク�
   for (const f of ['../src/lib/analysis.js', '../src/data/people.js', '../src/components/People.jsx']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/, `${f}: ネットワークに触れています`);
-    assert.doesNotMatch(src, /localStorage|indexedDB|from '\.\.\/lib\/storage\.js'|useStore/, `${f}: 保存しています`);
+    // 保存は呼び出し元から渡してもらう。ここが直接 storage を読み書きしないこと
+    assert.doesNotMatch(src, /\blocalStorage\b|\bindexedDB\b/, `${f}: 端末の保存に直接触れています`);
+    assert.doesNotMatch(src, /^import[^\n]*(storage\.js|useStore)/m, `${f}: 保存の仕組みを読み込んでいます`);
   }
 });
 
@@ -209,4 +212,47 @@ test('使い返しの説明も、相手の同意が要らないことにする',
       assert.ok(!m, `${t.name}: 「${m && m[0]}」は相手の同意が要ります`);
     }
   }
+});
+
+test('見立ての書き出しは、判定を書き足さない', () => {
+  const t = PERSON_TYPES[0];
+  const text = caseToText({
+    label: '職場のAさん',
+    behaviors: [t.behaviors[0], t.behaviors[1]],
+    matches: [{ type: t, behaviors: [t.behaviors[0], t.behaviors[1]] }],
+  });
+  assert.match(text, /職場のAさん/);
+  assert.match(text, new RegExp(t.name));
+  assert.match(text, /取れる距離/);
+  // 「この人は◯◯です」という断定を作らない
+  assert.doesNotMatch(text, /危険度|点満点|\d+\s*点|という人間|そういう人です/);
+  assert.match(text, /人を採点したものではありません/, '採点ではないと必ず添える');
+});
+
+test('書き出しは、選んだものが無くても落ちない', () => {
+  const text = caseToText({});
+  assert.match(text, /（なし）/);
+  assert.match(text, /問題がないという意味ではありません/);
+});
+
+test('書き出しはネットワークにも保存にも触れない', () => {
+  const src = readFileSync(new URL('../src/lib/personExport.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|localStorage|indexedDB/);
+});
+
+test('型の一覧は、見立てが出ていなくても全部の型を読める（目次の飛び先が常にある）', () => {
+  const src = readFileSync(new URL('../src/components/People.jsx', import.meta.url), 'utf8');
+  // 飛び先 id を、見立ての中ではなく型の一覧の側に置いていること
+  assert.match(src, /id=\{`toc-person-\$\{t\.id\}`\}/, '型の一覧に飛び先の id がありません');
+  assert.ok(
+    src.indexOf('shownTypes.map') > 0,
+    '型の一覧（しぼり込みが効く全件）を出していません',
+  );
+});
+
+test('しぼり込み（場面・芯・さがす）は、型の一覧にも同じものが効く', () => {
+  const src = readFileSync(new URL('../src/components/People.jsx', import.meta.url), 'utf8');
+  assert.match(src, /const shownTypes = useMemo/, '場面と芯でしぼった型の一覧がありません');
+  assert.match(src, /scenes \|\| \[\]\)\.includes\(scene\)/);
+  assert.match(src, /cores \|\| \[\]\)\.includes\(core\)/);
 });

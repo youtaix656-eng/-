@@ -405,3 +405,38 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
   body { font-size: 16px; }
   .head h1 { font-size: 1.4rem; letter-spacing: 0.16em; }
 }
+
+/* 選択中の件数を、スクロールしても見える所に置く（人間分析） */
+.pick-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--plate);
+  border-bottom: 1px solid var(--line-strong);
+  padding: 10px 0 9px;
+  margin-top: 16px;
+  font-size: .86rem;
+}
+.pick-bar button { padding: 6px 12px; font-size: .82rem; }
+
+/* たたんだ見出し（ふるまいの型ごと） */
+.group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 6px 2px;
+  text-align: left;
+}
+.group-head:hover { background: rgba(235, 235, 235, 0.05); border: 0; }
+.group-head .t { letter-spacing: 0.04em; }
+.group-head .s { color: var(--ink-dim); font-size: .8rem; white-space: nowrap; }
