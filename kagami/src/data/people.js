@@ -35,11 +35,28 @@ export const CORES = [
 
 export const CORE_MAP = Object.fromEntries(CORES.map((c) => [c.id, c]));
 
+/**
+ * 場面（どこで起きたか）。
+ * 元にした文章は 高齢者／女性／男性／親 で章立てされていたが、
+ * そこで実際に書かれていたのは「どこで、どういうふるまいに遭ったか」だった。
+ * **誰がやったかではなく、どこで起きるかで分ける。**
+ */
+export const SCENES = [
+  { id: 'work', label: '職場・仕事', reading: 'しょくばしごと' },
+  { id: 'home', label: '家庭・親しい人', reading: 'かていしたしいひと' },
+  { id: 'street', label: '道・店・近所', reading: 'みちみせきんじょ' },
+  { id: 'kids', label: '子ども連れの場', reading: 'こどもづれのば' },
+  { id: 'online', label: 'ネット・SNS', reading: 'ねっとえすえぬえす' },
+];
+
+export const SCENE_MAP = Object.fromEntries(SCENES.map((s) => [s.id, s]));
+
 export const PERSON_TYPES = [
   {
     id: 'unstable_words',
     name: '言うことが変わる',
     reading: 'いうことがかわる',
+    scenes: ['work', 'home', 'street', 'online'],
     cores: ['inconsistent'],
     summary: '前に言ったことと違うことを、悪びれずに言う。約束が残らない。',
     why:
@@ -49,6 +66,8 @@ export const PERSON_TYPES = [
       '約束の期日や金額が、そのつど違う',
       '話を大きく盛る。あとで確かめると事実と食い違う',
       '言った・言わないの話に必ずなる',
+      '約束の当日に、理由をつけて取りやめになることが繰り返される',
+      '同じ話を、別の相手にも同じように話している',
     ],
     distance:
       '口約束で進めない。決めたことをその場で文字にして相手にも渡す。渡せない相手なら、その相手とは決めごとをしない。',
@@ -59,6 +78,7 @@ export const PERSON_TYPES = [
     id: 'two_faced',
     name: '相手によって態度を変える',
     reading: 'あいてによってたいどをかえる',
+    scenes: ['work', 'home', 'street', 'online'],
     cores: ['inconsistent'],
     summary: '立場の弱い相手には強く、強い相手には低く出る。本人の前と陰とで話が違う。',
     why:
@@ -69,6 +89,8 @@ export const PERSON_TYPES = [
       '陰口を、聞こえる場所でわざと言う',
       '「誰が言ったかは言えないけど」と出どころを濁して伝えてくる',
       '気に入らない人を、集団から静かに外していく',
+      '自分には甘く、同じことを人がすると厳しい',
+      '立場が上の人の前でだけ、急に丁寧になる',
     ],
     distance:
       'その人が自分より弱い立場の人にどう接するかを見る。そこが本当の態度。こちらに向けられている好意を、判断の材料にしない。',
@@ -79,6 +101,7 @@ export const PERSON_TYPES = [
     id: 'mood_rules',
     name: '機嫌で場を動かす',
     reading: 'きげんでばをうごかす',
+    scenes: ['work', 'home', 'street'],
     cores: ['inconsistent', 'boundary'],
     summary: '不機嫌・ため息・沈黙で、言葉を使わずに周りを動かす。',
     why:
@@ -98,6 +121,7 @@ export const PERSON_TYPES = [
     id: 'crosses_line',
     name: '「やめて」が効かない',
     reading: 'やめてがきかない',
+    scenes: ['work', 'home', 'street', 'kids', 'online'],
     cores: ['boundary'],
     summary: '断っても引き下がらない。小さな違反を繰り返して、こちらの反応を試す。',
     why:
@@ -107,6 +131,7 @@ export const PERSON_TYPES = [
       '「冗談だよ」で越えたことを無かったことにする',
       'こちらの予定や都合を確かめずに決めてくる',
       '小さな約束破りが、少しずつ大きくなっている',
+      '一度絡まれると引き際がなく、長く続く',
     ],
     distance:
       '理由を足さない。同じ言葉で短く繰り返す。それでも続くなら、話し合いではなく、会う回数と場面を減らす。',
@@ -117,6 +142,7 @@ export const PERSON_TYPES = [
     id: 'pries',
     name: '踏み込んで聞いてくる',
     reading: 'ふみこんできいてくる',
+    scenes: ['work', 'home', 'street', 'online'],
     cores: ['boundary'],
     summary: '収入・家族・体・過去に、断りきれない形で入ってくる。',
     why:
@@ -136,6 +162,7 @@ export const PERSON_TYPES = [
     id: 'controls',
     name: '決めさせない・囲い込む',
     reading: 'きめさせないかこいこむ',
+    scenes: ['home', 'work'],
     cores: ['boundary'],
     summary: '予定・付き合い・お金を細かく確かめ、こちらが決める範囲を狭めていく。',
     why:
@@ -155,6 +182,7 @@ export const PERSON_TYPES = [
     id: 'never_wrong',
     name: '非を認めない',
     reading: 'ひをみとめない',
+    scenes: ['work', 'home', 'street', 'kids'],
     cores: ['responsibility'],
     summary: '謝らない。謝っても、その場だけで何も変わらない。',
     why:
@@ -164,6 +192,7 @@ export const PERSON_TYPES = [
       '謝罪が「そう受け取ったなら悪かった」の形になっている',
       '指摘すると、こちらの過去の落ち度が返ってくる',
       '同じことが、同じ形で繰り返されている',
+      '恥をかかされたと感じると、話の中身より怒りが前に出る',
     ],
     distance:
       '言葉で判断しない。同じことが次に起きるかどうかだけを見る。二回目からは、期待ではなく段取りで対処する。',
@@ -174,6 +203,7 @@ export const PERSON_TYPES = [
     id: 'victim',
     name: 'すぐ被害者の側に回る',
     reading: 'すぐひがいしゃのがわにまわる',
+    scenes: ['work', 'home', 'kids'],
     cores: ['responsibility'],
     summary: '困りごとを伝えると、いつのまにかこちらが加害者の側にされている。',
     why:
@@ -193,6 +223,7 @@ export const PERSON_TYPES = [
     id: 'takes_only',
     name: 'もらって当然・人任せ',
     reading: 'もらってとうぜんひとまかせ',
+    scenes: ['work', 'home', 'kids'],
     cores: ['responsibility', 'boundary'],
     summary: '好意を権利のように扱う。面倒なところだけが、いつもこちらに回ってくる。',
     why:
@@ -202,6 +233,7 @@ export const PERSON_TYPES = [
       '貸したお金や時間が、そのままになっている',
       '面倒な部分だけが、決まってこちらに回ってくる',
       '相談の形をしていない（「やっておいて」から始まる）',
+      '自分に得がある時だけ、急に連絡が増える',
     ],
     distance:
       '引き受ける時に、範囲と終わりを一緒に言う。貸すのは、返ってこなくても関係が壊れない額まで。',
@@ -209,9 +241,32 @@ export const PERSON_TYPES = [
     relatedTacticIds: ['reciprocity', 'needed', 'labeling'],
   },
   {
+    id: 'looks_away',
+    name: '見て見ぬふりをする',
+    reading: 'みてみぬふりをする',
+    scenes: ['kids', 'work', 'street'],
+    cores: ['responsibility'],
+    summary: '目の前で起きていることに気づいていながら止めない。指摘した側が悪者になる。',
+    why:
+      '止めないことは、その場では何もしていないように見える。だから責任を問いにくく、実害が出てから「知らなかった」で済ませられる。困っている側だけが、指摘するかどうかの重荷を負わされる。',
+    behaviors: [
+      '迷惑になっていることに気づいているのに、注意しない',
+      '他人が代わりに注意すると、注意したほうに怒る',
+      '実害が出ているのに、それでも止めない',
+      '「まだ小さいから」「悪気はないから」を、何年も同じように使い続ける',
+      '注意やしつけを「型にはめること」と言って避ける',
+      'その場では低姿勢に謝るが、次も同じことが起きる',
+    ],
+    distance:
+      'その場で相手を変えようとしない。店員・管理者・主催者など、その場を預かっている人に伝える。注意役を自分で引き受けない。',
+    replyIds: ['leave', 'record', 'window'],
+    relatedTacticIds: ['blame_shift', 'just_joking', 'guilt'],
+  },
+  {
     id: 'drains',
     name: '一緒にいると削られる',
     reading: 'いっしょにいるとけずられる',
+    scenes: ['work', 'home', 'street', 'online'],
     cores: [],
     summary: '否定・比較・説教・蒸し返しが続き、会ったあとに疲れが残る。',
     why:
@@ -222,6 +277,9 @@ export const PERSON_TYPES = [
       '持ち物・家族・境遇を、さりげなく比べられる',
       '終わったはずの失敗を、何度も持ち出される',
       'こちらを世代や立場でひとくくりにして、説教が始まる',
+      '昔のやり方を、いまの状況に関係なく押し付けてくる',
+      '「私のほうが大変」で、こちらの話が相手の苦労話に変わる',
+      '人の評価が、噂と比べ合いだけでできている',
     ],
     distance:
       '会う回数と長さを先に決めてから会う。理由を説明できなくてよい。会ったあとに残るもので決めてよい。',

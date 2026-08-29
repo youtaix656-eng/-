@@ -13,7 +13,7 @@ import { TACTICS, CATEGORIES } from './tactics.js';
 import { REPLIES } from './replies.js';
 import { HABITS } from './habits.js';
 import { MYTHS } from './myths.js';
-import { PERSON_TYPES, CORES } from './people.js';
+import { PERSON_TYPES, CORES, SCENES } from './people.js';
 import { STATES } from './states.js';
 import { SOURCES } from './sources.js';
 import { GLYPHS } from './glyphs.js';
@@ -30,6 +30,7 @@ export const TOC_CATEGORIES = [
   { id: 'myth', label: '当てにならない見抜き方', icon: GLYPHS.cross, view: 'myths' },
   { id: 'person', label: '人間分析', icon: GLYPHS.piece, view: 'people' },
   { id: 'core', label: '共通する芯', icon: GLYPHS.star, view: 'people' },
+  { id: 'scene', label: '場面', icon: GLYPHS.house, view: 'people' },
   { id: 'source', label: '出典', icon: GLYPHS.dagger, view: 'sources' },
 ];
 
@@ -159,6 +160,19 @@ export function buildTocEntries() {
       view: 'people',
       anchor: `toc-core-${c.id}`,
       targetId: c.id,
+    });
+  }
+
+  for (const sc of SCENES) {
+    entries.push({
+      id: `scene-${sc.id}`,
+      category: 'scene',
+      title: sc.label,
+      reading: sc.reading || '',
+      sub: `この場面で出やすい型 ${PERSON_TYPES.filter((t) => (t.scenes || []).includes(sc.id)).length}件`,
+      view: 'people',
+      anchor: 'toc-scenes',
+      targetId: sc.id,
     });
   }
 

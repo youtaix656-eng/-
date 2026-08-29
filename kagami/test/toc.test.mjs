@@ -7,7 +7,7 @@ import { REPLIES } from '../src/data/replies.js';
 import { HABITS } from '../src/data/habits.js';
 import { MYTHS } from '../src/data/myths.js';
 import { STATES } from '../src/data/states.js';
-import { PERSON_TYPES, CORES } from '../src/data/people.js';
+import { PERSON_TYPES, CORES, SCENES } from '../src/data/people.js';
 import { SOURCES } from '../src/data/sources.js';
 
 test('目次のタイトルは重複しない', () => {
@@ -62,11 +62,13 @@ test('目次はすべてのデータ（型・別名・まとまり・返し方�
   assert.equal(count('myth'), MYTHS.length);
   assert.equal(count('person'), PERSON_TYPES.length);
   assert.equal(count('core'), CORES.length);
+  assert.equal(count('scene'), SCENES.length);
   assert.equal(count('source'), SOURCES.length);
   assert.equal(
     TOC_ENTRIES.length,
     TACTICS.length + aliases + CATEGORIES.length + REPLIES.length + HABITS.length +
-      STATES.length + MYTHS.length + PERSON_TYPES.length + CORES.length + SOURCES.length,
+      STATES.length + MYTHS.length + PERSON_TYPES.length + CORES.length + SCENES.length +
+      SOURCES.length,
   );
 });
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PERSON_TYPES, CORES, CORE_MAP, allBehaviors } from '../src/data/people.js';
+import { PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors } from '../src/data/people.js';
 import { analyzePerson, coresOf, MIN_PER_TYPE, MIN_TOTAL } from '../src/lib/analysis.js';
 import { REPLY_MAP } from '../src/data/replies.js';
 import { TACTIC_MAP } from '../src/data/tactics.js';
@@ -13,6 +13,7 @@ test('id・名前は重複せず、読みを持つ', () => {
   assert.equal(new Set(names).size, names.length);
   for (const t of PERSON_TYPES) assert.match(t.reading, /^[ぁ-ゖー・]+$/u, `${t.name}: 読みが不正`);
   for (const c of CORES) assert.match(c.reading, /^[ぁ-ゖー・]+$/u, `${c.label}: 読みが不正`);
+  for (const sc of SCENES) assert.match(sc.reading, /^[ぁ-ゖー・]+$/u, `${sc.label}: 読みが不正`);
 });
 
 test('中身がそろっている（ふるまい・なぜ・距離）', () => {
@@ -23,6 +24,8 @@ test('中身がそろっている（ふるまい・なぜ・距離）', () => {
     for (const id of t.replyIds) assert.ok(REPLY_MAP[id], `${t.name}: 存在しない返し方 ${id}`);
     for (const id of t.relatedTacticIds) assert.ok(TACTIC_MAP[id], `${t.name}: 存在しない型 ${id}`);
     for (const c of t.cores || []) assert.ok(CORE_MAP[c], `${t.name}: 未知の芯 ${c}`);
+    assert.ok((t.scenes || []).length > 0, `${t.name}: 場面がありません`);
+    for (const x of t.scenes) assert.ok(SCENE_MAP[x], `${t.name}: 未知の場面 ${x}`);
   }
 });
 
@@ -131,4 +134,39 @@ test('画面に出る文にマークダウンを書かない', () => {
   for (const t of PERSON_TYPES) texts.push(t.name, t.summary, t.why, t.distance, ...t.behaviors);
   for (const c of CORES) texts.push(c.label, c.summary);
   for (const t of texts) assert.ok(!String(t).includes('**'), `「${t}」に ** が入っています`);
+});
+
+test('場面は「どこで起きたか」であって、誰がやったかではない', () => {
+  // 場面の名前に人の属性が入っていないこと
+  const attribute = /女|男|高齢|年寄|若者|主婦|外国人|世代/;
+  for (const sc of SCENES) {
+    const m = sc.label.match(attribute);
+    assert.ok(!m, `場面「${sc.label}」が人の属性で分けられています`);
+  }
+  // どの場面にも、少なくとも1つの型がある
+  for (const sc of SCENES) {
+    const n = PERSON_TYPES.filter((t) => (t.scenes || []).includes(sc.id)).length;
+    assert.ok(n > 0, `場面「${sc.label}」に型が1件もありません`);
+  }
+});
+
+test('元にした文章のふるまいが、どこかの型に入っている（落としていない）', () => {
+  const all = allBehaviors().map((b) => b.text).join(' ');
+  const must = [
+    ['二重基準', /自分には甘く/],
+    ['利益になる時だけ近づく', /得がある時だけ/],
+    ['苦労自慢', /私のほうが大変/],
+    ['昔の価値観の押し付け', /昔のやり方/],
+    ['引き際がない', /引き際がなく/],
+    ['ドタキャン', /当日に、理由をつけて取りやめ/],
+    ['噂で人を評価する', /噂と比べ合い/],
+    ['恥をかかされると激怒', /恥をかかされた/],
+    ['見て見ぬふり', /気づいているのに、注意しない/],
+    ['実害が出ても止めない', /実害が出ているのに/],
+    ['まだ小さいから', /まだ小さいから/],
+    ['注意した側に怒る', /注意したほうに怒る/],
+  ];
+  for (const [name, re] of must) {
+    assert.match(all, re, `「${name}」がどの型にも入っていません`);
+  }
 });

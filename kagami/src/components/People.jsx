@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { PERSON_TYPES, CORES, CORE_MAP, allBehaviors } from '../data/people.js';
+import { PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors } from '../data/people.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
 import { repliesOf } from '../data/replies.js';
 import { TACTIC_MAP } from '../data/tactics.js';
@@ -10,16 +10,25 @@ import { useFocusJump } from './useFocusJump.js';
 export default function People({ focus, onFocusDone, onGoTactic }) {
   const [checked, setChecked] = useState([]);
   const [open, setOpen] = useState('');
+  const [scene, setScene] = useState(() => (SCENES.some((sc) => sc.id === focus) ? focus : ''));
   // 型と芯が同じ画面にあるので、どちらの飛び先かを id から決める
   // （癖・状態の画面と同じ形。片方だけ直すと必ず取りこぼす）
   const anchor = focus
-    ? CORES.some((c) => c.id === focus)
-      ? `toc-core-${focus}`
-      : `toc-person-${focus}`
+    ? SCENES.some((sc) => sc.id === focus)
+      ? 'toc-scenes'
+      : CORES.some((c) => c.id === focus)
+        ? `toc-core-${focus}`
+        : `toc-person-${focus}`
     : '';
   useFocusJump(anchor, onFocusDone);
 
-  const behaviors = useMemo(() => allBehaviors(), []);
+  // 場面でしぼる（元の文章の章立てを「どこで起きたか」として残したもの）
+  const behaviors = useMemo(() => {
+    const all = allBehaviors();
+    if (!scene) return all;
+    const ids = new Set(PERSON_TYPES.filter((t) => (t.scenes || []).includes(scene)).map((t) => t.id));
+    return all.filter((b) => ids.has(b.typeId));
+  }, [scene]);
   const result = useMemo(() => analyzePerson(checked, PERSON_TYPES), [checked]);
   const cores = useMemo(() => coresOf(result.matches), [result]);
 
@@ -51,6 +60,24 @@ export default function People({ focus, onFocusDone, onGoTactic }) {
 
       <h2>見たものにチェック</h2>
       <Rule mark={GLYPHS.square} />
+
+      <p className="tiny" id="toc-scenes" style={{ marginBottom: 4 }}>
+        どこで起きたことか（しぼりたい時だけ。チェックは外れません）
+      </p>
+      <div className="chips">
+        <button className={`chip ${scene === '' ? 'on' : ''}`} onClick={() => setScene('')}>
+          すべて
+        </button>
+        {SCENES.map((sc) => (
+          <button
+            key={sc.id}
+            className={`chip ${scene === sc.id ? 'on' : ''}`}
+            onClick={() => setScene(scene === sc.id ? '' : sc.id)}
+          >
+            {sc.label}
+          </button>
+        ))}
+      </div>
       <p className="tiny">
         思い当たるものではなく、<strong>実際に見たもの</strong>だけを選んでください。
         {MIN_TOTAL}つ以上で見立てが出ます。<strong>この画面の内容は保存しません</strong>——
@@ -129,6 +156,8 @@ export default function People({ focus, onFocusDone, onGoTactic }) {
                   </h3>
                   <span className="tiny">
                     {(m.type.cores || []).map((c) => CORE_MAP[c].label).join('・') || '3つの芯には収まらない型'}
+                    {' ／ '}
+                    {(m.type.scenes || []).map((x) => SCENE_MAP[x].label).join('・')}
                   </span>
                 </div>
                 <button className="ghost" onClick={() => setOpen(open === m.type.id ? '' : m.type.id)}>
