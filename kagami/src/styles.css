@@ -1,0 +1,185 @@
+/* 鏡（かがみ） — 落ち着いた暗い画面ひとつに決め打ちする。
+   煽る配色にしない：この題材は、驚かせるほど判断が雑になる。 */
+:root {
+  --bg: #12131a;
+  --bg-soft: #1a1c26;
+  --card: #1e202b;
+  --line: #2e3140;
+  --fg: #e8e6f0;
+  --fg-dim: #a5a3b8;
+  --accent: #8fb8ff;
+  --accent-soft: #22304a;
+  --hit: #f5c56b;
+  --hit-soft: #4a3a1c;
+  --warn: #ff9c8a;
+  --max-w: 720px;
+  --nav-h: 60px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+#root { min-height: 100vh; }
+
+.app {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 16px calc(var(--nav-h) + 28px);
+}
+
+/* ── 見出し ── */
+.head { padding: 22px 0 6px; }
+.head h1 { font-size: 1.35rem; margin: 0 0 4px; letter-spacing: .04em; }
+.head p { margin: 0; color: var(--fg-dim); font-size: .88rem; }
+
+h2 { font-size: 1.05rem; margin: 26px 0 10px; }
+h3 { font-size: .95rem; margin: 18px 0 6px; }
+
+/* ── カード ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+.card.quiet { background: var(--bg-soft); }
+.card h3 { margin-top: 0; }
+.card p { margin: 6px 0; }
+.muted { color: var(--fg-dim); font-size: .85rem; }
+.tiny { font-size: .78rem; color: var(--fg-dim); }
+
+/* ── ボタン ── */
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  padding: 10px 14px;
+  transition: border-color .15s, background .15s;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
+button.ghost { background: transparent; }
+button.danger { border-color: #5a2a2a; color: var(--warn); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row.end { justify-content: flex-end; }
+
+/* ── 入力 ── */
+textarea, input[type='text'], select {
+  width: 100%;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 12px;
+}
+textarea { min-height: 140px; resize: vertical; line-height: 1.7; }
+textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+label.check { display: flex; gap: 9px; align-items: flex-start; cursor: pointer; margin: 10px 0; }
+label.check input { margin-top: 5px; flex: none; }
+
+/* ── チップ ── */
+.chips { display: flex; gap: 7px; flex-wrap: wrap; margin: 8px 0; }
+.chip {
+  font-size: .82rem;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--fg-dim);
+}
+.chip.on { border-color: var(--accent); color: var(--fg); background: var(--accent-soft); }
+.chip.cue { border-color: var(--hit); color: var(--hit); background: var(--hit-soft); }
+
+/* ── 当たった箇所 ── */
+.excerpt {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: .92rem;
+  max-height: 240px;
+  overflow: auto;
+}
+.excerpt mark { background: var(--hit-soft); color: var(--hit); border-radius: 3px; padding: 0 2px; }
+
+/* ── 一覧 ── */
+.list { list-style: none; padding: 0; margin: 0; }
+.list li { border-top: 1px solid var(--line); }
+.list li:first-child { border-top: 0; }
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 12px 2px;
+}
+.item:hover { border-color: transparent; background: var(--bg-soft); }
+.item .t { display: block; }
+.item .s { display: block; color: var(--fg-dim); font-size: .8rem; }
+
+/* 目次の行 */
+.kana-bar { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.kana-bar button { padding: 5px 11px; font-size: .85rem; border-radius: 999px; }
+.section-label {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg); padding: 8px 0 4px;
+  font-size: .85rem; color: var(--accent); letter-spacing: .12em;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 一時ハイライト（目次から飛んだ先） */
+.flash { animation: flash 1.8s ease-out; }
+@keyframes flash {
+  from { background: var(--accent-soft); }
+  to { background: transparent; }
+}
+
+/* ── 下部ナビ ── */
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex;
+  background: var(--bg-soft);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.nav button {
+  flex: 1; border: 0; border-radius: 0; background: none;
+  padding: 8px 2px; height: var(--nav-h);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-size: .68rem; color: var(--fg-dim);
+}
+.nav button .ic { font-size: 1.2rem; line-height: 1; }
+.nav button.on { color: var(--accent); }
+
+/* ── 注意書き ── */
+.note {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 11px 11px 0;
+  padding: 11px 14px;
+  margin: 14px 0;
+  font-size: .87rem;
+}
+.note.warn { border-left-color: var(--warn); background: #3a2320; }
+
+.back { background: none; border: 0; color: var(--accent); padding: 12px 0; font-size: .88rem; }
+.badge { font-size: .72rem; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; color: var(--fg-dim); }
