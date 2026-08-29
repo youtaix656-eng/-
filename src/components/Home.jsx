@@ -378,6 +378,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">このアプリの機能をすべて検索・確認できます。迷ったらここ。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('faq')}>
+          <span className="ico">❓</span>
+          <span className="title">鍼灸国試アプリ Q&A</span>
+          <span className="desc">使い方・学習の悩み・不具合など、よくある質問をキーワードや文章で検索できます。</span>
+        </button>
+
         {unvisitedFeature && (
           <button
             className="menu-item wide unvisited-feature-card"
@@ -394,6 +400,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="title">合格するためのロードマップ</span>
           <span className="desc">
             本番までの計画・やること/NG・新規→△✕の切替時期・手が使えない時の音声学習まで。迷ったらここ。
+          </span>
+        </button>
+
+        <button className="menu-item wide" onClick={() => onNavigate('cognitivestyle')}>
+          <span className="ico">🧭</span>
+          <span className="title">あなたの学習スタイル</span>
+          <span className="desc">
+            認知特性チェックの結果から、どの機能をどう使うと定着しやすいかをまとめました。
           </span>
         </button>
 
