@@ -5,7 +5,8 @@ import {
   makeTry, triesOf, summarize, orderCounters, untried, firstMove, RESULTS, RESULT_MAP, MIN_TRIES,
 } from '../src/lib/tried.js';
 import { PERSON_TYPES, COUNTER_BEST_SCENES, SELF_DEFENSE_TACTIC_IDS } from '../src/data/people.js';
-import { TACTIC_MAP } from '../src/data/tactics.js';
+import { TACTIC_MAP, akaNameOf, tacticLabel } from '../src/data/tactics.js';
+import { caseToText } from '../src/lib/personExport.js';
 
 const crosses = PERSON_TYPES.find((t) => t.id === 'crosses_line');
 
@@ -110,4 +111,36 @@ test('その手が合う場面の表は、許可した型をすべて覆う', ()
 test('記録はネットワークに触れない', () => {
   const src = readFileSync(new URL('../src/lib/tried.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /\bfetch\s*\(|XMLHttpRequest|localStorage|indexedDB/);
+});
+
+test('使い返す手には、世に出回っている呼び名がすべて付いている', () => {
+  for (const id of SELF_DEFENSE_TACTIC_IDS) {
+    assert.ok(akaNameOf(id), `${TACTIC_MAP[id].name}: 呼び名（aka）がありません`);
+    assert.match(tacticLabel(id), /（.+）$/, `${id}: 「呼び名（言い方）」の形になっていません`);
+  }
+});
+
+test('呼び名は1か所から取る（画面ごとに aka[0] を書かない）', () => {
+  const files = ['../src/components/CounterList.jsx', '../src/components/People.jsx'];
+  for (const f of files) {
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.doesNotMatch(src, /\.aka\s*\[\s*0\s*\]/, `${f}: aka[0] を直接読んでいます`);
+  }
+});
+
+test('書き出しに呼び名を添えられる', () => {
+  const t = PERSON_TYPES.find((x) => x.id === 'crosses_line');
+  const text = caseToText({
+    matches: [{ type: t, behaviors: [t.behaviors[0]] }],
+    nameOf: tacticLabel,
+  });
+  assert.match(text, /沈黙の圧力/, '呼び名が入っていません');
+  assert.match(text, /答える前に間を置く/, 'このアプリでの言い方も残すこと');
+});
+
+test('呼び名を渡さなければ、書き出しは今までどおり', () => {
+  const t = PERSON_TYPES.find((x) => x.id === 'crosses_line');
+  const text = caseToText({ matches: [{ type: t, behaviors: [t.behaviors[0]] }] });
+  assert.doesNotMatch(text, /沈黙の圧力/);
+  assert.match(text, /断りを交渉ごとにしない/);
 });

@@ -124,3 +124,22 @@ test('検索とカテゴリ絞り込みが効く', () => {
   assert.ok(hit.length > 0);
   assert.equal(filterToc(TOC_ENTRIES, { query: 'そんな語はどこにもない' }).length, 0);
 });
+
+test('目次では、型の呼び名（沈黙の圧力など）が先に出る', () => {
+  const withAka = TOC_ENTRIES.filter((e) => e.category === 'tactic' && /／/.test(e.sub));
+  assert.ok(withAka.length > 0, '呼び名つきの項目がありません');
+  for (const e of withAka) {
+    const t = TACTICS.find((x) => x.name === e.title);
+    const first = (t.aka || [])[0];
+    assert.ok(first, `${e.title}: aka が無いのに ／ が入っています`);
+    assert.ok(e.sub.startsWith(first.name), `${e.title}: 呼び名が先頭に来ていません（${e.sub}）`);
+  }
+});
+
+test('使い返す手は、目次からその呼び名で引ける', () => {
+  const titles = new Set(TOC_ENTRIES.map((e) => e.title));
+  for (const w of ['沈黙の圧力', '捕食者のテンポ', 'サード・アイ', '両面提示', 'フレーミング効果',
+    'アンカリング効果', '前提効果', '限定性の法則', '二者択一法', 'バックトラッキング']) {
+    assert.ok(titles.has(w), `目次から「${w}」を引けません`);
+  }
+});

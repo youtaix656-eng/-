@@ -122,6 +122,7 @@ export const TACTICS = [
     id: 'false_choice',
     name: '断る選択肢を消す',
     reading: 'ことわるせんたくしをけす',
+    aka: [{ name: '二者択一法', reading: 'にしゃたくいつほう' }, { name: '誤前提暗示', reading: 'ごぜんていあんじ' }],
     category: 'pressure',
     channel: 'text',
     summary: 'AとBのどちらかを選ばせて、「どちらも選ばない」を無いことにする。',
@@ -1155,6 +1156,26 @@ export function textTactics() {
 /** 言葉ではない型（間・目線・動く速さ）。一覧と目次には出るが、判定には出てこない */
 export function behaviorTactics() {
   return TACTICS.filter((t) => t.channel === 'behavior');
+}
+
+/**
+ * 世に出回っている呼び名（いちばん通りのよいもの1つ）。無ければ空。
+ * **画面ごとに aka[0] を書かない**——片方だけ直した時に食い違うため、ここから取る。
+ */
+export function akaNameOf(id) {
+  const t = TACTIC_MAP[id];
+  return (t && t.aka && t.aka[0] && t.aka[0].name) || '';
+}
+
+/**
+ * 「呼び名（このアプリでの言い方）」の形にする。
+ * 呼び名が無ければ、このアプリでの言い方だけを返す。
+ */
+export function tacticLabel(id) {
+  const t = TACTIC_MAP[id];
+  if (!t) return id;
+  const aka = akaNameOf(id);
+  return aka ? `${aka}（${t.name}）` : t.name;
 }
 
 /** カテゴリ id → その型の配列（カタログの並び順のまま） */

@@ -7,7 +7,7 @@ import {
   terms, haystackOf, matchesAll, splitByHit, suggestTerms, pushHistory, QUICK_TERMS,
 } from '../lib/personSearch.js';
 import { firstMove, untried, summarize, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
-import { TACTIC_MAP } from '../data/tactics.js';
+import { TACTIC_MAP, akaNameOf, tacticLabel } from '../data/tactics.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
 import { displayName, LABEL_MAX } from '../lib/cases.js';
 import { caseToText, copyText } from '../lib/personExport.js';
@@ -250,6 +250,7 @@ export default function People({
         behaviors: checkedTexts,
         matches: result.matches,
         tries,
+        nameOf: tacticLabel,
       }),
     );
     setCopied(ok ? 'done' : 'fail');
@@ -493,8 +494,11 @@ export default function People({
               <h3>まず1つだけやるなら</h3>
               <div className="row" style={{ gap: 8 }}>
                 <button className="chip on" onClick={() => onGoTactic(first.tacticId)}>
-                  {TACTIC_MAP[first.tacticId]?.name || first.tacticId}
+                  {akaNameOf(first.tacticId) || TACTIC_MAP[first.tacticId]?.name || first.tacticId}
                 </button>
+                {akaNameOf(first.tacticId) && (
+                  <span className="tiny">（{TACTIC_MAP[first.tacticId]?.name}）</span>
+                )}
                 {first.sharedBy > 1 && (
                   <span className="tiny">当たった{first.sharedBy}つの型に共通して出てくる手</span>
                 )}
@@ -510,7 +514,7 @@ export default function People({
           {notTried.length > 0 && (
             <p className="tiny">
               まだ試していない手が{notTried.length}件あります：
-              {notTried.slice(0, 4).map((c) => TACTIC_MAP[c.tacticId]?.name).join('／')}
+              {notTried.slice(0, 4).map((c) => akaNameOf(c.tacticId) || TACTIC_MAP[c.tacticId]?.name).join('／')}
             </p>
           )}
 
@@ -677,7 +681,7 @@ export default function People({
           </p>
           <div className="row" style={{ gap: 8 }}>
             <button className="chip on" onClick={() => onGoTactic(todays.counter.tacticId)}>
-              {TACTIC_MAP[todays.counter.tacticId]?.name || todays.counter.tacticId}
+              {tacticLabel(todays.counter.tacticId)}
             </button>
             <button className="ghost" onClick={() => openCase(todays.c)}>
               この見立てを開く
@@ -700,7 +704,7 @@ export default function People({
             <li key={r.tacticId}>
               <button className="item" onClick={() => onGoTactic(r.tacticId)}>
                 <span className="t">
-                  {GLYPHS.circlePlus} {TACTIC_MAP[r.tacticId]?.name || r.tacticId}
+                  {GLYPHS.circlePlus} {tacticLabel(r.tacticId)}
                   {s2 && s2.total >= MIN_TRIES && (
                     <span className="badge" style={{ marginLeft: 8 }}>
                       {s2.total}回 {GLYPHS.circle}{s2.ok}／{GLYPHS.cross}{s2.ng}

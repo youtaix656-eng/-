@@ -47,9 +47,10 @@ export function buildTocEntries() {
       category: 'tactic',
       title: t.name,
       reading: t.reading || '',
-      sub: [CATEGORIES.find((c) => c.id === t.category)?.label, ...(t.aka || []).map((a) => a.name)]
+      // 世に出回っている呼び名を先に出す（そちらで探しに来る人が多いため）
+      sub: [(t.aka || []).map((a) => a.name).join('・'), CATEGORIES.find((c) => c.id === t.category)?.label]
         .filter(Boolean)
-        .join('・'),
+        .join(' ／ '),
       view: 'tactics',
       anchor: `toc-tactic-${t.id}`,
       targetId: t.id,

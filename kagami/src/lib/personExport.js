@@ -10,7 +10,9 @@ function line(s) {
 
 /**
  * @param {{label?:string, sceneLabel?:string, at?:number,
- *          behaviors?:string[], matches?:Array, note?:string}} input
+ *          behaviors?:string[], matches?:Array, note?:string, tries?:Array,
+ *          nameOf?:(tacticId:string)=>string}} input
+ * nameOf を渡すと、対応策に呼び名（沈黙の圧力 など）を添える。
  * @returns {string}
  */
 export function caseToText(input = {}) {
@@ -42,7 +44,8 @@ export function caseToText(input = {}) {
     for (const c of m.type.counters || []) {
       const mine = tries.filter((t) => t.tacticId === c.tacticId);
       const mark = mine.length ? `（${mine.length}回試した）` : '';
-      out.push(`  ▷ ${line(c.how)}${mark}`);
+      const name = typeof input.nameOf === 'function' ? line(input.nameOf(c.tacticId)) : '';
+      out.push(`  ▷ ${name ? `${name}：` : ''}${line(c.how)}${mark}`);
       if (c.script) out.push(`    「${line(c.script)}」`);
     }
   }

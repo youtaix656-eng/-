@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TACTIC_MAP } from '../data/tactics.js';
+import { TACTIC_MAP, akaNameOf } from '../data/tactics.js';
 import { COUNTER_BEST_SCENES, SCENE_MAP } from '../data/people.js';
 import { orderCounters, summarize, triesOf, RESULTS, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
 import { GLYPHS } from '../data/glyphs.js';
@@ -39,8 +39,11 @@ export default function CounterList({
           <div className="counter" key={c.tacticId}>
             <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
               <button className="chip on" onClick={() => onGoTactic(c.tacticId)}>
-                {TACTIC_MAP[c.tacticId]?.name || c.tacticId}
+                {akaNameOf(c.tacticId) || TACTIC_MAP[c.tacticId]?.name || c.tacticId}
               </button>
+              {akaNameOf(c.tacticId) && (
+                <span className="tiny">（{TACTIC_MAP[c.tacticId]?.name}）</span>
+              )}
               <span className="tiny">
                 {fits && `${SCENE_MAP[scene].label}向き `}
                 {s
