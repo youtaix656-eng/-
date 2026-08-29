@@ -14,6 +14,7 @@ import { outputFormatPrompt } from './outline.js';
 import { rulesPrompt } from './rules.js';
 import { SOURCE_RULE } from './untrusted.js';
 import { styleText } from './style.js';
+import { rivalsBrief } from './rivals.js';
 
 // ── 新項目21：同じ問いの答えを使い回す ──
 //
@@ -124,6 +125,7 @@ export async function runStep({
   pitfallText = '',
   briefText = '',
   styleSamples = [],
+  rivals = [],
   signal,
   onDelta,
 }) {
@@ -150,9 +152,13 @@ export async function runStep({
   // 書き方の見本は**書く役の社員にだけ**渡す（`style.js` が役職で絞る）。
   // 全員に渡すと、調べるだけの社員の毎回の料金にも上乗せされる。
   const styleBlock = styleText(styleSamples, employee.roleId);
+  // 競合の観測は**市場を見る役にだけ**渡す（`roles.js` の readsMarket が単一の正）。
+  // 全員に渡すと、書くだけの社員の毎回の料金にも上乗せされる。
+  const rivalsBlock = rivalsBrief(rivals, employee.roleId, { ventureId: task.ventureId || null });
   const context = buildContext({
     employee, task, knowledgeList, inherited, boardText, relatedText, pitfallText, briefText,
     styleText: styleBlock,
+    rivalsText: rivalsBlock,
   });
   const system = buildSystemPrompt({
     employee,

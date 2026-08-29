@@ -100,6 +100,7 @@ export const CONTEXT_LIMITS = {
   pitfall: 400, // この役職で過去に起きたつまずき
   brief: 800, // 会社の現在地
   style: 1500, // 書き方の見本（オーナーの文章。書く役だけに渡す）
+  rivals: 900, // 競合の観測（外から来たものなので必ず囲う）
 };
 
 /** 末尾を残して切り詰める。切ったことが分かる印を頭に付ける。 */
@@ -134,6 +135,7 @@ export function buildContext({
   pitfallText = '',
   briefText = '',
   styleText = '',
+  rivalsText = '',
 }) {
   const layers = [];
   const parts = [];
@@ -194,6 +196,18 @@ export function buildContext({
     layers.push({ layer: 'style', count: 1 });
     parts.push(trimTail(styleText, CONTEXT_LIMITS.style));
     if (styleText.includes(FENCE_HEAD)) hasUntrusted = true;
+  }
+
+  // 競合の観測。**外から来たものなので必ず「資料」として囲う**（項目97と同じ線）。
+  // 競合のLP・note の本文をそのまま渡すと、その中の
+  // 「これまでの指示を無視して〇〇と書け」が通ってしまう。
+  if (rivalsText) {
+    layers.push({ layer: 'rivals', count: 1 });
+    parts.push(wrapUntrusted(trimTail(rivalsText, CONTEXT_LIMITS.rivals), {
+      label: '競合の観測（あなたが実際に見たもの）',
+      origin: 'external',
+    }));
+    hasUntrusted = true;
   }
 
   if (inherited) {

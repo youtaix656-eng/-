@@ -140,6 +140,10 @@ const REST_KEYS = [
   // 手でやっている作業の書き出し。会社画面でしか使わないので後回しでよい。
   // **読み込みが済むまで「まだ書き出していません」と言い切らないこと**（項目138）。
   KEYS.chores,
+  // 競合台帳・需要の観測。事業の画面と、市場を見る役の実行時にだけ要る。
+  // **読み込みが済むまで「まだ1件も見ていません」と言い切らないこと**（項目138）。
+  KEYS.rivals,
+  KEYS.voices,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -165,6 +169,8 @@ const EMPTY = {
   style: [],
   loops: [],
   chores: [],
+  rivals: [],
+  voices: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -1041,6 +1047,64 @@ export function useStore() {
     [put]
   );
 
+  // ── 競合台帳・需要の観測 ──
+  // **推測を入れない。** 入るのは「実際に見たもの」だけで、AIには調べさせない
+  //（検索が繋がっていない時に、もっともらしい値段とURLを作らせないため）。
+
+  const addRival = useCallback(
+    async (data) => {
+      const { makeRival, MAX_RIVALS } = await import('./rivals.js');
+      const made = makeRival(data || {});
+      if (!made) return null;
+      const list = stateRef.current.rivals || [];
+      if (list.length >= MAX_RIVALS) return null;
+      put(KEYS.rivals, [made, ...list]);
+      log({ actor: 'user', action: 'rivalAdded', target: made.name });
+      return made;
+    },
+    [put, log]
+  );
+
+  // 形の整えは読む側（normalizeRivals）が必ず通すので、ここではしない。
+  const updateRival = useCallback(
+    (id, patch) => {
+      put(
+        KEYS.rivals,
+        (stateRef.current.rivals || []).map((r) =>
+          r.id === id ? { ...r, ...patch, id: r.id, updatedAt: Date.now() } : r
+        )
+      );
+    },
+    [put]
+  );
+
+  const removeRival = useCallback(
+    (id) => {
+      put(KEYS.rivals, (stateRef.current.rivals || []).filter((r) => r.id !== id));
+    },
+    [put]
+  );
+
+  const addVoice = useCallback(
+    async (data) => {
+      const { makeVoice, MAX_VOICES } = await import('./demand.js');
+      const made = makeVoice(data || {});
+      if (!made) return null;
+      const list = stateRef.current.voices || [];
+      if (list.length >= MAX_VOICES) return null;
+      put(KEYS.voices, [made, ...list]);
+      return made;
+    },
+    [put]
+  );
+
+  const removeVoice = useCallback(
+    (id) => {
+      put(KEYS.voices, (stateRef.current.voices || []).filter((v) => v.id !== id));
+    },
+    [put]
+  );
+
   /**
    * 出した投稿に、あとから反応の数字を入れる。
    * **これが無いと「型 → 出す → 数字を見る → 伸びた型を次の種に」が閉じない。**
@@ -1376,6 +1440,7 @@ export function useStore() {
               // 書き方の見本（オーナーの文章）。渡す相手は runStep が役職で絞る。
               // 会議や相談では渡さない——外へ出る文章を書く仕事だけに要るもの。
               styleSamples: s.style,
+              rivals: s.rivals,
               // 同じ役職で過去に起きたつまずき（新しい3件だけ）
               pitfallText: tw.pitfallPrompt(s.pitfalls, step.roleId),
               signal: controller ? controller.signal : undefined,
@@ -2502,6 +2567,11 @@ export function useStore() {
     addChore,
     updateChore,
     removeChore,
+    addRival,
+    updateRival,
+    removeRival,
+    addVoice,
+    removeVoice,
     updatePattern: updatePatternAction,
     removePattern: removePatternAction,
     // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）

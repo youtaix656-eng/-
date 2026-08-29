@@ -19,6 +19,7 @@ export const LAYER_NAMES = {
   related: '関係する仕事',
   pitfall: 'つまずき集',
   style: '書き方の見本',
+  rivals: '競合の観測',
   handoff: '前からの引き継ぎ',
   task: 'この仕事の補足',
 };

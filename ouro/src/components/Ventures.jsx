@@ -12,10 +12,18 @@
 //  ⑨ 続くかどうかの見立て（真似される・場所に止められる。**採点しない**）
 //  ⑩ 有料記事として売る（段階的に値上げする・売る前の確認）
 //  ⑪ 回し方（OODA／PDCA）を1周ずつ進め、AI社員を動かす
+//  ⑫ 競合台帳（**実際に見た1件だけ**。推測とAIの当てずっぽうを入れない）
+//  ⑬ 需要の観測（実際に見た困りごとの声。検索ボリュームのような外の数字は持たない）
 //
 // **AIは呼ばない。**（呼ぶのは「分析してもらう」「案を出してもらう」を押した時だけ）
 
 import { useEffect, useMemo, useState } from 'react';
+import {
+  rivalsOf, rivalsLine, rivalAdvice, pricePosition, pricePositionLine,
+  openings, openingsLine, compareTable, seenEvidence,
+  RIVAL_PLACES, MIN_RIVALS, STALE_DAYS,
+} from '../lib/rivals.js';
+import { demandReview, demandLine, demandAdvice, VOICE_PLACES } from '../lib/demand.js';
 import { Card, SectionTitle, Field, Empty, Stat, Action, Row } from './ui.jsx';
 import {
   VENTURE_STATES,
@@ -223,6 +231,8 @@ export function VentureDetail({ store, ventureId, go, toast }) {
         toast={toast}
       />
       <VerdictCard venture={venture} status={status} store={store} funnel={funnel} toast={toast} />
+      <RivalsCard venture={venture} store={store} />
+      <DemandCard venture={venture} store={store} />
       <RiskCard venture={venture} store={store} toast={toast} />
       <TargetCard venture={venture} plan={plan} store={store} go={go} funnel={funnel} toast={toast} />
       <MoneyCard venture={venture} unit={unit} store={store} go={go} toast={toast} />
@@ -639,6 +649,11 @@ function RiskCard({ venture, store, toast }) {
             <div key={q.id} style={{ marginBottom: 12 }}>
               <p style={{ margin: '0 0 2px', fontSize: 13.5, fontWeight: 600 }}>{q.q}</p>
               <p className="muted" style={{ margin: '0 0 6px', fontSize: 11.5 }}>{q.why}</p>
+              {q.id === 'seen' && (
+                <p className="muted" style={{ margin: '0 0 6px', fontSize: 11.5 }}>
+                  ▸ {seenEvidence(store.rivals, venture.id).line}
+                </p>
+              )}
               <div className="btn-row">
                 {Object.entries(RISK_ANSWERS).map(([key, label]) => (
                   <button
@@ -1065,4 +1080,178 @@ function toForm(v) {
     goalMonthlyJpy: String(v.goalMonthlyJpy || ''),
     days: String(v.days || DEFAULT_DAYS),
   };
+}
+
+/**
+ * 競合台帳。**推測させない——実際に見た1件だけを残す。**
+ *
+ * ここでいちばん危ないのは、AIに「この分野の相場は？」と聞いて
+ * もっともらしい値段とURLを作らせること。だから入力欄しか置かず、
+ * **AIに調べさせるボタンを置いていない**（材料が揃ってから、依頼画面で
+ * 「競合と市場を見る」の流れに渡す）。
+ */
+function RivalsCard({ venture, store }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: '', place: 'note', url: '', price: '', postsPerMonth: '', who: '', what: '', opening: '' });
+
+  const list = rivalsOf(store.rivals, venture.id);
+  const pos = pricePosition(list, venture.priceJpy);
+  const gap = openings(list, { who: venture.who ? [venture.who] : [], what: venture.what ? [venture.what] : [] });
+  const table = compareTable(list, { price: venture.priceJpy, who: venture.who, what: venture.what });
+  const advice = rivalAdvice(list, { myPrice: venture.priceJpy, mine: { who: venture.who ? [venture.who] : [], what: venture.what ? [venture.what] : [] } });
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    store.addRival({ ...form, ventureId: venture.id });
+    setForm({ name: '', place: 'note', url: '', price: '', postsPerMonth: '', who: '', what: '', opening: '' });
+  };
+
+  return (
+    <Card glyph="◎" title="競合台帳（実際に見たもの）" action={<span className="chip">{list.length}</span>}>
+      <p className="muted" style={{ marginTop: -6 }}>
+        {store.hydrated ? rivalsLine(list) : '読み込み中です…'}
+      </p>
+      <p className="muted" style={{ fontSize: 12.5 }}>{pricePositionLine(pos)}</p>
+      {list.length > 0 && <p className="muted" style={{ fontSize: 12.5 }}>{openingsLine(gap)}</p>}
+
+      <button type="button" className="btn ghost block" onClick={() => setOpen(!open)}>
+        {open ? '閉じる' : '見たものを入れる・一覧を見る'}
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          <form onSubmit={submit}>
+            <Field label="名前（サービス名・発信者名）">
+              <input value={form.name} placeholder="例：〇〇さんの副業note" onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Field>
+            <Field label="どこで見たか">
+              <select value={form.place} onChange={(e) => setForm({ ...form, place: e.target.value })}>
+                {Object.entries(RIVAL_PLACES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </Field>
+            <Field label="URL（あれば）" hint="あなたが実際に開いた画面のURLだけ。思い出せなければ空でかまいません。">
+              <input value={form.url} placeholder="https://" onChange={(e) => setForm({ ...form, url: e.target.value })} />
+            </Field>
+            <Field label="値段（円）" hint="分からなければ空のまま。0円と書かないでください（無料と読めてしまいます）。">
+              <input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+            </Field>
+            <Field label="月に何本くらい出しているか">
+              <input type="number" min="0" value={form.postsPerMonth} onChange={(e) => setForm({ ...form, postsPerMonth: e.target.value })} />
+            </Field>
+            <Field label="誰に（読点で区切る）">
+              <input value={form.who} placeholder="初心者、副業したい人" onChange={(e) => setForm({ ...form, who: e.target.value })} />
+            </Field>
+            <Field label="何を（読点で区切る）">
+              <input value={form.what} placeholder="AI、時短" onChange={(e) => setForm({ ...form, what: e.target.value })} />
+            </Field>
+            <Field label="書き出し（あれば）" hint="そっくりな書き出しを出したときに知らせます（止めはしません）。">
+              <textarea rows={2} value={form.opening} onChange={(e) => setForm({ ...form, opening: e.target.value })} />
+            </Field>
+            <button type="submit" className="btn primary block" disabled={!form.name.trim()}>この観測を足す</button>
+          </form>
+
+          {table.rows.map((r) => (
+            <div key={r.id} className="card tight" style={{ marginTop: 8 }}>
+              <strong>{r.name}</strong>
+              {r.stale && <span className="chip" style={{ marginLeft: 6 }}>見た日が古い（{r.staleDays}日前）</span>}
+              <p className="muted" style={{ fontSize: 11.5, margin: '4px 0' }}>
+                {r.place}
+                {r.price ? ` / ¥${r.price.toLocaleString('ja-JP')}` : ' / 値段は未入力'}
+                {r.postsPerMonth ? ` / 月${r.postsPerMonth}本` : ''}
+                {r.who.length ? ` / 誰に：${r.who.join('・')}` : ''}
+                {r.what.length ? ` / 何を：${r.what.join('・')}` : ''}
+              </p>
+              {r.url && <p className="muted" style={{ fontSize: 11.5, margin: '0 0 4px', wordBreak: 'break-all' }}>{r.url}</p>}
+              <div className="btn-row">
+                <button type="button" className="btn ghost" onClick={() => store.updateRival(r.id, { seenAt: Date.now() })}>
+                  今もう一度見た
+                </button>
+                <button type="button" className="btn ghost" onClick={() => store.removeRival(r.id)}>消す</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {advice.map((a) => (
+        <p key={a.title} className="muted" style={{ fontSize: 11.5 }}>
+          <strong style={{ color: '#fff' }}>{a.title}</strong>：{a.body}
+        </p>
+      ))}
+      <p className="muted" style={{ fontSize: 11.5 }}>
+        ここに入るのは<strong style={{ color: '#fff' }}>あなたが実際に見たものだけ</strong>です。
+        {MIN_RIVALS}件たまると値段の位置が出て、{STALE_DAYS}日を過ぎた観測には「古い」と印を付けます
+        （勝手に消したり更新したりはしません）。
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * 需要の観測。**検索ボリューム・市場規模のような外の数字は持たない。**
+ * 実際に見た「困りごとの声」を、その人が使った言葉のまま貯めるだけ。
+ */
+function DemandCard({ venture, store }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ text: '', place: 'sns' });
+
+  const list = (store.voices || []).filter((v) => !v.ventureId || v.ventureId === venture.id);
+  const review = demandReview(list);
+  const advice = demandAdvice(review);
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.text.trim()) return;
+    store.addVoice({ ...form, ventureId: venture.id });
+    setForm({ text: '', place: form.place });
+  };
+
+  return (
+    <Card glyph="◇" title="需要の観測（見た声）" action={<span className="chip">{review.counted}</span>}>
+      <p className="muted" style={{ marginTop: -6 }}>
+        {store.hydrated ? demandLine(review) : '読み込み中です…'}
+      </p>
+      {review.words.length > 0 && (
+        <div className="btn-row" style={{ marginTop: 6 }}>
+          {review.words.slice(0, 8).map((w) => (
+            <span key={w.word} className="chip">{w.word} {w.hits}</span>
+          ))}
+        </div>
+      )}
+
+      <button type="button" className="btn ghost block" onClick={() => setOpen(!open)}>
+        {open ? '閉じる' : '見た声を入れる・一覧を見る'}
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          <form onSubmit={submit}>
+            <Field label="見た声（その人の言葉のまま）" hint="言い換えないでください。言い換えるほど、届く言葉から離れます。氏名やアカウント名は書かないこと。">
+              <textarea rows={2} value={form.text} placeholder="例：腰が痛いけど病院に行く時間がない" onChange={(e) => setForm({ ...form, text: e.target.value })} />
+            </Field>
+            <Field label="どこで見たか">
+              <select value={form.place} onChange={(e) => setForm({ ...form, place: e.target.value })}>
+                {Object.entries(VOICE_PLACES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </Field>
+            <button type="submit" className="btn primary block" disabled={!form.text.trim()}>この声を足す</button>
+          </form>
+          {list.map((v) => (
+            <div key={v.id} className="card tight" style={{ marginTop: 8 }}>
+              <p style={{ margin: '0 0 4px', fontSize: 13 }}>{v.text}</p>
+              <p className="muted" style={{ fontSize: 11.5, margin: '0 0 4px' }}>{VOICE_PLACES[v.place]}</p>
+              <button type="button" className="btn ghost" onClick={() => store.removeVoice(v.id)}>消す</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {advice.map((a) => (
+        <p key={a.title} className="muted" style={{ fontSize: 11.5 }}>
+          <strong style={{ color: '#fff' }}>{a.title}</strong>：{a.body}
+        </p>
+      ))}
+    </Card>
+  );
 }

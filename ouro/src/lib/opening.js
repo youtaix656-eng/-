@@ -60,3 +60,28 @@ export function similarOpenings(text, past = [], limit = 3) {
   }
   return out.sort((a, b) => b.score - a.score);
 }
+
+/**
+ * 競合の書き出しと重なっていないか（新規）。
+ *
+ * これまでは**自分の過去の成果物の中だけ**を見ていた。けれど競合を台帳に持つと、
+ * 「実際に見た他人の書き出しにそっくり」も見られる。真似は事故のもとだが、
+ * **止めない・書き換えない**——知らせるだけで、直すかは人が決める
+ *（他の見張りと同じ線：guard.js / prepublish.js）。
+ *
+ * @param {string} text いま出来た成果物
+ * @param {{id:string, name:string, opening:string}[]} rivals 観測（opening が空のものは飛ばす）
+ * @returns {{id, name, score}[]}
+ */
+export function similarToRivals(text, rivals = [], limit = 3) {
+  const head = openingOf(text);
+  if (head.length < 12) return [];
+  const out = [];
+  for (const r of rivals) {
+    if (!r || !r.opening) continue;
+    const score = similarity(head, openingOf(r.opening));
+    if (score >= SIMILAR_AT) out.push({ id: r.id, name: r.name, score });
+    if (out.length >= limit) break;
+  }
+  return out;
+}

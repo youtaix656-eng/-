@@ -105,6 +105,9 @@ AI社員に仕事を依頼すると、社員どうしで引き継ぎながら仕
 | 86 | 詰まっている段から、AI社員への依頼文を自動で組み立てる | `loop.loopRequest` |
 | 87 | 右端のスクロール矢印（長い画面を1画面ずつ動かす） | `components/ScrollArrows.jsx` |
 | 88 | 任せたら月いくら浮くか（手作業を時間と金額で出す） | `lib/offload.js` / `Company.jsx` |
+| 89 | 競合台帳（実際に見た1件だけ。値段の位置・空いている所・古い観測の印） | `lib/rivals.js` / `Ventures.jsx` |
+| 90 | 需要の観測（見た声をその言葉のまま貯め、重なった語を出す） | `lib/demand.js` / `Ventures.jsx` |
+| 91 | 競合と市場を見る（観測を材料にした仕事の流れ） | `data/workflows.js` の `market_scan` |
 
 設計の全体像（アーキテクチャ・DBスキーマ・API・拡張時の注意点）は
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。

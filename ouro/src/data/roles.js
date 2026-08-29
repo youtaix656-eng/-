@@ -31,6 +31,7 @@ export const DEPARTMENTS = [
 export const ROLES = [
   {
     id: 'researcher',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     name: 'リサーチャー',
     reading: 'りさーちゃー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
@@ -50,6 +51,7 @@ export const ROLES = [
   },
   {
     id: 'analyzer',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     name: 'アナライザー',
     reading: 'あならいざー', // 目次の並びに使う（推定しない）
     departmentId: 'research',
@@ -105,6 +107,7 @@ export const ROLES = [
   },
   {
     id: 'strategist',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     name: 'ストラテジスト',
     reading: 'すとらてじすと', // 目次の並びに使う（推定しない）
     departmentId: 'strategy',
@@ -223,6 +226,7 @@ export const ROLES = [
   },
   {
     id: 'marketer',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'マーケター',
     reading: 'まーけたー', // 目次の並びに使う（推定しない）
@@ -413,6 +417,7 @@ export const ROLES = [
   },
   {
     id: 'contentmarketer',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'コンテンツマーケター',
     reading: 'こんてんつまーけたー',
@@ -432,6 +437,7 @@ export const ROLES = [
   },
   {
     id: 'sales',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: '営業',
     reading: 'えいぎょう',
@@ -525,6 +531,7 @@ export const ROLES = [
   },
   {
     id: 'pr',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: '広報・ブランディング',
     reading: 'こうほうぶらんでぃんぐ',
@@ -547,6 +554,7 @@ export const ROLES = [
   // 成果物は必ず分析・ガバナンス担当の確認を通してから外に出す。
   {
     id: 'mkt_content',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'マーケティング企画・コンテンツ',
     teamLabel: '企画・コンテンツ', // チーム内での短い表示名（目次では name を使う）
@@ -643,6 +651,7 @@ export const ROLES = [
   },
   {
     id: 'mkt_brand',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     writesForReaders: true, // 書き方の見本（style.js）を読ませる役
     name: 'マーケティングブランド・PR',
     teamLabel: 'ブランド・PR', // チーム内での短い表示名（目次では name を使う）
@@ -675,6 +684,7 @@ export const ROLES = [
   },
   {
     id: 'mkt_forecast',
+    readsMarket: true, // 競合の観測（rivals.js）を読ませる役
     name: 'マーケティング予測・戦略分析',
     teamLabel: '予測・戦略分析', // チーム内での短い表示名（目次では name を使う）
     reading: 'まーけてぃんぐよそくせんりゃくぶんせき',
