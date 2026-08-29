@@ -104,14 +104,29 @@ jobs:
         run: npm run build
         working-directory: ouro
 
+      # 資格ラボ（過去問→AI変換 / Vite + React JSX）を /shikaku-lab サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (資格ラボ)
+        run: npm ci
+        working-directory: shikaku-lab
+
+      - name: Test (資格ラボ)
+        run: npm test
+        working-directory: shikaku-lab
+
+      - name: Build (資格ラボ / /shikaku-lab)
+        run: npm run build
+        working-directory: shikaku-lab
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/shikaku-lab
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
           cp -r henkaku-note/dist dist/henkaku-note
           cp -r ouro/dist dist/ouro
+          cp -r shikaku-lab/dist dist/shikaku-lab
           touch dist/.nojekyll
 
       - name: Upload artifact
