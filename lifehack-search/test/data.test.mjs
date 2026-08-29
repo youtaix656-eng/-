@@ -85,6 +85,16 @@ test('力・熱を使う工夫には、やめて切り替える先がある（�
   }
 });
 
+test('お湯・加熱を使う工夫は温度（℃）まで書く（「熱めのお湯」は人によって40℃にも80℃にもなる）', () => {
+  for (const hack of HACKS) {
+    const text = [hack.summary, ...(hack.steps || []), ...(hack.prep || []), ...(hack.donts || []), hack.why, hack.caution]
+      .filter(Boolean)
+      .join('\n');
+    if (!/お湯|ぬるま湯|熱湯|湯せん|加熱/u.test(text)) continue;
+    assert.match(text, /\d+\s*℃/u, `${hack.id}: お湯を使うのに温度が書かれていない`);
+  }
+});
+
 test('関連（related）は実在する id を指す', () => {
   for (const hack of HACKS) {
     for (const id of hack.related || []) {
