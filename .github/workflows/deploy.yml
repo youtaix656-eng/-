@@ -132,9 +132,23 @@ jobs:
         run: npm run build
         working-directory: shikaku-lab
 
+      # 間合い（まあい / Vite + React JSX）を /maai サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (間合い)
+        run: npm ci
+        working-directory: maai
+
+      - name: Test (間合い)
+        run: npm test
+        working-directory: maai
+
+      - name: Build (間合い / /maai)
+        run: npm run build
+        working-directory: maai
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
@@ -142,6 +156,7 @@ jobs:
           cp -r ouro/dist dist/ouro
           cp -r kagami/dist dist/kagami
           cp -r shikaku-lab/dist dist/shikaku-lab
+          cp -r maai/dist dist/maai
           touch dist/.nojekyll
 
       - name: Upload artifact
