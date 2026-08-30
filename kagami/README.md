@@ -182,6 +182,14 @@
 51. **絞り込んだら件数の表示も変える**（「210項目」のままにしない）。
 52. **数え方が画面の見た目と違うときは、数えている数をそのまま出す**
    （「短すぎる」は空白を除いた数なので、いま何文字ぶんとして数えているかを書く）。
+53. **目次から飛んだ先を光らせる印を、`className` に足さない。** 飛び先のカードは
+   「開く」で className が変わるので、class で印を付けると次の描き直しで React が
+   className をまるごと書き直し、**印だけが消える**——運ぶところまでは動くので、
+   「飛べているのに光らない」という気づきにくい形になる（実際に踏んだ。目次の
+   `☾ 操作の型`・`▷ 別の呼び名`・`✦ 型のまとまり` の全項目がこの状態だった）。
+   印は React が書き戻さない属性（`focus.js` の `FLASH_ATTR` ＝ `data-flash`）で付け、
+   CSS も `[data-flash]` で受ける。`focus.js` が `classList` を使っていないことと、
+   `styles.css` に `[data-flash]` があることをテストが機械チェックする。
 
 ## 構成
 
@@ -206,7 +214,7 @@ src/lib/detect.js     語の一致だけで型を当てる（AIを呼ばない�
 src/lib/privacy.js    個人情報を見つけて札に置き換える
 src/lib/records.js    記録（氏名・連絡先を持たない）
 src/lib/storage.js    localStorage のみ。**ネットワークに触れない**
-src/lib/focus.js      目次から飛んだ先へ運ぶ（React に依存しない）
+src/lib/focus.js      目次から飛んだ先へ運ぶ（React に依存しない。印は data-flash）
 src/data/glyphs.js    画面に出る印（絵文字を使わない）
 src/components/Ornament.jsx  飾りの線画（ウロボロス・六芒星と目・十字）
 src/lib/yomi.js       読み・並び・行分け（全アプリ共通の目次ルール）
