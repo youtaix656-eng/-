@@ -50,6 +50,12 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   const [batch, setBatch] = useState(0); // 0=すべて（従来通り）
   const [newPct, setNewPct] = useState(null); // null=すべて（従来通り・新規/復習を区別しない）
   const [mood, setMood] = useState(null);
+  // ミニタイムアタックモード（⑨）：1問あたりの制限時間つき軽量版。本番の模試と違い、
+  //   日常の一問一答でもペース感覚を鍛えられるようにする任意のオプション。
+  const [timeAttack, setTimeAttack] = useState(false);
+  const [taSeconds, setTaSeconds] = useState(15);
+  const [remain, setRemain] = useState(taSeconds);
+  const [answeredThisQ, setAnsweredThisQ] = useState(false);
   const [started, setStarted] = useState(false);
   const [order, setOrder] = useState([]);
   const [idx, setIdx] = useState(0);
@@ -237,12 +243,34 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     recordAnswer(q, correct, grade);
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
     setAnswerLog((prev) => [...prev, { q, correct }]);
+    setAnsweredThisQ(true);
   };
 
   const handleNext = () => {
     if (idx + 1 < order.length) setIdx(idx + 1);
     else setIdx(order.length); // 終了画面へ
   };
+
+  // タイムアタック：問題が変わるたびに残り時間をリセットして1秒ごとにカウントダウン
+  useEffect(() => {
+    setAnsweredThisQ(false);
+    if (!timeAttack || !started || idx >= order.length) return;
+    setRemain(taSeconds);
+    const timer = setInterval(() => {
+      setRemain((r) => (r <= 1 ? 0 : r - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [idx, started, timeAttack, taSeconds, order.length]);
+
+  // 時間切れ：まだ解答していなければ自動で「もう一度」扱いにして次の問題へ
+  useEffect(() => {
+    if (!timeAttack || !started || idx >= order.length) return;
+    if (remain === 0 && !answeredThisQ) {
+      handleAnswered(false, GRADES.again);
+      handleNext();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remain]);
 
   // 一問一答をリセット（途中経過を破棄して科目選択へ戻す）
   const resetQuiz = () => {
@@ -338,12 +366,12 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
           </label>
 
           <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
-            <label>忘却リスクの下限（{minRisk === 0 ? '指定なし' : `${minRisk}%以上だけ`}）</label>
-            <input type="range" min="0" max="90" step="10" value={minRisk} onChange={(e) => setMinRisk(Number(e.target.value))} />
+            <label htmlFor="quiz-min-risk">忘却リスクの下限（{minRisk === 0 ? '指定なし' : `${minRisk}%以上だけ`}）</label>
+            <input id="quiz-min-risk" type="range" min="0" max="90" step="10" value={minRisk} onChange={(e) => setMinRisk(Number(e.target.value))} />
           </div>
           <div className="field" style={{ marginTop: 8 }}>
-            <label>誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
-            <input type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => setMinWrong(Number(e.target.value))} />
+            <label htmlFor="quiz-min-wrong">誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
+            <input id="quiz-min-wrong" type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => setMinWrong(Number(e.target.value))} />
           </div>
 
           <div className="review-count">
@@ -384,6 +412,23 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
             <p className="inline-note" style={{ marginTop: 6 }}>
               新規{newRemaining}問・復習{reviewRemaining}問が対象です。「すべて新規」「すべて復習」では同じ問題を繰り返しません。
             </p>
+          )}
+
+          <label className="switch-row" style={{ marginTop: 10 }}>
+            <input type="checkbox" checked={timeAttack} onChange={(e) => setTimeAttack(e.target.checked)} />
+            <span>
+              ⏱ ミニタイムアタックモード
+              <small>1問あたりの制限時間つき。本番のペース感覚を日常の一問一答でも鍛えられます。</small>
+            </span>
+          </label>
+          {timeAttack && (
+            <div className="chip-row" style={{ marginTop: 6 }}>
+              {[10, 15, 20].map((s) => (
+                <button key={s} className={`chip ${taSeconds === s ? 'active' : ''}`} onClick={() => setTaSeconds(s)}>
+                  {s}秒
+                </button>
+              ))}
+            </div>
           )}
 
           <button
@@ -523,6 +568,9 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
         <span className="count">
           {subject === 'all' ? 'すべての科目' : subject}
         </span>
+        {timeAttack && (
+          <span className={`time ${remain <= 3 ? 'warn' : ''}`}>⏱ {remain}秒</span>
+        )}
         <span className="count">
           {idx + 1} / {order.length}
         </span>

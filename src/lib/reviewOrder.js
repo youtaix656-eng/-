@@ -28,7 +28,7 @@ export function matchesSearch(q, term, links) {
   return false;
 }
 
-// 復習リストを絞り込み（科目（複数可）＋弱点タグ＋検索語＋回＋ブックマーク＋忘却リスク／誤答回数の下限）
+// 復習リストを絞り込み（科目（複数可）＋弱点タグ＋検索語＋回＋ブックマーク＋忘却リスク／誤答回数の下限＋誤答理由の型）
 export function filterReview(
   questions,
   {
@@ -44,6 +44,8 @@ export function filterReview(
     minWrong = 0,
     srs = {},
     now = Date.now(),
+    missType = '',
+    missTypes = {},
   } = {}
 ) {
   return questions.filter((q) => {
@@ -55,6 +57,7 @@ export function filterReview(
     if (bookmarkOnly && !bookmarks[q.id]) return false;
     if (minWrong > 0 && (normalize(srs[q.id]).wrongCount || 0) < minWrong) return false;
     if (minRisk > 0 && Math.round(riskOf(q, srs, now) * 100) < minRisk) return false;
+    if (missType && missTypes[q.id]?.type !== missType) return false;
     return true;
   });
 }

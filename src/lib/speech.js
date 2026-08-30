@@ -3,6 +3,8 @@
 // アプリを開いた状態での再生を前提とする（画面OFF時の継続再生は非対応）。
 // ファイル書き出しは行わず、アプリ内での再生のみ。
 
+import { synthesizeSpeech } from './voiceClone.js';
+
 export function isSpeechSupported() {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
@@ -78,6 +80,64 @@ export function pauseSpeech() {
 }
 export function resumeSpeech() {
   if (isSpeechSupported()) window.speechSynthesis.resume();
+}
+
+// ---- ボイスクローン（BYOK・ElevenLabs）による読み上げ ----
+// speak() と同じ Promise 契約（正常終了で resolve、abort で AbortError reject）に揃える。
+let cloneAudioEl = null;
+function ensureCloneAudioEl() {
+  if (cloneAudioEl || typeof document === 'undefined') return cloneAudioEl;
+  cloneAudioEl = document.createElement('audio');
+  cloneAudioEl.style.display = 'none';
+  document.body.appendChild(cloneAudioEl);
+  return cloneAudioEl;
+}
+
+export async function speakCloned(text, { apiKey, voiceId, modelId, signal } = {}) {
+  if (!text || !text.trim()) return;
+  if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+  const blob = await synthesizeSpeech({ apiKey, voiceId, text, modelId });
+  if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+  const audio = ensureCloneAudioEl();
+  if (!audio) return; // document が無い環境（テスト等）では何もしない
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const cleanup = () => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
+      URL.revokeObjectURL(url);
+    };
+    const finish = (fn, arg) => {
+      if (done) return;
+      done = true;
+      cleanup();
+      fn(arg);
+    };
+    const onEnded = () => finish(resolve);
+    const onError = () => finish(reject, new Error('クローン音声の再生に失敗しました'));
+    const onAbort = () => {
+      audio.pause();
+      finish(reject, new DOMException('aborted', 'AbortError'));
+    };
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
+    if (signal) {
+      if (signal.aborted) return onAbort();
+      signal.addEventListener('abort', onAbort);
+    }
+    audio.src = url;
+    audio.play().catch((e) => finish(reject, e));
+  });
+}
+
+export function cancelClonedSpeech() {
+  try {
+    cloneAudioEl?.pause();
+  } catch (e) {
+    /* noop */
+  }
 }
 
 // 中断可能な待機（音声の「間」に使用）

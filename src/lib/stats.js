@@ -80,6 +80,24 @@ export function formatPercent(v) {
   return Math.round(v * 100) + '%';
 }
 
+// 科目バランス警告：特定の科目だけ極端に正答率が低いまま学習が進んでいないかを検知する。
+//   十分な解答数がある科目（minSample以上）だけを比較対象にし、平均よりgapThreshold以上低く、
+//   かつ絶対値でもlowThreshold未満の科目を「偏り」として報告する（相対的に低いだけの誤検知を避ける）。
+export function subjectBalanceWarning(
+  history,
+  questions,
+  { minSample = 15, gapThreshold = 0.2, lowThreshold = 0.5 } = {}
+) {
+  const qualified = subjectStats(history, questions).filter((s) => s.total >= minSample && s.accuracy != null);
+  if (qualified.length < 2) return { hasWarning: false, weakSubjects: [], avgAccuracy: null };
+
+  const avgAccuracy = qualified.reduce((sum, s) => sum + s.accuracy, 0) / qualified.length;
+  const weakSubjects = qualified.filter(
+    (s) => s.accuracy < lowThreshold && avgAccuracy - s.accuracy >= gapThreshold
+  );
+  return { hasWarning: weakSubjects.length > 0, weakSubjects, avgAccuracy };
+}
+
 // ---- 攻略率・合格ライン診断・合格者スタイル診断 ----
 
 const DAY_MS_L = 24 * 60 * 60 * 1000;

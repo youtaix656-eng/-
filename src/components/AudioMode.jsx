@@ -69,8 +69,10 @@ function Opt({ on, onToggle, title, desc, disabled }) {
   );
 }
 
-export default function AudioMode({ store, onToast, reviewPreset, onConsumePreset }) {
-  const { questions, links, history, srs, settings, updateSettings, recordAnswer, setLink, bookmarks, toggleBookmark } = store;
+export default function AudioMode({ store, onToast, reviewPreset, onConsumePreset, onNavigate }) {
+  const { questions, links, history, srs, settings, updateSettings, recordAnswer, setLink, bookmarks, toggleBookmark, voiceCloneApiKey } = store;
+  const voiceClone = settings.voiceClone || { enabled: false, voiceId: '', voiceName: '' };
+  const cloneActive = !!(voiceClone.enabled && voiceClone.voiceId && voiceCloneApiKey);
 
   const taggedQuestions = useMemo(
     () =>
@@ -622,6 +624,9 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);
   useEffect(() => { engine.configure({ loop }); }, [loop]);
   useEffect(() => { engine.configure({ voice: selectedVoice(), pitch: settings.speechPitch || 1 }); }, [voices, settings.voiceURI, settings.speechPitch]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    engine.configure({ cloneVoice: cloneActive ? { apiKey: voiceCloneApiKey, voiceId: voiceClone.voiceId } : null });
+  }, [cloneActive, voiceCloneApiKey, voiceClone.voiceId]);
 
   useEffect(() => {
     loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
@@ -1269,8 +1274,36 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
             </div>
           </div>
 
-          {/* 声を選ぶ（聞き取りやすい6種） */}
+          {/* ボイスクローン（自分の声・任意／BYOK） */}
           <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>🎤 自分の声（ボイスクローン・任意）</div>
+            {voiceClone.voiceId ? (
+              <>
+                <p className="inline-note">
+                  登録済み：<strong>{voiceClone.voiceName || 'マイボイス'}</strong>
+                  {!voiceCloneApiKey && '（APIキー未設定のため使用できません）'}
+                </p>
+                <label className="switch-row">
+                  <input
+                    type="checkbox"
+                    checked={!!voiceClone.enabled}
+                    onChange={(e) => updateSettings({ voiceClone: { ...voiceClone, enabled: e.target.checked } })}
+                  />
+                  <span>この声で読み上げる（オフ＝下の「声を選ぶ」を使用）</span>
+                </label>
+              </>
+            ) : (
+              <p className="inline-note">
+                自分の声を読み上げ声にできます。
+                <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => onNavigate && onNavigate('settings')}>
+                  設定画面で追加
+                </button>
+              </p>
+            )}
+          </div>
+
+          {/* 声を選ぶ（聞き取りやすい6種） */}
+          <div className="card" style={{ opacity: cloneActive ? 0.5 : 1 }}>
             <div className="section-label" style={{ marginTop: 0 }}>🎙️ 声を選ぶ（聞き取りやすい6種）</div>
             <div className="voice-grid">
               {VOICE_PRESETS.map((p) => (

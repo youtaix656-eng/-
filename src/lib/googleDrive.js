@@ -32,7 +32,14 @@ function loadGis() {
     s.async = true;
     s.defer = true;
     s.onload = () => resolve();
-    s.onerror = () => { gisLoadPromise = null; reject(new Error('Google Identity Servicesの読み込みに失敗しました（通信環境をご確認ください）')); };
+    s.onerror = () => {
+      // 失敗した<script>タグをDOMに残さない（電波状況が悪い環境で保存/復元/自動同期を
+      // 何度も試みると、読み込み失敗のたびにタグが積み上がっていた）。次回の再試行で
+      // 新しいタグを作るため、ここで確実に取り除く。
+      s.remove();
+      gisLoadPromise = null;
+      reject(new Error('Google Identity Servicesの読み込みに失敗しました（通信環境をご確認ください）'));
+    };
     document.head.appendChild(s);
   });
   return gisLoadPromise;

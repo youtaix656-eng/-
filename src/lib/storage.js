@@ -39,8 +39,13 @@ export const KEYS = {
   activity: 'shinkyu:activity', // 直近の閲覧履歴（画面・タイトル・ジャンル）
   numberOverrides: 'shinkyu:numberOverrides', // 数値ファクトの上書き（毎年変わる数値の一括更新）
   bookmarks: 'shinkyu:bookmarks', // ブックマーク（後で見直す問題・questionId→保存時刻）
+  keiketsuLibrary: 'shinkyu:keiketsuLibrary', // 経絡経穴の教科書材料（貼り付けた原文の置き場・検索用）
+  keizetsuPageImages: 'shinkyu:keizetsuPageImages', // 経絡経穴の教科書ページ写真（端末内限定・自分で追加。バックアップ対象外）
+  voiceCloneSecret: 'shinkyu:voiceCloneSecret', // ボイスクローン用の外部APIキー（BYOK・端末内のみ・バックアップ対象外）
+  cloudAuthPaused: 'shinkyu:cloudAuthPaused', // Google自動同期がサイレント再ログインに失敗し一時停止中か（端末のGoogleログイン状態に依存するため端末内のみ・バックアップ対象外）
   migrated: 'shinkyu:migrated',
   syncMeta: 'shinkyu:syncMeta', // クラウド自動同期用：進捗（srs/history/memos/links/examResults/settings）の最終更新時刻
+  visitedViews: 'shinkyu:visitedViews', // 一度でも開いたことのある画面（view id）の集合。「まだ使ったことのない機能」の判定用（activityは直近ログで古い訪問が消えるため別管理）
 };
 
 const useIdb = isIdbSupported();
@@ -214,6 +219,40 @@ export const clearAudioProgress = () => remove(KEYS.audioProgress);
 export const loadExamResults = () => read(KEYS.examResults, []);
 export const saveExamResults = (r) => write(KEYS.examResults, r);
 
+// ---- 経絡経穴の教科書材料（貼り付けた原文の置き場） ----
+// keiketsuLibrary = [{ id, title, text, addedAt }]
+// ここに置くのは検索・後で問題化するための「原文の下書き置き場」であり、
+// 実際の経穴データ（keiketsuCards.js）はこの原文をもとに出典つきで手動整備する
+// （画面から直接、経穴の医療的事実を編集させる作りにはしない）。
+export const loadKeiketsuLibrary = () => read(KEYS.keiketsuLibrary, []);
+export const saveKeiketsuLibrary = (v) => write(KEYS.keiketsuLibrary, v);
+
+// ---- 経絡経穴の教科書ページ写真（端末内限定） ----
+// keizetsuPageImages = [{ id, pageNumber, label, blob, addedAt }]
+// 教科書のページをスキャン画像としてこのアプリ（公開リポジトリ・公開サイト）に
+// 同梱すると著作権上の問題になるため、この画像は「ユーザーが自分の端末にだけ」保存する。
+// exportAll/importAll（バックアップ・QR・クラウド自動同期）には意図的に含めない
+// （画像はサイズが大きくQR/クラウド同期に不向きなことに加え、voiceCloneSecretと同様、
+// 端末をまたいで勝手に運ばれてほしくないデータのため）。
+export const loadKeizetsuPageImages = () => read(KEYS.keizetsuPageImages, []);
+export const saveKeizetsuPageImages = (v) => write(KEYS.keizetsuPageImages, v);
+
+// ---- ボイスクローン用の外部APIキー（BYOK） ----
+// voiceCloneSecret = { apiKey }
+// APIキーは「バックアップ・QR・WebRTC・クラウド自動同期のいずれにも含めない」
+// （exportAll/importAll から意図的に除外）。他の設定と違い、漏れると第三者に
+// 課金・なりすまし音声生成をされ得る生きた認証情報のため、この端末にのみ置く。
+export const loadVoiceCloneSecret = () => read(KEYS.voiceCloneSecret, { apiKey: '' });
+export const saveVoiceCloneSecret = (v) => write(KEYS.voiceCloneSecret, v);
+
+// ---- Google自動同期の一時停止フラグ（端末内のみ） ----
+// サイレント再ログインに一度失敗したら true にし、以後の自動トリガー（起動時・タブ復帰・
+// オンライン復帰・5分間隔等）は再ログイン画面を出さずに黙って諦める。ユーザーが手動で
+// 「今すぐ同期」「保存」「復元」「ログインし直す」のいずれかに成功したら false に戻す
+// （2026-08-28、失敗するたびに毎回ログインポップアップが出る不具合の修正で追加）。
+export const loadCloudAuthPaused = () => read(KEYS.cloudAuthPaused, false);
+export const saveCloudAuthPaused = (v) => write(KEYS.cloudAuthPaused, v);
+
 // ---- クラウド自動同期用メタ（進捗の最終更新時刻。lib/progressMerge.jsのマージ判定に使う） ----
 // syncMeta = { updatedAt }（ミリ秒epoch）
 export const loadSyncMeta = () => read(KEYS.syncMeta, { updatedAt: 0 });
@@ -226,6 +265,11 @@ export const saveActivity = (a) => write(KEYS.activity, a);
 export const loadNumberOverrides = () => read(KEYS.numberOverrides, {});
 export const saveNumberOverrides = (o) => write(KEYS.numberOverrides, o);
 export const clearActivity = () => remove(KEYS.activity);
+
+// ---- 一度でも開いたことのある画面（featureDiscovery.jsの「まだ使ったことのない機能」判定用） ----
+// activityは直近ログ（件数上限あり）なので古い訪問が消える。こちらは消さない集合。
+export const loadVisitedViews = () => read(KEYS.visitedViews, []);
+export const saveVisitedViews = (v) => write(KEYS.visitedViews, v);
 
 // ---- ログイン鍵（端末内のみ・サーバー送信なし） ----
 // auth = { email, salt, passHash, question, ansSalt, ansHash, updatedAt }
@@ -266,6 +310,8 @@ const DEFAULT_SETTINGS = {
   sessionNewRatio: 1, // 学習セッションの新規割合（0〜1、1=すべて新規）
   dailyGoal: 300, // 1日の目標問題数（ハリオ先生の「今日の進捗」表示に使用）
   reminder: { enabled: false, time: '07:00', lastNotified: '' }, // 毎日の学習リマインド通知
+  // ボイスクローン（音声学習の読み上げ声）。APIキー本体は含まない（voiceCloneSecretへ別保存）。
+  voiceClone: { enabled: false, voiceId: '', voiceName: '' },
   // ポモドーロタイマー（全画面上部）
   pomodoro: {
     enabled: false, // 上部バーを表示するか
@@ -310,6 +356,14 @@ export async function exportAll() {
     auth: await loadAuth(),
     examResults: await loadExamResults(),
     settings: await read(KEYS.settings, {}),
+    bookmarks: await loadBookmarks(),
+    keiketsuLibrary: await loadKeiketsuLibrary(),
+    // 「前回の続きから」（一問一答・復習・模試・音声・学習セッション）も別端末へ引き継ぐ
+    quizProgress: await loadQuizProgress(),
+    reviewProgress: await loadReviewProgress(),
+    examProgress: await loadExamProgress(),
+    audioProgress: await loadAudioProgress(),
+    session: await loadSession(),
   };
 }
 
@@ -330,4 +384,23 @@ export async function importAll(data) {
   if (data.auth && typeof data.auth === 'object') await saveAuth(data.auth);
   if (Array.isArray(data.examResults)) await saveExamResults(data.examResults);
   if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
+  if (data.bookmarks && typeof data.bookmarks === 'object') await saveBookmarks(data.bookmarks);
+  if (Array.isArray(data.keiketsuLibrary)) await saveKeiketsuLibrary(data.keiketsuLibrary);
+  if (data.quizProgress && typeof data.quizProgress === 'object') await saveQuizProgress(data.quizProgress);
+  if (data.reviewProgress && typeof data.reviewProgress === 'object') await saveReviewProgress(data.reviewProgress);
+  if (data.examProgress && typeof data.examProgress === 'object') await saveExamProgress(data.examProgress);
+  if (data.audioProgress && typeof data.audioProgress === 'object') await saveAudioProgress(data.audioProgress);
+  if (data.session && typeof data.session === 'object') await saveSession(data.session);
+}
+
+// ---- 「前回の続きから」（一問一答・復習・模試・音声）のまとめ読み込み ----
+// QR受け渡し（sync.js）は store の React state に無いこれらの値を個別に取得する必要があるため、
+// SyncQR.jsx / MigrationGuide.jsx から共用する。
+export async function loadResumeState() {
+  return {
+    quizProgress: await loadQuizProgress(),
+    reviewProgress: await loadReviewProgress(),
+    examProgress: await loadExamProgress(),
+    audioProgress: await loadAudioProgress(),
+  };
 }

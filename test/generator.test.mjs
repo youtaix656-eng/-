@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateQuestions, generateVariants, GENERATORS } from '../src/lib/generator.js';
 import { yuanPoints, meridians } from '../src/data/knowledgeBase.js';
+import { KEIKETSU_CARDS } from '../src/data/keiketsuCards.js';
+import { muPoints, shuPoints, extraMeridianPoints, confusablePoints, meridianNameById } from '../src/data/knowledgeBase.js';
 
 test('生成した問題は必要な項目を備える', () => {
   const qs = generateQuestions({ count: 8 });
@@ -22,11 +24,48 @@ test('生成問題の選択肢に重複がない', () => {
   });
 });
 
+// **たまに落ちるテストは、直った証拠にならない。**
+// 選択肢の重複は乱数しだいで出るので（四総穴の「合谷」は原穴にもあり、
+// 候補を混ぜると同じものが2つ入る）、少ない回数では見逃す。
+// 全部の生成器を数多く回して、1件も出ないことを確かめる。
+test('どの生成器でも、選択肢に重複が出ない（乱数を多く回して確かめる）', () => {
+  for (const [key, gen] of Object.entries(GENERATORS)) {
+    for (let i = 0; i < 300; i += 1) {
+      const q = gen.fn();
+      if (!q || !Array.isArray(q.choices)) continue;
+      assert.equal(
+        new Set(q.choices).size,
+        q.choices.length,
+        `${key} で重複：${JSON.stringify(q.choices)}`
+      );
+      // 正解が選択肢の中にあること（重複を落とした時に消えていないか）
+      assert.ok(q.answer >= 0 && q.answer < q.choices.length, `${key} の正解番号が範囲外`);
+    }
+  }
+});
+
+/**
+ * 設問に含まれる名前から、元のデータを引く。
+ *
+ * **単純な includes で先頭一致を取ってはいけない。**「気海兪」の設問が
+ * 「気海」に、「関元兪」が「関元」に当たってしまい、別の経穴のカードを
+ * 正解として比べることになる（実際にこの取り違えでテストがランダムに落ちた）。
+ * いちばん長く一致した名前を採る。
+ */
+function findByName(list, question) {
+  let hit = null;
+  for (const x of list) {
+    if (!x.name || !question.includes(x.name)) continue;
+    if (!hit || x.name.length > hit.name.length) hit = x;
+  }
+  return hit;
+}
+
 test('経絡→原穴の生成は KB と正解が一致する', () => {
   // meridianToYuan だけを大量生成し、正解がKBの原穴と一致することを確認
   for (let i = 0; i < 30; i++) {
     const q = GENERATORS.meridianToYuan.fn();
-    const m = meridians.find((x) => q.question.includes(x.name));
+    const m = findByName(meridians, q.question);
     assert.ok(m, '経絡名が設問に含まれる');
     assert.equal(q.choices[q.answer], yuanPoints[m.id]);
   }
@@ -53,6 +92,112 @@ test('相剋の生成は正しい（木→土 など）', () => {
 test('指定タイプのみ生成される', () => {
   const qs = generateQuestions({ types: ['sheng'], count: 5 });
   qs.forEach((q) => assert.ok(q.tags.includes('相生')));
+});
+
+test('経穴カード→経絡の生成はkeiketsuCards.jsと正解が一致する', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.keiketsuMeridian.fn();
+    assert.ok(q, 'カードが4枚以上あるので必ず生成される');
+    const c = findByName(KEIKETSU_CARDS, q.question);
+    assert.ok(c, '経穴名が設問に含まれる');
+    assert.equal(q.choices[q.answer], c.meridian);
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('経穴カード→取穴部位の生成はkeiketsuCards.jsと正解が一致する', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.keiketsuLocation.fn();
+    assert.ok(q);
+    const c = findByName(KEIKETSU_CARDS, q.question);
+    assert.ok(c, '経穴名が設問に含まれる');
+    assert.equal(q.choices[q.answer], c.location);
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('keiketsuCards.jsの全カードにsourceIds配列がある', () => {
+  KEIKETSU_CARDS.forEach((c) => {
+    assert.ok(Array.isArray(c.sourceIds), `${c.name} に sourceIds が無い`);
+  });
+});
+
+test('経絡→募穴の生成はknowledgeBase.jsと正解が一致し、選択肢に重複がない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.meridianToMu.fn();
+    assert.ok(q);
+    const entry = Object.entries(muPoints).find(([, p]) => q.choices[q.answer] === p);
+    assert.ok(entry, '正解の募穴がmuPointsに存在する');
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('経絡→背部兪穴の生成はknowledgeBase.jsと正解が一致し、選択肢に重複がない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.meridianToShu.fn();
+    assert.ok(q);
+    const entry = Object.entries(shuPoints).find(([, p]) => q.choices[q.answer] === p);
+    assert.ok(entry, '正解の兪穴がshuPointsに存在する');
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('紛らわしい経穴の鑑別は、正解と誤答が異なる経絡になり選択肢が重複しない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.confusablePoint.fn();
+    assert.ok(q);
+    assert.equal(new Set(q.choices).size, q.choices.length);
+    // 正解の経絡名は選択肢の中で1つだけ
+    assert.equal(q.choices.filter((c) => c === q.choices[q.answer]).length, 1);
+  }
+});
+
+test('奇経八脈の所属穴数の生成はknowledgeBase.jsと正解が一致し、選択肢に重複がない', () => {
+  for (let i = 0; i < 30; i++) {
+    const q = GENERATORS.extraMeridianCount.fn();
+    assert.ok(q);
+    const e = findByName(extraMeridianPoints, q.question);
+    assert.ok(e, '奇経名が設問に含まれる');
+    assert.equal(q.choices[q.answer], String(e.count));
+    assert.equal(new Set(q.choices).size, q.choices.length);
+  }
+});
+
+test('knowledgeBase.js: muPoints/shuPointsは12経すべてを網羅し値が重複しない', () => {
+  const meridianIds = ['LU', 'LI', 'ST', 'SP', 'HT', 'SI', 'BL', 'KI', 'PC', 'TE', 'GB', 'LR'];
+  for (const id of meridianIds) {
+    assert.ok(muPoints[id], `muPointsに${id}が無い`);
+    assert.ok(shuPoints[id], `shuPointsに${id}が無い`);
+  }
+  assert.equal(new Set(Object.values(muPoints)).size, meridianIds.length);
+  assert.equal(new Set(Object.values(shuPoints)).size, meridianIds.length);
+});
+
+test('knowledgeBase.js: extraMeridianPointsは6奇経すべてを持つ', () => {
+  const ids = extraMeridianPoints.map((e) => e.id);
+  assert.deepEqual(ids.sort(), ['chong', 'dai', 'yangqiao', 'yangwei', 'yinqiao', 'yinwei'].sort());
+  extraMeridianPoints.forEach((e) => {
+    assert.ok(e.name && e.points && typeof e.count === 'number');
+  });
+});
+
+test('knowledgeBase.js: confusablePointsは全件が異なる経絡ID・名称の組で、meridianNameByIdで解決できる', () => {
+  // 教科書p.239の同経同字2組+異経同字4組+同音異字17組。ただし同音異字のうち2組は
+  // 3穴セット（少海/小海/照海、承漿/少商/少衝）のためペアに分解すると19組になり、
+  // 合計は 2+4+19=25 組。
+  assert.equal(confusablePoints.length, 25);
+  confusablePoints.forEach((c) => {
+    assert.ok(c.a && c.b && c.a !== c.b);
+    assert.ok(meridianNameById(c.aMeridian));
+    assert.ok(meridianNameById(c.bMeridian));
+  });
+});
+
+test('meridianNameById: GV/CVを含む正しい名称を返す', () => {
+  assert.equal(meridianNameById('GV'), '督脈');
+  assert.equal(meridianNameById('CV'), '任脈');
+  assert.equal(meridianNameById('LU'), '手の太陰肺経');
+  assert.equal(meridianNameById('xx'), 'xx');
 });
 
 test('○×変形は正誤が整合する', () => {

@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { qrMatrix } from '../lib/qr.js';
 import { buildSyncPayload, encodeSync, syncUrl, SYNC_TTL_MS, HISTORY_SUMMARY_CUTOFF_MS } from '../lib/sync.js';
+import { loadResumeState } from '../lib/storage.js';
 import { splitIntoChunks } from '../lib/chunk.js';
 import QRImage from './QRImage.jsx';
 
 // 1枚のQRに載せるチャンクデータの目安文字数（URLのprefix・チャンクヘッダぶんの余裕を見た値）。
-// QR誤り訂正レベルLの実用上限（約2,953バイト）に対して十分小さく、スキャンもしやすい。
-const CHUNK_DATA_LEN = 900;
+// QR誤り訂正レベルLの実用上限（約2,953バイト）には収まるが、900文字だと画面越しの
+// カメラ撮影では読み取りにくいほど高密度（実測でモジュール1つ約2.9px）になっていたため、
+// スキャンのしやすさを優先して抑えた（実測でモジュール1つ約4.6pxまで改善、枚数は増える）。
+const CHUNK_DATA_LEN = 300;
+const QR_SIZE = 320;
 
 function fmtRemain(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -21,7 +25,7 @@ function fmtRemain(ms) {
 //     一定間隔で自動的に切り替え表示する「アニメーションQR」にする
 //     （手動での送り／一時停止も可能）。相手はSyncScanでカメラをかざし続けるだけでよい。
 export default function SyncQR({ store, onToast }) {
-  const { srs, history, memos, links, examResults, settings } = store;
+  const { srs, history, memos, links, examResults, settings, bookmarks, session } = store;
   const [open, setOpen] = useState(false);
   const [withHistory, setWithHistory] = useState(true);
   const [summarizeHistory, setSummarizeHistory] = useState(false);
@@ -57,7 +61,11 @@ export default function SyncQR({ store, onToast }) {
     setBuilding(true);
     setFrameIdx(0);
     (async () => {
-      const data = { srs, history, memos, links, examResults, settings };
+      // quizProgress等（一問一答・復習・模試・音声の「続きから」）はReactのstoreに無いため、
+      // IndexedDBから直接読む（bookmarks/sessionはstoreにあるのでそのまま使う）。
+      const resumeState = await loadResumeState();
+      if (!alive) return;
+      const data = { srs, history, memos, links, examResults, settings, bookmarks, session, ...resumeState };
       const payload = buildSyncPayload(data, { includeHistory: withHistory, summarizeHistory });
       const encoded = await encodeSync(payload);
       if (!alive) return;
@@ -68,7 +76,7 @@ export default function SyncQR({ store, onToast }) {
     })();
     return () => { alive = false; };
     // issuedAt を依存に含めることで「再発行」時に焼き直す
-  }, [open, issuedAt, withHistory, summarizeHistory, srs, history, memos, links, examResults, settings]);
+  }, [open, issuedAt, withHistory, summarizeHistory, srs, history, memos, links, examResults, settings, bookmarks, session]);
 
   const multi = chunks && chunks.length > 1;
   const currentUrl = chunks ? chunks[frameIdx] : '';
@@ -131,7 +139,8 @@ export default function SyncQR({ store, onToast }) {
               {!expired && chunks && chunks.length > 0 && (
                 <div style={{ textAlign: 'center' }}>
                   <p className="inline-note">
-                    <strong>{chunks.length}個のテキストブロックに分割中</strong>（{frameIdx + 1}/{chunks.length}個目）
+                    <strong>{Math.round(((frameIdx + 1) / chunks.length) * 100)}%</strong>
+                    （{chunks.length}個のテキストブロックに分割中・{frameIdx + 1}/{chunks.length}個目）
                   </p>
                   <div className="progress"><span style={{ width: `${((frameIdx + 1) / chunks.length) * 100}%` }} /></div>
                   <div className="btn-row" style={{ marginTop: 8, justifyContent: 'center' }}>
@@ -144,7 +153,7 @@ export default function SyncQR({ store, onToast }) {
             </div>
           ) : (
             <div style={{ textAlign: 'center', marginBottom: 10, position: 'relative' }}>
-              <QRImage matrix={matrix} dim={expired} />
+              <QRImage matrix={matrix} dim={expired} size={QR_SIZE} />
               {expired && (
                 <div
                   style={{
@@ -163,7 +172,8 @@ export default function SyncQR({ store, onToast }) {
                   <>
                     {multi ? (
                       <>
-                        <strong>{chunks.length}枚のQRに分割中</strong>（{frameIdx + 1}/{chunks.length}枚目）
+                        <strong>{Math.round(((frameIdx + 1) / chunks.length) * 100)}%</strong>
+                        （{frameIdx + 1}/{chunks.length}枚目・{chunks.length}枚のQRに分割中）
                         <br />相手のカメラをかざし続けると自動で読み取ります
                       </>
                     ) : (

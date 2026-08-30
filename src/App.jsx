@@ -12,6 +12,7 @@ import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
+import ScrollArrows from './components/ScrollArrows.jsx';
 import AuthGate from './components/AuthGate.jsx';
 import Pomodoro from './components/Pomodoro.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
@@ -47,6 +48,19 @@ const CoverageMap = lazy(() => import('./components/CoverageMap.jsx'));
 const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph.jsx'));
 const Flashcards = lazy(() => import('./components/Flashcards.jsx'));
 const MigrationGuide = lazy(() => import('./components/MigrationGuide.jsx'));
+const WeeklyJournal = lazy(() => import('./components/WeeklyJournal.jsx'));
+const ExplainNotes = lazy(() => import('./components/ExplainNotes.jsx'));
+const ExamDayChecklist = lazy(() => import('./components/ExamDayChecklist.jsx'));
+const AcupointTap = lazy(() => import('./components/AcupointTap.jsx'));
+const MnemonicQuiz = lazy(() => import('./components/MnemonicQuiz.jsx'));
+const KeiketsuReverseQuiz = lazy(() => import('./components/KeiketsuReverseQuiz.jsx'));
+const KeiketsuLibrary = lazy(() => import('./components/KeiketsuLibrary.jsx'));
+const KeizetsuIndex = lazy(() => import('./components/KeizetsuIndex.jsx'));
+const KeizetsuTextbook = lazy(() => import('./components/KeizetsuTextbook.jsx'));
+const KeizetsuPageImages = lazy(() => import('./components/KeizetsuPageImages.jsx'));
+const Faq = lazy(() => import('./components/Faq.jsx'));
+const CognitiveStyleGuide = lazy(() => import('./components/CognitiveStyleGuide.jsx'));
+const CognitiveTraining = lazy(() => import('./components/CognitiveTraining.jsx'));
 
 function ViewLoading() {
   return (
@@ -108,6 +122,9 @@ const VIEW_TITLES = {
   flashcards: 'フラッシュカード',
   mnemonics: '語呂合わせノート',
   features: '全機能一覧',
+  faq: '鍼灸国試アプリ Q&A',
+  cognitivestyle: 'あなたの学習スタイル',
+  cognitivetraining: '認知特性トレーニング',
   toc: '目次',
   settings: '設定',
 };
@@ -132,6 +149,8 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
+  const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
+  const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
@@ -154,6 +173,12 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [view]);
 
+  // 学習セッションが完了画面（行き止まり）になっているかどうか。完了済みセッションを
+  // 「前回開いていた画面」として復元・保存すると、タブの再読み込み（Androidが背面タブの
+  // プロセスを回収した場合など）のたびに毎回この完了画面へ戻ってしまい、他画面へ
+  // 移れないように見える不具合になる（終了する／もう一度以外に抜け道が無いため）。
+  const isDeadEndSession = (s) => !s || s.pos >= s.target;
+
   // 前回開いていた画面を復元（アプリを閉じて開き直しても続きから）
   const viewRestored = useRef(false);
   useEffect(() => {
@@ -161,8 +186,9 @@ export default function App() {
     let cancelled = false;
     loadLastView().then((v) => {
       if (cancelled) return;
-      // ハッシュ経由の取り込み等で既に他画面へ切り替わっている場合は尊重
-      if (v && typeof v === 'string' && v !== 'home') {
+      // ハッシュ経由の取り込み等で既に他画面へ切り替わっている場合は尊重。
+      // 完了済みセッションへの復元は行わない（行き止まりになるため）。
+      if (v && typeof v === 'string' && v !== 'home' && !(v === 'session' && isDeadEndSession(store.session))) {
         setView((cur) => (cur === 'home' ? v : cur));
       }
       // 復元が完了してから保存を有効化する（初期の 'home' で上書きしないため）
@@ -171,17 +197,29 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.loaded]);
 
-  // 画面を切り替えるたびに保存（復元完了後のみ）
+  // 画面を切り替えるたびに保存（復元完了後のみ）。完了済みセッションは「home」として
+  // 保存し、次回の復元が行き止まりの完了画面に落ちないようにする。
   useEffect(() => {
-    if (store.loaded && viewRestored.current) saveLastView(view);
-  }, [view, store.loaded]);
+    if (!store.loaded || !viewRestored.current) return;
+    const v = view === 'session' && isDeadEndSession(store.session) ? 'home' : view;
+    saveLastView(v);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, store.loaded, store.session]);
 
   // 直近の履歴に記録（ホーム以外の画面を開いたとき）。復元完了後のみ。
   useEffect(() => {
     if (!store.loaded || !viewRestored.current || view === 'home') return;
     store.logActivity(activityInfo(view));
+  }, [view, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 一度でも開いた画面を記録（消えない集合。「まだ使ったことのない機能」の判定用、
+  // Home.jsxのfeatureDiscoveryが参照する。activityと違い件数上限で古い訪問が消えない）。
+  useEffect(() => {
+    if (!store.loaded || !viewRestored.current) return;
+    store.markViewVisited(view);
   }, [view, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 端末だけに取り込む体験メモ（#notes=…）を反映したら知らせて画面を開く
@@ -309,6 +347,14 @@ export default function App() {
     setFocusKeyword(kw);
     setView('connect');
   };
+  const jumpToRoadmapLevel = (levelId) => {
+    setFocusRoadmapLevel(levelId);
+    setView('roadmap');
+  };
+  const jumpToTraining = (mode) => {
+    setFocusTrainingMode(mode);
+    setView('cognitivetraining');
+  };
   const startCustomQuiz = (questionsList) => {
     setQuizQuestions(questionsList);
     setView('quiz');
@@ -402,6 +448,8 @@ export default function App() {
             }}
             installPrompt={installPrompt}
             onInstall={installApp}
+            onJumpToRoadmapLevel={jumpToRoadmapLevel}
+            onStartSubjectQuiz={startSubjectQuiz}
           />
         );
       case 'quiz':
@@ -451,6 +499,7 @@ export default function App() {
             onToast={showToast}
             reviewPreset={audioReview}
             onConsumePreset={() => setAudioReview(false)}
+            onNavigate={setView}
           />
         );
       case 'exam':
@@ -460,7 +509,11 @@ export default function App() {
       case 'dashboard':
         return <Dashboard store={store} />;
       case 'analytics':
-        return <Analytics store={store} onNavigate={setView} />;
+        return <Analytics store={store} onNavigate={setView} onToast={showToast} />;
+      case 'journal':
+        return <WeeklyJournal store={store} onNavigate={setView} />;
+      case 'explain':
+        return <ExplainNotes store={store} onNavigate={setView} />;
       case 'unread':
         return <UnreadPages store={store} onToast={showToast} onOpenImport={() => setView('import')} />;
       case 'mistakes':
@@ -480,7 +533,14 @@ export default function App() {
           if (qs.length) startCustomQuiz(qs);
         }} />;
       case 'roadmap':
-        return <Roadmap store={store} onNavigate={setView} />;
+        return (
+          <Roadmap
+            store={store}
+            onNavigate={setView}
+            focusLevel={focusRoadmapLevel}
+            onConsumeFocusLevel={() => setFocusRoadmapLevel(null)}
+          />
+        );
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
@@ -518,16 +578,43 @@ export default function App() {
         return <Venues store={store} onToast={showToast} />;
       case 'examcontent':
         return <ExamContent store={store} onToast={showToast} />;
+      case 'examday':
+        return <ExamDayChecklist store={store} onNavigate={setView} />;
       case 'experiences':
         return <Experiences store={store} onToast={showToast} />;
       case 'mindmap':
         return <MindMap store={store} onOpenKeyword={openKeyword} />;
       case 'flashcards':
-        return <Flashcards store={store} />;
+        return <Flashcards store={store} onNavigate={setView} />;
+      case 'acupointtap':
+        return <AcupointTap onNavigate={setView} />;
+      case 'keiketsureverse':
+        return <KeiketsuReverseQuiz onNavigate={setView} />;
+      case 'keiketsulibrary':
+        return <KeiketsuLibrary onToast={showToast} onNavigate={setView} />;
+      case 'keizetsuindex':
+        return <KeizetsuIndex onNavigate={setView} />;
+      case 'keizetsutextbook':
+        return <KeizetsuTextbook store={store} onNavigate={setView} />;
+      case 'keizetsupageimages':
+        return <KeizetsuPageImages onToast={showToast} onNavigate={setView} />;
       case 'mnemonics':
-        return <MnemonicNotebook store={store} onToast={showToast} />;
+        return <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} />;
+      case 'mnemonicquiz':
+        return <MnemonicQuiz store={store} onNavigate={setView} />;
       case 'features':
         return <FeatureIndex onNavigate={setView} />;
+      case 'faq':
+        return <Faq />;
+      case 'cognitivestyle':
+        return <CognitiveStyleGuide onNavigate={setView} onOpenTraining={jumpToTraining} />;
+      case 'cognitivetraining':
+        return (
+          <CognitiveTraining
+            initialMode={focusTrainingMode}
+            onConsumeInitialMode={() => setFocusTrainingMode(null)}
+          />
+        );
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':
@@ -551,7 +638,7 @@ export default function App() {
           />
         );
       default:
-        return <Home store={store} onNavigate={setView} />;
+        return <Home store={store} onNavigate={setView} onJumpToRoadmapLevel={jumpToRoadmapLevel} onStartSubjectQuiz={startSubjectQuiz} />;
     }
   };
 
@@ -626,6 +713,11 @@ export default function App() {
       </main>
 
       {toast && <div className="toast">{toast}</div>}
+
+      {/* 右端のスクロール矢印：長い画面を1画面ずつ動かす。
+          **画面の分岐（renderView）の中に入れないこと**——入れるとその画面にしか出ない。
+          動かない画面では自分で消える。 */}
+      <ScrollArrows view={view} />
 
       {/* 音声ミニプレーヤー：他の画面へ移っても再生を続けられる（音声画面では非表示） */}
       <MiniPlayer hidden={view === 'audio'} onOpen={() => setView('audio')} lifted={view !== 'roadmap'} />

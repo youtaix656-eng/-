@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { ROADMAP_PHASES, ROADMAP_MONTHS, phasesInMonth } from '../data/roadmapPhases.js';
 
@@ -84,9 +85,24 @@ function HeadphoneSVG() {
   );
 }
 
-export default function Roadmap({ store, onNavigate }) {
+export default function Roadmap({ store, onNavigate, focusLevel, onConsumeFocusLevel }) {
   const examDate = store.settings.examDate;
   const left = daysUntil(examDate);
+  const levelDetailsRef = useRef(null);
+
+  // Homeのレベルバッジから遷移してきた時、レベル別ガイドを自動で開いて該当箇所へスクロールする
+  useEffect(() => {
+    if (!focusLevel) return;
+    const el = levelDetailsRef.current;
+    if (!el) return;
+    el.open = true;
+    const timer = setTimeout(() => {
+      const target = el.querySelector(`#level-${focusLevel}`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      onConsumeFocusLevel?.();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [focusLevel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="view rm">
@@ -179,6 +195,96 @@ export default function Roadmap({ store, onNavigate }) {
       })}
 
       {/* 全期間 共通の心得 */}
+      <div className="section-label">🧠 なぜこの方法が効くのか（科学的根拠）</div>
+      <details className="card">
+        <summary style={{ fontWeight: 700, cursor: 'pointer' }}>
+          「読む」より「解く」、詰め込みより間隔をあけた復習が効く理由
+        </summary>
+        <div style={{ marginTop: 12 }}>
+          <p>
+            <b>①解く（検索練習）が読むより効く：テスト効果</b><br />
+            記憶は「思い出そうとする」という行為そのもので強化されます（検索誘発性強化）。ただ読むだけだと
+            "わかった気になる"錯覚（流暢性の錯覚）が起きやすく、実際の定着とは別物です。Roediger &amp; Karpicke（2006）の
+            実験でも、同じ時間なら読み返すより思い出す練習をしたグループの方が1週間後の成績が高くなりました。
+            → <b>一問一答は「解く→裏で解説」の1セット</b>なので、これ自体が検索練習になっています。
+          </p>
+          <p>
+            <b>②今すぐ完璧を狙わなくていい：望ましい困難</b><br />
+            Bjork（UCLA）の提唱する考え方で、学習中に「ちょっと苦労する」状態の方が、後々の記憶保持率が高くなります。
+            間違えた問題をその場ですぐ完璧に理解しようとせず、時間を空けてもう一度思い出す機会を作る方が理にかなっています。
+          </p>
+          <p>
+            <b>③間隔をあけて繰り返すと定着する：間隔効果</b><br />
+            記憶はEbbinghausの忘却曲線通り時間とともに薄れますが、忘れかけたタイミングで思い出すと
+            再固定化（reconsolidation）という過程を経て、前より強く保持されます。同じ日に詰め込むより、
+            日をまたいで間隔をあけた方が最終的な定着率が高いことが多数の研究で確認されています。
+            → <b>SRS（間隔反復）はこの効果を自動計算</b>して、忘れる直前のタイミングで復習に出しています。
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            <b>④睡眠が記憶を定着させる</b><br />
+            学習した内容は睡眠中（特に深いノンレム睡眠）に海馬から大脳皮質へ転写され、長期記憶として定着すると
+            考えられています。夜遅くまで新規問題を詰め込むより、ある程度で切り上げて眠る方が、その日解いた分の定着には有利です。
+          </p>
+        </div>
+      </details>
+
+      <div className="section-label">🎓 レベル別：問題演習の進め方</div>
+      <details className="card" ref={levelDetailsRef}>
+        <summary style={{ fontWeight: 700, cursor: 'pointer' }}>
+          初級者・中級者・上級者で、使う機能をどう変えるか
+        </summary>
+        <div style={{ marginTop: 12 }}>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            レベルが上がるほど「広く浅く」から「狭く深く」に絞っていくのが基本です。
+          </p>
+
+          <div id="level-beginner" style={{ marginTop: 14 }}>
+            <b>🔰 初級者（まだ全体像がない・正答率が低い時期）</b>
+            <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：広く浅く「知ってる/知らない」を仕分ける</div>
+            <ul style={{ marginTop: 4 }}>
+              <li><button className="rm-link" onClick={() => onNavigate('quiz')}>一問一答</button>：科目・ジャンル絞り込みなし「すべて」から手当たり次第に</li>
+              <li><button className="rm-link" onClick={() => onNavigate('audio')}>⚡高速回転モード</button>（音声学習内）：3秒想起→答え、をサクサク周回</li>
+              <li><button className="rm-link" onClick={() => onNavigate('toc')}>目次</button>／<button className="rm-link" onClick={() => onNavigate('mindmap')}>マインドマップ</button>：知らない科目だけ10分ほど眺めて地図を掴む</li>
+              <li><button className="rm-link" onClick={() => onNavigate('flashcards')}>フラッシュカード</button>：経穴など視覚的に覚えやすいものから</li>
+              <li><button className="rm-link" onClick={() => onNavigate('coverage')}>網羅マップ</button>：手つかずの科目を把握するだけでOK（今埋めようとしなくていい）</li>
+              <li>誤答理由の分析やリーチ管理はまだ気にしなくていい。間違いだらけで当然の時期</li>
+            </ul>
+          </div>
+
+          <div id="level-intermediate" style={{ marginTop: 14 }}>
+            <b>📘 中級者（正答率が上がり、間違いパターンが見えてきた時期）</b>
+            <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：弱点を可視化して、そこだけ繰り返す</div>
+            <ul style={{ marginTop: 4 }}>
+              <li><button className="rm-link" onClick={() => onNavigate('review')}>復習</button>が主戦場に。SRSが出す問題を優先的に解く</li>
+              <li>誤答理由（勘違い／知識不足／ケアレス）を記録し始める → 弱点パターンが見えてくる</li>
+              <li>リーチ（8回誤答）バッジの付いた問題を意識的に潰す</li>
+              <li><button className="rm-link" onClick={() => onNavigate('dashboard')}>弱点分析</button>／<button className="rm-link" onClick={() => onNavigate('analytics')}>分析</button>：弱点クラスタ・忘却予測でテーマを把握</li>
+              <li><button className="rm-link" onClick={() => onNavigate('mindmap')}>まぎらわしい対比</button>で紛らわしい選択肢を集中的に潰す</li>
+              <li><button className="rm-link" onClick={() => onNavigate('choicequiz')}>4択問題</button>で本番形式（選択肢を選ぶ）に慣れる</li>
+              <li><button className="rm-link" onClick={() => onNavigate('connect')}>連結学習</button>で知識を「点」から「線」につなぐ</li>
+              <li>「今日のおすすめ」バナーに従い、新規:復習の比率を自動調整に任せる</li>
+              <li><button className="rm-link" onClick={() => onNavigate('session')}>学習（3分の2バッファ術）</button>で時間を計画的に配分（基礎2:バッファ1）</li>
+            </ul>
+          </div>
+
+          <div id="level-advanced" style={{ marginTop: 14, marginBottom: 0 }}>
+            <b>🎯 上級者（合格前提・直前期）</b>
+            <div className="inline-note" style={{ marginTop: 2, marginBottom: 4 }}>目的：本番シミュレーションと穴の最終確認</div>
+            <ul style={{ marginTop: 4, marginBottom: 0 }}>
+              <li><button className="rm-link" onClick={() => onNavigate('exam')}>模試（午前/午後）</button>：本番同形式・時間制限ありを週1で</li>
+              <li><button className="rm-link" onClick={() => onNavigate('exam')}>模試「苦手な問題」</button>：正答率データから自動抽出された弱点だけに演習</li>
+              <li><button className="rm-link" onClick={() => onNavigate('exam')}>模試「選択式」</button>：科目・ジャンル・キーワードでピンポイント演習</li>
+              <li><button className="rm-link" onClick={() => onNavigate('analytics')}>分析・攻略率・合格診断</button>：合格ラインまでの距離を定期チェック</li>
+              <li>復習は<button className="rm-link" onClick={() => onNavigate('review')}>△✕（間違えた問題）</button>だけに絞る（新規はストップ）</li>
+              <li><button className="rm-link" onClick={() => onNavigate('pasttrends')}>鍼灸過去問題の傾向と対策</button>：頻出テーマ・キーワードの最終チェック</li>
+              <li><button className="rm-link" onClick={() => onNavigate('numbers')}>数値の棚卸し</button>：毎年変わる統計数値の最終確認</li>
+              <li><button className="rm-link" onClick={() => onNavigate('coverage')}>網羅マップ</button>：手薄科目が残っていないか最終確認</li>
+              <li><button className="rm-link" onClick={() => onNavigate('audio')}>音声学習「今日の連結」「弱点読み」</button>：スキマ時間も総仕上げに</li>
+            </ul>
+          </div>
+        </div>
+      </details>
+
       <div className="section-label">🧭 全期間つらぬく心得</div>
       <div className="rm-dd card">
         <div className="rm-do">

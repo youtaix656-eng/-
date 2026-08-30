@@ -14,7 +14,11 @@ import {
 } from '../lib/webrtcTransfer.js';
 import QRImage from './QRImage.jsx';
 
-const CODE_CHUNK_LEN = 700;
+// SDP（オファー/アンサー）は圧縮後もICE候補等でそれなりの長さになるため、
+// 1個あたりの文字数を抑えてQRの版（モジュール数）を下げ、カメラでの読み取りやすさを
+// 優先する（版が上がるほど1モジュールが小さくなり、画面越しの撮影では読み取りにくくなる）。
+const CODE_CHUNK_LEN = 300;
+const QR_SIZE = 280;
 
 // 交換用コード（オファー／アンサー）をQR＋テキストで表示するだけの静止パネル
 // （自動送りはしない。SDPの手動交換は1回きりの操作なので、SyncQR.jsxのような
@@ -37,13 +41,13 @@ function CodeOutputPanel({ chunks, onToast, label }) {
   return (
     <div style={{ textAlign: 'center', marginTop: 10 }}>
       {matrix ? (
-        <QRImage matrix={matrix} size={220} />
+        <QRImage matrix={matrix} size={QR_SIZE} />
       ) : (
         <p className="inline-note">（このブロックはQRとしては大きすぎます。コピーで送ってください）</p>
       )}
       {multi && (
         <p className="inline-note" style={{ marginTop: 6 }}>
-          <strong>{chunks.length}個に分割中</strong>（{idx + 1}/{chunks.length}個目）
+          <strong>{Math.round(((idx + 1) / chunks.length) * 100)}%</strong>（{chunks.length}個に分割中・{idx + 1}/{chunks.length}個目）
         </p>
       )}
       <div className="btn-row" style={{ marginTop: 8, justifyContent: 'center' }}>
@@ -55,33 +59,135 @@ function CodeOutputPanel({ chunks, onToast, label }) {
   );
 }
 
-// 相手から受け取ったコードを1ブロックずつ貼り付けて自動で組み立てる入力パネル
+// 相手から受け取ったコードを1ブロックずつ貼り付けて自動で組み立てる入力パネル。
+// カメラ対応端末（BarcodeDetector）では、QRを直接かざして読み取ることもできる
+// （端末のカメラアプリでの読み取り→コピペは、長い文字列だと"コピー"操作が出ない
+// 端末があるため、アプリ内スキャンをSyncScan.jsxと同じ方式で用意する）。
 function CodeInputPanel({ onComplete, onToast, label }) {
   const [text, setText] = useState('');
   const [progress, setProgress] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState('');
   const reassemblerRef = useRef(new Reassembler());
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
+  const activeRef = useRef(false);
+  const busyRef = useRef(false);
 
-  const add = () => {
-    if (!text.trim()) return;
-    const res = reassemblerRef.current.add(text.trim());
+  const hasDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
+  const stopCamera = () => {
+    activeRef.current = false;
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setScanning(false);
+  };
+  useEffect(() => () => stopCamera(), []);
+
+  // 1ブロック分の文字列（QR1枚・貼り付け1回ぶん）を処理（貼り付け・カメラ共通）
+  const addChunk = (raw) => {
+    const res = reassemblerRef.current.add(raw.trim());
     if (!res.ok) {
       onToast?.(`これは${label}のコードとして読み取れませんでした`);
-      return;
+      return false;
     }
     setProgress({ received: res.receivedCount, total: res.total });
-    setText('');
     if (res.complete) {
+      stopCamera();
       onComplete(reassemblerRef.current.assemble());
       reassemblerRef.current.reset();
       setProgress(null);
+    }
+    return true;
+  };
+
+  const addFromTextarea = () => {
+    if (!text.trim()) return;
+    if (addChunk(text)) setText('');
+  };
+
+  const startCamera = async () => {
+    setScanError('');
+    if (!hasDetector) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      streamRef.current = stream;
+      setScanning(true);
+      requestAnimationFrame(async () => {
+        const v = videoRef.current;
+        if (!v) return;
+        v.srcObject = stream;
+        v.setAttribute('playsinline', 'true');
+        try { await v.play(); } catch (e) { /* 自動再生の制約は無視 */ }
+        let detector;
+        try {
+          detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        } catch (e) {
+          setScanError('この端末ではQRの読み取りに対応していません。貼り付けをご利用ください。');
+          stopCamera();
+          return;
+        }
+        activeRef.current = true;
+        const tick = async () => {
+          if (!activeRef.current || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes && codes.length && !busyRef.current) {
+              busyRef.current = true;
+              addChunk(codes[0].rawValue);
+              busyRef.current = false;
+            }
+          } catch (e) { /* 一時的な検出エラーは無視して継続 */ }
+          if (activeRef.current) timerRef.current = setTimeout(tick, 250);
+        };
+        tick();
+      });
+    } catch (e) {
+      setScanError('カメラを起動できませんでした。ブラウザのカメラ許可を確認するか、貼り付けをご利用ください。');
+      stopCamera();
     }
   };
 
   return (
     <div style={{ marginTop: 10 }}>
       {progress && progress.total > 1 && (
-        <p className="inline-note">{progress.received} / {progress.total} 個 取り込み済み</p>
+        <p className="inline-note">
+          {Math.round((progress.received / progress.total) * 100)}%（{progress.received} / {progress.total} 個 取り込み済み）
+        </p>
       )}
+
+      {hasDetector && !scanning && (
+        <button className="btn" onClick={startCamera} style={{ marginBottom: 8 }}>📷 QRを読み取る（カメラ）</button>
+      )}
+      {scanError && <div className="auth-error" style={{ marginBottom: 8 }}>{scanError}</div>}
+
+      {scanning && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ position: 'relative', textAlign: 'center' }}>
+            <video ref={videoRef} muted playsInline style={{ width: '100%', maxWidth: 320, borderRadius: 12, background: '#000' }} />
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute', top: '50%', left: '50%', width: 160, height: 160,
+                transform: 'translate(-50%, -50%)', border: '3px solid rgba(255,255,255,0.9)',
+                borderRadius: 12, boxShadow: '0 0 0 9999px rgba(0,0,0,0.25)', pointerEvents: 'none',
+              }}
+            />
+          </div>
+          <p className="inline-note" style={{ marginTop: 6 }}>
+            相手の{label}コードを枠内に入れてください。複数枚に分かれている場合は、切り替わるQRをそのまま映し続けてください。
+          </p>
+          <div className="btn-row" style={{ marginTop: 6 }}>
+            <button className="btn ghost sm" onClick={stopCamera}>カメラを閉じる</button>
+          </div>
+        </div>
+      )}
+
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -90,7 +196,7 @@ function CodeInputPanel({ onComplete, onToast, label }) {
         style={{ width: '100%' }}
       />
       <div className="btn-row" style={{ marginTop: 8 }}>
-        <button className="btn primary" onClick={add} disabled={!text.trim()}>取り込む</button>
+        <button className="btn primary" onClick={addFromTextarea} disabled={!text.trim()}>取り込む</button>
       </div>
     </div>
   );
@@ -111,8 +217,17 @@ export default function P2PTransfer({ store, onToast }) {
   const [answerChunks, setAnswerChunks] = useState(null);
   const pcRef = useRef(null);
   const dcRef = useRef(null);
+  const connectTimeoutRef = useRef(null);
+
+  const clearConnectTimeout = () => {
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+  };
 
   const cleanup = () => {
+    clearConnectTimeout();
     try { dcRef.current?.close(); } catch (e) { /* noop */ }
     try { pcRef.current?.close(); } catch (e) { /* noop */ }
     pcRef.current = null;
@@ -133,11 +248,28 @@ export default function P2PTransfer({ store, onToast }) {
 
   const watchConnectionFailure = (pc) => {
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      if (pc.connectionState === 'connected') {
+        clearConnectTimeout();
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        clearConnectTimeout();
         setErrorMsg('接続できませんでした。同じWi-Fiに接続してから試すか、他の移行方法（QR分割・共有・Googleドライブ）をご利用ください。');
         setPhase('error');
       }
     };
+  };
+
+  // 対称NAT等でICE接続が失敗にも成功にも至らず「接続を待っています…」のまま
+  // いつまでも進まないことがある（実測で65秒待っても状態が変化しないケースを確認）。
+  // ブラウザ側のconnectionState変化を待つだけでなく、一定時間で見切りを付けて
+  // 他の移行方法へ誘導する（ユーザーが無反応な画面で待たされ続けないようにする）。
+  const armConnectTimeout = (ms = 20000) => {
+    clearConnectTimeout();
+    connectTimeoutRef.current = setTimeout(() => {
+      if (pcRef.current && pcRef.current.connectionState !== 'connected') {
+        setErrorMsg('接続に時間がかかりすぎています。同じWi-Fiに接続しているか確認するか、他の移行方法（QR分割・共有・Googleドライブ）をご利用ください。');
+        setPhase('error');
+      }
+    }, ms);
   };
 
   // ===== 送る側 =====
@@ -157,6 +289,7 @@ export default function P2PTransfer({ store, onToast }) {
       setPhase('waiting-answer');
 
       dc.onopen = async () => {
+        clearConnectTimeout();
         setPhase('sending');
         try {
           const data = await exportAll();
@@ -180,6 +313,7 @@ export default function P2PTransfer({ store, onToast }) {
       const sdp = await decodeSdp(encoded);
       await acceptAnswer(pcRef.current, sdp);
       setPhase('connecting');
+      armConnectTimeout();
       onToast?.('応答コードを取り込みました。接続を待っています…');
     } catch (e) {
       onToast?.(e.message || '応答コードの取り込みに失敗しました');
@@ -201,6 +335,7 @@ export default function P2PTransfer({ store, onToast }) {
         receiveOverChannel(ev.channel, {
           onProgress: (received, total) => setProgress({ received, total }),
           onComplete: async (text) => {
+            clearConnectTimeout();
             try {
               const data = JSON.parse(text);
               if (!confirm('別端末の学習データ（問題・進捗・設定など）を取り込みます。この端末のデータは上書きされます。よろしいですか？')) {
@@ -215,8 +350,9 @@ export default function P2PTransfer({ store, onToast }) {
               setPhase('error');
             }
           },
-          onError: () => {
-            setErrorMsg('受信中にエラーが発生しました');
+          onError: (e) => {
+            clearConnectTimeout();
+            setErrorMsg(e?.message || '受信中にエラーが発生しました');
             setPhase('error');
           },
         });
@@ -226,6 +362,7 @@ export default function P2PTransfer({ store, onToast }) {
       const { parts } = splitIntoChunks(encodedAnswer, CODE_CHUNK_LEN);
       setAnswerChunks(parts);
       setPhase('waiting-connection');
+      armConnectTimeout();
     } catch (e) {
       setErrorMsg(e.message || 'アンサーの作成に失敗しました');
       setPhase('error');
@@ -299,8 +436,13 @@ export default function P2PTransfer({ store, onToast }) {
           )}
 
           {role === 'receive' && progress && phase === 'waiting-connection' && (
-            <div className="progress" style={{ marginTop: 8 }}>
-              <span style={{ width: `${Math.min(100, (progress.received / Math.max(1, progress.total)) * 100)}%` }} />
+            <div style={{ marginTop: 8 }}>
+              <p className="inline-note">
+                受信中… {Math.round(Math.min(100, (progress.received / Math.max(1, progress.total)) * 100))}%
+              </p>
+              <div className="progress">
+                <span style={{ width: `${Math.min(100, (progress.received / Math.max(1, progress.total)) * 100)}%` }} />
+              </div>
             </div>
           )}
 

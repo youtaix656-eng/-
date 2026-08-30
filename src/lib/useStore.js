@@ -6,7 +6,7 @@ import * as storage from './storage.js';
 import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK } from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
-import { decodeSync, syncToBackup, isSyncExpired } from './sync.js';
+import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
 import { dedupeAgainst } from './importer.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
@@ -70,6 +70,7 @@ export function useStore() {
   const [auth, setAuthState] = useState(null); // 端末内ログイン鍵
   const [examResults, setExamResultsState] = useState([]); // 模試の結果履歴
   const [activity, setActivityState] = useState([]); // 直近の閲覧履歴（ホーム右上）
+  const [visitedViews, setVisitedViewsState] = useState([]); // 一度でも開いた画面（消えない集合、まだ使ったことのない機能の判定用）
   const [numberOverrides, setNumberOverridesState] = useState({}); // 数値ファクトの上書き（毎年更新）
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
@@ -77,6 +78,24 @@ export function useStore() {
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
   const [cloudAutoSyncToast, setCloudAutoSyncToast] = useState(0); // クラウド自動同期で他端末の進捗を取り込んだ回数
   const [cloudSyncStatus, setCloudSyncStatus] = useState(null); // { ok, at, pulled, error } | null（CloudBackup.jsxの状態表示用）
+  const [cloudAuthPaused, setCloudAuthPaused] = useState(false); // サイレント再ログイン失敗で自動同期を一時停止中か
+  // ボイスクローン用APIキー（BYOK）。secretのため settings とは別保存＝バックアップ/同期対象外。
+  const [voiceCloneApiKey, setVoiceCloneApiKeyState] = useState('');
+  useEffect(() => {
+    storage.loadVoiceCloneSecret().then((v) => setVoiceCloneApiKeyState(v.apiKey || ''));
+  }, []);
+  const saveVoiceCloneApiKey = useCallback((apiKey) => {
+    setVoiceCloneApiKeyState(apiKey);
+    storage.saveVoiceCloneSecret({ apiKey });
+  }, []);
+
+  useEffect(() => {
+    storage.loadCloudAuthPaused().then((v) => setCloudAuthPaused(!!v));
+  }, []);
+  const clearCloudAuthPause = useCallback(() => {
+    setCloudAuthPaused(false);
+    storage.saveCloudAuthPaused(false);
+  }, []);
 
   // 初期ロード（IndexedDB）。旧 localStorage からの移行も行う。
   useEffect(() => {
@@ -129,6 +148,7 @@ export function useStore() {
       const au = await storage.loadAuth();
       const er = await storage.loadExamResults();
       const act = await storage.loadActivity();
+      const vv = await storage.loadVisitedViews();
       const numOv = await storage.loadNumberOverrides();
       const [
         { default: eiseiQuestions, EISEI_VERSION },
@@ -335,6 +355,7 @@ export function useStore() {
       setAuthState(au || null);
       setExamResultsState(er || []);
       setActivityState(Array.isArray(act) ? act : []);
+      setVisitedViewsState(Array.isArray(vv) ? vv : []);
       setNumberOverridesState(numOv && typeof numOv === 'object' ? numOv : {});
       // 同梱の語呂合わせ（バッチ方式・増分）。DEFAULT_MNEMONICS_VERSION が上がるたびに
       // 未登録のキーワードだけ追加（既存ユーザーが編集・削除したものは上書きしない）。
@@ -428,6 +449,9 @@ export function useStore() {
     if (persist.current) storage.saveActivity(activity);
   }, [activity]);
   useEffect(() => {
+    if (persist.current) storage.saveVisitedViews(visitedViews);
+  }, [visitedViews]);
+  useEffect(() => {
     if (persist.current) storage.saveNumberOverrides(numberOverrides);
   }, [numberOverrides]);
   useEffect(() => {
@@ -442,65 +466,196 @@ export function useStore() {
   // googleDrive.js・progressMerge.js は実際に使う時だけ動的import（未使用ユーザーの
   // バンドルを増やさないため）。サイレント認証・通信の失敗は静かに諦める（ユーザー操作を妨げない）。
   const cloudSyncBusy = useRef(false);
-  useEffect(() => {
-    if (!loaded) return;
-    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
-    let alive = true;
+  // 実際の同期処理本体（自動同期のデバウンス後・手動の「今すぐ同期」ボタンの両方から呼ぶ）。
+  // silent=trueは自動同期用（同意画面を出さず、失敗しても静かに諦める）。
+  // silent=falseは手動トリガー用（初回は同意画面が出てよい）。
+  // 戻り値は { skipped: true } （busy中・クライアントID未設定で何もしなかった）か
+  // 完了時はundefined。呼び出し側（手動「今すぐ同期」ボタン）はskippedを見て、
+  // 「進行中の別の同期と重なって今回は何もしなかった」のを「同期に成功した」と
+  // 誤表示しないようにする（バックグラウンドの自動トリガーが増えたことで、手動ボタンを
+  // 押した瞬間に別の同期が進行中というケースが実際に起こりうるようになったため）。
+  const runCloudSync = useCallback(async (silent) => {
+    if (cloudSyncBusy.current) return { skipped: true, reason: 'busy' };
     const clientId = settings.googleDriveClientId;
-    const timer = setTimeout(async () => {
-      if (cloudSyncBusy.current) return;
-      cloudSyncBusy.current = true;
-      try {
-        const [gd, pm, meta] = await Promise.all([
-          import('./googleDrive.js'),
-          import('./progressMerge.js'),
-          storage.loadSyncMeta(),
-        ]);
-        const token = await gd.requestAccessToken(clientId, { silent: true });
-        if (!alive) return;
-        const remoteText = await gd.downloadBackup(token, gd.SYNC_FILENAME);
-        const localSnapshot = { srs, history, memos, links, examResults, settings };
-        let merged = localSnapshot;
-        let pulled = false;
-        if (remoteText) {
-          const remote = JSON.parse(remoteText);
-          merged = pm.mergeProgress(localSnapshot, remote.data || {}, {
-            localUpdatedAt: meta.updatedAt || 0,
-            remoteUpdatedAt: (remote.meta && remote.meta.updatedAt) || 0,
-          });
-          pulled =
-            Object.keys(merged.srs).length !== Object.keys(localSnapshot.srs).length ||
-            merged.history.length !== localSnapshot.history.length ||
-            Object.keys(merged.memos).length !== Object.keys(localSnapshot.memos).length ||
-            Object.keys(merged.links).length !== Object.keys(localSnapshot.links).length ||
-            merged.examResults.length !== localSnapshot.examResults.length;
-        }
-        const newUpdatedAt = Date.now();
-        await gd.uploadBackup(token, JSON.stringify({ meta: { updatedAt: newUpdatedAt }, data: merged }), gd.SYNC_FILENAME);
-        await storage.saveSyncMeta({ updatedAt: newUpdatedAt });
-        if (!alive) return;
-        if (pulled) {
-          setSrs(merged.srs);
-          setHistory(merged.history);
-          setMemos(merged.memos);
-          setLinks(merged.links);
-          setExamResultsState(merged.examResults);
-          setCloudAutoSyncToast((n) => n + 1);
-        }
-        if (JSON.stringify(merged.settings) !== JSON.stringify(localSnapshot.settings)) {
-          setSettings(merged.settings);
-        }
-        setCloudSyncStatus({ ok: true, at: newUpdatedAt, pulled });
-      } catch (e) {
-        const gd = await import('./googleDrive.js').catch(() => null);
-        const needsRelogin = gd && gd.isSilentAuthError(e);
-        setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message, needsRelogin });
-      } finally {
-        cloudSyncBusy.current = false;
+    if (!clientId) return { skipped: true, reason: 'no-client-id' };
+    // サイレント再ログインが一度失敗したら、直すまで自動トリガーはポップアップを
+    // 出さずに黙って諦める（起動のたび・タブ復帰のたびにログイン画面が出る不具合の修正）。
+    // 手動操作（今すぐ同期・保存・復元・ログインし直す）はsilent=falseなのでここを通らない。
+    if (silent && cloudAuthPaused) return { skipped: true, reason: 'auth-paused' };
+    cloudSyncBusy.current = true;
+    try {
+      const [gd, pm, meta] = await Promise.all([
+        import('./googleDrive.js'),
+        import('./progressMerge.js'),
+        storage.loadSyncMeta(),
+      ]);
+      const token = await gd.requestAccessToken(clientId, { silent });
+      const remoteText = await gd.downloadBackup(token, gd.SYNC_FILENAME);
+      // quizProgress等（一問一答・模試・復習・音声の「続きから」）はReactのstoreに無いため、
+      // IndexedDBから直接読む（sessionはstoreにあるのでそのまま使う）。ユーザー指定により、
+      // 「別端末で今まさに進行中の活動を裏で上書きしかねない」という理由であえて対象外に
+      // していたが、常に最新の状態に同期する方針を優先してここに含めることにした
+      // （マージは各自身のタイムスタンプで新しい方を丸ごと採用＝mergeResumeState参照）。
+      const resumeState = await storage.loadResumeState();
+      const localSnapshot = { srs, history, memos, links, examResults, settings, bookmarks, ...resumeState, session };
+      let merged = localSnapshot;
+      let pulled = false;
+      if (remoteText) {
+        const remote = JSON.parse(remoteText);
+        merged = pm.mergeProgress(localSnapshot, remote.data || {}, {
+          localUpdatedAt: meta.updatedAt || 0,
+          remoteUpdatedAt: (remote.meta && remote.meta.updatedAt) || 0,
+        });
+        // 件数だけの比較だと、既存の問題IDのlastAnswered/dueだけが他端末で更新された
+        // ケース（件数は変わらず値だけ変わる、実運用で最も多いパターン）を「変化なし」と
+        // 誤判定し、マージ結果をローカルへ反映し損ねてしまう（progressMerge.jsのバグ修正参照）。
+        pulled = pm.progressChanged(localSnapshot, merged);
       }
-    }, 5000); // 変更が落ち着くのを待ってから同期（連打での通信を避ける）。loaded直後の初回実行も兼ねる
-    return () => { alive = false; clearTimeout(timer); };
-  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults]);
+      const newUpdatedAt = Date.now();
+      await gd.uploadBackup(token, JSON.stringify({ meta: { updatedAt: newUpdatedAt }, data: merged }), gd.SYNC_FILENAME);
+      await storage.saveSyncMeta({ updatedAt: newUpdatedAt });
+      if (pulled) {
+        setSrs(merged.srs);
+        setHistory(merged.history);
+        setMemos(merged.memos);
+        setLinks(merged.links);
+        setExamResultsState(merged.examResults);
+        setBookmarks(merged.bookmarks);
+        setSessionState(merged.session);
+        await Promise.all([
+          storage.saveSession(merged.session),
+          storage.saveQuizProgress(merged.quizProgress),
+          storage.saveExamProgress(merged.examProgress),
+          storage.saveReviewProgress(merged.reviewProgress),
+          storage.saveAudioProgress(merged.audioProgress),
+        ]);
+        setCloudAutoSyncToast((n) => n + 1);
+      }
+      if (JSON.stringify(merged.settings) !== JSON.stringify(localSnapshot.settings)) {
+        setSettings(merged.settings);
+      }
+      setCloudSyncStatus({ ok: true, at: newUpdatedAt, pulled });
+      if (cloudAuthPaused) { setCloudAuthPaused(false); storage.saveCloudAuthPaused(false); }
+    } catch (e) {
+      const gd = await import('./googleDrive.js').catch(() => null);
+      const needsRelogin = gd && gd.isSilentAuthError(e);
+      setCloudSyncStatus({ ok: false, at: Date.now(), error: e && e.message, needsRelogin });
+      if (silent && needsRelogin) { setCloudAuthPaused(true); storage.saveCloudAuthPaused(true); }
+      throw e;
+    } finally {
+      cloudSyncBusy.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings, srs, history, memos, links, examResults, bookmarks, session, cloudAuthPaused]);
+
+  // 「常に最新の状態」の各種自動トリガーが共有する間引き用の最終実行時刻。
+  // 起動時同期もここに登録することで、起動直後にfocus/visibilitychangeが偶発的に
+  // 発火しても（一部ブラウザは初回表示時にfocusイベントを出すことがある）、
+  // 直後に無駄なもう1回の同期が連続しないようにする。
+  const lastBgSyncRef = useRef(0);
+  const didInitialSyncRef = useRef(false);
+
+  // データ変更をきっかけにした同期（連打での通信を避けるため、変更が落ち着くのを待ってから）。
+  // loaded直後の"初回"はここでは動かさない（下の起動時同期が別途・待たずに担当する）。
+  useEffect(() => {
+    if (!loaded) return undefined;
+    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return undefined;
+    if (!didInitialSyncRef.current) return undefined; // 初回は起動時同期に任せる（二重発火防止）
+    const timer = setTimeout(() => { runCloudSync(true).catch(() => {}); }, 5000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults, bookmarks, session]);
+
+  // ①起動時（URLを開いた・ホーム画面から起動した直後）は、上のデバウンスを待たず
+  // ほぼ即座に同期を試みる（「開いたらすぐ最新化する」という体感を優先）。
+  // ⑥失敗した場合（起動直後は回線がまだ安定していないことがある）は15秒後に1回だけ
+  // 自動で再試行する（無限リトライはしない＝失敗が続く環境で通信を送り続けない）。
+  useEffect(() => {
+    if (!loaded) return undefined;
+    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return undefined;
+    if (didInitialSyncRef.current) return undefined;
+    didInitialSyncRef.current = true;
+    let alive = true;
+    let retryTimer = null;
+    const timer = setTimeout(() => {
+      lastBgSyncRef.current = Date.now();
+      runCloudSync(true).catch(() => {
+        if (!alive) return;
+        retryTimer = setTimeout(() => {
+          if (!alive) return;
+          lastBgSyncRef.current = Date.now();
+          runCloudSync(true).catch(() => {});
+        }, 15000);
+      });
+    }, 300);
+    return () => { alive = false; clearTimeout(timer); if (retryTimer) clearTimeout(retryTimer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId]);
+
+  // 「🔄 今すぐ同期」ボタン用（CloudBackup.jsx）。自動同期のデバウンス（最大5秒）を
+  // 待たずに、設定を変えた直後や動作確認をしたい時にその場で同期できる。
+  const syncCloudNow = useCallback(() => runCloudSync(false), [runCloudSync]);
+
+  // runCloudSyncは解答するたび等、頻繁に変わるsrs/history等に依存しているため参照が
+  // 毎回変わる。下のイベントリスナー登録・setIntervalの依存にrunCloudSyncを直接使うと、
+  // 学習中（＝データが変わるたび）にリスナーの解除→再登録とsetIntervalの再作成が
+  // 繰り返されてしまい、④の5分間隔が実質リセットされ続けて発火しない・不要なchurnが
+  // 起きるバグがあった。常に最新のrunCloudSyncを参照しつつ、リスナー登録自体は
+  // データの変化と無関係に安定させるため、refに逃がす。
+  const runCloudSyncRef = useRef(runCloudSync);
+  useEffect(() => { runCloudSyncRef.current = runCloudSync; }, [runCloudSync]);
+
+  // 「常に最新の状態」に近づけるため、ローカルの変更を待つだけでなく、他端末での更新も
+  // 積極的に拾いに行く。②タブに戻ってきた時（他の端末で進めてから、この端末に戻ってきた
+  // 場面が典型）③オフラインから復帰した時④開いたままの端末でも取りこぼさないよう
+  // 一定間隔（5分）で、それぞれ自動で1回同期する。短時間に何度も発火しても連打に
+  // ならないよう、共通の間引き（1分）を通す。
+  const triggerBackgroundSync = useCallback(() => {
+    if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const BG_SYNC_MIN_INTERVAL_MS = 60_000;
+    const now = Date.now();
+    if (now - lastBgSyncRef.current < BG_SYNC_MIN_INTERVAL_MS) return;
+    lastBgSyncRef.current = now;
+    runCloudSyncRef.current(true).catch(() => {});
+  }, [settings.googleDriveAutoSync, settings.googleDriveClientId]);
+
+  useEffect(() => {
+    if (!loaded) return undefined;
+    if (typeof document === 'undefined' || typeof window === 'undefined') return undefined;
+    document.addEventListener('visibilitychange', triggerBackgroundSync);
+    window.addEventListener('focus', triggerBackgroundSync);
+    window.addEventListener('online', triggerBackgroundSync);
+    const interval = setInterval(triggerBackgroundSync, 5 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', triggerBackgroundSync);
+      window.removeEventListener('focus', triggerBackgroundSync);
+      window.removeEventListener('online', triggerBackgroundSync);
+      clearInterval(interval);
+    };
+  }, [loaded, triggerBackgroundSync]);
+
+  // ⑤バックグラウンドへ退避する直前（他アプリに切り替える・タブを閉じる等）にも、
+  // ローカルの最新の変更を一度プッシュしておく。次に開いた別端末が、待たされずに
+  // この端末の最新状態を受け取れるようにするため（間引きは共通のcloudSyncBusyのみ＝
+  // 退避の合図は取りこぼしたくないので上の1分間引きは適用しない）。
+  // ここも同じ理由でrunCloudSyncRef経由にし、データが変わるたびのリスナー再登録を避ける。
+  useEffect(() => {
+    if (!loaded) return undefined;
+    if (typeof document === 'undefined') return undefined;
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (!settings.googleDriveAutoSync || !settings.googleDriveClientId) return;
+      runCloudSyncRef.current(true).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onHide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId]);
 
   const clearCloudAutoSyncToast = useCallback(() => setCloudAutoSyncToast(0), []);
 
@@ -542,6 +697,11 @@ export function useStore() {
     });
   }, []);
   const clearActivity = useCallback(() => setActivityState([]), []);
+
+  const markViewVisited = useCallback((view) => {
+    if (!view) return;
+    setVisitedViewsState((cur) => (cur.includes(view) ? cur : [...cur, view]));
+  }, []);
 
   // 数値ファクトの上書き（毎年変わる数値を全科目まとめて更新するための単一窓口）
   const setNumberOverride = useCallback((id, patch) => {
@@ -778,6 +938,18 @@ export function useStore() {
     setQuestions(sampleQuestions);
   }, []);
 
+  // 端末内の解答履歴（history）は追記型で無制限に増え続けるため、既定オフの
+  // オプションとして、古い履歴（90日超）を「日付×科目×正誤の件数」に要約して
+  // 軽量化できるようにする（QR/バックアップ転送で使っているsummarizeHistoryForTransferと
+  // 同じロジック。要約後は個々の問題までは遡れなくなるため、必ず件数を見せてから
+  // ユーザーの明示操作でのみ実行する。設定画面「⚙️」から）。
+  const summarizeOldHistory = useCallback(() => {
+    const before = history.length;
+    const summarized = summarizeHistoryForTransfer(history);
+    setHistory(summarized);
+    return { before, after: summarized.length };
+  }, [history]);
+
   // バックアップ実行後にカウンタをリセット
   const markBackedUp = useCallback(() => {
     setSettings((prev) => ({
@@ -855,6 +1027,8 @@ export function useStore() {
     activity,
     logActivity,
     clearActivity,
+    visitedViews,
+    markViewVisited,
     numberOverrides,
     setNumberOverride,
     clearNumberOverride,
@@ -883,6 +1057,11 @@ export function useStore() {
     cloudAutoSyncToast,
     clearCloudAutoSyncToast,
     cloudSyncStatus,
+    syncCloudNow,
+    cloudAuthPaused,
+    clearCloudAuthPause,
+    voiceCloneApiKey,
+    saveVoiceCloneApiKey,
     settings,
     reviewQuestions,
     dueReviewQuestions,
@@ -897,6 +1076,7 @@ export function useStore() {
     updateSettings,
     resetProgress,
     restoreSamples,
+    summarizeOldHistory,
     markBackedUp,
     importBackup,
     emptyState,

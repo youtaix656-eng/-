@@ -19,27 +19,38 @@ export const MIGRATION_METHODS = {
 
 // syncPayloadBytes: QR/URL受け渡し用ペイロード（進捗・設定のみ、圧縮後）のバイト数
 // fullBackupBytes: 問題データも含む完全バックアップのバイト数
-// hasShareApi: この端末がWeb Share API（ファイル共有）に対応しているか
-export function recommendMigrationMethod({ syncPayloadBytes, fullBackupBytes, hasShareApi }) {
-  if (syncPayloadBytes != null && syncPayloadBytes <= QR_SINGLE_FRAME_BYTES) {
+// hasShareApi: この端末がWeb Share API（ファイル共有）に対応しているか（後方互換のため残す。
+//   capabilities.shareApi が指定されていればそちらを優先する）
+// capabilities: deviceCapabilities.jsのcheckDeviceCapabilities()の戻り値（任意）。
+//   指定すると、この端末で実際には使えない方法（カメラ非対応なのにQRをすすめる 等）を除外する。
+//   未指定時は全て対応しているものとして扱う（既存呼び出し側との後方互換）。
+export function recommendMigrationMethod({ syncPayloadBytes, fullBackupBytes, hasShareApi, capabilities }) {
+  const caps = {
+    camera: true,
+    webrtc: true,
+    shareApi: hasShareApi,
+    ...capabilities,
+  };
+
+  if (syncPayloadBytes != null && syncPayloadBytes <= QR_SINGLE_FRAME_BYTES && caps.camera) {
     return {
       ...MIGRATION_METHODS.qr,
       reason: '進捗・設定だけならQRコード1枚で収まるサイズです。最も手軽な方法です。',
     };
   }
-  if (syncPayloadBytes != null && syncPayloadBytes <= QR_MANY_FRAMES_LIMIT) {
+  if (syncPayloadBytes != null && syncPayloadBytes <= QR_MANY_FRAMES_LIMIT && caps.camera) {
     return {
       ...MIGRATION_METHODS['qr-multi'],
       reason: 'QRを複数枚に自動分割して連続表示すれば移行できます。相手のカメラをかざし続けるだけです。',
     };
   }
-  if (hasShareApi) {
+  if (caps.shareApi) {
     return {
       ...MIGRATION_METHODS.share,
       reason: '問題データも含めたバックアップ全体は、共有ボタン（AirDrop・LINE・Google Drive等）で直接送るのが簡単です。',
     };
   }
-  if (fullBackupBytes == null || fullBackupBytes <= REASONABLE_TRANSFER_LIMIT) {
+  if (caps.webrtc && (fullBackupBytes == null || fullBackupBytes <= REASONABLE_TRANSFER_LIMIT)) {
     return {
       ...MIGRATION_METHODS.webrtc,
       reason: '共有ボタンが使えない環境では、WebRTCで端末同士を直接つないで転送できます（同じWi-Fiがおすすめ）。',

@@ -1,7 +1,9 @@
 // コンテンツ品質チェック（CI用）。
 //   1) スキーマ検証  2) 版番号の健全性  3) 重複（stem/id/論点）
-//   4) 網羅マップ集計  5) 数値ファクトの鮮度
-//   スキーマ/重複/版番号にエラーがあれば exit 1（CIを落とす）。網羅・鮮度は警告のみ。
+//   4) 網羅マップ集計  5) 数値ファクトの鮮度  6) 全機能一覧のview実在確認
+//   7) 経穴カード（keiketsuCards.js）の要穴・分類クロスチェック
+//   スキーマ/重複/版番号/経穴クロスチェックにエラーがあれば exit 1（CIを落とす）。
+//   網羅・鮮度は警告のみ。
 //
 //   実行: node scripts/validate-content.mjs
 
@@ -12,6 +14,11 @@ import { validateBank } from '../src/lib/questionSchema.js';
 import { coverageBySubject, coverageSummary, coverageLevel } from '../src/lib/coverage.js';
 import { volatileNumberFacts } from '../src/data/mindmapData.js';
 import featureRegistry from '../src/data/featureRegistry.js';
+import { KEIKETSU_CARDS } from '../src/data/keiketsuCards.js';
+import {
+  yuanPoints, luoPoints, xiPoints, muPoints, muPointLocation, shuPoints,
+  fourCommandPoints, dualDefinitionPoints, confusablePoints, meridians,
+} from '../src/data/knowledgeBase.js';
 
 const line = (s = '') => process.stdout.write(s + '\n');
 let hardFail = 0;
@@ -90,6 +97,64 @@ if (orphanFeatures.length) {
   line(`  ✗ view が App.jsx に存在しない機能 ${orphanFeatures.length} 件:`);
   for (const f of orphanFeatures) line(`      [${f.id}] view="${f.view}"（${f.title}）`);
 } else line('  ✓ 全機能の view はApp.jsxに実在する');
+line('');
+
+// 7) 経穴カード（keiketsuCards.js）の要穴クロスチェック。
+//    knowledgeBase.js の構造化データ（原穴・絡穴・郄穴・募穴・兪穴・四総穴・
+//    二説併記6穴・紛らわしい経穴の対）を単一の正とし、361枚のカードが
+//    経絡・分類とも矛盾していないかを毎回機械的に確認する（2026-08-28、
+//    muPointLocation.LI/SPの実バグをこの種のクロスチェックで発見した経緯から常設化）。
+line('■ 経穴カード（keiketsuCards.js）のクロスチェック');
+{
+  const byName = new Map();
+  KEIKETSU_CARDS.forEach((c) => {
+    if (!byName.has(c.name)) byName.set(c.name, []);
+    byName.get(c.name).push(c);
+  });
+  const keiketsuIssues = [];
+  const meridianNameOf = (id) => meridians.find((m) => m.id === id)?.name || { CV: '任脈', GV: '督脈' }[id];
+  const checkPoint = (pointName, meridianId, roleLabel) => {
+    const cards = byName.get(pointName);
+    const meridianName = meridianNameOf(meridianId);
+    if (!cards) { keiketsuIssues.push(`${roleLabel}「${pointName}」(${meridianName})のカードが見つからない`); return; }
+    if (!cards.some((c) => c.meridian === meridianName)) {
+      keiketsuIssues.push(`${roleLabel}「${pointName}」は${meridianName}のはずが、実際は[${cards.map((c) => c.meridian).join(', ')}]`);
+    }
+  };
+  Object.entries(yuanPoints).forEach(([m, p]) => checkPoint(p, m, '原穴'));
+  Object.entries(luoPoints).forEach(([m, p]) => { if (m !== 'SP_GREAT') checkPoint(p, m, '絡穴'); });
+  Object.entries(xiPoints).forEach(([m, p]) => checkPoint(p, m, '郄穴'));
+  Object.entries(muPoints).forEach(([m, p]) => {
+    const loc = muPointLocation[m];
+    checkPoint(p, loc === 'self' ? m : loc, `募穴(${m}の募穴)`);
+  });
+  Object.entries(shuPoints).forEach(([m, p]) => checkPoint(p, 'BL', `背部兪穴(${m}の兪穴)`));
+  fourCommandPoints.forEach((f) => checkPoint(f.point, f.meridian, '四総穴'));
+  dualDefinitionPoints.forEach((name) => {
+    const cards = byName.get(name);
+    if (!cards) { keiketsuIssues.push(`二説併記穴「${name}」のカードが見つからない`); return; }
+    cards.forEach((c) => {
+      if (!c.location.includes('別説')) keiketsuIssues.push(`二説併記穴「${name}」(${c.id})のlocationに「別説」の記載が無い`);
+    });
+  });
+  confusablePoints.forEach((cp) => {
+    checkPoint(cp.a, cp.aMeridian, `confusable(${cp.group})`);
+    checkPoint(cp.b, cp.bMeridian, `confusable(${cp.group})`);
+  });
+  const dupIds = KEIKETSU_CARDS.map((c) => c.id).filter((id, i, arr) => arr.indexOf(id) !== i);
+  const dupNames = KEIKETSU_CARDS.map((c) => c.name).filter((n, i, arr) => arr.indexOf(n) !== i);
+  if (dupIds.length) keiketsuIssues.push(`id重複: ${[...new Set(dupIds)].join(', ')}`);
+  if (dupNames.length) keiketsuIssues.push(`経穴名重複: ${[...new Set(dupNames)].join(', ')}`);
+
+  line(`  総カード数: ${KEIKETSU_CARDS.length}`);
+  if (keiketsuIssues.length) {
+    hardFail += keiketsuIssues.length;
+    line(`  ✗ 要穴・分類の矛盾 ${keiketsuIssues.length} 件:`);
+    for (const i of keiketsuIssues) line(`      ${i}`);
+  } else {
+    line('  ✓ 原穴・絡穴・郄穴・募穴・兪穴・四総穴・二説併記穴・紛らわしい経穴の対、いずれも矛盾なし');
+  }
+}
 line('');
 
 line('===== 結果 =====');

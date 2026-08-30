@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { overallStats, studyStreak } from '../lib/stats.js';
+import { estimateLevel } from '../lib/learnerLevel.js';
+import { todayFocusSubjects } from '../lib/todayFocus.js';
+import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
-import { loadQuizProgress, clearQuizProgress } from '../lib/storage.js';
+import { loadQuizProgress, clearQuizProgress, loadSyncMeta } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import {
   detectBrokenYesterday,
@@ -12,6 +15,8 @@ import {
   dismissStreakBreak,
 } from '../lib/streakBreak.js';
 import Mascot from './Mascot.jsx';
+import featureRegistry from '../data/featureRegistry.js';
+import { suggestUnvisitedFeature } from '../lib/featureDiscovery.js';
 
 const LONG_PRESS_MS = 550;
 
@@ -43,12 +48,46 @@ function useLongPress(onLongPress, onTap) {
 }
 
 // ホーム画面：学習状況の概要と各モードへの入り口
-export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall }) {
-  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings } = store;
+// 「n分前」のような簡易な相対時刻表示（クラウド同期の鮮度表示専用の小さな整形なので、
+// 汎用ヘルパーとしては切り出さずここに閉じる）。
+function timeAgoJa(at) {
+  const sec = Math.max(0, Math.floor((Date.now() - at) / 1000));
+  if (sec < 60) return 'たった今';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}分前`;
+  const hour = Math.floor(min / 60);
+  if (hour < 24) return `${hour}時間前`;
+  return `${Math.floor(hour / 24)}日前`;
+}
+
+const SYNC_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
+
+export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz }) {
+  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus } = store;
+
+  // 直近の同期試行が失敗続きでも、実際に最後に成功したのがいつかを別途持っておく
+  // （cloudSyncStatusは直近1回の結果しか持たないため）。syncMetaは同期が成功した時だけ
+  // 更新されるので、そのまま「最後に成功した時刻」として使える。
+  const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState(null);
+  useEffect(() => {
+    if (!settings.googleDriveAutoSync) return;
+    loadSyncMeta().then((m) => setLastSuccessfulSyncAt(m?.updatedAt || null));
+  }, [settings.googleDriveAutoSync, cloudSyncStatus]);
   const overall = overallStats(history);
+  const level = estimateLevel({ srs, history });
+  const focusSubjects = useMemo(() => {
+    const scope = scopeCoverage(questions, history);
+    return todayFocusSubjects(scope, daysUntil(settings.examDate));
+  }, [questions, history, settings.examDate]);
   const reviewCount = reviewQuestions.length;
   const dueCount = (dueReviewQuestions || []).length;
   const unreadCount = (unread || []).length;
+  // まだ使ったことのない機能を日替わりで1件だけ提案（60超の機能が下部ナビ・常設バー・
+  // 各画面内メニューに散らばっていて気づかれにくいため）。全部使ったことがあればnull。
+  const unvisitedFeature = useMemo(
+    () => suggestUnvisitedFeature(featureRegistry, store.visitedViews),
+    [store.visitedViews]
+  );
   const sessionActive = session && session.pos < session.target;
   const { streak, longestStreak, studiedToday } = studyStreak(history);
   const examLeft = daysUntil(settings.examDate);
@@ -128,6 +167,57 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
         </button>
       )}
 
+      {/* クラウド自動同期の状態を軽く見える化（常に最新かどうかの安心材料。詳細は設定画面）。
+          直近の試行が失敗していても、最後に「成功した」時刻からまだ日が浅ければ静かに
+          再試行に任せる。3日以上成功していない場合だけ、見た目を強めて気づきやすくする
+          （毎回の一時的な失敗をいちいち赤字にすると、かえって見なくなってしまうため）。 */}
+      {settings.googleDriveAutoSync && (() => {
+        const longFailure = !cloudSyncStatus?.ok && lastSuccessfulSyncAt != null
+          && Date.now() - lastSuccessfulSyncAt > SYNC_STALE_MS;
+        return (
+          <button
+            className="inline-note"
+            onClick={() => onNavigate('settings')}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', marginBottom: 10,
+              padding: '4px 2px', background: 'none', border: 'none',
+              color: longFailure ? 'var(--wrong, #c62828)' : undefined,
+              fontWeight: longFailure ? 700 : undefined,
+            }}
+          >
+            {!cloudSyncStatus ? (
+              '☁️ 同期を準備しています…'
+            ) : cloudSyncStatus.ok ? (
+              `☁️ 最新の状態に同期済み（${timeAgoJa(cloudSyncStatus.at)}）`
+            ) : cloudSyncStatus.needsRelogin ? (
+              '⚠️ 再ログインが必要です（タップして設定へ）'
+            ) : longFailure ? (
+              `⚠️ ${timeAgoJa(lastSuccessfulSyncAt)}から同期できていません（タップして確認）`
+            ) : (
+              `☁️ 同期に失敗しました（${timeAgoJa(cloudSyncStatus.at)}・自動で再試行します）`
+            )}
+          </button>
+        );
+      })()}
+
+      <button
+        className="level-badge"
+        onClick={() => onJumpToRoadmapLevel?.(level.id)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+          textAlign: 'left', marginBottom: 10, padding: '10px 14px',
+          borderRadius: 12, border: '1px solid var(--border, #333)', background: 'var(--surface-2, transparent)',
+        }}
+      >
+        <span style={{ fontSize: 22 }}>{level.icon}</span>
+        <span style={{ flex: 1 }}>
+          <span style={{ fontWeight: 700 }}>今のレベル：{level.label}</span>
+          <span className="inline-note" style={{ display: 'block' }}>
+            レベル別の使い方を見る →
+          </span>
+        </span>
+      </button>
+
       {/* ハリオ先生（AIマスコット） */}
       <Mascot store={store} onNavigate={onNavigate} />
 
@@ -138,6 +228,25 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <p style={{ margin: '4px 0 10px', fontSize: 16 }}>{nextTask.text}</p>
           <div className="btn-row">
             <button className="btn ghost sm" onClick={doneNextTask}>やった・消す</button>
+          </div>
+        </div>
+      )}
+
+      {/* 今日集中すべき科目：残り日数×手薄度×直近正答率から自動レコメンド。次のタスクが決まっている日は出さない */}
+      {!nextTask && focusSubjects.length > 0 && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>🎯 今日集中すべき科目</div>
+          <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+            {focusSubjects.map((f) => (
+              <button
+                key={f.subject.id}
+                className="chip"
+                onClick={() => onStartSubjectQuiz?.(f.subject.name)}
+              >
+                {f.subject.name}
+                <span className="inline-note" style={{ marginLeft: 4 }}>（{f.reason}）</span>
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -269,11 +378,36 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">このアプリの機能をすべて検索・確認できます。迷ったらここ。</span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('faq')}>
+          <span className="ico">❓</span>
+          <span className="title">鍼灸国試アプリ Q&A</span>
+          <span className="desc">使い方・学習の悩み・不具合など、よくある質問をキーワードや文章で検索できます。</span>
+        </button>
+
+        {unvisitedFeature && (
+          <button
+            className="menu-item wide unvisited-feature-card"
+            onClick={() => onNavigate(unvisitedFeature.view)}
+          >
+            <span className="ico">✨</span>
+            <span className="title">まだ使ったことのない機能：{unvisitedFeature.title}</span>
+            <span className="desc">{unvisitedFeature.desc}</span>
+          </button>
+        )}
+
         <button className="menu-item wide featured roadmap-card" onClick={() => onNavigate('roadmap')}>
           <span className="ico">🗺️</span>
           <span className="title">合格するためのロードマップ</span>
           <span className="desc">
             本番までの計画・やること/NG・新規→△✕の切替時期・手が使えない時の音声学習まで。迷ったらここ。
+          </span>
+        </button>
+
+        <button className="menu-item wide" onClick={() => onNavigate('cognitivestyle')}>
+          <span className="ico">🧭</span>
+          <span className="title">あなたの学習スタイル</span>
+          <span className="desc">
+            認知特性チェックの結果から、どの機能をどう使うと定着しやすいかをまとめました。
           </span>
         </button>
 
@@ -331,6 +465,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="desc">経穴カード＋全科目対応。問題からその場でカードを作って反復。</span>
         </button>
 
+        <button className="menu-item" onClick={() => onNavigate('keizetsutextbook')}>
+          <span className="ico">📖</span>
+          <span className="title">経絡経穴 教科書目次</span>
+          <span className="desc">教科書の章立てをページ順に要約。過去問の出題頻度を🔴🟠🟡⚪で色分け表示。</span>
+        </button>
+
         <button className="menu-item" onClick={() => onNavigate('mnemonics')}>
           <span className="ico">💡</span>
           <span className="title">語呂合わせノート</span>
@@ -362,6 +502,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="title">間違いノート</span>
           <span className="desc">間違えた問題＋メモをPDF/テキスト出力。移動中の見返しに。</span>
           {reviewCount > 0 && <span className="count-pill">{reviewCount}問</span>}
+        </button>
+
+        <button className="menu-item" onClick={() => onNavigate('explain')}>
+          <span className="ico">🗣️</span>
+          <span className="title">説明ノート</span>
+          <span className="desc">マスター済みの問題を人に説明するつもりで書いて定着を確認。</span>
         </button>
 
         <button className="menu-item" onClick={() => onNavigate('exam')}>
@@ -445,6 +591,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="ico">📋</span>
           <span className="title">鍼灸国家試験の内容</span>
           <span className="desc">試験概要・出題基準・持ち物などを貼り付けて管理。</span>
+        </button>
+
+        <button className="menu-item wide" onClick={() => onNavigate('examday')}>
+          <span className="ico">✅</span>
+          <span className="title">試験当日チェックリスト</span>
+          <span className="desc">持ち物・当日の流れを「前日まで／朝／会場到着後」で時系列に確認。</span>
         </button>
 
         <button className="menu-item wide" onClick={() => onNavigate('experiences')}>

@@ -952,6 +952,10 @@ textarea {
   color: var(--text-sub);
   font-weight: 600;
 }
+.exam-pace-warn {
+  color: var(--wrong);
+  font-weight: 700;
+}
 
 /* ---- 模試結果 ---- */
 .result-hero {
@@ -1046,6 +1050,17 @@ textarea {
   font-weight: 700;
   color: var(--text-sub);
   margin: 18px 0 10px;
+}
+
+/* 機種変更ガイド：details/summaryの開閉見出し。タップしやすいよう当たり判定を広めに */
+.migration-summary {
+  cursor: pointer;
+  list-style: revert;
+  padding: 4px 0;
+  user-select: none;
+}
+.migration-summary::marker {
+  color: var(--text-sub);
 }
 
 hr.sep {
@@ -2826,6 +2841,44 @@ code.block {
 
 .ana-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 
+/* ===== 右端のスクロール矢印 =====
+   縦に長い画面を、指で何度もはらわずに1画面ずつ動かすためのもの。
+   重なりはロードマップバー（28）より下。ミニプレーヤー（29）・下部ナビ（30）・
+   モーダル（70/100）が出たら、その下に隠れる。
+   横は、画面が広い時に本文の右端（--max-w の外側）へ寄せる。 */
+.scroll-arrows {
+  position: fixed;
+  right: max(8px, calc(50vw - var(--max-w) / 2 + 8px));
+  bottom: calc(var(--nav-h) + var(--roadmap-bar-h) + 64px + env(safe-area-inset-bottom, 0px));
+  z-index: 27;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scroll-arrows button {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+.scroll-arrows button:hover:not(:disabled) {
+  background: var(--navy-light);
+}
+/* 端まで来た側は、消さずに薄くする（位置が動くと押し損ねるため）。 */
+.scroll-arrows button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* ===== 音声ミニプレーヤー（画面遷移しても再生継続） ===== */
 .mini-player {
   position: fixed;
@@ -3588,3 +3641,62 @@ code.block {
 
 /* ===== なぜ?チェーン・誤答リンク（#4/#8） ===== */
 .why-box, .wrongchoice-box { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: 10px 12px; }
+
+/* ===== 経絡経穴概論 索引・目次 =====
+   このアプリの基本は黒背景（アプリ全体は :root の --bg/--text を黒地・白文字で
+   統一している）。ただし「該当ページは白背景黒文字でみやすく」というこの機能限定の
+   明示指定により、.kz-page だけは教科書のページを見ている感覚に近い白背景・黒文字を
+   スコープ限定で使う（:root のトークンは変更しない。他画面には一切影響しない）。 */
+.kz-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.kz-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; cursor: pointer; color: var(--text); font: inherit; text-align: left;
+}
+.kz-chip .kz-term { font-size: 14px; font-weight: 700; }
+.kz-chip .kz-pages { font-size: 10px; color: var(--text-sub); }
+.kz-chip.kz-card { border-color: var(--accent); }
+.kz-chip.kz-card .kz-term { color: var(--accent); }
+.kz-chip.kz-point .kz-term, .kz-chip.kz-meridian .kz-term, .kz-chip.kz-extra .kz-term { color: #6bbf9a; }
+.kz-chip.kz-point, .kz-chip.kz-meridian, .kz-chip.kz-extra { border-color: #3f6e56; }
+.kz-chip.kz-confusable { border-color: #a8752a; }
+.kz-chip.kz-confusable .kz-term { color: #d4a24c; }
+.kz-chip.kz-none { opacity: 0.65; }
+.kz-chip.active { box-shadow: 0 0 0 2px var(--accent) inset; }
+
+.kz-page {
+  background: #ffffff; color: #111111; border-radius: 14px; padding: 16px; margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: box-shadow .3s ease;
+}
+.kz-page.kz-jumped { box-shadow: 0 0 0 3px #f2a71b, 0 4px 14px rgba(0,0,0,.3); }
+.kz-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.kz-page-term { font-size: 22px; font-weight: 800; margin-right: 8px; }
+.kz-page-yomi { font-size: 13px; color: #555555; }
+.kz-page-close { background: none; border: none; font-size: 18px; color: #555555; cursor: pointer; padding: 4px; }
+.kz-page-pages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.kz-page-badge { background: #f1f5f9; color: #1e293b; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px; }
+.kz-page-body { color: #111111; }
+.kz-page-body svg text { fill: #0f172a; }
+.kz-page-lead { font-size: 13px; color: #333333; margin: 0 0 8px; }
+.kz-page-note { margin-top: 10px; font-size: 12px; color: #7a4a06; background: #fef3c7; border-radius: 8px; padding: 8px 10px; }
+.kz-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kz-table th, .kz-table td { border: 1px solid #e2e8f0; padding: 7px 9px; vertical-align: top; text-align: left; }
+.kz-table th { background: #f1f5f9; width: 96px; font-weight: 700; color: #111111; white-space: nowrap; }
+.kz-table td { color: #111111; line-height: 1.6; }
+.kz-hit { background: #fde68a; color: #111111 !important; }
+.inline-note-dark { font-size: 12px; color: #444444; line-height: 1.6; margin: 4px 0; }
+
+/* 経絡経穴 教科書目次（ページ順） */
+.kz-tb-section { padding: 0; overflow: hidden; }
+.kz-tb-head {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+  background: none; border: none; cursor: pointer; padding: 14px 16px; font: inherit; color: #111111;
+}
+.kz-tb-pages { flex: 0 0 auto; font-size: 11px; font-weight: 800; color: #555555; white-space: nowrap; }
+.kz-tb-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; }
+.kz-freq { flex: 0 0 auto; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.kz-freq-hot { background: #fee2e2; color: #b91c1c; }
+.kz-freq-warm { background: #ffedd5; color: #9a3412; }
+.kz-freq-cool { background: #fef9c3; color: #854d0e; }
+.kz-freq-none { background: #f1f5f9; color: #64748b; }
+.kz-tb-section .kz-page-body { padding: 0 16px 16px; }

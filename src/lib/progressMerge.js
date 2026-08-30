@@ -52,7 +52,55 @@ export function mergeSettings(local, remote, remoteNewer) {
   return mergeObjectMap(local, remote, remoteNewer);
 }
 
-// local/remote: { srs, history, memos, links, examResults, settings }
+// 一問一答・模試・復習・音声・学習セッションの「続きから」（1つの活動を表す単一オブジェクト）。
+// memos/linksのようなキー単位マージはできない（idの並びやidxなど、オブジェクト全体で
+// 一貫していないと壊れる）ため、各オブジェクト自身が持つ時刻（at、sessionだけstartedAt）を見て、
+// より新しい方をまるごと採用する（ユーザー指定により、あえて対象外にしていたものを含める）。
+function pickNewerByOwnTimestamp(local, remote, timeKey = 'at') {
+  if (!local) return remote || null;
+  if (!remote) return local;
+  const lt = typeof local[timeKey] === 'number' ? local[timeKey] : 0;
+  const rt = typeof remote[timeKey] === 'number' ? remote[timeKey] : 0;
+  return rt > lt ? remote : local;
+}
+
+export function mergeResumeState(local, remote) {
+  const l = local || {};
+  const r = remote || {};
+  return {
+    quizProgress: pickNewerByOwnTimestamp(l.quizProgress, r.quizProgress),
+    examProgress: pickNewerByOwnTimestamp(l.examProgress, r.examProgress),
+    reviewProgress: pickNewerByOwnTimestamp(l.reviewProgress, r.reviewProgress),
+    audioProgress: pickNewerByOwnTimestamp(l.audioProgress, r.audioProgress),
+    session: pickNewerByOwnTimestamp(l.session, r.session, 'startedAt'),
+  };
+}
+
+// マージ結果が元のlocalと実質的に異なるか（＝端末の状態へ反映する価値があるか）を判定する。
+// 単純な件数比較（Object.keys(...).length）だと、既存の問題IDのlastAnswered/dueだけが
+// 新しく更新されたケース（件数は変わらず値だけ変わる、実運用で最も多いパターン）を
+// 「変化なし」と誤判定してしまう（useStore.jsのクラウド自動同期で実際に発生していたバグ）。
+// 中身まで比較することで、件数が同じでも値が更新されていれば正しく「変化あり」を返す。
+export function progressChanged(local, merged) {
+  const l = local || {};
+  const m = merged || {};
+  return (
+    JSON.stringify(m.srs) !== JSON.stringify(l.srs) ||
+    JSON.stringify(m.history) !== JSON.stringify(l.history) ||
+    JSON.stringify(m.memos) !== JSON.stringify(l.memos) ||
+    JSON.stringify(m.links) !== JSON.stringify(l.links) ||
+    JSON.stringify(m.examResults) !== JSON.stringify(l.examResults) ||
+    JSON.stringify(m.bookmarks) !== JSON.stringify(l.bookmarks) ||
+    JSON.stringify(m.quizProgress) !== JSON.stringify(l.quizProgress) ||
+    JSON.stringify(m.examProgress) !== JSON.stringify(l.examProgress) ||
+    JSON.stringify(m.reviewProgress) !== JSON.stringify(l.reviewProgress) ||
+    JSON.stringify(m.audioProgress) !== JSON.stringify(l.audioProgress) ||
+    JSON.stringify(m.session) !== JSON.stringify(l.session)
+  );
+}
+
+// local/remote: { srs, history, memos, links, examResults, settings, bookmarks,
+//                 quizProgress, examProgress, reviewProgress, audioProgress, session }
 // localUpdatedAt/remoteUpdatedAt: lib/storage.jsのsyncMeta.updatedAt（ミリ秒epoch）
 export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdatedAt = 0 } = {}) {
   const remoteNewer = remoteUpdatedAt > localUpdatedAt;
@@ -63,5 +111,12 @@ export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdated
     links: mergeObjectMap(local?.links, remote?.links, remoteNewer),
     examResults: mergeExamResults(local?.examResults, remote?.examResults),
     settings: mergeSettings(local?.settings, remote?.settings, remoteNewer),
+    // ブックマークはメモ・リンクと同じくキー単位のUNION（片方の端末だけで付けた印を消さない）。
+    // QR／バックアップファイル／WebRTC経由の移行では既に引き継がれていたが、
+    // クラウド自動同期の対象からは漏れていたため合わせる。
+    bookmarks: mergeObjectMap(local?.bookmarks, remote?.bookmarks, remoteNewer),
+    // 一問一答・模試・復習・音声・学習セッションの「続きから」。ユーザー指定により
+    // クラウド自動同期の対象に含める（各自身のタイムスタンプで新しい方をまるごと採用）。
+    ...mergeResumeState(local, remote),
   };
 }

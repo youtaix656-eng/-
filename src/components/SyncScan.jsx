@@ -178,8 +178,10 @@ export default function SyncScan({ onToast }) {
 
       {progress && progress.total > 1 && (
         <div style={{ marginTop: 10 }}>
-          <div className="progress"><span style={{ width: `${(progress.received / progress.total) * 100}%` }} /></div>
-          <p className="inline-note" style={{ marginTop: 4 }}>{progress.received} / {progress.total} 枚 読み取り済み</p>
+          <div className="progress"><span style={{ width: `${Math.round((progress.received / progress.total) * 100)}%` }} /></div>
+          <p className="inline-note" style={{ marginTop: 4 }}>
+            {Math.round((progress.received / progress.total) * 100)}%（{progress.received} / {progress.total} 枚 読み取り済み）
+          </p>
         </div>
       )}
 

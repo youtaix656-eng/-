@@ -1,35 +1,16 @@
 import { useMemo, useState } from 'react';
-import { clustersMap } from '../lib/audioplan.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
-import { TERM_READINGS } from '../lib/yomi.js';
+import { buildMnemonicEntries } from '../lib/mnemonicEntries.js';
 
 // 語呂合わせノート：連結学習・音声学習から登録した語呂合わせ（kwMeta）を一覧で見返し、
 // その場で追加・編集・削除できる。
 //   ふりがな：kwMetaのreading（手入力で確定した読みのみ表示。自動推定は誤読の恐れがあるため行わない）に、
 //   lib/yomi.js の TERM_READINGS（既知の専門用語の読み）をフォールバックとして使う。
-export default function MnemonicNotebook({ store, onToast }) {
+//   一覧の組み立ては lib/mnemonicEntries.js（MnemonicQuiz.jsxと共用）。
+export default function MnemonicNotebook({ store, onToast, onNavigate }) {
   const { kwMeta, setKeywordMeta, questions, links } = store;
-  const clusters = useMemo(() => clustersMap(questions, links), [questions, links]);
 
-  const entries = useMemo(() => {
-    return Object.entries(kwMeta || {})
-      .filter(([, v]) => v && v.mnemonic && v.mnemonic.trim())
-      .map(([keyword, v]) => {
-        const qs = clusters.get(keyword) || [];
-        const reading = (v.reading && v.reading.trim()) || TERM_READINGS[keyword] || '';
-        // 関連問題の科目に加え、手入力（組み込み含む）で指定された科目があれば合わせる。
-        const subjects = new Set(qs.map((q) => q.subject).filter(Boolean));
-        if (v.subject) subjects.add(v.subject);
-        return {
-          keyword,
-          mnemonic: v.mnemonic,
-          reading,
-          count: qs.length,
-          subjects: [...subjects],
-        };
-      })
-      .sort((a, b) => a.keyword.localeCompare(b.keyword, 'ja'));
-  }, [kwMeta, clusters]);
+  const entries = useMemo(() => buildMnemonicEntries(kwMeta, questions, links), [kwMeta, questions, links]);
 
   // 科目選択（出題基準の1〜14の順）。「全科目」＋実際に問題が収録されている科目のみ。
   const [subjectFilter, setSubjectFilter] = useState('all');
@@ -83,6 +64,12 @@ export default function MnemonicNotebook({ store, onToast }) {
       <p className="view-desc">
         登録した語呂合わせを一覧で見返せます。連結学習・音声学習の画面からも登録できます。
       </p>
+
+      {entries.length > 0 && (
+        <button className="btn ghost block" onClick={() => onNavigate && onNavigate('mnemonicquiz')} style={{ marginBottom: 10 }}>
+          🧠 想起テストで確認する
+        </button>
+      )}
 
       <div className="card">
         <div className="section-label" style={{ marginTop: 0 }}>＋ 新しく追加</div>

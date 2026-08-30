@@ -9,7 +9,7 @@ import { relatedQuestions } from '../lib/related.js';
 import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
 import { comparisonsForKeyword, COMPARISONS } from '../data/mindmapData.js';
-import { loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS } from '../lib/missTypes.js';
+import { loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS, MISS_TYPES } from '../lib/missTypes.js';
 import { buildGraphFromSolved } from '../lib/kgService.js';
 import { conceptsOf } from '../lib/concepts.js';
 import { elaborationSuggestions, chainNext } from '../lib/kgRecall.js';
@@ -137,6 +137,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const [bookmarkOnly, setBookmarkOnly] = useState(false);
   const [minRisk, setMinRisk] = useState(0); // 忘却リスクの下限（%）
   const [minWrong, setMinWrong] = useState(0); // 誤答回数の下限
+  const [missTypeFilter, setMissTypeFilter] = useState(''); // 誤答理由の型で絞り込み
   const [recentOnly, setRecentOnly] = useState(''); // ''|'today'|'week'：直近の誤答だけに絞る
   const [batch, setBatch] = useState(60); // 1回の問題数（0=すべて）
   const [showAll, setShowAll] = useState(false); // リストの折りたたみ
@@ -251,6 +252,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const filterOpts = {
     subjects: subjectsSel, tag: filterTag, term: search, links,
     round, bookmarkOnly, bookmarks, minRisk, minWrong, srs,
+    missType: missTypeFilter, missTypes,
   };
 
   const applyRecent = (qs) => (recentWrongIds ? qs.filter((q) => recentWrongIds.has(q.id)) : qs);
@@ -260,15 +262,15 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     const filtered = applyRecent(filterReview(extendedReviewPool, filterOpts));
     return sortReview(filtered, orderMode, { srs, history, links });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extendedReviewPool, subjectsSel, filterTag, search, round, bookmarkOnly, bookmarks, minRisk, minWrong, recentWrongIds, orderMode, srs, history, links]);
+  }, [extendedReviewPool, subjectsSel, filterTag, search, round, bookmarkOnly, bookmarks, minRisk, minWrong, missTypeFilter, missTypes, recentWrongIds, orderMode, srs, history, links]);
 
   // 出題プール：絞り込みがあれば全リストから、無ければ「今日の復習」から。並びは orderMode。
-  const filtering = subjectsSel.length > 0 || !!filterTag || !!search.trim() || !!round || bookmarkOnly || minRisk > 0 || minWrong > 0 || !!recentOnly;
+  const filtering = subjectsSel.length > 0 || !!filterTag || !!search.trim() || !!round || bookmarkOnly || minRisk > 0 || minWrong > 0 || !!missTypeFilter || !!recentOnly;
   const startPool = useMemo(() => {
     const base = filtering ? applyRecent(filterReview(extendedReviewPool, filterOpts)) : dueReviewQuestions;
     return sortReview(base, orderMode, { srs, history, links });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtering, subjectsSel, filterTag, search, round, bookmarkOnly, bookmarks, minRisk, minWrong, recentWrongIds, extendedReviewPool, dueReviewQuestions, orderMode, srs, history, links]);
+  }, [filtering, subjectsSel, filterTag, search, round, bookmarkOnly, bookmarks, minRisk, minWrong, missTypeFilter, missTypes, recentWrongIds, extendedReviewPool, dueReviewQuestions, orderMode, srs, history, links]);
 
   // 実際に出題される問数（バッチ上限と在庫の小さい方）
   const effectiveCount = batch > 0 ? Math.min(batch, startPool.length) : startPool.length;
@@ -308,7 +310,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
 
   const clearFilters = () => {
     setSubjectsSel([]); setFilterTag(''); setSearch(''); setRound('');
-    setBookmarkOnly(false); setMinRisk(0); setMinWrong(0); setRecentOnly('');
+    setBookmarkOnly(false); setMinRisk(0); setMinWrong(0); setMissTypeFilter(''); setRecentOnly('');
   };
 
   // 今日の到達・連続日数（改善2）：復習由来の解答だけを数える
@@ -659,6 +661,20 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
         <div className="field" style={{ marginTop: 8 }}>
           <label>誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
           <input type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => setMinWrong(Number(e.target.value))} />
+        </div>
+
+        <div className="chip-row" style={{ marginTop: 8 }}>
+          <span className="section-hint">誤答理由の型で集中特訓：</span>
+          <button className={`chip ${missTypeFilter === '' ? 'active' : ''}`} onClick={() => setMissTypeFilter('')}>指定なし</button>
+          {MISS_TYPES.map((t) => (
+            <button
+              key={t.id}
+              className={`chip ${missTypeFilter === t.id ? 'active' : ''}`}
+              onClick={() => setMissTypeFilter(missTypeFilter === t.id ? '' : t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         <div className="review-count">

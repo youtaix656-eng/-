@@ -76,8 +76,9 @@ export function estimatedAnswerSeconds(history, subject) {
 // B. 基礎タスク比率の算出。シフト情報が未連携（shiftContext未指定）なら常に標準比率。
 // 標準比率は既定2:1だが、設定画面（settings.bufferBaseRatioPct）で調整できる
 // （standardRatio に渡す。ハードコーディングしない）。
-// 睡眠アプリ等と連携した体調スコア（0-100、任意）があれば、その日のコンディションに応じて
-// ±5%の範囲でゆるく微調整する（下限40%・上限80%でクランプ）。
+// 体調スコア（0-100、任意。Session.jsxは「今日の調子」をlib/mood.jsのmoodToConditionScoreで
+// 変換して渡す）があれば、その日のコンディションに応じて±5%の範囲でゆるく微調整する
+// （下限40%・上限80%でクランプ）。
 export function baseRatioFor({ shiftContext, conditionScore, baseRatio, standardRatio } = {}) {
   if (baseRatio != null) return baseRatio;
   const std = standardRatio ?? DEFAULT_BASE_RATIO;
@@ -128,7 +129,10 @@ export function resolveBufferUsage(completed) {
 }
 
 export function bufferUsageLabel(usage) {
-  if (usage === 'review') return 'ご褒美復習（得意分野の確認）';
+  // 'review'は「まだ間違えた問題を確認する軽めの復習」であり、得意分野を確認するもの
+  // ではない（実装はreviewPoolFor＝通常の復習対象プールをそのまま使う）。文言と実装を
+  // 一致させる。
+  if (usage === 'review') return 'ご褒美復習（気楽に取り組む復習）';
   if (usage === 'catchup') return '積み残し消化（未完了問題の続き）';
   return '';
 }

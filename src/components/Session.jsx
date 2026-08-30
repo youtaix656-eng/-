@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import { GRADES } from '../lib/srs.js';
 import { getSubjects } from '../lib/stats.js';
@@ -10,6 +10,7 @@ import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/rev
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
 import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLabel, managerReviewMessage } from '../lib/bufferSession.js';
+import { loadTodayMood, moodToConditionScore } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 
@@ -30,7 +31,7 @@ function poolFor(questions, subject) {
 // 出題順の組み立ては src/lib/sessionOrder.js に集約（Quiz.jsxと共用）。
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio }) {
-  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark } = store;
+  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded } = store;
   // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
   const subjects = useMemo(() => {
     const present = getSubjects(questions);
@@ -65,14 +66,34 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   };
   // 新規◯割・復習◯割（0〜100の新規%）。既定は設定値。
   const [newPct, setNewPct] = useState(Math.round((settings.sessionNewRatio ?? 1) * 100));
+  // settings はIndexedDBから非同期に読み込まれる。上のuseStateの初期値評価はマウント時の
+  // 1回だけなので、この画面がsettings読み込み完了より先にマウントされていた場合、
+  // 後から読み込まれた保存値（前回の新規/復習の割合）に追従しない。loadedがtrueになった
+  // 最初の1回だけ同期する（以降はユーザーがスライダーを動かした値を優先し上書きしない）。
+  const newPctSyncedRef = useRef(false);
+  useEffect(() => {
+    if (newPctSyncedRef.current || !loaded) return;
+    newPctSyncedRef.current = true;
+    setNewPct(Math.round((settings.sessionNewRatio ?? 1) * 100));
+  }, [loaded, settings.sessionNewRatio]);
 
   // 3分の2バッファ術：学習予定時間（分）→ 基礎タスク/バッファの自動計算（#A・#B）。
-  //   シフト連携・睡眠アプリ連携は未実装のため、常に設定画面の標準比率（既定2:1）で動作する。
+  //   シフト連携（勤務シフト）は未実装だが、体調連携は「今日の調子」（Home/Mascotで記録、
+  //   音声学習・復習のノルマ調整と同じ値）をconditionScoreとしてそのまま渡している。
   const [planMinutes, setPlanMinutes] = useState(60);
+  const [mood, setMood] = useState(null);
+  useEffect(() => { loadTodayMood().then(setMood); }, []);
   const standardBaseRatio = (settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100)) / 100;
   const bufferPlan = useMemo(
-    () => planStudySession({ totalMinutes: planMinutes, subject, history, standardRatio: standardBaseRatio }),
-    [planMinutes, subject, history, standardBaseRatio]
+    () =>
+      planStudySession({
+        totalMinutes: planMinutes,
+        subject,
+        history,
+        standardRatio: standardBaseRatio,
+        conditionScore: moodToConditionScore(mood),
+      }),
+    [planMinutes, subject, history, standardBaseRatio, mood]
   );
 
   // 検索（科目→ジャンル→キーワード の段階しぼり＋フリーワード）
@@ -132,6 +153,16 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 上位を変えたら下位をリセット
   useEffect(() => { setGenre(''); setKeyword(''); setRound(''); }, [subject]);
   useEffect(() => { setKeyword(''); }, [genre]);
+
+  // 開始ボタン共通の無効化条件（10・60・300・900のTARGETSボタンと、
+  // 時間計画（3分の2バッファ術）の開始ボタンの両方で使う。以前は後者だけ
+  // filteredPool.length===0しか見ておらず、押しても必ずトーストで失敗するだけの
+  // 状態になり得た）。
+  const startDisabled =
+    filteredPool.length === 0 ||
+    (newPct >= 100 && newRemaining === 0) ||
+    (newPct <= 0 && reviewRemaining === 0) ||
+    (newPct > 0 && newPct < 100 && newRemaining === 0 && reviewRemaining === 0);
 
   const begin = (target, opts = {}) => {
     const pool = opts.pool || filteredPool;
@@ -330,12 +361,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
                 key={t}
                 className="sess-target"
                 onClick={() => begin(t)}
-                disabled={
-                  filteredPool.length === 0 ||
-                  (newPct >= 100 && newRemaining === 0) ||
-                  (newPct <= 0 && reviewRemaining === 0) ||
-                  (newPct > 0 && newPct < 100 && newRemaining === 0 && reviewRemaining === 0)
-                }
+                disabled={startDisabled}
               >
                 <span className="sess-target-n">{t}</span>
                 <span className="sess-target-l">
@@ -408,7 +434,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             className="btn primary block lg"
             style={{ marginTop: 10 }}
             onClick={() => begin(bufferPlan.baseTaskQuestionCount, { buffer: bufferPlan })}
-            disabled={filteredPool.length === 0}
+            disabled={startDisabled}
           >
             この計画で基礎タスクを始める（{bufferPlan.baseTaskQuestionCount}問）
           </button>
@@ -436,6 +462,29 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     const t = session.target; // 実際に出題された問数
     const requested = session.requestedTarget || session.target; // 押したボタンの目標値（見出し・絵文字の判定用）
     const capped = t < requested;
+    // 10・60・300・900の定型セッションかどうか（誤答復習・バッファ枠・基礎タスクはlabel/bufferを持つ）。
+    // これが無いと、これらの可変長セッションの長さがたまたま60/300/900をまたいだ時に
+    // 無関係な「今日の目標300問達成！」等の文言・2周目ボタンが出てしまう。
+    const isStandardSession = !session.label && !session.buffer;
+    const doneIco = !isStandardSession ? (session.buffer ? '🧩' : '🔁') : requested >= 900 ? '🏆' : requested >= 300 ? '🎉' : '✅';
+    const doneTitle = !isStandardSession
+      ? `${session.label || '基礎タスク'}完了！（${requested}問）`
+      : requested >= 900
+      ? '1周（900問）終了！'
+      : requested >= 300
+      ? '今日の目標 300問 達成！'
+      : requested >= 60
+      ? '1セット（60問）完了！'
+      : `すきま学習（${requested}問）完了！`;
+    const doneDesc = !isStandardSession
+      ? 'おつかれさまでした。この調子で続けましょう。'
+      : requested >= 900
+      ? 'おつかれさまでした。苦手を分析して2周目へ進みましょう。'
+      : requested >= 300
+      ? 'すばらしい集中力です。苦手の復習で定着させましょう。'
+      : requested >= 60
+      ? 'いいペースです。続けて次のセットへ。'
+      : '短い時間でもコツコツ積み上げ、えらい！もう1回いける？';
     // このセッションの解答を history から復元（誤答一覧・ジャンル別＝#1/#6）
     const idsSet = new Set(session.ids || []);
     const startedAt = session.startedAt || 0;
@@ -464,33 +513,23 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     return (
       <div className="view">
         <div className="card sess-done">
-          <div className="sess-done-ico">{requested >= 900 ? '🏆' : requested >= 300 ? '🎉' : '✅'}</div>
-          <h2>
-            {requested >= 900 ? '1周（900問）終了！' : requested >= 300 ? '今日の目標 300問 達成！' : requested >= 60 ? '1セット（60問）完了！' : `すきま学習（${requested}問）完了！`}
-          </h2>
+          <div className="sess-done-ico">{doneIco}</div>
+          <h2>{doneTitle}</h2>
           {capped && (
             <p className="inline-note" style={{ textAlign: 'center' }}>
               該当する問題が{t}問だったため、{t}問で終了しました。
             </p>
           )}
-          <p className="view-desc" style={{ textAlign: 'center' }}>
-            {requested >= 900
-              ? 'おつかれさまでした。苦手を分析して2周目へ進みましょう。'
-              : requested >= 300
-              ? 'すばらしい集中力です。苦手の復習で定着させましょう。'
-              : requested >= 60
-              ? 'いいペースです。続けて次のセットへ。'
-              : '短い時間でもコツコツ積み上げ、えらい！もう1回いける？'}
-          </p>
+          <p className="view-desc" style={{ textAlign: 'center' }}>{doneDesc}</p>
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
             {onGoAudio && (
               <button className="btn" onClick={() => onGoAudio?.()}>🔊 音声で復習する</button>
             )}
-            {requested >= 900 ? (
+            {isStandardSession && requested >= 900 ? (
               <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>2周目を開始</button>
             ) : (
-              <button className="btn primary" onClick={() => begin(requested, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>もう一度</button>
+              <button className="btn primary" onClick={() => begin(requested, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true, label: session.label })}>もう一度</button>
             )}
           </div>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>
@@ -634,7 +673,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
 
   // ===== 休憩画面（60問ごと） =====
   if (showBreak) {
-    const isDaily = session.pos === 300;
+    // target===300（かつ誤答復習・バッファ枠等の可変長セッションではない）の時だけ
+    // 「今日の目標達成」を出す。posだけで判定すると、900問（1周）セッション中に
+    // 300問地点を通過した瞬間に誤って表示されてしまう。
+    const isDaily = !session.label && !session.buffer && session.target === 300 && session.pos === 300;
     return (
       <div className="view">
         <div className="card sess-break">
@@ -675,6 +717,12 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 3分の2バッファ術：基礎タスク進捗（実行役ビュー）＋ 未達が近い時のハリオのリマインド
   const bufRemaining = session.buffer ? session.target - session.pos : 0;
   const harioReminder = session.buffer && bufRemaining > 0 && bufRemaining <= 5 ? harioBaseTaskReminder(bufRemaining) : null;
+  // 前の問題／次の問題への移動（タップで戻る・進める）。
+  // target-1（このセッション最後の問題）より先へは進められない
+  // （それ以上先へ進むとセッション完了扱いになり、answered()を経ずに完了してしまうため）。
+  const canGoPrev = session.pos > 0;
+  const canGoNext = session.pos < session.target - 1;
+  const goToPos = (pos) => updateSession({ pos: Math.max(0, Math.min(session.target - 1, pos)) });
   return (
     <div className="view">
       <div className="sess-topbar">
@@ -686,6 +734,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       </div>
       <div className="progress">
         <span style={{ width: `${((session.pos + 1) / session.target) * 100}%` }} />
+      </div>
+      <div className="btn-row" style={{ justifyContent: 'center', gap: 10, margin: '6px 0' }}>
+        <button className="btn ghost sm" onClick={() => goToPos(session.pos - 1)} disabled={!canGoPrev}>← 前の問題</button>
+        <button className="btn ghost sm" onClick={() => goToPos(session.pos + 1)} disabled={!canGoNext}>次の問題 →</button>
       </div>
       {harioReminder && (
         <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{harioReminder}」</p>
@@ -838,12 +890,18 @@ function FastCard({ question, onGraded, GRADES }) {
 // 休憩タイマー（5分/10分）。残り時間を表示し、終わると自動で続行。途中スキップ可。
 function BreakTimer({ minutes, onDone }) {
   const [remain, setRemain] = useState(null); // 秒。null=未開始
+  const ivRef = useRef(null);
+  // アンマウント時（「続ける」を押す・中断する等でこの画面ごと消える時）にインターバルを
+  // 必ず止める。放置すると、残り時間ぶん裏で動き続けたタイマーが、あとで表示される
+  // 別の（無関係な）休憩画面を勝手に閉じてしまう。
+  useEffect(() => () => { if (ivRef.current) clearInterval(ivRef.current); }, []);
   const start = () => {
     setRemain(minutes * 60);
-    const iv = setInterval(() => {
+    ivRef.current = setInterval(() => {
       setRemain((r) => {
         if (r <= 1) {
-          clearInterval(iv);
+          clearInterval(ivRef.current);
+          ivRef.current = null;
           onDone?.();
           return null;
         }
@@ -861,7 +919,7 @@ function BreakTimer({ minutes, onDone }) {
   return (
     <div className="sess-timer">
       <span>休憩中… あと {mm}:{ss}</span>
-      <button className="btn ghost sm" onClick={() => onDone?.()}>スキップして再開</button>
+      <button className="btn ghost sm" onClick={() => { if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; } onDone?.(); }}>スキップして再開</button>
     </div>
   );
 }

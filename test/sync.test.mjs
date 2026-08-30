@@ -35,6 +35,37 @@ test('進捗データを encode → decode で round-trip できる', async () =
   assert.deepEqual(back.settings, data.settings);
 });
 
+test('「続きから」（一問一答・復習・模試・音声・学習セッション）・ブックマークも round-trip できる', async () => {
+  const data = {
+    srs: { 'q-1': { seen: 3 } },
+    bookmarks: { 'q-1': 1700000000000 },
+    quizProgress: { subject: '解剖学', ids: ['q-1', 'q-2'], idx: 1, stats: { total: 2, correct: 1 }, at: 1 },
+    reviewProgress: { ids: ['q-3'], idx: 0, stats: { total: 1, correct: 0 }, at: 2 },
+    examProgress: { ids: ['q-4', 'q-5'], answers: [0, null], idx: 1, remain: 5000, presetLabel: '午前', at: 3 },
+    audioProgress: { sig: 'abc', index: 4, at: 4 },
+    session: { subject: '生理学', ids: ['q-6'], pos: 0, target: 60, round: 1, startedAt: 5, times: {} },
+  };
+  const enc = await encodeSync(buildSyncPayload(data));
+  const back = syncToBackup(await decodeSync(enc));
+  assert.deepEqual(back.bookmarks, data.bookmarks);
+  assert.deepEqual(back.quizProgress, data.quizProgress);
+  assert.deepEqual(back.reviewProgress, data.reviewProgress);
+  assert.deepEqual(back.examProgress, data.examProgress);
+  assert.deepEqual(back.audioProgress, data.audioProgress);
+  assert.deepEqual(back.session, data.session);
+});
+
+test('「続きから」が無い場合は何も足さない（空オブジェクト混入防止）', async () => {
+  const enc = await encodeSync(buildSyncPayload({ srs: { a: { seen: 1 } } }));
+  const back = syncToBackup(await decodeSync(enc));
+  assert.equal(back.quizProgress, undefined);
+  assert.equal(back.reviewProgress, undefined);
+  assert.equal(back.examProgress, undefined);
+  assert.equal(back.audioProgress, undefined);
+  assert.equal(back.session, undefined);
+  assert.equal(back.bookmarks, undefined);
+});
+
 test('解答履歴を含めない指定は history を落とす', async () => {
   const data = { srs: { a: { seen: 1 } }, history: [{ id: 'a' }] };
   const enc = await encodeSync(buildSyncPayload(data, { includeHistory: false }));

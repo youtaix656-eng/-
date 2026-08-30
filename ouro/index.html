@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Ouro — AIを使うのではなく、AIを雇う。自分専用のAI会社を持つアプリ。"
+    />
+    <link rel="icon" href="./favicon.png" />
+    <title>Ouro — 自分専用のAI会社</title>
+    <!--
+      新項目05：1枚目をHTMLだけで出す。
+      CSS も JS も別ファイルなので、これが無いと読み込みが終わるまで白い画面が出る。
+      黒地と待ちの輪だけをここに書いておき、React が描けたら丸ごと置き換わる。
+      **ここに増やさないこと**（増やすほど最初の1枚が遅くなる）。
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #000;
+        color: #fff;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #boot span {
+        width: 26px;
+        height: 26px;
+        border: 1px solid #333;
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: bootspin 0.9s linear infinite;
+      }
+      @keyframes bootspin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot span {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot"><span></span></div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

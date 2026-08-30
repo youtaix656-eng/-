@@ -50,6 +50,13 @@ export function buildSyncPayload(data, { includeHistory = true, summarizeHistory
   if (data.links && Object.keys(data.links).length) p.l = data.links;
   if (Array.isArray(data.examResults) && data.examResults.length) p.e = data.examResults;
   if (data.settings) p.g = data.settings;
+  if (data.bookmarks && Object.keys(data.bookmarks).length) p.b = data.bookmarks;
+  // 「前回の続きから」（一問一答・復習・模試・音声・学習セッション）
+  if (data.quizProgress) p.q = data.quizProgress;
+  if (data.reviewProgress) p.r = data.reviewProgress;
+  if (data.examProgress) p.x = data.examProgress;
+  if (data.audioProgress) p.a = data.audioProgress;
+  if (data.session) p.n = data.session;
   return p;
 }
 
@@ -81,6 +88,12 @@ export function syncToBackup(p) {
   if (p.l) b.links = p.l;
   if (p.e) b.examResults = p.e;
   if (p.g) b.settings = p.g;
+  if (p.b) b.bookmarks = p.b;
+  if (p.q) b.quizProgress = p.q;
+  if (p.r) b.reviewProgress = p.r;
+  if (p.x) b.examProgress = p.x;
+  if (p.a) b.audioProgress = p.a;
+  if (p.n) b.session = p.n;
   return b;
 }
 

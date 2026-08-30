@@ -11,7 +11,7 @@ import {
 // Googleドライブ（アプリ専用のappDataFolダー・ユーザーには見えない領域）への
 // クラウドバックアップ。他の機能と違いGoogleのサーバーと通信するため、
 // 既定ではオフ（クライアントID未設定の間は何も送信しない）で、注記も明示する。
-export default function CloudBackup({ settings, updateSettings, onToast, importBackup, cloudSyncStatus }) {
+export default function CloudBackup({ settings, updateSettings, onToast, importBackup, cloudSyncStatus, syncCloudNow, cloudAuthPaused, clearCloudAuthPause }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -21,6 +21,7 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
   const ensureToken = async () => {
     const token = await requestAccessToken(clientId);
     setSignedIn(true);
+    clearCloudAuthPause?.(); // 手動ログインが通ったので、自動同期の一時停止を解除する
     return token;
   };
 
@@ -80,6 +81,29 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
     onToast?.('Googleからログアウトしました（この端末のバックアップデータは残ります）');
   };
 
+  // 自動同期は変更が落ち着いてから最大5秒後に走るため、設定変更の直後や動作確認をしたい時に
+  // 待たずにその場で試せるようにする（フル一致するuploadBackup/downloadBackupは
+  // 手動の「保存」「復元」と同じだが、こちらは進捗のマージまで含む自動同期そのものを起動する）。
+  const doSyncNow = async () => {
+    if (!syncCloudNow) return;
+    setBusy(true);
+    try {
+      const result = await syncCloudNow();
+      if (result?.skipped) {
+        // 他の自動トリガー（タブ復帰・定期同期等）とちょうど重なって今回は何もしていない。
+        // 「同期しました」と誤表示すると、実は最新化されていないのに安心してしまうため、
+        // 実際に何が起きたかをそのまま伝える。
+        onToast?.('ちょうど別の同期が進行中でした（少し待ってからもう一度お試しください）');
+      } else {
+        onToast?.('今すぐ同期しました');
+      }
+    } catch (e) {
+      onToast?.(e.message || '同期に失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="card">
       <p className="inline-note" style={{ marginBottom: 10 }}>
@@ -116,9 +140,15 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
             <input
               type="text"
               value={clientId}
-              onChange={(e) => updateSettings({ googleDriveClientId: e.target.value })}
+              onChange={(e) => updateSettings({ googleDriveClientId: e.target.value.trim() })}
               placeholder="例）1234567890-abc...apps.googleusercontent.com"
             />
+            {clientId && !clientId.endsWith('.apps.googleusercontent.com') && (
+              <p className="inline-note" style={{ color: 'var(--wrong, #c62828)', marginTop: 4 }}>
+                ⚠ 「.apps.googleusercontent.com」で終わる文字列ではありません。クライアントID以外の値
+                （クライアントシークレットや別の項目）を貼り付けていないかご確認ください。
+              </p>
+            )}
           </div>
 
           <div className="section-label">② 連携・保存・復元</div>
@@ -152,28 +182,37 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
             <span>
               開くたびに自動で同期する
               <small>
-                アプリを開いた時と、解答・メモ等が変わった数秒後に、確認画面を出さず裏で
-                Googleドライブと同期します（進捗・設定のみ、問題データは含みません）。片方の端末だけの
-                進捗が消えないよう、問題ごと・解答記録ごとにマージします。初回は上の「保存」または
-                「復元」を一度手動で行い、Googleへのログインを済ませてください（以後は自動）。
+                アプリを開いた時、このタブに戻ってきた時、解答・メモ等が変わった数秒後に、
+                確認画面を出さず裏でGoogleドライブと同期します（進捗・設定・ブックマークのみ、
+                問題データは含みません）。片方の端末だけの進捗が消えないよう、問題ごと・
+                解答記録ごとにマージします。初回は上の「保存」または「復元」を一度手動で行い、
+                Googleへのログインを済ませてください（以後は自動）。
               </small>
             </span>
           </label>
-          {settings.googleDriveAutoSync && cloudSyncStatus && (
+          {settings.googleDriveAutoSync && clientId.trim() && (
+            <div className="btn-row" style={{ marginTop: 8 }}>
+              <button className="btn ghost sm" onClick={doSyncNow} disabled={busy}>
+                {busy ? '通信中…' : '🔄 今すぐ同期'}
+              </button>
+            </div>
+          )}
+          {settings.googleDriveAutoSync && (cloudAuthPaused || cloudSyncStatus) && (
             <div style={{ marginTop: 6 }}>
-              {cloudSyncStatus.ok ? (
+              {cloudAuthPaused ? (
+                <div>
+                  <p className="inline-note">
+                    自動同期は再ログイン待ちで一時停止中です（ブラウザがログイン画面を自動で
+                    閉じた、またはブロックしたため）。ログイン画面が毎回勝手に出ることは
+                    ありません。下のボタンを一度押すと、以後また自動で同期されるようになります。
+                  </p>
+                  <button className="btn sm" onClick={doRelogin} disabled={busy}>🔑 ログインし直す</button>
+                </div>
+              ) : cloudSyncStatus.ok ? (
                 <p className="inline-note">
                   最終自動同期：{new Date(cloudSyncStatus.at).toLocaleString('ja-JP')}
                   {cloudSyncStatus.pulled ? '（他端末の進捗を反映しました）' : ''}
                 </p>
-              ) : cloudSyncStatus.needsRelogin ? (
-                <div>
-                  <p className="inline-note">
-                    自動同期には再ログインが必要です（ブラウザがログイン画面を自動で閉じたため）。
-                    下のボタンを一度押すと、以後また自動で同期されるようになります。
-                  </p>
-                  <button className="btn sm" onClick={doRelogin} disabled={busy}>🔑 ログインし直す</button>
-                </div>
               ) : (
                 <p className="inline-note">
                   自動同期を試みましたが失敗しました（{cloudSyncStatus.error || '不明なエラー'}）。次の機会に再試行します。

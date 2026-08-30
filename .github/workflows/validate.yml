@@ -2,6 +2,7 @@ name: Validate content & build
 
 # デプロイ前の品質ゲート。PR と main への push で
 #   1) テスト  2) コンテンツ検証（スキーマ・重複・版番号・網羅・数値鮮度）  3) ビルド
+#   4) E2Eスモークテスト（主要画面が実際にブラウザで描画されコンソールエラーが無いか）
 # を実行する。スキーマ/重複/版番号に重大エラーがあれば失敗する。
 
 on:
@@ -45,3 +46,9 @@ jobs:
 
       - name: Performance budget (bundle size)
         run: npm run check:size
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E smoke test (主要画面がレンダリングされコンソールエラーが無いか)
+        run: npm run e2e:smoke

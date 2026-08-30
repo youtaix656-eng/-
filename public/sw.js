@@ -8,7 +8,10 @@
 //    → ファイル名にハッシュが付くため、内容が変わればURLも変わる＝キャッシュしても安全。
 //  - 新しい Service Worker は待たずに有効化（skipWaiting + clients.claim）。
 
-const CACHE = 'shinkyu-cache-v2';
+// 同じGitHub Pages配下に他の同梱アプリ（るるくる・睡眠トラッカー・腰痛ナビ等）も
+// 存在するため、将来それぞれが独自のService Workerを持った時にキャッシュ名が
+// 衝突しないよう、アプリ名を含めた分かりやすい名前にしている。
+const CACHE = 'shinkyu-exam-app-cache-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -17,8 +20,13 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      // 同じドメイン（GitHub Pages）に同梱の別アプリ（/ouro など）も CacheStorage を
+      // 共有している。名前を見ずに消すと、そちらのキャッシュまで巻き添えで消える。
+      // このアプリの分（shinkyu-）だけを対象にする。
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await Promise.all(
+        keys.filter((k) => k.startsWith('shinkyu-') && k !== CACHE).map((k) => caches.delete(k))
+      );
       await self.clients.claim();
     })()
   );

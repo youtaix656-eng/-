@@ -9,20 +9,36 @@ import {
   masteryStats,
   styleDiagnosis,
   formatPercent,
+  subjectBalanceWarning,
 } from '../lib/stats.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { isInReview, MATURE_INTERVAL } from '../lib/srs.js';
 import { computeBadges } from '../lib/gamify.js';
+import { buildProgressSummary, buildProgressReportHtml } from '../lib/progressReport.js';
+import { hourlyPerformance } from '../lib/timeOfDay.js';
 import InsightsSection from './InsightsSection.jsx';
 
 // 分析・攻略率・合格者診断（⑯⑱㉑㉒）
 // 学習分析グラフ・出題範囲カバー率・合格ラインまで何%・合格者スタイル診断を1画面に。
-export default function Analytics({ store, onNavigate }) {
+export default function Analytics({ store, onNavigate, onToast }) {
   const { history, questions, srs, examResults } = store;
   const badges = useMemo(
     () => computeBadges(history, srs, questions, examResults, isInReview, MATURE_INTERVAL),
     [history, srs, questions, examResults]
   );
+
+  const printProgressReport = () => {
+    const summary = buildProgressSummary({ history, questions, srs, examResults });
+    const html = buildProgressReportHtml(summary);
+    const w = window.open('', '_blank');
+    if (!w) {
+      onToast?.('ポップアップがブロックされました。ブラウザの設定をご確認ください。');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
 
   const overall = overallStats(history);
   const scope = useMemo(() => scopeCoverage(questions, history), [questions, history]);
@@ -43,6 +59,8 @@ export default function Analytics({ store, onNavigate }) {
     () => styleDiagnosis(history, questions, srs, isInReview, MATURE_INTERVAL),
     [history, questions, srs]
   );
+  const balance = useMemo(() => subjectBalanceWarning(history, questions), [history, questions]);
+  const timeOfDay = useMemo(() => hourlyPerformance(history), [history]);
 
   if (history.length === 0) {
     return (
@@ -103,6 +121,28 @@ export default function Analytics({ store, onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* ===== 科目バランス警告 ===== */}
+      {balance.hasWarning && (
+        <div className="card" style={{ borderLeft: '4px solid var(--wrong)' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚖️ 科目バランスの偏りに注意</div>
+          <p className="inline-note" style={{ margin: '0 0 6px' }}>
+            他の科目は平均{formatPercent(balance.avgAccuracy)}前後で解けているのに、次の科目だけ極端に低いままです。
+            このまま模試だけ繰り返すと苦手科目が手つかずになりやすいので、優先的に取り組みましょう。
+          </p>
+          {balance.weakSubjects.map((s) => (
+            <div className="stat-row" key={s.subject}>
+              <div className="stat-head">
+                <span className="stat-subject">{s.subject}</span>
+                <span className="stat-pct">{formatPercent(s.accuracy)}<span className="stat-sub">（{s.total}問）</span></span>
+              </div>
+              <div className="bar ana-bar-mastery">
+                <span style={{ width: `${s.accuracy * 100}%`, background: 'var(--wrong)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ===== ⑱ 出題範囲カバー率・攻略率 ===== */}
       <div className="section-label">🗂️ 出題範囲カバー率・攻略率</div>
@@ -208,6 +248,37 @@ export default function Analytics({ store, onNavigate }) {
         </div>
       </div>
 
+      {/* ===== 時間帯別パフォーマンス分析 ===== */}
+      {timeOfDay.buckets.some((b) => b.total > 0) && (
+        <>
+          <div className="section-label">🕐 時間帯別の正答率</div>
+          <div className="card">
+            {timeOfDay.best && (
+              <p className="inline-note" style={{ margin: '0 0 8px' }}>
+                あなたは<strong>{timeOfDay.best.label}</strong>の正答率が高い傾向です（{formatPercent(timeOfDay.best.accuracy)}）。
+              </p>
+            )}
+            {timeOfDay.buckets.map((b) => (
+              <div className="stat-row" key={b.id}>
+                <div className="stat-head">
+                  <span className="stat-subject">{b.label}</span>
+                  <span className="stat-pct">
+                    {b.accuracy != null ? formatPercent(b.accuracy) : '—'}
+                    <span className="stat-sub"> （{b.total}問）</span>
+                  </span>
+                </div>
+                {b.accuracy != null && (
+                  <div className="bar ana-bar-mastery">
+                    <span style={{ width: `${b.accuracy * 100}%` }} />
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="inline-note" style={{ marginTop: 6 }}>10問以上解いた時間帯だけを比較対象にしています。</div>
+          </div>
+        </>
+      )}
+
       {/* ===== ㉒ 合格者スタイル診断 ===== */}
       <div className="section-label">🧭 合格者スタイル診断</div>
       <div className="card ana-diag">
@@ -257,6 +328,8 @@ export default function Analytics({ store, onNavigate }) {
       </div>
 
       <div className="ana-jump">
+        <button className="btn ghost sm" onClick={printProgressReport}>🏆 進捗サマリーを書き出す</button>
+        <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('journal')}>📓 週次の弱点ジャーナル</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('review')}>🔁 間違えた問題へ</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('scope')}>🗂️ 試験範囲へ</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('session')}>📚 学習へ</button>
