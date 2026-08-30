@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { HABITS, HABIT_MAP } from '../src/data/habits.js';
+import { SELF_DEFENSE_TACTIC_IDS } from '../src/data/people.js';
 import { TACTIC_MAP } from '../src/data/tactics.js';
 import { REPLY_MAP } from '../src/data/replies.js';
 
@@ -62,4 +64,27 @@ test('型（相手のすること）と癖（自分のしていること）を�
     assert.ok(!TACTIC_MAP[h.id], `${h.id}: 型と同じ id を使っています`);
     assert.ok(!HABIT_MAP[h.id]?.cues, `${h.title}: 癖に判定用の語を持たせています`);
   }
+});
+
+test('癖ごとに「その癖があると使いにくい手」があり、実在する手を指す', () => {
+  const ids = new Set(SELF_DEFENSE_TACTIC_IDS);
+  for (const h of HABITS) {
+    assert.ok(Array.isArray(h.hardCounters), `${h.id}: 使いにくい手の一覧がありません`);
+    for (const t of h.hardCounters) {
+      assert.ok(ids.has(t), `${h.id}: 使い返しの一覧にない手「${t}」`);
+    }
+  }
+});
+
+test('使いにくい手は「やるな」ではなく、先に知らせるだけ', () => {
+  const src = readFileSync(new URL('../src/components/CounterList.jsx', import.meta.url), 'utf8');
+  assert.match(src, /hardFor/, '使いにくい手の知らせがありません');
+  assert.doesNotMatch(src, /disabled=\{hard/, '使いにくいというだけで押せなくしています');
+});
+
+test('自分に当てはまる癖は、自分で選ぶ（判定で決めない）', () => {
+  const src = readFileSync(new URL('../src/components/Habits.jsx', import.meta.url), 'utf8');
+  assert.match(src, /これは自分に当てはまる/, '自分で選ぶ口がありません');
+  // 貼った文面から自分の癖は分からないので、判定は持たない
+  assert.doesNotMatch(src, /detect\(|cues/, '文面から癖を当てようとしています');
 });

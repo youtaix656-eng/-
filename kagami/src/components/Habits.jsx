@@ -8,7 +8,7 @@ import { GLYPHS } from '../data/glyphs.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { useFocusJump } from './useFocusJump.js';
 
-export default function Habits({ focus, onFocusDone, onGoTactic }) {
+export default function Habits({ focus, onFocusDone, onGoTactic, myHabits = [], onSetMyHabits }) {
   // 癖と状態が同じ画面にあるので、どちらの飛び先かを id から決める
   const anchor = focus
     ? STATES.some((st) => st.id === focus)
@@ -43,6 +43,28 @@ export default function Habits({ focus, onFocusDone, onGoTactic }) {
         <div className="card" key={h.id} id={`toc-habit-${h.id}`}>
           <h3>{h.title}</h3>
           <p>{h.summary}</p>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={myHabits.includes(h.id)}
+              onChange={() =>
+                onSetMyHabits?.(
+                  myHabits.includes(h.id)
+                    ? myHabits.filter((x) => x !== h.id)
+                    : [...myHabits, h.id],
+                )
+              }
+            />
+            <span>
+              これは自分に当てはまる
+              <br />
+              <span className="tiny">
+                印を付けると、人間分析で「この癖の人には最初は使いにくい手」を先に知らせます。
+                当てはまることは落ち度ではありません。
+              </span>
+            </span>
+          </label>
 
           <h3>何が起きているか</h3>
           <p>{h.why}</p>
