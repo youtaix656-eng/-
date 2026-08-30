@@ -314,7 +314,7 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
 }
 
 /* 目次から飛んだ先を一瞬だけ光らせる */
-.flash { animation: flash 1.9s ease-out; }
+[data-flash] { animation: flash 1.9s ease-out; }
 @keyframes flash {
   from { background: rgba(235, 235, 235, 0.16); }
   to { background: transparent; }
