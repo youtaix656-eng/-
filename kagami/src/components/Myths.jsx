@@ -5,8 +5,8 @@ import { GLYPHS } from '../data/glyphs.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { useFocusJump } from './useFocusJump.js';
 
-export default function Myths({ focus, onFocusDone }) {
-  useFocusJump(focus ? `toc-myth-${focus}` : '', onFocusDone);
+export default function Myths({ focus, anchor, onFocusDone }) {
+  useFocusJump(anchor || (focus ? `toc-myth-${focus}` : ''), onFocusDone);
 
   return (
     <>

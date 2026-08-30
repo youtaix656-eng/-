@@ -15,7 +15,9 @@ export default function CounterList({
   type, scene = '', tries = [], hidden = [], onTry, onHide, onGoTactic, caseId = '',
   myHabits = [], practice = false,
 }) {
-  const [memo, setMemo] = useState('');
+  // **ひとことは手ごとに持つ。** カードに1つだけだと、①について書いたメモが
+  // 押した③の記録に付く（実際に踏んだ）。
+  const [memos, setMemos] = useState({});
   const [explain, setExplain] = useState('');
   const [showNext, setShowNext] = useState('');
   const sum = summarize(tries);
@@ -44,16 +46,6 @@ export default function CounterList({
         {shown.length}つ挙げています。上から順にどうぞ——下へ行くほど、あとから戻しにくい手です。
       </p>
 
-      {!practice && (
-        <input
-          type="text"
-          value={memo}
-          maxLength={200}
-          onChange={(e) => setMemo(e.target.value)}
-          placeholder="ひとこと（任意。次に「やってみた」を押すと一緒に残ります）"
-          style={{ marginBottom: 4 }}
-        />
-      )}
 
       {shown.map((c, idx) => {
         const mark = ORDER_MARKS[idx] || `${idx + 1}.`;
@@ -122,6 +114,15 @@ export default function CounterList({
               </p>
             )}
 
+            <input
+              type="text"
+              value={memos[c.tacticId] || ''}
+              maxLength={200}
+              onChange={(e) => setMemos((m) => ({ ...m, [c.tacticId]: e.target.value }))}
+              placeholder="この手についてのひとこと（任意。○△✕と一緒に残ります）"
+              style={{ marginTop: 8 }}
+            />
+
             <div className="row" style={{ gap: 6, marginTop: 6 }}>
               <span className="tiny">やってみた：</span>
               {RESULTS.map((r) => (
@@ -129,8 +130,11 @@ export default function CounterList({
                   key={r.id}
                   className="chip"
                   onClick={() => {
-                    onTry({ tacticId: c.tacticId, typeId: type.id, caseId, result: r.id, note: memo });
-                    setMemo('');
+                    onTry({
+                      tacticId: c.tacticId, typeId: type.id, caseId,
+                      result: r.id, note: memos[c.tacticId] || '',
+                    });
+                    setMemos((m) => ({ ...m, [c.tacticId]: '' }));
                   }}
                 >
                   {r.mark} {r.label}
@@ -142,8 +146,8 @@ export default function CounterList({
               <button className="chip" onClick={() => setExplain(explain === c.tacticId ? '' : c.tacticId)}>
                 {explain === c.tacticId ? '説明を閉じる' : 'この型の説明'}
               </button>
-              <button className="chip" onClick={() => onHide(c.tacticId)}>
-                {GLYPHS.cross} 隠す
+              <button className="chip" onClick={() => onHide(type.id, c.tacticId)}>
+                {GLYPHS.cross} この型では隠す
               </button>
             </div>
 
@@ -185,8 +189,8 @@ export default function CounterList({
 
       {hiddenCount > 0 && !practice && (
         <p className="tiny">
-          合わないので隠している手が{hiddenCount}件あります。
-          <button className="chip" style={{ marginLeft: 6 }} onClick={() => onHide(null)}>
+          この型で「合わない」と隠した手が{hiddenCount}件あります（ほかの型では出ます）。
+          <button className="chip" style={{ marginLeft: 6 }} onClick={() => onHide(type.id, null)}>
             戻す
           </button>
         </p>

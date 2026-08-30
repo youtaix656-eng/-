@@ -29,6 +29,12 @@ function when(at) {
 
 const norm = (s) => String(s || '').toLowerCase();
 
+/** 日付の欄（YYYY-MM-DD）を画面の表記へ。**Date に通さない**（UTC で読まれて前日になる） */
+function showDate(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  return m ? `${m[1]}/${m[2]}/${m[3]}` : '';
+}
+
 /**
  * 枠は3つ（28）。**目次から飛ぶ時は、飛び先のある枠へ先に切り替える**
  * ——切り替えないと、飛び先が描かれていないので着かない。
@@ -43,8 +49,12 @@ export default function People({
   focus, onFocusDone, onGoTactic, cases = [], onSaveCase, onRemoveCase,
   tries = [], onAddTry, personView = {}, onSetPersonView,
   myHabits = [], undoCase, onUndoRemove, onClearPeople, onImportPeople,
+  onRemoveTry, onHideCounter, ui = {}, anchor: tocAnchor,
 }) {
-  const [checked, setChecked] = useState([]);
+  // 画面を移っても、書きかけの見立てを捨てない（端末には保存しない＝
+  // 「選んだだけでは残りません」の約束はそのまま。開いている間だけの覚え書き）
+  const kept = ui.people || (ui.people = {});
+  const [checked, setChecked] = useState(() => kept.checked || []);
   const [open, setOpen] = useState('');
   const [catalogOpen, setCatalogOpen] = useState('');
   const [scene, setSceneState] = useState(() =>
@@ -53,9 +63,10 @@ export default function People({
   const [core, setCoreState] = useState(personView.core || '');
   const [caseType, setCaseType] = useState('');
   // 目次から型・芯へ飛んできた時は、最初から「型を読む」を開いておく
-  const [tab, setTab] = useState(() =>
-    focus && !SCENES.some((sc) => sc.id === focus) ? 'browse' : 'pick',
-  );
+  const [tab, setTab] = useState(() => {
+    if (!focus) return kept.tab || 'pick';
+    return focus === 'lookup' || SCENES.some((sc) => sc.id === focus) ? 'pick' : 'browse';
+  });
   const [compareWith, setCompareWith] = useState('');
   const [practice, setPractice] = useState(false);
   const [sortBy, setSortBy] = useState(personView.sort || 'catalog');
@@ -63,19 +74,20 @@ export default function People({
   const [importText, setImportText] = useState('');
   const [importAsk, setImportAsk] = useState(null);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [stage, setStage] = useState(0);
-  const [status, setStatus] = useState('open');
-  const [nextAction, setNextAction] = useState('');
-  const [nextMeetAt, setNextMeetAt] = useState('');
-  const [query, setQuery] = useState('');
+  const [stage, setStage] = useState(() => kept.stage || 0);
+  const [status, setStatus] = useState(() => kept.status || 'open');
+  const [nextAction, setNextAction] = useState(() => kept.nextAction || '');
+  const [nextMeetAt, setNextMeetAt] = useState(() => kept.nextMeetAt || '');
+  const [query, setQuery] = useState(() => kept.query || '');
   const [onlyChecked, setOnlyChecked] = useState(false);
-  const [openGroups, setOpenGroups] = useState([]);
+  const [openGroups, setOpenGroups] = useState(() => kept.openGroups || []);
   // 保存まわり
-  const [label, setLabel] = useState('');
-  const [note, setNote] = useState('');
-  const [editingId, setEditingId] = useState('');
+  const [label, setLabel] = useState(() => kept.label || '');
+  const [note, setNote] = useState(() => kept.note || '');
+  const [editingId, setEditingId] = useState(() => kept.editingId || '');
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState('');
+  const [confirmTry, setConfirmTry] = useState('');
   const [caseQuery, setCaseQuery] = useState('');
   const [caseSort, setCaseSort] = useState('updated');
   const [copied, setCopied] = useState(false);
@@ -84,13 +96,22 @@ export default function People({
   const [now, setNow] = useState(() => Date.now());
   const [focusSeen, setFocusSeen] = useState(focus);
 
+  // 書きかけをそのまま覚えておく（描き直しのたびに上書きするだけ）
+  useEffect(() => {
+    Object.assign(kept, {
+      checked, label, note, stage, status, nextAction, nextMeetAt, editingId, openGroups, query, tab,
+    });
+  }, [kept, checked, label, note, stage, status, nextAction, nextMeetAt, editingId, openGroups, query, tab]);
+
   // 型と芯が同じ画面にあるので、どちらの飛び先かを id から決める
   const anchor = focus
-    ? SCENES.some((sc) => sc.id === focus)
-      ? 'toc-scenes'
-      : CORES.some((c) => c.id === focus)
-        ? `toc-core-${focus}`
-        : `toc-person-${focus}`
+    ? focus === 'lookup'
+      ? 'toc-lookup' // 「ふるまいでさがす」はさがす欄そのものが飛び先
+      : SCENES.some((sc) => sc.id === focus)
+        ? 'toc-scenes'
+        : CORES.some((c) => c.id === focus)
+          ? `toc-core-${focus}`
+          : `toc-person-${focus}`
     : '';
   /**
    * 飛び先のある枠へ、**描く前に**切り替える。
@@ -99,7 +120,10 @@ export default function People({
    */
   if (focus !== focusSeen) {
     setFocusSeen(focus);
-    if (focus) setTab(SCENES.some((sc) => sc.id === focus) ? 'pick' : 'browse');
+    if (focus) {
+      const inPick = focus === 'lookup' || SCENES.some((sc) => sc.id === focus);
+      setTab(inPick ? 'pick' : 'browse');
+    }
   }
 
   // 消した直後の「元に戻す」を、時間が過ぎたら画面から下ろす
@@ -110,7 +134,7 @@ export default function People({
     return () => clearTimeout(t);
   }, [undoCase]);
 
-  useFocusJump(anchor, onFocusDone);
+  useFocusJump(tocAnchor || anchor, onFocusDone);
 
   const behaviors = useMemo(() => allBehaviors(), []);
 
@@ -220,17 +244,16 @@ export default function People({
     setCoreState(v);
     onSetPersonView?.({ core: v });
   };
-  const hidden = personView.hidden || [];
+  const hiddenByType = personView.hiddenByType || {};
+  /** その型で隠した手だけ（型をまたいで消さない） */
+  const hiddenFor = (typeId) => hiddenByType[typeId] || [];
   const history = personView.history || [];
 
   function rememberQuery(q) {
     if (q && q.trim()) onSetPersonView?.({ history: pushHistory(history, q.trim()) });
   }
 
-  function hideCounter(tacticId) {
-    if (tacticId === null) onSetPersonView?.({ hidden: [] });
-    else onSetPersonView?.({ hidden: [...new Set([...hidden, tacticId])] });
-  }
+  const hideCounter = (typeId, tacticId) => onHideCounter?.(typeId, tacticId);
 
   function toggle(id) {
     setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
@@ -238,13 +261,23 @@ export default function People({
     setCopied(false);
   }
 
-  const first = useMemo(() => firstMove(result.matches), [result]);
+  /** 隠した手を外した状態の「当たった型」——ここを通さないと、隠した手を先頭で勧めてしまう */
+  const visibleMatches = useMemo(
+    () =>
+      result.matches.map((m) => ({
+        ...m,
+        type: { ...m.type, counters: m.type.counters.filter((c) => !hiddenFor(m.type.id).includes(c.tacticId)) },
+      })),
+    [result, hiddenByType],
+  );
+  const first = useMemo(() => firstMove(visibleMatches), [visibleMatches]);
   const trySum = useMemo(() => summarize(tries), [tries]);
   const notTried = useMemo(() => {
-    const all = result.matches.flatMap((m) => m.type.counters);
+    const all = visibleMatches.flatMap((m) => m.type.counters);
     const seen = new Set();
-    return untried(all, tries).filter((c) => (seen.has(c.tacticId) ? false : seen.add(c.tacticId)));
-  }, [result, tries]);
+    // **この見立ての中だけで数える**（別の人で試した手を「試した」にしない）
+    return untried(all, tries, editingId).filter((c) => (seen.has(c.tacticId) ? false : seen.add(c.tacticId)));
+  }, [visibleMatches, tries, editingId]);
 
   /**
    * 今日試す1つ——保存した見立てのうち、いちばん最近直したものから、
@@ -253,12 +286,15 @@ export default function People({
   const todays = useMemo(() => {
     for (const c of cases) {
       const ids = new Set(c.checkedIds.map((id) => id.split(':')[0]));
-      const cs = PERSON_TYPES.filter((t) => ids.has(t.id)).flatMap((t) => t.counters);
-      const rest = untried(cs, tries);
+      const cs = PERSON_TYPES.filter((t) => ids.has(t.id)).flatMap((t) =>
+        t.counters.filter((x) => !(hiddenByType[t.id] || []).includes(x.tacticId)),
+      );
+      // その人の記録の中だけで「まだ試していない」を見る
+      const rest = untried(cs, tries, c.id);
       if (rest.length > 0) return { c, counter: rest[0] };
     }
     return null;
-  }, [cases, tries]);
+  }, [cases, tries, hiddenByType]);
 
   const editing = cases.find((c) => c.id === editingId) || null;
   const timeline = useMemo(() => (editing ? timelineOf(editing) : []), [editing]);
@@ -392,6 +428,7 @@ export default function People({
       cases: importAsk.cases,
       tries: importAsk.tries,
       myHabits: importAsk.myHabits,
+      personView: importAsk.personView,
     });
     setImportAsk(null);
     setImportText('');
@@ -420,13 +457,22 @@ export default function People({
     window.scrollTo(0, 0);
   }
 
+  /** まっさらから作り直す。**前の人の欄を残さない**——距離・状態・次にすること・
+   * 次に会う日を戻していなかったので、別人の見立てにそのまま引き継がれていた（実際に踏んだ） */
   function newCase() {
     setEditingId('');
     setChecked([]);
     setOpenGroups([]);
     setLabel('');
     setNote('');
+    setStage(0);
+    setStatus('open');
+    setNextAction('');
+    setNextMeetAt('');
+    setCompareWith('');
     setSaved(false);
+    setCopied(false);
+    setConsultCopied(false);
   }
 
   function save() {
@@ -504,17 +550,17 @@ export default function People({
         ))}
       </div>
 
+      {/* **画面のいちばん上に置かない。** 一覧の下のほうで消すと画面の外に出てしまい、
+          気づかないまま20秒で戻せなくなっていた（実際に踏んだ）。いる場所に出す */}
       {canUndo && (
-        <div className="card quiet">
-          <p>
-            <strong>「{displayName(undoCase.item)}」を消しました。</strong>
-          </p>
-          <div className="row end">
-            <button className="primary" onClick={onUndoRemove}>
-              元に戻す
-            </button>
-          </div>
-          <p className="tiny">この案内が消えると、もう戻せません。</p>
+        <div className="undo-bar" role="status">
+          <span>
+            「{displayName(undoCase.item)}」を消しました。
+            <span className="tiny">（この案内が消えると、もう戻せません）</span>
+          </span>
+          <button className="primary" onClick={onUndoRemove}>
+            元に戻す
+          </button>
         </div>
       )}
 
@@ -855,7 +901,7 @@ export default function People({
               showCounters
               scene={scene}
               tries={tries}
-              hidden={hidden}
+              hidden={hiddenFor(m.type.id)}
               onTry={onAddTry}
               onHide={hideCounter}
               caseId={editingId}
@@ -1067,7 +1113,7 @@ export default function People({
                     {c.sceneId && SCENE_MAP[c.sceneId] ? `${SCENE_MAP[c.sceneId].label}・` : ''}
                     ふるまい{c.checkedIds.length}件・{when(c.updatedAt)}
                     {c.stage ? `／${(STAGES.find((st) => st.id === c.stage) || {}).label}` : ''}
-                    {c.nextMeetAt ? `／次に会う ${c.nextMeetAt}` : ''}
+                    {c.nextMeetAt ? `／次に会う ${showDate(c.nextMeetAt)}` : ''}
                     {c.note ? `／${c.note.slice(0, 24)}` : ''}
                   </span>
                   {c.nextAction && (
@@ -1304,10 +1350,33 @@ export default function People({
                   </span>
                   <span className="s">
                     {when(t.at)}
-                    {caseNameOf(t.caseId) ? `・${caseNameOf(t.caseId)}` : ''}
+                    {caseNameOf(t.caseId) ? `・${caseNameOf(t.caseId)}` : '・見立てに紐づいていません'}
                     {t.note ? `／${t.note}` : ''}
                   </span>
                 </button>
+                <div className="row end" style={{ paddingBottom: 8 }}>
+                  {confirmTry === t.id ? (
+                    <>
+                      <span className="tiny">元に戻せません。</span>
+                      <button className="ghost" onClick={() => setConfirmTry('')}>
+                        やめる
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() => {
+                          onRemoveTry?.(t.id);
+                          setConfirmTry('');
+                        }}
+                      >
+                        消す
+                      </button>
+                    </>
+                  ) : (
+                    <button className="danger ghost" onClick={() => setConfirmTry(t.id)}>
+                      この記録を消す
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
         </ul>
@@ -1457,10 +1526,11 @@ export default function People({
           onGoTactic={onGoTactic}
           scene={scene}
           tries={tries}
-          hidden={hidden}
+          hidden={hiddenFor(t.id)}
           onTry={onAddTry}
           onHide={hideCounter}
           myHabits={myHabits}
+          caseId={editingId}
         />
       ))}
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PLACE_MAP, countByTactic, countByPlace } from '../lib/records.js';
 import { TACTIC_MAP } from '../data/tactics.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
@@ -11,6 +11,8 @@ function when(at) {
 }
 
 export default function Records({ records, onRemove, onGoCheck }) {
+  // **消すときは必ず確認を出す**（見立て・全消しと同じ扱い。押した瞬間には消さない）
+  const [confirmId, setConfirmId] = useState('');
   const byTactic = countByTactic(records);
   const byPlace = countByPlace(records);
 
@@ -53,6 +55,9 @@ export default function Records({ records, onRemove, onGoCheck }) {
                   </li>
                 ))}
               </ul>
+              {byTactic.length > 5 && (
+                <p className="tiny">ほか{byTactic.length - 5}件の型にも当たっています。</p>
+              )}
               {byPlace.length > 0 && (
                 <p className="tiny">
                   場面：{byPlace.map((p) => `${p.place.label} ${p.count}件`).join(' / ')}
@@ -83,9 +88,27 @@ export default function Records({ records, onRemove, onGoCheck }) {
               )}
               {r.note && <p className="muted">{r.note}</p>}
               <div className="row end">
-                <button className="danger ghost" onClick={() => onRemove(r.id)}>
-                  この記録を消す
-                </button>
+                {confirmId === r.id ? (
+                  <>
+                    <span className="tiny">元に戻せません。</span>
+                    <button className="ghost" onClick={() => setConfirmId('')}>
+                      やめる
+                    </button>
+                    <button
+                      className="danger"
+                      onClick={() => {
+                        onRemove(r.id);
+                        setConfirmId('');
+                      }}
+                    >
+                      消す
+                    </button>
+                  </>
+                ) : (
+                  <button className="danger ghost" onClick={() => setConfirmId(r.id)}>
+                    この記録を消す
+                  </button>
+                )}
               </div>
             </div>
           ))}

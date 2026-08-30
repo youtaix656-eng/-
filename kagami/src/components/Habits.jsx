@@ -8,14 +8,14 @@ import { GLYPHS } from '../data/glyphs.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { useFocusJump } from './useFocusJump.js';
 
-export default function Habits({ focus, onFocusDone, onGoTactic, myHabits = [], onSetMyHabits }) {
+export default function Habits({ focus, anchor: tocAnchor, onFocusDone, onGoTactic, myHabits = [], onSetMyHabits }) {
   // 癖と状態が同じ画面にあるので、どちらの飛び先かを id から決める
   const anchor = focus
     ? STATES.some((st) => st.id === focus)
       ? `toc-state-${focus}`
       : `toc-habit-${focus}`
     : '';
-  useFocusJump(anchor, onFocusDone);
+  useFocusJump(tocAnchor || anchor, onFocusDone);
 
   return (
     <>

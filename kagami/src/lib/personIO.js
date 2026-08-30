@@ -6,6 +6,9 @@
 //   3. **判定を持ち出さない。** 出るのは入力（チェックしたふるまい）と記録だけ。
 //   4. ネットワークに触れない。ファイルの読み書きも画面側で行う。
 
+import { normalizeCase } from './cases.js';
+import { makeTry } from './tried.js';
+
 export const FORMAT = 'kagami-people-v1';
 
 /** 持ち出す形にする */
@@ -16,7 +19,17 @@ export function toExport({ cases = [], tries = [], myHabits = [], personView = {
     cases,
     tries,
     myHabits,
-    personView: { scene: personView.scene || '', core: personView.core || '' },
+    // しぼり込みと「隠した手」も持ち出す（取り込み側でも同じものを読む）。
+    // さがした語（history）は入れない——人に渡すものに検索履歴を混ぜない。
+    personView: {
+      scene: personView.scene || '',
+      core: personView.core || '',
+      sort: personView.sort || 'catalog',
+      filters: Array.isArray(personView.filters) ? personView.filters : [],
+      hiddenByType: personView.hiddenByType && typeof personView.hiddenByType === 'object'
+        ? personView.hiddenByType
+        : {},
+    },
   };
 }
 
@@ -29,19 +42,39 @@ export function parseImport(text) {
   try {
     data = JSON.parse(String(text || ''));
   } catch {
-    return { ok: false, reason: 'ファイルの形が読めませんでした（JSONではないようです）', cases: [], tries: [], myHabits: [] };
+    return {
+      ok: false,
+      reason: 'ファイルの形が読めませんでした（JSONではないようです）',
+      cases: [], tries: [], myHabits: [], personView: null,
+    };
   }
   if (!data || data.format !== FORMAT) {
     return {
       ok: false,
       reason: 'このアプリの人間分析の書き出しではないようです',
-      cases: [], tries: [], myHabits: [],
+      cases: [], tries: [], myHabits: [], personView: null,
     };
   }
-  const cases = Array.isArray(data.cases) ? data.cases.filter((c) => c && c.id) : [];
-  const tries = Array.isArray(data.tries) ? data.tries.filter((t) => t && t.id && t.tacticId) : [];
+  // **形の足りないものを、そのまま画面へ渡さない。**
+  // checkedIds や note が無いだけで画面が落ちる（実際に踏んだ）。
+  const cases = Array.isArray(data.cases)
+    ? data.cases.map((c) => normalizeCase(c)).filter(Boolean)
+    : [];
+  const tries = Array.isArray(data.tries)
+    ? data.tries.filter((t) => t && t.id && t.tacticId).map((t) => makeTry(t))
+    : [];
   const myHabits = Array.isArray(data.myHabits) ? data.myHabits.filter((h) => typeof h === 'string') : [];
-  return { ok: true, cases, tries, myHabits };
+  const pv = data.personView && typeof data.personView === 'object' ? data.personView : {};
+  const personView = {
+    scene: typeof pv.scene === 'string' ? pv.scene : '',
+    core: typeof pv.core === 'string' ? pv.core : '',
+    sort: typeof pv.sort === 'string' ? pv.sort : '',
+    filters: Array.isArray(pv.filters) ? pv.filters.filter((f) => f && typeof f.name === 'string') : [],
+    hiddenByType: pv.hiddenByType && typeof pv.hiddenByType === 'object' && !Array.isArray(pv.hiddenByType)
+      ? pv.hiddenByType
+      : {},
+  };
+  return { ok: true, cases, tries, myHabits, personView };
 }
 
 /**
@@ -55,6 +88,28 @@ export function mergeCases(mine = [], theirs = []) {
     if (!cur || (c.updatedAt || 0) > (cur.updatedAt || 0)) map.set(c.id, c);
   }
   return [...map.values()];
+}
+
+/**
+ * しぼり込みと「隠した手」を混ぜる。**いまのものを消さない**——
+ * 隠した手は型ごとに足し合わせ、名前つきのしぼり込みは同じ名前だけ上書きする。
+ */
+export function mergePersonView(mine = {}, theirs = null) {
+  if (!theirs) return mine;
+  const hidden = { ...(mine.hiddenByType || {}) };
+  for (const [typeId, ids] of Object.entries(theirs.hiddenByType || {})) {
+    if (!Array.isArray(ids)) continue;
+    hidden[typeId] = [...new Set([...(hidden[typeId] || []), ...ids])];
+  }
+  const names = new Set((theirs.filters || []).map((f) => f.name));
+  return {
+    ...mine,
+    scene: theirs.scene || mine.scene || '',
+    core: theirs.core || mine.core || '',
+    sort: theirs.sort || mine.sort || 'catalog',
+    filters: [...(mine.filters || []).filter((f) => !names.has(f.name)), ...(theirs.filters || [])].slice(-8),
+    hiddenByType: hidden,
+  };
 }
 
 export function mergeTries(mine = [], theirs = []) {

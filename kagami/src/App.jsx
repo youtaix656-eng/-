@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { GLYPHS } from './data/glyphs.js';
 import { useStore } from './lib/useStore.js';
 import Home from './components/Home.jsx';
@@ -12,6 +12,7 @@ import Sources from './components/Sources.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
 import Records from './components/Records.jsx';
 import Settings from './components/Settings.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 const NAV = [
   { id: 'home', label: 'ホーム', icon: GLYPHS.sun },
@@ -27,6 +28,23 @@ export default function App() {
   const [view, setView] = useState('home');
   const [checkMode, setCheckMode] = useState('received');
   const [focus, setFocus] = useState('');
+  /**
+   * 目次が持っている飛び先（DOM の id）。
+   *
+   * **画面側で組み立て直さない。** 目次の `anchor` と画面側の組み立てが二重にあると、
+   * 片方だけ直したときに黙って食い違う（「ふるまいでさがす」が実際に飛べなくなっていた）。
+   */
+  const [focusAnchor, setFocusAnchor] = useState('');
+
+  /**
+   * 画面ごとの「書きかけ」を、画面を移っても持っておく箱。
+   *
+   * App は画面を出し入れするので、離れた瞬間に画面の中の状態が捨てられる
+   * ——貼った本文も、選んだふるまいも、黙って消えていた（実際に踏んだ）。
+   * **端末には保存しない**（貼った文面は送らない・選んだだけでは残らない、という
+   * 約束をそのまま守るため）。タブを閉じれば消える、開いている間だけの覚え書き。
+   */
+  const uiRef = useRef({});
 
   // 画面の先頭へ戻すのは**操作の一部**として行う。
   // 「focus が空なら先頭へ」という副作用にすると、目次から飛んだ直後に
@@ -38,6 +56,7 @@ export default function App() {
       window.scrollTo(0, 0);
     } else if (arg) {
       setFocus(arg); // 飛び先は画面側が運ぶので、ここでは先頭へ戻さない
+      setFocusAnchor('');
     } else {
       window.scrollTo(0, 0);
     }
@@ -46,13 +65,18 @@ export default function App() {
 
   const goFromToc = useCallback((entry) => {
     setFocus(entry.targetId);
+    setFocusAnchor(entry.anchor || '');
     setView(entry.view);
   }, []);
 
-  const clearFocus = useCallback(() => setFocus(''), []);
+  const clearFocus = useCallback(() => {
+    setFocus('');
+    setFocusAnchor('');
+  }, []);
 
   return (
     <div className="app">
+      <ErrorBoundary viewKey={view} onHome={() => go('home')}>
       {view === 'home' && <Home onGo={go} records={store.records} />}
       {view === 'check' && (
         <Check
@@ -60,25 +84,29 @@ export default function App() {
           onChangeMode={setCheckMode}
           onSave={store.addRecord}
           settings={store.settings}
+          ui={uiRef.current}
+          onGoSettings={() => go('settings')}
         />
       )}
-      {view === 'tactics' && <Tactics focus={focus} onFocusDone={clearFocus} />}
-      {view === 'replies' && <Replies focus={focus} onFocusDone={clearFocus} />}
+      {view === 'tactics' && <Tactics focus={focus} anchor={focusAnchor} onFocusDone={clearFocus} ui={uiRef.current} />}
+      {view === 'replies' && <Replies focus={focus} anchor={focusAnchor} onFocusDone={clearFocus} />}
       {view === 'habits' && (
         <Habits
           focus={focus}
+          anchor={focusAnchor}
           onFocusDone={clearFocus}
           onGoTactic={(id) => go('tactics', id)}
           myHabits={store.myHabits}
           onSetMyHabits={store.setMyHabits}
         />
       )}
-      {view === 'sources' && <Sources focus={focus} onFocusDone={clearFocus} />}
-      {view === 'toc' && <TableOfContents onGo={goFromToc} />}
-      {view === 'myths' && <Myths focus={focus} onFocusDone={clearFocus} />}
+      {view === 'sources' && <Sources focus={focus} anchor={focusAnchor} onFocusDone={clearFocus} />}
+      {view === 'toc' && <TableOfContents onGo={goFromToc} ui={uiRef.current} />}
+      {view === 'myths' && <Myths focus={focus} anchor={focusAnchor} onFocusDone={clearFocus} />}
       {view === 'people' && (
         <People
           focus={focus}
+          anchor={focusAnchor}
           onFocusDone={clearFocus}
           onGoTactic={(id) => go('tactics', id)}
           cases={store.cases}
@@ -93,6 +121,9 @@ export default function App() {
           onUndoRemove={store.undoRemoveCase}
           onClearPeople={store.clearPeople}
           onImportPeople={store.importPeople}
+          onRemoveTry={store.removeTry}
+          onHideCounter={store.hideCounter}
+          ui={uiRef.current}
         />
       )}
       {view === 'records' && (
@@ -109,9 +140,13 @@ export default function App() {
           onClearAll={store.clearAll}
           recordCount={store.records.length}
           caseCount={store.cases.length}
+          tryCount={store.tries.length}
+          habitCount={store.myHabits.length}
           storageSize={store.storageSize}
         />
       )}
+
+      </ErrorBoundary>
 
       {!NAV.some((n) => n.id === view) && (
         <button className="back" onClick={() => go('home')}>

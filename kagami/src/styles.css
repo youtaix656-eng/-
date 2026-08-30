@@ -511,3 +511,28 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
 
 /* おすすめの順番（番号そのものに意味がある） */
 .order-mark { font-family: var(--serif); font-size: 1.1rem; color: var(--ink); line-height: 1; }
+
+/* 飛び先が固定バーの下に隠れないようにする（目次の共通ルール） */
+[id^='toc-'], [id^='kana-'], #sec-result { scroll-margin-top: 72px; }
+
+/* 消した直後の「元に戻す」。**いる場所に出す**——画面の上に置くと、
+   一覧の下のほうで消したときに見えないまま20秒で戻せなくなる */
+.undo-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  width: min(var(--max-w, 560px), calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--plate-soft);
+  border: 1px solid var(--ink-faint);
+  border-radius: 2px;
+  font-size: .86rem;
+  line-height: 1.6;
+}
+.undo-bar button { flex: none; }

@@ -2,17 +2,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { load, save, clear, storageSize } from './storage.js';
 import { makeRecord, sortRecords } from './records.js';
-import { makeCase, updateCase, sortCases } from './cases.js';
+import { makeCase, updateCase, sortCases, normalizeCase } from './cases.js';
 import { makeTry } from './tried.js';
 import { pushSnapshot, withSeenAt, makeUndo } from './caseTools.js';
-import { mergeCases, mergeTries } from './personIO.js';
+import { mergeCases, mergeTries, mergePersonView } from './personIO.js';
 
 const EMPTY = {
   records: [],
   cases: [],
   tries: [],
   myHabits: [],
-  personView: { scene: '', core: '', history: [], hidden: [], filters: [], seenTypes: [], sort: 'catalog' },
+  // hiddenByType は**型ごと**に隠した手（以前の hidden は型をまたいで消えていた）
+  personView: {
+    scene: '', core: '', history: [], hiddenByType: {}, filters: [], seenTypes: [], sort: 'catalog',
+  },
   settings: {
     keepRaw: false, // 記録するとき本文をそのまま残すか（既定は伏せる）
     seenIntro: false,
@@ -26,16 +29,31 @@ export function useStore() {
       ...EMPTY,
       ...loaded,
       records: Array.isArray(loaded.records) ? loaded.records : [],
-      cases: Array.isArray(loaded.cases) ? loaded.cases : [],
+      // 端末に入っているものも必ず形をそろえてから画面へ渡す
+      cases: Array.isArray(loaded.cases) ? loaded.cases.map((c) => normalizeCase(c)).filter(Boolean) : [],
       tries: Array.isArray(loaded.tries) ? loaded.tries : [],
       myHabits: Array.isArray(loaded.myHabits) ? loaded.myHabits : [],
-      personView: { ...EMPTY.personView, ...(loaded.personView || {}) },
+      personView: {
+        ...EMPTY.personView,
+        ...(loaded.personView || {}),
+        // 古い形（型をまたぐ hidden）は引き継がない——隠したままだと
+        // 「おすすめ3つ」が別の型でも黙って減る。隠し直せるようにして戻す
+        hidden: undefined,
+        hiddenByType:
+          loaded.personView && typeof loaded.personView.hiddenByType === 'object'
+            ? loaded.personView.hiddenByType
+            : {},
+      },
       settings: { ...EMPTY.settings, ...(loaded.settings || {}) },
     };
   });
 
   useEffect(() => {
-    save(state);
+    // **消したものを端末に残さない。** undoCase は「消した直後だけ戻せる」ための
+    // 覚え書きなので、保存に混ぜると消したはずの本文が localStorage に残り続ける
+    // （再読み込みしても消えない。実際に踏んだ）。
+    const { undoCase, ...persisted } = state;
+    save(persisted);
   }, [state]);
 
   const addRecord = useCallback((input) => {
@@ -104,12 +122,13 @@ export function useStore() {
   }, []);
 
   /** 取り込み（画面側で必ず確認を出してから呼ぶ） */
-  const importPeople = useCallback(({ cases = [], tries = [], myHabits = [] }) => {
+  const importPeople = useCallback(({ cases = [], tries = [], myHabits = [], personView = null }) => {
     setState((s) => ({
       ...s,
-      cases: mergeCases(s.cases, cases),
+      cases: mergeCases(s.cases, cases.map((c) => normalizeCase(c)).filter(Boolean)),
       tries: mergeTries(s.tries, tries),
       myHabits: [...new Set([...s.myHabits, ...myHabits])],
+      personView: mergePersonView(s.personView, personView),
     }));
   }, []);
 
@@ -121,6 +140,17 @@ export function useStore() {
 
   const removeTry = useCallback((id) => {
     setState((s) => ({ ...s, tries: s.tries.filter((t) => t.id !== id) }));
+  }, []);
+
+  /** その型で「合わない」と印を付けた手（型ごと。型をまたいで消さない） */
+  const hideCounter = useCallback((typeId, tacticId) => {
+    setState((s) => {
+      const cur = s.personView.hiddenByType || {};
+      const next = { ...cur };
+      if (tacticId === null) delete next[typeId];
+      else next[typeId] = [...new Set([...(cur[typeId] || []), tacticId])];
+      return { ...s, personView: { ...s.personView, hiddenByType: next } };
+    });
   }, []);
 
   /** 人間分析のしぼり込み・検索履歴・隠した手を覚えておく */
@@ -151,6 +181,7 @@ export function useStore() {
     tries: state.tries,
     addTry,
     removeTry,
+    hideCounter,
     undoCase: state.undoCase || null,
     undoRemoveCase,
     myHabits: state.myHabits,

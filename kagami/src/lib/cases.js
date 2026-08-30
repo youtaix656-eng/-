@@ -68,6 +68,44 @@ export function updateCase(existing, patch = {}, at = Date.now()) {
   };
 }
 
+/**
+ * 外から来た見立てを、画面が触れる形にそろえる。
+ *
+ * **足りない欄を黙って undefined のままにしない。** 取り込んだファイルに
+ * `checkedIds` や `note` が無いだけで画面が落ち、下部ナビごと消えて戻れなくなった
+ * （実際に踏んだ）。ここを通していないものを画面へ渡さないこと。
+ */
+/** 文字列でないものを文字にしない（数や入れ物が「42」「[object Object]」になって残る） */
+function text(value, max) {
+  return typeof value === 'string' ? clean(value, max) : '';
+}
+
+export function normalizeCase(input, at = Date.now()) {
+  if (!input || !input.id) return null;
+  const created = Number(input.createdAt) || Number(input.updatedAt) || at;
+  return {
+    id: String(input.id),
+    label: text(input.label, LABEL_MAX),
+    sceneId: typeof input.sceneId === 'string' ? input.sceneId : '',
+    checkedIds: Array.isArray(input.checkedIds)
+      ? [...new Set(input.checkedIds.filter((x) => typeof x === 'string' && x))]
+      : [],
+    note: text(input.note, NOTE_MAX),
+    createdAt: created,
+    updatedAt: Number(input.updatedAt) || created,
+    snapshots: Array.isArray(input.snapshots)
+      ? input.snapshots
+          .filter((sn) => sn && Array.isArray(sn.checkedIds))
+          .map((sn) => ({ at: Number(sn.at) || created, checkedIds: sn.checkedIds.filter(Boolean) }))
+      : [],
+    seenAt: input.seenAt && typeof input.seenAt === 'object' && !Array.isArray(input.seenAt) ? input.seenAt : {},
+    stage: Number.isFinite(Number(input.stage)) ? Number(input.stage) : 0,
+    status: typeof input.status === 'string' && input.status ? input.status : 'open',
+    nextAction: text(input.nextAction, LABEL_MAX * 3),
+    nextMeetAt: /^\d{4}-\d{2}-\d{2}$/.test(String(input.nextMeetAt || '')) ? input.nextMeetAt : '',
+  };
+}
+
 /** 新しく直したものが上 */
 export function sortCases(cases = []) {
   return [...cases].sort((a, b) => b.updatedAt - a.updatedAt);

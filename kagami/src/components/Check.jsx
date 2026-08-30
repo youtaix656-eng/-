@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TACTICS, behaviorTactics } from '../data/tactics.js';
 import { detectTactics, splitByHighlight, MIN_TEXT } from '../lib/detect.js';
 import { summarizePersonal } from '../lib/privacy.js';
@@ -13,11 +13,17 @@ import TacticCard from './TacticCard.jsx';
  *   'received' … 言われた側（既定）
  *   'draft'    … 自分が書いたものを見る（項目77の線。使う癖は人に向く癖になる）
  */
-export default function Check({ mode = 'received', onChangeMode, onSave, settings }) {
-  const [text, setText] = useState('');
+export default function Check({ mode = 'received', onChangeMode, onSave, settings, ui = {}, onGoSettings }) {
+  // 画面を移っても、貼った本文を捨てない（端末には保存しない。開いている間だけ）
+  const kept = ui.check || (ui.check = {});
+  const [text, setText] = useState(() => kept.text || '');
   const [openId, setOpenId] = useState('');
-  const [placeId, setPlaceId] = useState('other');
+  const [placeId, setPlaceId] = useState(() => kept.placeId || 'other');
   const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    kept.text = text;
+    kept.placeId = placeId;
+  }, [kept, text, placeId]);
 
   const result = useMemo(() => detectTactics(text, TACTICS), [text]);
   const parts = useMemo(() => splitByHighlight(text, result.matches), [text, result]);
@@ -77,14 +83,21 @@ export default function Check({ mode = 'received', onChangeMode, onSave, setting
       {personal.length > 0 && (
         <div className="note warn">
           個人情報らしきものが入っています（{personal.map((p) => `${p.label}${p.count}件`).join('・')}）。
-          記録に残すときは{settings.keepRaw ? '設定で「そのまま残す」になっています。設定を見直せます。' : '自動で伏せます。'}
+          記録に残すときは{settings.keepRaw ? '設定で「そのまま残す」になっています。' : '自動で伏せます。'}
+          {settings.keepRaw && onGoSettings && (
+            <button className="chip" style={{ marginLeft: 8 }} onClick={onGoSettings}>
+              設定を見直す
+            </button>
+          )}
         </div>
       )}
 
       {result.status === 'short' && text.length > 0 && (
         <div className="card quiet">
           <p className="muted">
-            短すぎて調べられません（{MIN_TEXT}文字以上）。短い文はたまたま当たるだけになるので、判定しないことにしています。
+            短すぎて調べられません。空白を除いて{MIN_TEXT}文字以上でお願いします
+            （いまは{result.length}文字ぶんとして数えています）。
+            短い文はたまたま当たるだけになるので、判定しないことにしています。
           </p>
           <p className="tiny">言われたことが一言だけなら、型の一覧から近いものを探すほうが早いことがあります。</p>
         </div>
@@ -147,7 +160,10 @@ export default function Check({ mode = 'received', onChangeMode, onSave, setting
                   <button
                     key={p.id}
                     className={`chip ${placeId === p.id ? 'on' : ''}`}
-                    onClick={() => setPlaceId(p.id)}
+                    onClick={() => {
+                      setPlaceId(p.id);
+                      setSaved(false); // 場面を選び直したら記録し直せる
+                    }}
                   >
                     {p.icon} {p.label}
                   </button>

@@ -105,9 +105,16 @@ export function recommendThree(counters = [], opts = {}) {
     .slice(0, limit);
 }
 
-/** まだ一度も試していない手 */
-export function untried(counters = [], tries = []) {
-  const done = new Set(tries.map((t) => t.tacticId));
+/**
+ * まだ一度も試していない手。
+ *
+ * **見立て（人）ごとに数える。** caseId を渡さないと、A さんで試した手が
+ * B さんでも「試した」扱いになり、次に何をすればよいか出なくなる（実際に踏んだ）。
+ * @param {string} [caseId] この見立ての中だけで数える
+ */
+export function untried(counters = [], tries = [], caseId) {
+  const use = caseId === undefined ? tries : tries.filter((t) => t.caseId === caseId);
+  const done = new Set(use.map((t) => t.tacticId));
   return counters.filter((c) => !done.has(c.tacticId));
 }
 

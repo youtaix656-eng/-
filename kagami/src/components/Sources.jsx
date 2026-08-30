@@ -5,8 +5,8 @@ import { useFocusJump } from './useFocusJump.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
 
-export default function Sources({ focus, onFocusDone }) {
-  useFocusJump(focus ? `toc-source-${focus}` : '', onFocusDone);
+export default function Sources({ focus, anchor, onFocusDone }) {
+  useFocusJump(anchor || (focus ? `toc-source-${focus}` : ''), onFocusDone);
 
   return (
     <>

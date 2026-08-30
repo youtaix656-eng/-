@@ -4,8 +4,9 @@ import { useFocusJump } from './useFocusJump.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
 
-export default function Replies({ focus, onFocusDone }) {
-  useFocusJump(focus ? `toc-reply-${focus}` : '', onFocusDone);
+export default function Replies({ focus, anchor, onFocusDone }) {
+  // 目次が持っている飛び先をそのまま使う（画面側で組み立て直さない）
+  useFocusJump(anchor || (focus ? `toc-reply-${focus}` : ''), onFocusDone);
 
   return (
     <>

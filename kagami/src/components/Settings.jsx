@@ -2,7 +2,16 @@ import React, { useState } from 'react';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
 
-export default function Settings({ settings, setSetting, onClearAll, recordCount, caseCount = 0, storageSize }) {
+/** 何も入っていないのに「約1KB」と書かない（実際の量をそのまま出す） */
+function sizeLine(bytes) {
+  if (!bytes) return 'まだ何も入っていません';
+  if (bytes < 1024) return `約${bytes}バイト`;
+  return `約${Math.round(bytes / 1024)}KB`;
+}
+
+export default function Settings({
+  settings, setSetting, onClearAll, recordCount, caseCount = 0, tryCount = 0, habitCount = 0, storageSize,
+}) {
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -36,8 +45,8 @@ export default function Settings({ settings, setSetting, onClearAll, recordCount
       <div className="card">
         <h3>保存されているもの</h3>
         <p className="tiny">
-          記録 {recordCount}件・人間分析の見立て {caseCount}件・
-          約{Math.max(1, Math.round(storageSize() / 1024))}KB（端末内）。
+          記録 {recordCount}件・人間分析の見立て {caseCount}件・やってみた記録 {tryCount}件・
+          自分に当てはまる癖 {habitCount}件・{sizeLine(storageSize())}（端末内）。
           このアプリはサーバーを持たないので、端末を変えるとデータは引き継がれません。
         </p>
         {!confirming ? (
@@ -48,7 +57,9 @@ export default function Settings({ settings, setSetting, onClearAll, recordCount
           </div>
         ) : (
           <div className="note warn">
-            記録{recordCount}件・見立て{caseCount}件と設定をすべて消します。元に戻せません。
+            <strong>この端末に入っているものを全部消します。</strong>
+            記録{recordCount}件・人間分析の見立て{caseCount}件・やってみた記録{tryCount}件・
+            自分に当てはまる癖{habitCount}件・しぼり込みとさがした語・設定。元に戻せません。
             <div className="row end" style={{ marginTop: 8 }}>
               <button className="ghost" onClick={() => setConfirming(false)}>
                 やめる
