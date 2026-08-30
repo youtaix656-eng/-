@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   PERSON_TYPES, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors,
-  SELF_DEFENSE_TACTIC_IDS,
+  SELF_DEFENSE_TACTIC_IDS, COUNTER_SCENE_NOTES, COUNTER_NEXT, COUNTER_STEP, STEP_LABELS,
 } from '../src/data/people.js';
+import { recommendThree } from '../src/lib/tried.js';
+import { ORDER_MARKS } from '../src/data/glyphs.js';
 import { analyzePerson, coresOf, MIN_PER_TYPE, MIN_TOTAL } from '../src/lib/analysis.js';
 import { caseToText } from '../src/lib/personExport.js';
 import { REPLY_MAP } from '../src/data/replies.js';
@@ -255,4 +257,143 @@ test('しぼり込み（場面・芯・さがす）は、型の一覧にも同�
   assert.match(src, /const shownTypes = useMemo/, '場面と芯でしぼった型の一覧がありません');
   assert.match(src, /scenes \|\| \[\]\)\.includes\(scene\)/);
   assert.match(src, /cores \|\| \[\]\)\.includes\(core\)/);
+});
+
+test('場面ごとの足し引きは、実在する手と場面にだけ付く', () => {
+  const ids = new Set(SELF_DEFENSE_TACTIC_IDS);
+  const scenes = new Set(SCENES.map((sc) => sc.id));
+  for (const [tacticId, notes] of Object.entries(COUNTER_SCENE_NOTES)) {
+    assert.ok(ids.has(tacticId), `${tacticId}: 使い返しの一覧にない手に足し引きが付いています`);
+    for (const [sceneId, text] of Object.entries(notes)) {
+      assert.ok(scenes.has(sceneId), `${tacticId}: 知らない場面「${sceneId}」`);
+      assert.ok(text.length > 6, `${tacticId}/${sceneId}: 中身がありません`);
+      assert.doesNotMatch(text, /\*\*/, 'マークダウンはそのまま表示されるので書かない');
+    }
+  }
+});
+
+test('その手が効かなかった時の、次の一手が必ずある（行き止まりにしない）', () => {
+  for (const id of SELF_DEFENSE_TACTIC_IDS) {
+    assert.ok(COUNTER_NEXT[id], `${id}: 効かなかった時の一手がありません`);
+    // 次の一手も、相手の同意が要らないことにする
+    assert.doesNotMatch(
+      COUNTER_NEXT[id],
+      /論破|言い負か|やり込め|分からせ|納得させ|認めさせ/,
+      `${id}: 相手の同意が要る言い方が入っています`,
+    );
+  }
+});
+
+test('やる順番は、すべての手に付いていて、段の呼び名がある', () => {
+  for (const id of SELF_DEFENSE_TACTIC_IDS) {
+    const step = COUNTER_STEP[id];
+    assert.ok(step, `${id}: 順番がありません`);
+    assert.ok(STEP_LABELS[step], `${id}: 段の呼び名がありません`);
+  }
+  // **段が上ほど強い、という書き方をしない**（後戻りしにくいという意味しかない）
+  for (const label of Object.values(STEP_LABELS)) {
+    assert.doesNotMatch(label, /強い|効く|上級|最強|必殺/, `${label}: 強さの序列に見える言い方です`);
+  }
+});
+
+test('人間分析の画面は、3つの枠に分かれている（長い1枚にしない）', () => {
+  const src = readFileSync(new URL('../src/components/People.jsx', import.meta.url), 'utf8');
+  assert.match(src, /const TABS = \[/, '枠の一覧がありません');
+  for (const id of ['pick', 'browse', 'saved']) {
+    assert.ok(src.includes(`tab === '${id}'`), `${id} の枠が描かれていません`);
+  }
+  // 目次から飛ぶ時は、飛び先のある枠へ先に切り替える（切り替えないと着かない）
+  assert.match(src, /setTab\('browse'\)/, '型の一覧へ飛ぶ時に枠を切り替えていません');
+});
+
+test('見立てを比べる所でも、どちらが重いかを出さない', () => {
+  const src = readFileSync(new URL('../src/components/People.jsx', import.meta.url), 'utf8');
+  assert.match(src, /どちらが重いかは出しません/);
+  assert.match(src, /点数でも順位でもありません/, '重なりの表に、点数ではないと書いていません');
+});
+
+test('どのタイプにも、おすすめの手がちょうど3つある', () => {
+  for (const t of PERSON_TYPES) {
+    assert.equal(t.counters.length, 3, `${t.name}: おすすめは3つにそろえる`);
+    assert.ok(ORDER_MARKS.length >= 3, '番号の印が足りません');
+  }
+});
+
+test('3つとも別の手（同じ手を番号だけ変えて並べない）', () => {
+  for (const t of PERSON_TYPES) {
+    const ids = t.counters.map((c) => c.tacticId);
+    assert.equal(new Set(ids).size, ids.length, `${t.name}: 同じ手が二度出ています`);
+  }
+});
+
+test('おすすめの並びは「後戻りのしにくさ」の順', () => {
+  for (const t of PERSON_TYPES) {
+    const out = recommendThree(t.counters, { steps: COUNTER_STEP });
+    const steps = out.map((c) => COUNTER_STEP[c.tacticId]);
+    for (let i = 1; i < steps.length; i += 1) {
+      assert.ok(steps[i] >= steps[i - 1], `${t.name}: 後戻りしにくい手が先に来ています`);
+    }
+  }
+});
+
+test('自分の記録や場面で、①が後戻りしにくい手に入れ替わらない', () => {
+  const crosses = PERSON_TYPES.find((t) => t.id === 'crosses_line');
+  // deadline は「それも効かないなら」の段。◯を2回付けても①には来ない
+  const tries = [
+    { id: 'a', tacticId: 'deadline', result: 'ok', at: 1 },
+    { id: 'b', tacticId: 'deadline', result: 'ok', at: 2 },
+  ];
+  const out = recommendThree(crosses.counters, { tries, steps: COUNTER_STEP });
+  assert.notEqual(out[0].tacticId, 'deadline');
+  assert.equal(COUNTER_STEP[out[0].tacticId], 1);
+});
+
+test('すべての手に「相手はどうなるか」がある', () => {
+  for (const t of PERSON_TYPES) {
+    for (const c of t.counters) {
+      assert.ok(c.effect, `${t.name}／${c.tacticId}: 相手はどうなるかがありません`);
+      assert.ok(c.effect.length >= 20, `${t.name}／${c.tacticId}: 短すぎます`);
+      assert.doesNotMatch(c.effect, /\*\*/, 'マークダウンはそのまま表示されるので書かない');
+    }
+  }
+});
+
+test('「相手はどうなるか」に効き目の大きさを書かない', () => {
+  // 「◯％の人が従う」は実験の条件次第で変わる。型に書けば必ず嘘になる
+  const size = /\d+\s*[%％]|\d+割の人|\d+人中|必ず|確実に|100/;
+  for (const t of PERSON_TYPES) {
+    for (const c of t.counters) {
+      const m = c.effect.match(size);
+      assert.ok(!m, `${t.name}／${c.tacticId}: 「${m && m[0]}」は書けません`);
+    }
+  }
+});
+
+test('「相手はどうなるか」で、相手が変わると書かない', () => {
+  // 変えられるのは距離であって、相手の人格ではない（この画面の芯）
+  const changesThem = /改心|反省する|反省させ|性格が(直|変わ)|人が変わ[るり]|治りま|矯正|分からせ|言い負か/;
+  for (const t of PERSON_TYPES) {
+    for (const c of t.counters) {
+      const m = c.effect.match(changesThem);
+      assert.ok(!m, `${t.name}／${c.tacticId}: 「${m && m[0]}」は相手を変える話になっています`);
+    }
+  }
+});
+
+test('「相手はどうなるか」は言い切らない（外れる場合を必ず残す）', () => {
+  // 「〜が多い／〜やすい」か、外れた時のこと（それでも／〜ことはある／とは限らない）を必ず書く
+  const hedge =
+    /多い|やす[いくさ]|にくい|ことがある|こともある|ことはある|それでも|とは限らない|限りません|次第|できない|少ない|分か[るっ]/;
+  for (const t of PERSON_TYPES) {
+    for (const c of t.counters) {
+      assert.match(c.effect, hedge, `${t.name}／${c.tacticId}: 言い切っています`);
+    }
+  }
+});
+
+test('画面にも「相手が変わるという意味ではない」と出す', () => {
+  const src = readFileSync(new URL('../src/components/CounterList.jsx', import.meta.url), 'utf8');
+  assert.match(src, /相手はどうなるか/);
+  assert.match(src, /相手の性格が変わるという意味ではありません/);
+  assert.match(src, /何割の人がそうなるかは書きません/);
 });

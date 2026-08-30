@@ -1,12 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   PERSON_TYPES, PERSON_TYPE_MAP, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors,
-  COUNTER_BEST_SCENES,
+  STAGES, CASE_STATUSES, SCENE_HELPLINES, NOTE_TEMPLATE, STALE_DAYS,
 } from '../data/people.js';
+import {
+  timelineOf, compare, isStale, daysSince, undoAlive, seenAtOf, UNDO_MS, SNAPSHOT_MAX,
+} from '../lib/caseTools.js';
+import { toExport, parseImport, toConsultText } from '../lib/personIO.js';
 import {
   terms, haystackOf, matchesAll, splitByHit, suggestTerms, pushHistory, QUICK_TERMS,
 } from '../lib/personSearch.js';
 import { firstMove, untried, summarize, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
+import { flashTo } from '../lib/focus.js';
 import { TACTIC_MAP, akaNameOf, tacticLabel } from '../data/tactics.js';
 import { analyzePerson, coresOf, MIN_TOTAL } from '../lib/analysis.js';
 import { displayName, LABEL_MAX, newCaseId } from '../lib/cases.js';
@@ -24,9 +29,20 @@ function when(at) {
 
 const norm = (s) => String(s || '').toLowerCase();
 
+/**
+ * 枠は3つ（28）。**目次から飛ぶ時は、飛び先のある枠へ先に切り替える**
+ * ——切り替えないと、飛び先が描かれていないので着かない。
+ */
+const TABS = [
+  { id: 'pick', label: '調べる' },
+  { id: 'browse', label: '型を読む' },
+  { id: 'saved', label: '保存したもの' },
+];
+
 export default function People({
   focus, onFocusDone, onGoTactic, cases = [], onSaveCase, onRemoveCase,
   tries = [], onAddTry, personView = {}, onSetPersonView,
+  myHabits = [], undoCase, onUndoRemove, onClearPeople, onImportPeople,
 }) {
   const [checked, setChecked] = useState([]);
   const [open, setOpen] = useState('');
@@ -36,6 +52,21 @@ export default function People({
   );
   const [core, setCoreState] = useState(personView.core || '');
   const [caseType, setCaseType] = useState('');
+  // 目次から型・芯へ飛んできた時は、最初から「型を読む」を開いておく
+  const [tab, setTab] = useState(() =>
+    focus && !SCENES.some((sc) => sc.id === focus) ? 'browse' : 'pick',
+  );
+  const [compareWith, setCompareWith] = useState('');
+  const [practice, setPractice] = useState(false);
+  const [sortBy, setSortBy] = useState(personView.sort || 'catalog');
+  const [filterName, setFilterName] = useState('');
+  const [importText, setImportText] = useState('');
+  const [importAsk, setImportAsk] = useState(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [stage, setStage] = useState(0);
+  const [status, setStatus] = useState('open');
+  const [nextAction, setNextAction] = useState('');
+  const [nextMeetAt, setNextMeetAt] = useState('');
   const [query, setQuery] = useState('');
   const [onlyChecked, setOnlyChecked] = useState(false);
   const [openGroups, setOpenGroups] = useState([]);
@@ -48,6 +79,10 @@ export default function People({
   const [caseQuery, setCaseQuery] = useState('');
   const [caseSort, setCaseSort] = useState('updated');
   const [copied, setCopied] = useState(false);
+  const [consultCopied, setConsultCopied] = useState(false);
+  const [exported, setExported] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [focusSeen, setFocusSeen] = useState(focus);
 
   // 型と芯が同じ画面にあるので、どちらの飛び先かを id から決める
   const anchor = focus
@@ -57,6 +92,24 @@ export default function People({
         ? `toc-core-${focus}`
         : `toc-person-${focus}`
     : '';
+  /**
+   * 飛び先のある枠へ、**描く前に**切り替える。
+   * useEffect で切り替えると、飛ぶ時（rAF）にはまだ古い枠が描かれているので着かない
+   * ——実際にそうなった。prop が変わった時の state の直し方（描いている途中で直す）に寄せる。
+   */
+  if (focus !== focusSeen) {
+    setFocusSeen(focus);
+    if (focus) setTab(SCENES.some((sc) => sc.id === focus) ? 'pick' : 'browse');
+  }
+
+  // 消した直後の「元に戻す」を、時間が過ぎたら画面から下ろす
+  useEffect(() => {
+    if (!undoCase) return undefined;
+    setNow(Date.now());
+    const t = setTimeout(() => setNow(Date.now()), UNDO_MS + 200);
+    return () => clearTimeout(t);
+  }, [undoCase]);
+
   useFocusJump(anchor, onFocusDone);
 
   const behaviors = useMemo(() => allBehaviors(), []);
@@ -113,11 +166,18 @@ export default function People({
       byType.set(b.typeId, list);
     }
     const picked = new Set(checked.map((id) => id.split(':')[0]));
-    return shownTypes
+    const count = new Map();
+    for (const c of cases) for (const id of c.checkedIds) {
+      const t = id.split(':')[0];
+      count.set(t, (count.get(t) || 0) + 1);
+    }
+    const list = shownTypes
       .filter((t) => byType.has(t.id))
-      .map((t) => ({ type: t, items: byType.get(t.id) }))
-      .sort((a, b) => (picked.has(b.type.id) ? 1 : 0) - (picked.has(a.type.id) ? 1 : 0));
-  }, [shownBehaviors, shownTypes, checked]);
+      .map((t) => ({ type: t, items: byType.get(t.id) }));
+    if (sortBy === 'kana') list.sort((a, b) => a.type.reading.localeCompare(b.type.reading, 'ja'));
+    else if (sortBy === 'mine') list.sort((a, b) => (count.get(b.type.id) || 0) - (count.get(a.type.id) || 0));
+    return list.sort((a, b) => (picked.has(b.type.id) ? 1 : 0) - (picked.has(a.type.id) ? 1 : 0));
+  }, [shownBehaviors, shownTypes, checked, sortBy, cases]);
 
   // 検索中・「選んだものだけ」の時は、たたまずに開いておく（探しに来ているので）
   const forceOpen = !!query.trim() || onlyChecked;
@@ -200,6 +260,15 @@ export default function People({
     return null;
   }, [cases, tries]);
 
+  const editing = cases.find((c) => c.id === editingId) || null;
+  const timeline = useMemo(() => (editing ? timelineOf(editing) : []), [editing]);
+  const other = cases.find((c) => c.id === compareWith) || null;
+  const diff = useMemo(
+    () => (editing && other ? compare(editing.checkedIds, other.checkedIds) : null),
+    [editing, other],
+  );
+  const textOfId = useMemo(() => new Map(behaviors.map((b) => [b.id, b.text])), [behaviors]);
+
   /** 対応策の逆引き（この手はどの型に効くか） */
   const reverse = useMemo(() => {
     const map = new Map();
@@ -213,7 +282,123 @@ export default function People({
     return [...map.values()].sort((a, b) => b.types.length - a.types.length);
   }, []);
 
+  const seenTypes = personView.seenTypes || [];
+  function markSeen(id) {
+    if (!seenTypes.includes(id)) onSetPersonView?.({ seenTypes: [...seenTypes, id] });
+  }
+  const unseen = PERSON_TYPES.filter((t) => !seenTypes.includes(t.id)).length;
+
+  /** 枠は左右キーでも移れる（18）。押せる所へ届かないと、道具として使えない */
+  function onTabKey(e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const i = TABS.findIndex((t) => t.id === tab);
+    const d = e.key === 'ArrowRight' ? 1 : -1;
+    setTab(TABS[(i + d + TABS.length) % TABS.length].id);
+  }
+
+  /** 型の一覧まで運ぶ（21・16）。開く・読んだ印・飛ぶ、をひと続きにする */
+  function readType(id) {
+    markSeen(id);
+    setCatalogOpen(id);
+    setTab('browse');
+    requestAnimationFrame(() => flashTo(`toc-person-${id}`));
+  }
+
+  const canUndo = undoAlive(undoCase, now);
+
+  /** 覚えさせたしぼり込み（17）。**勝手に足さない**——名前を付けて押した時だけ */
+  const savedFilters = personView.filters || [];
+  function saveFilter() {
+    const name = filterName.trim();
+    if (!name) return;
+    const next = [
+      ...savedFilters.filter((f) => f.name !== name),
+      { name, query, scene, core, onlyChecked },
+    ].slice(-8);
+    onSetPersonView?.({ filters: next });
+    setFilterName('');
+  }
+  function applyFilter(f) {
+    setQuery(f.query || '');
+    setScene(f.scene || '');
+    setCore(f.core || '');
+    setOnlyChecked(!!f.onlyChecked);
+  }
+
+  /** 型 × 見立ての重なり（20）。**点数でも順位でもない**——出るのは件数だけ */
+  const matrixRows = useMemo(() => {
+    const rows = [];
+    for (const t of PERSON_TYPES) {
+      const cells = shownCases.map(
+        (c) => c.checkedIds.filter((id) => id.startsWith(`${t.id}:`)).length,
+      );
+      if (cells.some((n) => n > 0)) rows.push({ type: t, cells });
+    }
+    return rows;
+  }, [shownCases]);
+
+  const caseNameOf = (id) => {
+    const c = cases.find((x) => x.id === id);
+    if (!c) return '';
+    return displayName(c);
+  };
+
+  /** 相談する時に渡す文（14）。事実だけを見た順に並べる */
+  const consultText = useMemo(() => {
+    if (!editing) return '';
+    const rows = editing.checkedIds
+      .map((id) => ({ at: seenAtOf(editing, id) || editing.createdAt, id }))
+      .sort((a, b) => a.at - b.at)
+      .map((r) => ({ when: when(r.at), text: textOfId.get(r.id) || r.id }));
+    const sceneLabel = editing.sceneId && SCENE_MAP[editing.sceneId] ? SCENE_MAP[editing.sceneId].label : '';
+    return toConsultText({ label: displayName(editing), sceneLabel, rows });
+  }, [editing, textOfId]);
+
+  async function copyConsult() {
+    const ok = await copyText(consultText);
+    setConsultCopied(ok ? 'done' : 'fail');
+  }
+
+  /** 持ち出す（6）。判定は入らない——入力と記録だけ */
+  const exportText = () =>
+    JSON.stringify(toExport({ cases, tries, myHabits, personView }), null, 1);
+
+  async function copyExport() {
+    const ok = await copyText(exportText());
+    setExported(ok ? 'done' : 'fail');
+  }
+
+  function downloadExport() {
+    try {
+      const blob = new Blob([exportText()], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kagami-people.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setExported('fail');
+    }
+  }
+
+  /** 取り込みは**必ず確認を出してから**（29）。ここでは検めるだけ */
+  function checkImport() {
+    setImportAsk(parseImport(importText));
+  }
+  function doImport() {
+    if (!importAsk || !importAsk.ok) return;
+    onImportPeople?.({
+      cases: importAsk.cases,
+      tries: importAsk.tries,
+      myHabits: importAsk.myHabits,
+    });
+    setImportAsk(null);
+    setImportText('');
+  }
+
   function toggleGroup(id) {
+    markSeen(id);
     setOpenGroups((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]));
   }
 
@@ -225,8 +410,13 @@ export default function People({
     setLabel(c.label);
     setNote(c.note);
     setScene(c.sceneId || '');
+    setStage(c.stage || 0);
+    setStatus(c.status || 'open');
+    setNextAction(c.nextAction || '');
+    setNextMeetAt(c.nextMeetAt || '');
     setSaved(false);
     setCopied(false);
+    setTab('pick');
     window.scrollTo(0, 0);
   }
 
@@ -243,7 +433,10 @@ export default function People({
     // 新しく作る時も先に id を決めておき、保存後は「編集中」へ移す。
     // そうしないと、もう一度押した時に同じ人の見立てがもう1件できてしまう。
     const id = editingId || newCaseId();
-    onSaveCase({ id, label, note, sceneId: scene, checkedIds: checked });
+    onSaveCase({
+      id, label, note, sceneId: scene, checkedIds: checked,
+      stage, status, nextAction, nextMeetAt,
+    });
     setEditingId(id);
     setSaved(true);
   }
@@ -294,6 +487,39 @@ export default function People({
         分けているのは<strong>ふるまい</strong>だけです。
       </div>
 
+      {/* 3つに分ける（28）。長い1枚だと、探しに来た時に何度もスクロールすることになる */}
+      <div className="chips tabs" role="tablist" onKeyDown={onTabKey}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`chip ${tab === t.id ? 'on' : ''}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+            {t.id === 'saved' && cases.length > 0 ? `（${cases.length}）` : ''}
+            {t.id === 'browse' && unseen > 0 ? `（未読${unseen}）` : ''}
+          </button>
+        ))}
+      </div>
+
+      {canUndo && (
+        <div className="card quiet">
+          <p>
+            <strong>「{displayName(undoCase.item)}」を消しました。</strong>
+          </p>
+          <div className="row end">
+            <button className="primary" onClick={onUndoRemove}>
+              元に戻す
+            </button>
+          </div>
+          <p className="tiny">この案内が消えると、もう戻せません。</p>
+        </div>
+      )}
+
+      {tab === 'pick' && (
+        <>
       {/* 選択中の件数を、スクロールしても見える所に置く */}
       <div className="pick-bar">
         <span>
@@ -329,7 +555,14 @@ export default function People({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onBlur={() => rememberQuery(query)}
-        placeholder="ふるまいをさがす（読みでも引けます。スペースで2語以上）"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            rememberQuery(query);
+            document.getElementById('sec-result')?.focus?.();
+          }
+          if (e.key === 'Escape') setQuery('');
+        }}
+        placeholder="ふるまいをさがす（読みでも引けます。スペースで2語以上。Enterで覚え、Escで消します）"
       />
 
       <div className="chips">
@@ -384,6 +617,17 @@ export default function People({
         ))}
       </div>
 
+      {scene && (SCENE_HELPLINES[scene] || []).length > 0 && (
+        <div className="note">
+          {SCENE_MAP[scene].label}で行き詰まった時の相談先：
+          <strong>{SCENE_HELPLINES[scene].join('／')}</strong>
+          <br />
+          <span className="tiny">
+            {GLYPHS.reference} 名称・番号は変わることがあります。公式の案内で確かめてから使ってください。
+          </span>
+        </div>
+      )}
+
       <p className="tiny" style={{ margin: '10px 0 4px' }}>
         どの芯にあたるか
       </p>
@@ -413,6 +657,55 @@ export default function People({
         )}
       </div>
 
+      <div className="chips">
+        <span className="tiny">並び：</span>
+        {[
+          ['catalog', '元の並び'],
+          ['kana', 'あいうえお順'],
+          ['mine', '自分の見立てに多い順'],
+        ].map(([id, lbl]) => (
+          <button
+            key={id}
+            className={`chip ${sortBy === id ? 'on' : ''}`}
+            onClick={() => {
+              setSortBy(id);
+              onSetPersonView?.({ sort: id });
+            }}
+          >
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {/* しぼり込みを覚える（17）。**勝手に覚えない**——名前を付けて押した時だけ */}
+      <div className="chips">
+        {savedFilters.map((f) => (
+          <button key={f.name} className="chip" onClick={() => applyFilter(f)}>
+            {GLYPHS.reference} {f.name}
+          </button>
+        ))}
+        {filtering && (
+          <>
+            <input
+              type="text"
+              value={filterName}
+              maxLength={20}
+              onChange={(e) => setFilterName(e.target.value)}
+              placeholder="このしぼり込みの名前"
+              style={{ maxWidth: 220, margin: 0 }}
+            />
+            <button className="chip" onClick={saveFilter} disabled={!filterName.trim()}>
+              {GLYPHS.circlePlus} 覚える
+            </button>
+          </>
+        )}
+        {savedFilters.length > 0 && (
+          <button className="chip" onClick={() => onSetPersonView?.({ filters: [] })}>
+            {GLYPHS.cross} 覚えたものを消す
+          </button>
+        )}
+      </div>
+
       <p className="tiny">
         {behaviors.length}項目のうち <strong>{shownBehaviors.length}件</strong>を表示／
         {groups.length}の型
@@ -428,6 +721,11 @@ export default function People({
             <button className="group-head" onClick={() => toggleGroup(g.type.id)} aria-expanded={isOpen}>
               <span className="t">
                 {isOpen ? GLYPHS.triangleDown : GLYPHS.pointer} {g.type.name}
+                {!seenTypes.includes(g.type.id) && (
+                  <span className="badge" style={{ marginLeft: 8 }}>
+                    未読
+                  </span>
+                )}
               </span>
               <span className="s">
                 {words.length > 0 && `${g.items.length}件該当・`}
@@ -447,12 +745,26 @@ export default function People({
                   </span>
                 </label>
               ))}
+            {isOpen && (
+              <div className="row end">
+                <button className="ghost" onClick={() => readType(g.type.id)}>
+                  この型を読む（取れる距離・返し方）
+                </button>
+              </div>
+            )}
           </div>
         );
       })}
 
-      <h2 id="sec-result">見立て</h2>
+      <h2 id="sec-result" tabIndex={-1}>見立て</h2>
       <Rule mark={GLYPHS.piece} />
+
+      <div className="chips">
+        <button className={`chip ${practice ? 'on' : ''}`} onClick={() => setPractice((v) => !v)}>
+          {practice ? '下読みをやめる' : '言い方だけ大きく出す（下読み）'}
+        </button>
+        {practice && <span className="tiny">声に出して1度読んでおくと、その場で出てきます。</span>}
+      </div>
 
       {result.status === 'empty' && (
         <div className="card quiet">
@@ -512,6 +824,13 @@ export default function People({
               </div>
               <p style={{ margin: '8px 0 4px' }}>{first.how}</p>
               <p className="script">「{first.script}」</p>
+              {first.effect && (
+                <p className="effect">
+                  <span className="tiny">相手はどうなるか</span>
+                  <br />
+                  {first.effect}
+                </p>
+              )}
               <p className="tiny">
                 いくつも同時にやろうとすると続きません。今日はこれだけ、で十分です。
               </p>
@@ -540,6 +859,8 @@ export default function People({
               onTry={onAddTry}
               onHide={hideCounter}
               caseId={editingId}
+              myHabits={myHabits}
+              practice={practice}
             />
           ))}
         </>
@@ -575,6 +896,90 @@ export default function People({
           placeholder="メモ（いつ・どこで・何があったか。任意）"
         />
 
+        {/* 記録のひな形（13）。**上書きしない**——空のときだけ入れる */}
+        <div className="row end" style={{ marginTop: 6 }}>
+          <button
+            className="ghost"
+            disabled={!!note.trim()}
+            onClick={() => {
+              setNote(NOTE_TEMPLATE);
+              setSaved(false);
+            }}
+          >
+            {note.trim() ? 'ひな形（メモが空のときだけ）' : 'ひな形を入れる'}
+          </button>
+        </div>
+        <p className="tiny">
+          <strong>「言われたこと」はそのまま書いてください。</strong>
+          要約すると、あとから読んだ時に自分の解釈しか残りません。
+        </p>
+
+        <p className="tiny" style={{ margin: '12px 0 4px' }}>
+          いまの距離
+        </p>
+        <div className="chips">
+          {STAGES.map((st) => (
+            <button
+              key={st.id}
+              className={`chip ${stage === st.id ? 'on' : ''}`}
+              onClick={() => {
+                setStage(st.id);
+                setSaved(false);
+              }}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+        <p className="tiny">
+          <strong>右へ行くほど正しい、ではありません。</strong>
+          いまどこにいるかを置くだけで、戻してもかまいません。
+        </p>
+
+        <p className="tiny" style={{ margin: '12px 0 4px' }}>
+          この見立ての状態
+        </p>
+        <div className="chips">
+          {CASE_STATUSES.map((st) => (
+            <button
+              key={st.id}
+              className={`chip ${status === st.id ? 'on' : ''}`}
+              onClick={() => {
+                setStatus(st.id);
+                setSaved(false);
+              }}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="text"
+          value={nextAction}
+          maxLength={120}
+          onChange={(e) => {
+            setNextAction(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="次にすること（例：次に同じことを言われたら持ち帰る）"
+        />
+        <label className="tiny" style={{ display: 'block', marginTop: 10 }}>
+          次に顔を合わせる日（任意）
+          <input
+            type="date"
+            value={nextMeetAt}
+            onChange={(e) => {
+              setNextMeetAt(e.target.value);
+              setSaved(false);
+            }}
+          />
+        </label>
+        <p className="tiny">
+          日付はこの端末の中だけに残ります。<strong>知らせは出しません</strong>
+          （この画面を開いた時に並ぶだけです）。
+        </p>
+
         <div className="row end" style={{ marginTop: 10 }}>
           {editingId && (
             <button className="ghost" onClick={newCase}>
@@ -594,7 +999,11 @@ export default function People({
           </p>
         )}
       </div>
+        </>
+      )}
 
+      {tab === 'saved' && (
+        <>
       <h2>保存してある見立て（{cases.length}）</h2>
       <Rule mark={GLYPHS.reference} />
 
@@ -643,12 +1052,29 @@ export default function People({
                   <span className="t">
                     {GLYPHS.piece} {displayName(c)}
                     {c.id === editingId && <span className="badge" style={{ marginLeft: 8 }}>編集中</span>}
+                    {c.status && c.status !== 'open' && (
+                      <span className="badge" style={{ marginLeft: 8 }}>
+                        {(CASE_STATUSES.find((st) => st.id === c.status) || {}).label}
+                      </span>
+                    )}
+                    {isStale(c, now) && (
+                      <span className="badge" style={{ marginLeft: 8 }}>
+                        {daysSince(c.updatedAt, now)}日ぶり
+                      </span>
+                    )}
                   </span>
                   <span className="s">
                     {c.sceneId && SCENE_MAP[c.sceneId] ? `${SCENE_MAP[c.sceneId].label}・` : ''}
                     ふるまい{c.checkedIds.length}件・{when(c.updatedAt)}
+                    {c.stage ? `／${(STAGES.find((st) => st.id === c.stage) || {}).label}` : ''}
+                    {c.nextMeetAt ? `／次に会う ${c.nextMeetAt}` : ''}
                     {c.note ? `／${c.note.slice(0, 24)}` : ''}
                   </span>
+                  {c.nextAction && (
+                    <span className="s">
+                      {GLYPHS.pointer} 次にすること：{c.nextAction}
+                    </span>
+                  )}
                 </button>
                 <div className="row end" style={{ paddingBottom: 8 }}>
                   {confirmDelete === c.id ? (
@@ -677,6 +1103,44 @@ export default function People({
               </li>
             ))}
           </ul>
+
+          <p className="tiny">
+            {GLYPHS.reference} 「{STALE_DAYS}日ぶり」の印は、見直す目安を過ぎたというだけです。
+            <strong>古い見立てを勝手に消したり、書き換えたりはしません。</strong>
+          </p>
+
+          {matrixRows.length > 0 && shownCases.length > 0 && (
+            <>
+              <h3>型 × 見立て（重なりを見る）</h3>
+              <p className="tiny">
+                数はチェックしたふるまいの件数です。
+                <strong>点数でも順位でもありません。</strong>
+                同じ型が何人にも並ぶなら、それはあなたが繰り返し出会っている型です。
+              </p>
+              <div className="scroll-x">
+                <table className="matrix">
+                  <thead>
+                    <tr>
+                      <th>型</th>
+                      {shownCases.map((c) => (
+                        <th key={c.id}>{displayName(c)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrixRows.map((r) => (
+                      <tr key={r.type.id}>
+                        <th>{r.type.name}</th>
+                        {r.cells.map((count, i) => (
+                          <td key={shownCases[i].id}>{count > 0 ? count : ''}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -696,9 +1160,258 @@ export default function People({
           </div>
           <p style={{ margin: '8px 0 4px' }}>{todays.counter.how}</p>
           <p className="script">「{todays.counter.script}」</p>
+          {todays.counter.effect && (
+            <p className="effect">
+              <span className="tiny">相手はどうなるか</span>
+              <br />
+              {todays.counter.effect}
+            </p>
+          )}
         </div>
       )}
 
+      {editing && (
+        <>
+          <h2>「{displayName(editing)}」を読み直す</h2>
+          <Rule mark={GLYPHS.moonWax} />
+
+          <h3>移り変わり</h3>
+          <p className="tiny">
+            直すたびに前の版を残しています（{SNAPSHOT_MAX}件まで）。
+            <strong>良くなった・悪くなったという判定は出しません。</strong>
+            同じ人でも、3か月前と今では見えているものが違うというだけです。
+          </p>
+          <ul className="list">
+            {timeline.map((v, i) => (
+              <li key={`${v.at}-${i}`}>
+                <div className="item">
+                  <span className="t">
+                    {v.now ? 'いまの中身' : when(v.at)}・ふるまい{v.checkedIds.length}件
+                  </span>
+                  <span className="s">
+                    {v.checkedIds
+                      .slice(0, 3)
+                      .map((id) => textOfId.get(id))
+                      .filter(Boolean)
+                      .join('／')}
+                    {v.checkedIds.length > 3 && ` ほか${v.checkedIds.length - 3}`}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <h3>いつ見たことか</h3>
+          <p className="tiny">
+            最初にチェックした日です（チェックを外すと消えます）。
+            <strong>いつ見たかが分かると、続いていることなのか一度きりなのかを自分で判断できます。</strong>
+          </p>
+          <ul className="tiny">
+            {editing.checkedIds.map((id) => (
+              <li key={id}>
+                {when(seenAtOf(editing, id) || editing.createdAt)}：{textOfId.get(id) || id}
+              </li>
+            ))}
+            {editing.checkedIds.length === 0 && <li className="muted">ありません。</li>}
+          </ul>
+
+          <h3>ほかの見立てと比べる</h3>
+          <p className="tiny">
+            <strong>どちらが重いかは出しません。</strong>
+            同じふるまいが出ているかどうかを並べるだけです。
+          </p>
+          <div className="chips">
+            <button
+              className={`chip ${compareWith === '' ? 'on' : ''}`}
+              onClick={() => setCompareWith('')}
+            >
+              比べない
+            </button>
+            {cases
+              .filter((c) => c.id !== editing.id)
+              .map((c) => (
+                <button
+                  key={c.id}
+                  className={`chip ${compareWith === c.id ? 'on' : ''}`}
+                  onClick={() => setCompareWith(compareWith === c.id ? '' : c.id)}
+                >
+                  {displayName(c)}
+                </button>
+              ))}
+          </div>
+          {cases.length < 2 && <p className="muted">比べるには、見立てが2件以上いります。</p>}
+          {diff && other && (
+            <div className="card quiet">
+              <h3>どちらにもある（{diff.both.length}）</h3>
+              <ul className="tiny">
+                {diff.both.map((id) => (
+                  <li key={id}>{textOfId.get(id) || id}</li>
+                ))}
+                {diff.both.length === 0 && <li className="muted">ありません。</li>}
+              </ul>
+              <h3>「{displayName(editing)}」だけ（{diff.onlyA.length}）</h3>
+              <ul className="tiny">
+                {diff.onlyA.map((id) => (
+                  <li key={id}>{textOfId.get(id) || id}</li>
+                ))}
+                {diff.onlyA.length === 0 && <li className="muted">ありません。</li>}
+              </ul>
+              <h3>「{displayName(other)}」だけ（{diff.onlyB.length}）</h3>
+              <ul className="tiny">
+                {diff.onlyB.map((id) => (
+                  <li key={id}>{textOfId.get(id) || id}</li>
+                ))}
+                {diff.onlyB.length === 0 && <li className="muted">ありません。</li>}
+              </ul>
+            </div>
+          )}
+
+          <h3>人に相談するときに渡す文</h3>
+          <p className="tiny">
+            見たことを、見た順に並べます。
+            <strong>相手がどういう人かという判断は入りません。</strong>
+            言い合いになりにくいのは、事実だけを時系列で置いた時です。
+          </p>
+          <div className="row end">
+            <button className="ghost" onClick={copyConsult}>
+              {consultCopied === 'done'
+                ? 'コピーしました'
+                : consultCopied === 'fail'
+                  ? 'コピーできません'
+                  : '文章にしてコピー'}
+            </button>
+          </div>
+          <pre className="quote">{consultText}</pre>
+        </>
+      )}
+
+      <h2>やってみた記録（{tries.length}）</h2>
+      <Rule mark={GLYPHS.circle} />
+      {tries.length === 0 ? (
+        <p className="tiny">
+          まだありません。型のカードの「黒い心理学で返すなら」から、試した手に ○△✕ を付けられます。
+        </p>
+      ) : (
+        <ul className="list">
+          {[...tries]
+            .sort((a, b) => b.at - a.at)
+            .slice(0, 40)
+            .map((t) => (
+              <li key={t.id}>
+                <button className="item" onClick={() => onGoTactic(t.tacticId)}>
+                  <span className="t">
+                    {(RESULT_MAP[t.result] || {}).mark} {tacticLabel(t.tacticId)}
+                  </span>
+                  <span className="s">
+                    {when(t.at)}
+                    {caseNameOf(t.caseId) ? `・${caseNameOf(t.caseId)}` : ''}
+                    {t.note ? `／${t.note}` : ''}
+                  </span>
+                </button>
+              </li>
+            ))}
+        </ul>
+      )}
+      <p className="tiny">
+        残しているのは<strong>自分がそれをやれたかどうか</strong>までです。
+        効き目の割合も、相手がどう変わったかも記録していません（そこまでは分からないからです）。
+      </p>
+
+      <h2>持ち出す・取り込む</h2>
+      <Rule mark={GLYPHS.diamondOutline} />
+      <p className="tiny">
+        この端末の中だけに保存しているので、機種を変えると消えます。
+        持ち出すのは<strong>入力（チェックしたふるまい）と記録だけ</strong>で、判定は入りません。
+        中身は人に見せたくないものです。<strong>置き場所に気をつけてください。</strong>
+      </p>
+      <div className="row end">
+        <button className="ghost" onClick={copyExport}>
+          {exported === 'done'
+            ? 'コピーしました'
+            : exported === 'fail'
+              ? 'コピーできません'
+              : '書き出してコピー'}
+        </button>
+        <button className="ghost" onClick={downloadExport}>
+          ファイルに保存
+        </button>
+      </div>
+
+      <textarea
+        style={{ minHeight: 80, marginTop: 10 }}
+        value={importText}
+        onChange={(e) => {
+          setImportText(e.target.value);
+          setImportAsk(null);
+        }}
+        placeholder="書き出した文をここに貼ると、取り込めます"
+      />
+      <div className="row end">
+        <button className="ghost" onClick={checkImport} disabled={!importText.trim()}>
+          中身を検める
+        </button>
+      </div>
+      {importAsk && !importAsk.ok && <p className="tiny">{importAsk.reason}</p>}
+      {importAsk && importAsk.ok && (
+        <div className="card quiet">
+          <p>
+            <strong>
+              見立て{importAsk.cases.length}件・やってみた記録{importAsk.tries.length}件
+            </strong>
+            を取り込みます。
+          </p>
+          <p className="tiny">
+            いまあるものは消えません。
+            <strong>同じ見立てがあれば、あとから直したほうを残します。</strong>
+            取り込んだあとは元に戻せません。
+          </p>
+          <div className="row end">
+            <button className="ghost" onClick={() => setImportAsk(null)}>
+              やめる
+            </button>
+            <button className="primary" onClick={doImport}>
+              取り込む
+            </button>
+          </div>
+        </div>
+      )}
+
+      <h2>人間分析だけを消す</h2>
+      <Rule mark={GLYPHS.cross} />
+      <p className="tiny">
+        消えるのは<strong>この画面のもの（見立て・やってみた記録・しぼり込み）だけ</strong>です。
+        型・癖・状態の記録は残ります。
+      </p>
+      <div className="row end">
+        {confirmClear ? (
+          <>
+            <span className="tiny">元に戻せません。</span>
+            <button className="ghost" onClick={() => setConfirmClear(false)}>
+              やめる
+            </button>
+            <button
+              className="danger"
+              onClick={() => {
+                onClearPeople?.();
+                setConfirmClear(false);
+                newCase();
+              }}
+            >
+              消す
+            </button>
+          </>
+        ) : (
+          <button className="danger ghost" onClick={() => setConfirmClear(true)}>
+            人間分析だけ消す
+          </button>
+        )}
+      </div>
+
+        </>
+      )}
+
+      {tab === 'browse' && (
+        <>
       <h2>手から引く（逆引き）</h2>
       <Rule mark={GLYPHS.circlePlus} />
       <p className="tiny">
@@ -747,6 +1460,7 @@ export default function People({
           hidden={hidden}
           onTry={onAddTry}
           onHide={hideCounter}
+          myHabits={myHabits}
         />
       ))}
 
@@ -762,6 +1476,8 @@ export default function People({
           <p className="muted">{c.summary}</p>
         </div>
       ))}
+        </>
+      )}
 
       <div className="note warn">
         身の危険を感じるとき、その場から離れられないときは、この画面ではなく人に頼ってください。

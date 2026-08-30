@@ -13,6 +13,7 @@ import { GLYPHS } from '../data/glyphs.js';
 export default function PersonTypeCard({
   type, matched, open, onToggle, onGoTactic, id,
   scene = '', tries = [], hidden = [], onTry, onHide, caseId = '', showCounters = false,
+  myHabits = [], practice = false,
 }) {
   return (
     <div className={`card ${open ? 'opened' : ''}`} id={id}>
@@ -53,7 +54,7 @@ export default function PersonTypeCard({
 
       {(showCounters || open) && (
         <>
-          <h3>黒い心理学で返すなら</h3>
+          <h3>このタイプには、これがおすすめ（黒い心理学で返すなら）</h3>
           <CounterList
             type={type}
             scene={scene}
@@ -63,6 +64,8 @@ export default function PersonTypeCard({
             onHide={onHide}
             onGoTactic={onGoTactic}
             caseId={caseId}
+            myHabits={myHabits}
+            practice={practice}
           />
         </>
       )}

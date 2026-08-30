@@ -38,5 +38,11 @@ export const GLYPHS = {
   piece: '☖',
 };
 
+/**
+ * 順番を出す印。**番号そのものに意味がある所だけ**に使う
+ * （おすすめの手を①②③と並べる、など）。飾りには使わない。
+ */
+export const ORDER_MARKS = ['①', '②', '③', '④', '⑤'];
+
 /** 画面に出してよい印（テストが使う） */
-export const ALLOWED_GLYPHS = new Set(Object.values(GLYPHS));
+export const ALLOWED_GLYPHS = new Set([...Object.values(GLYPHS), ...ORDER_MARKS]);

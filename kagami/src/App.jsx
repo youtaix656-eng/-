@@ -65,7 +65,13 @@ export default function App() {
       {view === 'tactics' && <Tactics focus={focus} onFocusDone={clearFocus} />}
       {view === 'replies' && <Replies focus={focus} onFocusDone={clearFocus} />}
       {view === 'habits' && (
-        <Habits focus={focus} onFocusDone={clearFocus} onGoTactic={(id) => go('tactics', id)} />
+        <Habits
+          focus={focus}
+          onFocusDone={clearFocus}
+          onGoTactic={(id) => go('tactics', id)}
+          myHabits={store.myHabits}
+          onSetMyHabits={store.setMyHabits}
+        />
       )}
       {view === 'sources' && <Sources focus={focus} onFocusDone={clearFocus} />}
       {view === 'toc' && <TableOfContents onGo={goFromToc} />}
@@ -82,6 +88,11 @@ export default function App() {
           onAddTry={store.addTry}
           personView={store.personView}
           onSetPersonView={store.setPersonView}
+          myHabits={store.myHabits}
+          undoCase={store.undoCase}
+          onUndoRemove={store.undoRemoveCase}
+          onClearPeople={store.clearPeople}
+          onImportPeople={store.importPeople}
         />
       )}
       {view === 'records' && (

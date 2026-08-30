@@ -188,7 +188,7 @@ button:disabled:hover { background: transparent; border-color: var(--line-strong
 .row.end { justify-content: flex-end; }
 
 /* ── 入力 ──────────────────────────────────── */
-textarea, input[type='text'], select {
+textarea, input[type='text'], input[type='date'], select {
   width: 100%;
   font: inherit;
   color: var(--ink);
@@ -455,3 +455,59 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
   margin: 6px 0;
   color: var(--ink);
 }
+
+/* 下読み用（声に出す前に言い方だけ見る） */
+.script.practice {
+  font-size: 1.25rem;
+  line-height: 1.9;
+  border-left-width: 3px;
+  padding: 10px 0 10px 16px;
+}
+
+/* ── 枠の切り替え（人間分析の3つ）──────────── */
+.tabs { margin: 16px 0 6px; }
+.tabs .chip { font-family: var(--serif); letter-spacing: 0.06em; padding: 8px 16px; }
+
+/* 横に長い表は、そこだけ横に動かす（画面ごと横に動かさない） */
+.scroll-x { overflow-x: auto; margin: 10px 0 4px; }
+
+/* 型 × 見立ての重なり。数は件数であって点数ではない */
+.matrix { border-collapse: collapse; font-size: .84rem; min-width: 100%; }
+.matrix th, .matrix td {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+.matrix thead th { font-family: var(--serif); font-weight: 500; color: var(--ink); }
+.matrix tbody th { text-align: left; font-weight: 400; color: var(--ink); }
+.matrix td:empty::after { content: '·'; color: var(--ink-faint); }
+
+/* 相談する時に渡す文（そのまま読める形で出す） */
+.quote {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  font-size: .86rem;
+  line-height: 1.9;
+  color: var(--ink-dim);
+  background: var(--plate-soft);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 14px;
+  margin: 8px 0 4px;
+}
+
+/* 相手はどうなるか（言い方の下に置く。効き目の大きさは書かない） */
+.effect {
+  border-left: 1px dashed var(--ink-faint);
+  padding: 2px 0 2px 12px;
+  margin: 6px 0;
+  font-size: .88rem;
+  color: var(--ink-dim);
+}
+.effect .tiny { letter-spacing: 0.12em; }
+
+/* おすすめの順番（番号そのものに意味がある） */
+.order-mark { font-family: var(--serif); font-size: 1.1rem; color: var(--ink); line-height: 1; }
