@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import faq from '../src/data/faq.js';
 
-test('faq.js: ちょうど30件収録されている', () => {
-  assert.equal(faq.length, 30);
+test('faq.js: ちょうど42件収録されている', () => {
+  assert.equal(faq.length, 42);
 });
 
 test('faq.js: id・questionが重複しない', () => {
