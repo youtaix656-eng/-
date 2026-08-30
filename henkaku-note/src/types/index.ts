@@ -35,6 +35,12 @@ export interface SleepEntry {
   recordedAt: number;
 }
 
+/** 瞑想1回ぶんの記録。長さより「やった日」を数えるが、長さも残しておく */
+export interface MeditationSession {
+  minutes: number;
+  recordedAt: number;
+}
+
 export interface DayRecord {
   /** 'YYYY-MM-DD' */
   date: string;
@@ -49,6 +55,8 @@ export interface DayRecord {
   /** その日だけの終業時刻 'HH:MM'（未設定は設定の既定値を使う） */
   shiftEndsAt: string | null;
   sleep: SleepEntry | null;
+  /** その日の瞑想（1日に複数回できる）。古いデータには無いので、読む側は空配列を既定にする */
+  meditations?: MeditationSession[];
   updatedAt: number;
 }
 
@@ -101,6 +109,10 @@ export interface Settings {
   audioLinkUrl: string;
   /** ストリークを大きく出すか（既定は控えめ＝煽らない） */
   showStreakProminently: boolean;
+  /** 瞑想タイマーの終わりに音を鳴らすか */
+  meditationBell: boolean;
+  /** タイマーの既定の長さ（分） */
+  meditationDefaultMinutes: number;
 }
 
 export interface AppState {

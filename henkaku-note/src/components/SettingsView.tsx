@@ -4,6 +4,7 @@ import { approximateSize } from '../lib/storage';
 import { backupFileName, downloadText, parseJson, pickTextFile, toJson } from '../lib/backup';
 import { DEFAULT_AUDIO_URL } from '../lib/audioLink';
 import { bedtimeTarget } from '../lib/shift';
+import { LENGTH_OPTIONS } from '../lib/meditation';
 import { initialState } from '../lib/useStore';
 import type { AppState } from '../types';
 
@@ -43,6 +44,41 @@ export default function SettingsView({ state }: { state: AppState }) {
           <input type="time" value={state.settings.offDayBedtime} onChange={(e) => actions.setSettings({ offDayBedtime: e.target.value })} />
         </label>
         {example && <p className="note-line warm" style={{ margin: 0 }}>いまの設定だと、勤務日の目標は <strong className="num">{example.label}</strong>（{example.reason}）です。</p>}
+      </div>
+
+      <div className="card">
+        <h2>瞑想</h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          「習慣」画面で瞑想を追加すると、その日の記録画面にタイマーが出ます。
+        </p>
+        <div>
+          <p className="section-title">タイマーの既定の長さ</p>
+          <div className="chips">
+            {LENGTH_OPTIONS.map((o) => (
+              <button
+                key={o.minutes}
+                type="button"
+                className="chip"
+                aria-pressed={state.settings.meditationDefaultMinutes === o.minutes}
+                onClick={() => actions.setSettings({ meditationDefaultMinutes: o.minutes })}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="habit"
+          aria-pressed={state.settings.meditationBell}
+          onClick={() => actions.setSettings({ meditationBell: !state.settings.meditationBell })}
+        >
+          <span className="box" aria-hidden="true">{state.settings.meditationBell ? '✓' : ''}</span>
+          <span className="body">
+            終わりに音を鳴らす
+            <span className="criterion">目を閉じたままでも終わりが分かるように。音源は端末内で作るのでオフラインでも鳴ります。</span>
+          </span>
+        </button>
       </div>
 
       <div className="card">

@@ -11,7 +11,7 @@ const AT = new Date(2026, 7, 1).getTime();
 const habits = buildDefaultHabits(AT);
 const settings: Settings = {
   shiftEndDefault: '00:00', bedWithinMinutes: 90, offDayBedtime: '23:00',
-  audioLinkEnabled: false, audioLinkUrl: '', showStreakProminently: false,
+  audioLinkEnabled: false, audioLinkUrl: '', showStreakProminently: false, meditationBell: true, meditationDefaultMinutes: 10,
 };
 
 function day(date: string, over: Partial<DayRecord> = {}): DayRecord {
@@ -135,4 +135,27 @@ test('選択肢の定義がそろっている', () => {
   for (const o of MANAGER_ALLOCATION_OPTIONS) {
     assert.ok(o.advice.length > 0, '配分の選択肢には必ず直し方の助言を付ける');
   }
+});
+
+test('週の集計に瞑想が入り、主役は「した日数」', () => {
+  const days = daysMap([
+    { ...day('2026-08-17', { checked: ['step1-peers'] }), meditations: [{ minutes: 10, recordedAt: 0 }] },
+    { ...day('2026-08-18', { checked: ['step1-peers'] }), meditations: [{ minutes: 10, recordedAt: 0 }, { minutes: 3, recordedAt: 0 }] },
+    day('2026-08-19', { checked: ['step1-peers'] }),
+  ]);
+  const s = buildWeekSummary('2026-08-19', days, habits, settings);
+  assert.equal(s.meditation.days, 2);
+  assert.equal(s.meditation.sessions, 3);
+  assert.equal(s.meditation.totalMinutes, 23);
+});
+
+test('瞑想が週1〜3日なら、長さより「置く日を増やす」ほうを助言する', () => {
+  const list = ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21'].map((d, i) => ({
+    ...day(d, { checked: ['step1-peers'] }),
+    meditations: i === 0 ? [{ minutes: 60, recordedAt: 0 }] : [],
+  }));
+  const s = buildWeekSummary('2026-08-21', daysMap(list), habits, settings);
+  const hint = managerHint(s, undefined);
+  assert.match(hint, /置く日を増やす/);
+  assert.match(hint, /3分/);
 });

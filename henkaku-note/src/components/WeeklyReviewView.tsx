@@ -73,6 +73,13 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
         <div className="rate-bar" aria-hidden="true"><span style={{ width: `${Math.round(summary.averageRate * 100)}%` }} /></div>
         {comparison && <p className="small muted" style={{ margin: 0 }}>{comparison.text}</p>}
 
+        {summary.meditation.days > 0 && (
+          <p className="small" style={{ margin: 0 }}>
+            瞑想 <strong className="num">{summary.meditation.days}</strong>日／7
+            （{summary.meditation.sessions}回・{summary.meditation.totalMinutes}分）
+            <span className="muted" style={{ display: 'block' }}>効果は合計時間より、置けた日数のほうに効くとされています。</span>
+          </p>
+        )}
         <p className="small" style={{ margin: 0 }}>
           勤務 {summary.workDays}日／休み {summary.offDays}日
           {summary.bedtime.planned > 0 && (
