@@ -1,10 +1,11 @@
 // 端末内の状態（記録と設定）。保存は storage.js（localStorage のみ）。
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { load, save, clear, storageSize } from './storage.js';
 import { makeRecord, sortRecords } from './records.js';
 import { makeCase, updateCase, sortCases, normalizeCase } from './cases.js';
 import { makeTry } from './tried.js';
-import { pushSnapshot, withSeenAt, makeUndo } from './caseTools.js';
+import { pushSnapshot, withSeenAt, makeUndo, UNDO_KEEP } from './caseTools.js';
+import { toBackup, mergeRecords } from './backup.js';
 import { mergeCases, mergeTries, mergePersonView } from './personIO.js';
 
 const EMPTY = {
@@ -48,12 +49,18 @@ export function useStore() {
     };
   });
 
+  /**
+   * 保存できなかったこと（端末がいっぱい等）を画面に出すための印。
+   * **黙って失敗しない**——`save()` の戻り値を誰も見ていなかったので、
+   * 「保存しました」と出たまま何も残らず、再読み込みで全部消えていた（実際に踏んだ）。
+   */
+  const [saveFailed, setSaveFailed] = useState(false);
+
   useEffect(() => {
-    // **消したものを端末に残さない。** undoCase は「消した直後だけ戻せる」ための
-    // 覚え書きなので、保存に混ぜると消したはずの本文が localStorage に残り続ける
-    // （再読み込みしても消えない。実際に踏んだ）。
-    const { undoCase, ...persisted } = state;
-    save(persisted);
+    // **消したものを端末に残さない。** undoCases は「消した直後だけ戻せる」ための
+    // 覚え書きなので、保存に混ぜると消したはずの本文が localStorage に残り続ける。
+    const { undoCases, ...persisted } = state;
+    setSaveFailed(!save(persisted));
   }, [state]);
 
   const addRecord = useCallback((input) => {
@@ -103,13 +110,36 @@ export function useStore() {
   const removeCase = useCallback((id) => {
     setState((s) => {
       const gone = s.cases.find((c) => c.id === id) || null;
-      return { ...s, cases: s.cases.filter((c) => c.id !== id), undoCase: makeUndo(gone) };
+      // **続けて消しても、前のぶんを黙って捨てない**（1件しか持っていなかったので、
+      // 2件目を消した瞬間に1件目が戻せなくなっていた）
+      const undo = gone ? [makeUndo(gone), ...(s.undoCases || [])].slice(0, UNDO_KEEP) : s.undoCases;
+      return { ...s, cases: s.cases.filter((c) => c.id !== id), undoCases: undo };
     });
   }, []);
 
-  /** 消した直後の1件だけ戻せる */
-  const undoRemoveCase = useCallback(() => {
-    setState((s) => (s.undoCase ? { ...s, cases: [s.undoCase.item, ...s.cases], undoCase: null } : s));
+  /** 消した直後のものを戻す（どれを戻すかは画面が選ぶ） */
+  const undoRemoveCase = useCallback((id) => {
+    let back = null;
+    setState((s) => {
+      const list = s.undoCases || [];
+      const found = id ? list.find((u) => u.item.id === id) : list[0];
+      if (!found) return s;
+      back = found.item;
+      return {
+        ...s,
+        cases: [found.item, ...s.cases.filter((c) => c.id !== found.item.id)],
+        undoCases: list.filter((u) => u !== found),
+      };
+    });
+    return back;
+  }, []);
+
+  /** 戻さずに案内だけ閉じる（画面の下をずっと覆わない） */
+  const dismissUndo = useCallback((id) => {
+    setState((s) => ({
+      ...s,
+      undoCases: (s.undoCases || []).filter((u) => (id ? u.item.id !== id : false)),
+    }));
   }, []);
 
   const setMyHabits = useCallback((ids) => {
@@ -118,7 +148,7 @@ export function useStore() {
 
   /** 人間分析のぶんだけ消す（設定の「すべて消す」とは別） */
   const clearPeople = useCallback(() => {
-    setState((s) => ({ ...s, cases: [], tries: [], undoCase: null, personView: EMPTY.personView }));
+    setState((s) => ({ ...s, cases: [], tries: [], undoCases: [], personView: EMPTY.personView }));
   }, []);
 
   /** 取り込み（画面側で必ず確認を出してから呼ぶ） */
@@ -167,6 +197,25 @@ export function useStore() {
     setState(EMPTY);
   }, []);
 
+  /** この端末のものを、まるごと持ち出す */
+  const exportAll = useCallback(() => toBackup(stateRef.current), []);
+
+  /** まるごと取り込む（画面側で必ず確認を出してから呼ぶ） */
+  const importAll = useCallback((data) => {
+    setState((s) => ({
+      ...s,
+      records: mergeRecords(s.records, data.records || []),
+      cases: mergeCases(s.cases, (data.cases || []).map((c) => normalizeCase(c)).filter(Boolean)),
+      tries: mergeTries(s.tries, data.tries || []),
+      myHabits: [...new Set([...s.myHabits, ...(data.myHabits || [])])],
+      personView: mergePersonView(s.personView, data.personView),
+    }));
+  }, []);
+
+  // 書き出しは「呼んだ時点の中身」を読む（state を閉じ込めると古いものが出る）
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   const records = useMemo(() => sortRecords(state.records), [state.records]);
   const cases = useMemo(() => sortCases(state.cases), [state.cases]);
 
@@ -182,8 +231,10 @@ export function useStore() {
     addTry,
     removeTry,
     hideCounter,
-    undoCase: state.undoCase || null,
+    undoCases: state.undoCases || [],
     undoRemoveCase,
+    dismissUndo,
+    saveFailed,
     myHabits: state.myHabits,
     setMyHabits,
     clearPeople,
@@ -192,6 +243,8 @@ export function useStore() {
     setPersonView,
     setSetting,
     clearAll,
+    exportAll,
+    importAll,
     storageSize,
   };
 }

@@ -17,11 +17,20 @@ function readRaw() {
   }
 }
 
+/**
+ * @returns {boolean} 端末に書けたか。
+ * **書けなかったことを飲み込まない**——ここで黙って手元の変数へ逃がしていたので、
+ * `save()` は常に true を返し、画面は「保存しました」と出したまま何も残らず、
+ * 再読み込みで全部消えていた（実際に踏んだ）。
+ */
 function writeRaw(text) {
   try {
     window.localStorage.setItem(KEY, text);
+    memory = null;
+    return true;
   } catch {
-    memory = text;
+    memory = text; // 開いている間だけは読み直せるようにしておく
+    return false;
   }
 }
 
@@ -36,10 +45,10 @@ export function load(fallback) {
   }
 }
 
+/** @returns {boolean} 端末に残せたか（false なら画面が知らせる） */
 export function save(state) {
   try {
-    writeRaw(JSON.stringify(state));
-    return true;
+    return writeRaw(JSON.stringify(state));
   } catch {
     return false;
   }

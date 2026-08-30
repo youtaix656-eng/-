@@ -23,6 +23,13 @@ export const PLACES = [
 
 export const PLACE_MAP = Object.fromEntries(PLACES.map((p) => [p.id, p]));
 
+/**
+ * 本文の上限。**丸ごと貼り付けたやりとりを、そのまま端末に貯めない**——
+ * 呼び名40字・メモ400字には上限があるのに、本文だけ無制限だった（1万字以上が
+ * そのまま残っていた）。切ったことは画面に必ず出す（黙って落とさない）。
+ */
+export const TEXT_MAX = 4000;
+
 let seq = 0;
 function newId(now) {
   seq += 1;
@@ -43,8 +50,9 @@ export function makeRecord(input = {}) {
     at,
     placeId,
     // 既定は伏せる。keepRaw を明示したときだけそのまま残す。
-    text: input.keepRaw ? raw : mask(raw),
+    text: (input.keepRaw ? raw : mask(raw)).slice(0, TEXT_MAX),
     masked: !input.keepRaw,
+    truncated: raw.length > TEXT_MAX,
     tacticIds: [...new Set((input.tacticIds || []).filter(Boolean))],
     replyIds: [...new Set((input.replyIds || []).filter(Boolean))],
     // メモも伏せる（ここに名前が書かれやすい）

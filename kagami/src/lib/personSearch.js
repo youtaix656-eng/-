@@ -153,3 +153,47 @@ export function pushHistory(history = [], query) {
   if (!q) return history;
   return [q, ...history.filter((h) => h !== q)].slice(0, HISTORY_MAX);
 }
+
+
+/**
+ * 言い換えの手引き（26）。
+ *
+ * **新しい主張を作らない**——ここに書くのは「ふだんの言い方 → データの中にある語」の
+ * 対応だけで、型の中身は増やさない。無いと「せかす」で「急がせる」が引けない。
+ * 後読み（lookbehind）は使わない。
+ */
+export const SYNONYMS = [
+  ['せかす', '急がせる 期限 締切'],
+  ['あせらせる', '急がせる 期限'],
+  ['おどす', '脅す 罰 怒'],
+  ['にらむ', '見つめ 目線 眉間'],
+  ['むし', '無視 黙 罰'],
+  ['きげん', '機嫌 不機嫌'],
+  ['おかね', 'お金 金額 値段 支払'],
+  ['ねだん', '値段 金額 お金'],
+  ['ほめる', 'ほめ 称賛 承認'],
+  ['さそう', '誘 勧誘 紹介'],
+  ['ことわる', '断 拒否 やめて'],
+  ['うそ', '嘘 事実 食い違'],
+  ['なかま', '仲間 みんな 周り 皆'],
+  ['じかん', '時間 期限 締切 いま'],
+  ['きらわれ', '嫌わ 見捨て 孤立'],
+];
+
+/** その語に対応する「データの中にある語」を足した検索語を返す */
+export function withSynonyms(query) {
+  const q = fold(String(query || ''));
+  const extra = SYNONYMS.filter(([k]) => q.includes(fold(k))).map(([, v]) => v).join(' ');
+  return extra ? `${query} ${extra}` : query;
+}
+
+/** 言い換えを足したうえで、どれか1つでも当たれば拾う（AND から OR へ緩める） */
+export function matchesLoose(hay, query) {
+  const words = terms(withSynonyms(query));
+  if (words.length === 0) return true;
+  const base = terms(query);
+  // もとの語がすべて当たるなら、それが本筋
+  if (matchesAll(hay, base)) return true;
+  // 言い換えのぶんは、どれか1つ当たれば拾う
+  return words.some((w) => fold(hay).includes(w));
+}

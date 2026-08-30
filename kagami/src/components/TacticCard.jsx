@@ -4,7 +4,7 @@ import { repliesOf } from '../data/replies.js';
 import { sourcesOf } from '../data/sources.js';
 
 /** 型ひとつぶんの中身。一覧・調べた結果・記録のどこからでも同じものを出す。 */
-export default function TacticCard({ tactic, cues = [], open, onToggle, id }) {
+export default function TacticCard({ tactic, cues = [], open, onToggle, id, onGoTactic }) {
   const cat = CATEGORY_MAP[tactic.category];
   return (
     <div className={`card ${open ? "opened" : ""}`} id={id}>
@@ -19,9 +19,16 @@ export default function TacticCard({ tactic, cues = [], open, onToggle, id }) {
             <span className="tiny aka">別名：{tactic.aka.map((a) => a.name).join('・')}</span>
           )}
         </div>
-        <button className="ghost" onClick={onToggle} aria-expanded={!!open}>
-          {open ? '閉じる' : 'くわしく'}
-        </button>
+        <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+          {onGoTactic && (
+            <button className="ghost" onClick={() => onGoTactic(tactic.id)}>
+              型の一覧で読む
+            </button>
+          )}
+          <button className="ghost" onClick={onToggle} aria-expanded={!!open}>
+            {open ? '閉じる' : 'くわしく'}
+          </button>
+        </div>
       </div>
 
       <p className={open ? "plate-summary" : ""}>{tactic.summary}</p>

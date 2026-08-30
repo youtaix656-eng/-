@@ -48,7 +48,7 @@ const TABS = [
 export default function People({
   focus, onFocusDone, onGoTactic, cases = [], onSaveCase, onRemoveCase,
   tries = [], onAddTry, personView = {}, onSetPersonView,
-  myHabits = [], undoCase, onUndoRemove, onClearPeople, onImportPeople,
+  myHabits = [], undoCases = [], onUndoRemove, onDismissUndo, onClearPeople, onImportPeople,
   onRemoveTry, onHideCounter, ui = {}, anchor: tocAnchor,
 }) {
   // 画面を移っても、書きかけの見立てを捨てない（端末には保存しない＝
@@ -128,11 +128,11 @@ export default function People({
 
   // 消した直後の「元に戻す」を、時間が過ぎたら画面から下ろす
   useEffect(() => {
-    if (!undoCase) return undefined;
+    if (undoCases.length === 0) return undefined;
     setNow(Date.now());
     const t = setTimeout(() => setNow(Date.now()), UNDO_MS + 200);
     return () => clearTimeout(t);
-  }, [undoCase]);
+  }, [undoCases]);
 
   useFocusJump(tocAnchor || anchor, onFocusDone);
 
@@ -340,7 +340,8 @@ export default function People({
     requestAnimationFrame(() => flashTo(`toc-person-${id}`));
   }
 
-  const canUndo = undoAlive(undoCase, now);
+  /** まだ戻せるもの（新しい順。1件しか持たないと、続けて消したとき前のが消える） */
+  const liveUndos = undoCases.filter((u) => undoAlive(u, now));
 
   /** 覚えさせたしぼり込み（17）。**勝手に足さない**——名前を付けて押した時だけ */
   const savedFilters = personView.filters || [];
@@ -552,15 +553,32 @@ export default function People({
 
       {/* **画面のいちばん上に置かない。** 一覧の下のほうで消すと画面の外に出てしまい、
           気づかないまま20秒で戻せなくなっていた（実際に踏んだ）。いる場所に出す */}
-      {canUndo && (
+      {liveUndos.length > 0 && (
         <div className="undo-bar" role="status">
-          <span>
-            「{displayName(undoCase.item)}」を消しました。
-            <span className="tiny">（この案内が消えると、もう戻せません）</span>
-          </span>
-          <button className="primary" onClick={onUndoRemove}>
-            元に戻す
-          </button>
+          {liveUndos.map((u) => (
+            <div className="undo-row" key={u.item.id}>
+              <span>
+                「{displayName(u.item)}」を消しました。
+                <span className="tiny">（この案内が消えると、もう戻せません）</span>
+              </span>
+              <button
+                className="primary"
+                onClick={() => {
+                  const back = onUndoRemove?.(u.item.id);
+                  // **戻したら、そのまま続きを直せるようにする**——戻しただけだと
+                  // 「編集中」に戻らず、次に保存した時に同じ人が2件できる
+                  if (back) openCase(back);
+                }}
+              >
+                元に戻す
+              </button>
+            </div>
+          ))}
+          <div className="row end">
+            <button className="ghost" onClick={() => onDismissUndo?.()}>
+              閉じる
+            </button>
+          </div>
         </div>
       )}
 
@@ -608,6 +626,7 @@ export default function People({
           }
           if (e.key === 'Escape') setQuery('');
         }}
+        aria-label="ふるまいをさがす"
         placeholder="ふるまいをさがす（読みでも引けます。スペースで2語以上。Enterで覚え、Escで消します）"
       />
 
@@ -627,6 +646,9 @@ export default function People({
               {h}
             </button>
           ))}
+          <button className="chip" onClick={() => onSetPersonView?.({ history: [] })}>
+            {GLYPHS.cross} さがした語を消す
+          </button>
         </div>
       )}
 
@@ -737,6 +759,7 @@ export default function People({
               value={filterName}
               maxLength={20}
               onChange={(e) => setFilterName(e.target.value)}
+              aria-label="このしぼり込みの名前"
               placeholder="このしぼり込みの名前"
               style={{ maxWidth: 220, margin: 0 }}
             />
@@ -907,6 +930,7 @@ export default function People({
               caseId={editingId}
               myHabits={myHabits}
               practice={practice}
+              memos={kept.memos || (kept.memos = {})}
             />
           ))}
         </>
@@ -930,6 +954,7 @@ export default function People({
             setLabel(e.target.value);
             setSaved(false);
           }}
+          aria-label="呼び名"
           placeholder="呼び名（例：職場のAさん／空でも残せます）"
         />
         <textarea
@@ -939,6 +964,7 @@ export default function People({
             setNote(e.target.value);
             setSaved(false);
           }}
+          aria-label="メモ"
           placeholder="メモ（いつ・どこで・何があったか。任意）"
         />
 
@@ -1008,12 +1034,14 @@ export default function People({
             setNextAction(e.target.value);
             setSaved(false);
           }}
+          aria-label="次にすること"
           placeholder="次にすること（例：次に同じことを言われたら持ち帰る）"
         />
         <label className="tiny" style={{ display: 'block', marginTop: 10 }}>
           次に顔を合わせる日（任意）
           <input
             type="date"
+            aria-label="次に顔を合わせる日"
             value={nextMeetAt}
             onChange={(e) => {
               setNextMeetAt(e.target.value);
@@ -1061,6 +1089,7 @@ export default function People({
             type="text"
             value={caseQuery}
             onChange={(e) => setCaseQuery(e.target.value)}
+            aria-label="保存した見立てをさがす"
             placeholder="呼び名・メモ・場面でさがす"
           />
           <div className="chips">
@@ -1133,7 +1162,9 @@ export default function People({
                         className="danger"
                         onClick={() => {
                           onRemoveCase(c.id);
-                          if (editingId === c.id) newCase();
+                          // **書きかけを捨てない。** 消したのが編集中のものでも、
+                          // 選んだふるまいと呼び名は残す（新しい見立てとして続けられる）
+                          if (editingId === c.id) setEditingId('');
                           setConfirmDelete('');
                         }}
                       >
@@ -1413,6 +1444,7 @@ export default function People({
           setImportText(e.target.value);
           setImportAsk(null);
         }}
+        aria-label="人間分析の書き出しを貼って取り込む"
         placeholder="書き出した文をここに貼ると、取り込めます"
       />
       <div className="row end">
@@ -1481,6 +1513,14 @@ export default function People({
 
       {tab === 'browse' && (
         <>
+      {checked.length > 0 && (
+        <div className="chips">
+          <button className="chip on" onClick={() => setTab('pick')}>
+            {GLYPHS.pointer} 選んだふるまい（{checked.length}件）に戻る
+          </button>
+        </div>
+      )}
+
       <h2>手から引く（逆引き）</h2>
       <Rule mark={GLYPHS.circlePlus} />
       <p className="tiny">
@@ -1522,7 +1562,10 @@ export default function People({
           id={`toc-person-${t.id}`}
           type={t}
           open={catalogOpen === t.id}
-          onToggle={() => setCatalogOpen(catalogOpen === t.id ? '' : t.id)}
+          onToggle={() => {
+            markSeen(t.id); // ここで読んでも未読の印を消す（減らないままだった）
+            setCatalogOpen(catalogOpen === t.id ? '' : t.id);
+          }}
           onGoTactic={onGoTactic}
           scene={scene}
           tries={tries}
@@ -1531,6 +1574,7 @@ export default function People({
           onHide={hideCounter}
           myHabits={myHabits}
           caseId={editingId}
+          memos={kept.memos || (kept.memos = {})}
         />
       ))}
 

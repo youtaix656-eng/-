@@ -13,7 +13,7 @@ import { GLYPHS } from '../data/glyphs.js';
 export default function PersonTypeCard({
   type, matched, open, onToggle, onGoTactic, id,
   scene = '', tries = [], hidden = [], onTry, onHide, caseId = '', showCounters = false,
-  myHabits = [], practice = false,
+  myHabits = [], practice = false, memos,
 }) {
   return (
     <div className={`card ${open ? 'opened' : ''}`} id={id}>
@@ -66,6 +66,7 @@ export default function PersonTypeCard({
             caseId={caseId}
             myHabits={myHabits}
             practice={practice}
+            memos={memos}
           />
         </>
       )}

@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { HABITS } from '../data/habits.js';
+import { matchesLoose } from '../lib/personSearch.js';
+import Finder from './Finder.jsx';
 import { STATES, STATES_NOTE } from '../data/states.js';
 import { sourcesOf } from '../data/sources.js';
 import { TACTIC_MAP } from '../data/tactics.js';
@@ -16,6 +18,17 @@ export default function Habits({ focus, anchor: tocAnchor, onFocusDone, onGoTact
       : `toc-habit-${focus}`
     : '';
   useFocusJump(tocAnchor || anchor, onFocusDone);
+
+  const [query, setQuery] = useState('');
+  const hay = (o, keys) => keys.map((k) => (Array.isArray(o[k]) ? o[k].join(' ') : o[k] || '')).join(' ');
+  const shownHabits = useMemo(
+    () => (query.trim() ? HABITS.filter((h) => matchesLoose(hay(h, ['title', 'reading', 'summary', 'why', 'signs', 'moves']), query)) : HABITS),
+    [query],
+  );
+  const shownStates = useMemo(
+    () => (query.trim() ? STATES.filter((st) => matchesLoose(hay(st, ['title', 'reading', 'summary', 'detail']), query)) : STATES),
+    [query],
+  );
 
   return (
     <>
@@ -36,10 +49,19 @@ export default function Habits({ focus, anchor: tocAnchor, onFocusDone, onGoTact
         変えられるのは<strong>その場での一手</strong>だけです。
       </div>
 
-      <h2>つけこまれやすい形</h2>
+      <Finder
+        label="癖・状態をさがす"
+        value={query}
+        onChange={setQuery}
+        total={HABITS.length + STATES.length}
+        shown={shownHabits.length + shownStates.length}
+        hint="「断れない」「謝る」「眠れない」などで引けます。"
+      />
+
+      <h2>つけこまれやすい形（{shownHabits.length}）</h2>
       <Rule mark={GLYPHS.circlePlus} />
 
-      {HABITS.map((h) => (
+      {shownHabits.map((h) => (
         <div className="card" key={h.id} id={`toc-habit-${h.id}`}>
           <h3>{h.title}</h3>
           <p>{h.summary}</p>
@@ -102,12 +124,12 @@ export default function Habits({ focus, anchor: tocAnchor, onFocusDone, onGoTact
           </div>
         </div>
       ))}
-      <h2>長く続いた時に起きること</h2>
+      <h2>長く続いた時に起きること（{shownStates.length}）</h2>
       <Rule mark={GLYPHS.moonWane} />
 
       <div className="note warn">{STATES_NOTE}</div>
 
-      {STATES.map((st) => (
+      {shownStates.map((st) => (
         <div className="card" key={st.id} id={`toc-state-${st.id}`}>
           <h3>
             {st.title} {st.check && <span className="badge">※要確認</span>}

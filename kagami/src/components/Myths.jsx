@@ -1,12 +1,25 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { MYTHS } from '../data/myths.js';
+import { matchesLoose } from '../lib/personSearch.js';
+import Finder from './Finder.jsx';
 import { sourcesOf } from '../data/sources.js';
 import { GLYPHS } from '../data/glyphs.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { useFocusJump } from './useFocusJump.js';
 
 export default function Myths({ focus, anchor, onFocusDone }) {
+  const [query, setQuery] = useState('');
   useFocusJump(anchor || (focus ? `toc-myth-${focus}` : ''), onFocusDone);
+
+  const shown = useMemo(
+    () =>
+      query.trim()
+        ? MYTHS.filter((m) =>
+            matchesLoose([m.title, m.reading, m.claim, m.known, m.risk, m.instead].join(' '), query),
+          )
+        : MYTHS,
+    [query],
+  );
 
   return (
     <>
@@ -24,7 +37,16 @@ export default function Myths({ focus, anchor, onFocusDone }) {
         相手を疑う道具を配らないために並べています。
       </div>
 
-      {MYTHS.map((m) => (
+      <Finder
+        label="見抜き方をさがす"
+        value={query}
+        onChange={setQuery}
+        total={MYTHS.length}
+        shown={shown.length}
+        hint="「嘘」「目線」「表情」などで引けます。"
+      />
+
+      {shown.map((m) => (
         <div className="card" key={m.id} id={`toc-myth-${m.id}`}>
           <h3>
             {m.title} {m.check && <span className="badge">※要確認</span>}

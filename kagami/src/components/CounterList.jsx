@@ -13,11 +13,20 @@ import { GLYPHS, ORDER_MARKS } from '../data/glyphs.js';
  */
 export default function CounterList({
   type, scene = '', tries = [], hidden = [], onTry, onHide, onGoTactic, caseId = '',
-  myHabits = [], practice = false,
+  myHabits = [], practice = false, memos: kept,
 }) {
   // **ひとことは手ごとに持つ。** カードに1つだけだと、①について書いたメモが
   // 押した③の記録に付く（実際に踏んだ）。
-  const [memos, setMemos] = useState({});
+  // 呼び出し元から入れ物をもらえたら、そこに置く——カードを閉じただけで
+  // 書きかけが消えないようにするため（端末には保存しない）。
+  const box = kept || {};
+  const [, bump] = useState(0);
+  const memos = box;
+  const setMemo = (id, v) => {
+    box[`${type.id}:${id}`] = v;
+    bump((n) => n + 1);
+  };
+  const memoOf = (id) => box[`${type.id}:${id}`] || '';
   const [explain, setExplain] = useState('');
   const [showNext, setShowNext] = useState('');
   const sum = summarize(tries);
@@ -116,9 +125,10 @@ export default function CounterList({
 
             <input
               type="text"
-              value={memos[c.tacticId] || ''}
+              value={memoOf(c.tacticId)}
               maxLength={200}
-              onChange={(e) => setMemos((m) => ({ ...m, [c.tacticId]: e.target.value }))}
+              aria-label={`${TACTIC_MAP[c.tacticId]?.name || c.tacticId} についてのひとこと`}
+              onChange={(e) => setMemo(c.tacticId, e.target.value)}
               placeholder="この手についてのひとこと（任意。○△✕と一緒に残ります）"
               style={{ marginTop: 8 }}
             />
@@ -132,9 +142,9 @@ export default function CounterList({
                   onClick={() => {
                     onTry({
                       tacticId: c.tacticId, typeId: type.id, caseId,
-                      result: r.id, note: memos[c.tacticId] || '',
+                      result: r.id, note: memoOf(c.tacticId),
                     });
-                    setMemos((m) => ({ ...m, [c.tacticId]: '' }));
+                    setMemo(c.tacticId, '');
                   }}
                 >
                   {r.mark} {r.label}

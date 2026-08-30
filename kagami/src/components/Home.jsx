@@ -4,7 +4,7 @@ import { REPLIES } from '../data/replies.js';
 import { GLYPHS } from '../data/glyphs.js';
 import { Ouroboros, CrossMark, Rule } from './Ornament.jsx';
 
-export default function Home({ onGo, records }) {
+export default function Home({ onGo, records, cases = [] }) {
   return (
     <>
       <div className="plate-mark">
@@ -90,7 +90,9 @@ export default function Home({ onGo, records }) {
         </li>
         <li>
           <button className="item" onClick={() => onGo('people')}>
-            <span className="t">{GLYPHS.piece} 人間分析</span>
+            <span className="t">
+              {GLYPHS.piece} 人間分析{cases.length > 0 ? `（見立て${cases.length}件）` : ''}
+            </span>
             <span className="s">
               気になる相手との距離の決め方。年齢や性別ではなく、ふるまいで見る。
             </span>
