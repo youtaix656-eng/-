@@ -45,6 +45,11 @@ export default class ErrorBoundary extends React.Component {
           <button className="ghost" onClick={() => this.setState({ error: null })}>
             もう一度ひらく
           </button>
+          {this.props.onSettings && (
+            <button className="ghost" onClick={() => this.props.onSettings()}>
+              設定（書き出し）へ
+            </button>
+          )}
           <button className="primary" onClick={() => this.props.onHome && this.props.onHome()}>
             ホームへもどる
           </button>

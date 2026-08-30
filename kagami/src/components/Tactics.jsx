@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TACTICS, CATEGORIES, tacticsInCategory, akaNameOf } from '../data/tactics.js';
-import { terms, matchesAll, suggestTerms } from '../lib/personSearch.js';
+import { terms, matchesLoose, suggestTerms } from '../lib/personSearch.js';
 import { useFocusJump } from './useFocusJump.js';
 import TacticCard from './TacticCard.jsx';
 import { EyeSigil, Rule } from './Ornament.jsx';
@@ -36,17 +36,26 @@ export default function Tactics({ focus, anchor, onFocusDone, ui = {} }) {
 
   const words = useMemo(() => terms(query), [query]);
   const inCategory = category ? tacticsInCategory(category) : TACTICS;
+  const hayOf = (t) =>
+    [
+      t.name, t.reading, t.summary, t.why, akaNameOf(t.id) || '',
+      (t.aka || []).map((a) => `${a.name}${a.reading || ''}`).join(' '),
+      (t.cues || []).join(' '),
+      CATEGORIES.find((c) => c.id === t.category)?.label || '',
+    ].join(' ');
+  // ふだんの言い方でも引けるようにする（「せかす」で「急がせる」が出る）
+  const matchHay = (t) => matchesLoose(hayOf(t), query);
   const shown = useMemo(() => {
     if (words.length === 0) return inCategory;
-    return inCategory.filter((t) => {
-      const hay = [
-        t.name, t.reading, t.summary, t.why, akaNameOf(t.id) || '',
-        (t.aka || []).map((a) => `${a.name}${a.reading || ''}`).join(' '),
-        (t.cues || []).join(' '),
-      ].join(' ');
-      return matchesAll(hay, words);
-    });
-  }, [inCategory, words]);
+    return inCategory.filter(matchHay);
+  }, [inCategory, words, query]);
+
+  /** まとまりの件数も、さがしている間は**その結果の数**にする（全体のままだと食い違う） */
+  const countIn = (catId) => {
+    const list = tacticsInCategory(catId);
+    if (words.length === 0) return list.length;
+    return list.filter((t) => matchHay(t)).length;
+  };
 
   // 0件のときに黙らない（近い語を出すだけ。勝手に検索し直さない）
   const nearby = useMemo(
@@ -72,6 +81,7 @@ export default function Tactics({ focus, anchor, onFocusDone, ui = {} }) {
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        aria-label="型をさがす"
         onKeyDown={(e) => {
           if (e.key === 'Escape') setQuery('');
         }}
@@ -89,7 +99,7 @@ export default function Tactics({ focus, anchor, onFocusDone, ui = {} }) {
             className={`chip ${category === c.id ? 'on' : ''}`}
             onClick={() => setCategory(category === c.id ? '' : c.id)}
           >
-            {c.icon} {c.label}（{tacticsInCategory(c.id).length}）
+            {c.icon} {c.label}（{countIn(c.id)}）
           </button>
         ))}
       </div>

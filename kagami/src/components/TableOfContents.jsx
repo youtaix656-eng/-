@@ -39,8 +39,12 @@ export default function TableOfContents({ onGo, ui = {} }) {
       <input
         type="text"
         value={query}
+        aria-label="目次をさがす"
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="さがす（型・返し方・出典）"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setQuery('');
+        }}
+        placeholder="さがす（型・返し方・出典。Escで消します）"
       />
 
       <div className="chips">

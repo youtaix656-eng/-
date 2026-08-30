@@ -77,10 +77,10 @@ test('「まだ試していない手」は見立てごとに数える', () => {
   assert.equal(untried(counters, tries).length, counters.length - 1, '見立てを渡さなければ今までどおり');
 });
 
-test('消したものを端末に残さない（undoCase は保存に混ぜない）', () => {
+test('消したものを端末に残さない（undoCases は保存に混ぜない）', () => {
   const s = src('lib/useStore.js');
-  assert.match(s, /const \{ undoCase, \.\.\.persisted \} = state;/, 'undoCase を保存から外していません');
-  assert.match(s, /save\(persisted\)/);
+  assert.match(s, /const \{ undoCases, \.\.\.persisted \} = state;/, '消したものを保存から外していません');
+  assert.match(s, /setSaveFailed\(!save\(persisted\)\)/, '保存できたかを見ていません');
 });
 
 test('隠した手は型ごとに持つ（型をまたいで消さない）', () => {
@@ -102,10 +102,11 @@ test('「新しく作る」で前の人の欄を残さない', () => {
   }
 });
 
-test('ひとことは手ごとに持つ（別の手に付かない）', () => {
+test('ひとことは手ごとに持ち、カードを閉じても消えない', () => {
   const s = src('components/CounterList.jsx');
-  assert.match(s, /const \[memos, setMemos\] = useState\(\{\}\)/);
-  assert.match(s, /note: memos\[c\.tacticId\] \|\| ''/);
+  assert.match(s, /const memoOf = \(id\) => box\[`\$\{type\.id\}:\$\{id\}`\]/, '手ごとに持っていません');
+  assert.match(s, /note: memoOf\(c\.tacticId\)/);
+  assert.match(src('components/People.jsx'), /kept\.memos/, '画面をまたいで覚えていません');
 });
 
 test('消す操作には必ず確認を出す', () => {
@@ -187,7 +188,7 @@ test('「元に戻す」は、いる場所に出す（画面の上に置かな�
 test('型の一覧にもさがす欄がある', () => {
   const s = src('components/Tactics.jsx');
   assert.match(s, /型をさがす/);
-  assert.match(s, /matchesAll/);
+  assert.match(s, /matchesLoose/);
   assert.match(s, /見つかりませんでした/, '0件のときに黙っています');
 });
 
@@ -197,7 +198,7 @@ test('絞り込んだら件数の表示も変わる', () => {
 });
 
 test('記録に残したあと、場面を選び直せる', () => {
-  assert.match(src('components/Check.jsx'), /setSaved\(false\); \/\/ 場面を選び直したら記録し直せる/);
+  assert.match(src('components/Check.jsx'), /setSavedText\(''\); \/\/ 場面を選び直したら記録し直せる/);
 });
 
 test('「短すぎる」の数え方を画面に出す', () => {

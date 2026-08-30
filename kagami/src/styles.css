@@ -513,7 +513,8 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
 .order-mark { font-family: var(--serif); font-size: 1.1rem; color: var(--ink); line-height: 1; }
 
 /* 飛び先が固定バーの下に隠れないようにする（目次の共通ルール） */
-[id^='toc-'], [id^='kana-'], #sec-result { scroll-margin-top: 72px; }
+/* 文字を大きくしても隠れないよう、rem で持つ（px 決め打ちだと大きい設定で隠れる） */
+[id^='toc-'], [id^='kana-'], #sec-result { scroll-margin-top: 5.5rem; }
 
 /* 消した直後の「元に戻す」。**いる場所に出す**——画面の上に置くと、
    一覧の下のほうで消したときに見えないまま20秒で戻せなくなる */
@@ -536,3 +537,22 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
   line-height: 1.6;
 }
 .undo-bar button { flex: none; }
+
+/* 消したものの案内（複数持てるので行で並べる） */
+.undo-bar { flex-direction: column; align-items: stretch; }
+.undo-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.undo-row + .undo-row { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+
+/* 保存できていない時の知らせ（いちばん上に出す） */
+.save-warn { margin: 12px 0 0; }
+
+/* 重なりの表：横に動かしても、左端の型名は残す */
+.matrix tbody th {
+  position: sticky;
+  left: 0;
+  background: var(--plate);
+  z-index: 1;
+}
+
+/* 相談用の文が長くても、画面が伸び続けないようにする */
+.quote { max-height: 320px; overflow: auto; }

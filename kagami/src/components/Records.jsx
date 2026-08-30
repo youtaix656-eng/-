@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { PLACE_MAP, countByTactic, countByPlace } from '../lib/records.js';
+import React, { useMemo, useState } from 'react';
+import { PLACES, PLACE_MAP, countByTactic, countByPlace } from '../lib/records.js';
+import { matchesLoose } from '../lib/personSearch.js';
+import Finder from './Finder.jsx';
 import { TACTIC_MAP } from '../data/tactics.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
@@ -10,11 +12,33 @@ function when(at) {
   return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export default function Records({ records, onRemove, onGoCheck }) {
+/** 一度に描く件数。**全部を1枚に描かない**（120件で35,000pxになっていた） */
+const PAGE = 30;
+
+export default function Records({ records, onRemove, onGoCheck, onGoTactic }) {
   // **消すときは必ず確認を出す**（見立て・全消しと同じ扱い。押した瞬間には消さない）
   const [confirmId, setConfirmId] = useState('');
+  const [query, setQuery] = useState('');
+  const [placeId, setPlaceId] = useState('');
+  const [sort, setSort] = useState('new');
+  const [limit, setLimit] = useState(PAGE);
   const byTactic = countByTactic(records);
   const byPlace = countByPlace(records);
+
+  const shown = useMemo(() => {
+    let list = records;
+    if (placeId) list = list.filter((r) => r.placeId === placeId);
+    if (query.trim()) {
+      list = list.filter((r) =>
+        matchesLoose(
+          [r.text, r.note, PLACE_MAP[r.placeId]?.label, ...(r.tacticIds || []).map((id) => TACTIC_MAP[id]?.name || '')].join(' '),
+          query,
+        ),
+      );
+    }
+    if (sort === 'old') return [...list].sort((a, b) => a.at - b.at);
+    return list; // 既定は新しい順（呼び出し元が並べたものをそのまま使う）
+  }, [records, query, placeId, sort]);
 
   return (
     <>
@@ -51,7 +75,10 @@ export default function Records({ records, onRemove, onGoCheck }) {
               <ul className="tiny">
                 {byTactic.slice(0, 5).map((c) => (
                   <li key={c.tacticId}>
-                    {TACTIC_MAP[c.tacticId]?.name || c.tacticId} — {c.count}回
+                    <button className="chip" onClick={() => onGoTactic && onGoTactic(c.tacticId)}>
+                      {TACTIC_MAP[c.tacticId]?.name || c.tacticId}
+                    </button>{' '}
+                    — {c.count}回
                   </li>
                 ))}
               </ul>
@@ -66,7 +93,44 @@ export default function Records({ records, onRemove, onGoCheck }) {
             </div>
           )}
 
-          {records.map((r) => (
+          <Finder
+            label="記録をさがす"
+            value={query}
+            onChange={(v) => {
+              setQuery(v);
+              setLimit(PAGE);
+            }}
+            total={records.length}
+            shown={shown.length}
+            hint="本文・場面・型の名前で引けます。"
+          />
+
+          <div className="chips">
+            <button className={`chip ${placeId === '' ? 'on' : ''}`} onClick={() => setPlaceId('')}>
+              場面で絞らない
+            </button>
+            {PLACES.filter((pl) => records.some((r) => r.placeId === pl.id)).map((pl) => (
+              <button
+                key={pl.id}
+                className={`chip ${placeId === pl.id ? 'on' : ''}`}
+                onClick={() => setPlaceId(placeId === pl.id ? '' : pl.id)}
+              >
+                {pl.icon} {pl.label}
+              </button>
+            ))}
+          </div>
+          <div className="chips">
+            {[
+              ['new', '新しい順'],
+              ['old', '古い順'],
+            ].map(([id, lbl]) => (
+              <button key={id} className={`chip ${sort === id ? 'on' : ''}`} onClick={() => setSort(id)}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          {shown.slice(0, limit).map((r) => (
             <div className="card" key={r.id}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span className="tiny">
@@ -77,12 +141,17 @@ export default function Records({ records, onRemove, onGoCheck }) {
               <div className="excerpt" style={{ marginTop: 8 }}>
                 {r.text}
               </div>
+              {r.truncated && (
+                <p className="tiny">
+                  {GLYPHS.reference} 長かったので、本文は先頭だけ残しています。
+                </p>
+              )}
               {r.tacticIds.length > 0 && (
                 <div className="chips">
                   {r.tacticIds.map((id) => (
-                    <span className="chip" key={id}>
+                    <button className="chip" key={id} onClick={() => onGoTactic && onGoTactic(id)}>
                       {TACTIC_MAP[id]?.name || id}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -112,6 +181,14 @@ export default function Records({ records, onRemove, onGoCheck }) {
               </div>
             </div>
           ))}
+
+          {shown.length > limit && (
+            <div className="row end">
+              <button className="ghost" onClick={() => setLimit(limit + PAGE)}>
+                もっと見る（残り{shown.length - limit}件）
+              </button>
+            </div>
+          )}
         </>
       )}
     </>

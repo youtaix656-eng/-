@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
+import { parseBackup } from '../lib/backup.js';
+import { copyText } from '../lib/personExport.js';
 
 /** 何も入っていないのに「約1KB」と書かない（実際の量をそのまま出す） */
 function sizeLine(bytes) {
@@ -11,8 +13,32 @@ function sizeLine(bytes) {
 
 export default function Settings({
   settings, setSetting, onClearAll, recordCount, caseCount = 0, tryCount = 0, habitCount = 0, storageSize,
+  onExportAll, onImportAll,
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [ask, setAsk] = useState(null);
+
+  const text = () => JSON.stringify(onExportAll ? onExportAll() : {}, null, 1);
+
+  async function copyAll() {
+    setCopied((await copyText(text())) ? 'done' : 'fail');
+  }
+
+  function download() {
+    try {
+      const blob = new Blob([text()], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kagami-backup.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setCopied('fail');
+    }
+  }
 
   return (
     <>
@@ -72,6 +98,67 @@ export default function Settings({
                 }}
               >
                 消す
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>持ち出す・取り込む</h3>
+        <p className="tiny">
+          サーバーを持たないので、<strong>端末を変えると全部消えます。</strong>
+          残しておきたいときは書き出してください。記録・人間分析の見立て・やってみた記録・
+          自分の癖・設定が入ります。
+          <br />
+          <strong>貼った文面がそのまま入ります。置き場所に気をつけてください。</strong>
+        </p>
+        <div className="row end">
+          <button className="ghost" onClick={copyAll}>
+            {copied === 'done' ? 'コピーしました' : copied === 'fail' ? 'コピーできません' : '書き出してコピー'}
+          </button>
+          <button className="ghost" onClick={download}>
+            ファイルに保存
+          </button>
+        </div>
+
+        <textarea
+          style={{ minHeight: 80, marginTop: 10 }}
+          value={importText}
+          aria-label="書き出した文を貼って取り込む"
+          onChange={(e) => {
+            setImportText(e.target.value);
+            setAsk(null);
+          }}
+          placeholder="書き出した文をここに貼ると、取り込めます"
+        />
+        <div className="row end">
+          <button className="ghost" disabled={!importText.trim()} onClick={() => setAsk(parseBackup(importText))}>
+            中身を検める
+          </button>
+        </div>
+        {ask && !ask.ok && <p className="tiny">{ask.reason}</p>}
+        {ask && ask.ok && (
+          <div className="note warn">
+            <strong>
+              記録{ask.counts.records}件・見立て{ask.counts.cases}件・やってみた記録
+              {ask.counts.tries}件・癖{ask.counts.myHabits}件
+            </strong>
+            を取り込みます。いまあるものは消えません（同じものはあとから直したほうを残します）。
+            取り込んだあとは元に戻せません。
+            <div className="row end" style={{ marginTop: 8 }}>
+              <button className="ghost" onClick={() => setAsk(null)}>
+                やめる
+              </button>
+              <button
+                className="primary"
+                onClick={() => {
+                  onImportAll?.(ask.data);
+                  setAsk(null);
+                  setImportText('');
+                }}
+              >
+                取り込む
               </button>
             </div>
           </div>

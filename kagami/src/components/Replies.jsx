@@ -1,12 +1,25 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { REPLIES } from '../data/replies.js';
+import { matchesLoose } from '../lib/personSearch.js';
+import Finder from './Finder.jsx';
 import { useFocusJump } from './useFocusJump.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
 
 export default function Replies({ focus, anchor, onFocusDone }) {
+  const [query, setQuery] = useState('');
   // 目次が持っている飛び先をそのまま使う（画面側で組み立て直さない）
   useFocusJump(anchor || (focus ? `toc-reply-${focus}` : ''), onFocusDone);
+
+  const shown = useMemo(
+    () =>
+      query.trim()
+        ? REPLIES.filter((r) =>
+            matchesLoose([r.tocTitle, r.reading, r.summary, r.detail, ...(r.lines || [])].join(' '), query),
+          )
+        : REPLIES,
+    [query],
+  );
 
   return (
     <>
@@ -22,7 +35,16 @@ export default function Replies({ focus, anchor, onFocusDone }) {
         ここにあるのは<strong>時間を置く・持ち帰る・記録する・人に話す・その場を離れる</strong>——相手の同意が要らないことだけです。
       </div>
 
-      {REPLIES.map((r) => (
+      <Finder
+        label="返し方をさがす"
+        value={query}
+        onChange={setQuery}
+        total={REPLIES.length}
+        shown={shown.length}
+        hint="「時間」「持ち帰る」「記録」などで引けます。"
+      />
+
+      {shown.map((r) => (
         <div className="card" key={r.id} id={`toc-reply-${r.id}`}>
           <h3>
             {r.icon} {r.tocTitle}

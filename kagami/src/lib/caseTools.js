@@ -76,6 +76,12 @@ export function makeUndo(c) {
 /** 戻せる時間（これを過ぎたら画面から消す） */
 export const UNDO_MS = 20000;
 
+/**
+ * 同時に持っておける「消したもの」の数。
+ * **1件だけだと、続けて消したときに前のぶんが黙って戻せなくなる**（実際に踏んだ）。
+ */
+export const UNDO_KEEP = 3;
+
 export function undoAlive(undo, now = Date.now()) {
   return !!undo && now - undo.at < UNDO_MS;
 }

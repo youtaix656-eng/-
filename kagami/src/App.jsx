@@ -52,7 +52,9 @@ export default function App() {
   // （実際にこれで飛べなくなっていた）。
   const go = useCallback((next, arg) => {
     if (next === 'check') {
-      setCheckMode(arg === 'draft' ? 'draft' : 'received');
+      // **下部ナビで戻っただけで、選んでいた側を変えない**（「自分が書いた側」で
+      // 書いている途中に「言われた側」へ勝手に戻っていた）。指定があった時だけ変える。
+      if (arg === 'draft' || arg === 'received') setCheckMode(arg);
       window.scrollTo(0, 0);
     } else if (arg) {
       setFocus(arg); // 飛び先は画面側が運ぶので、ここでは先頭へ戻さない
@@ -76,8 +78,20 @@ export default function App() {
 
   return (
     <div className="app">
-      <ErrorBoundary viewKey={view} onHome={() => go('home')}>
-      {view === 'home' && <Home onGo={go} records={store.records} />}
+      {store.saveFailed && (
+        <div className="note warn save-warn" role="alert">
+          <strong>この端末に保存できていません。</strong>
+          空きが足りないか、ブラウザが保存を止めている可能性があります。
+          <strong>いま画面に出ているものは、閉じると消えます。</strong>
+          設定の「書き出してコピー」で先に控えを取ってください。
+          <button className="chip" style={{ marginLeft: 8 }} onClick={() => go('settings')}>
+            設定をひらく
+          </button>
+        </div>
+      )}
+
+      <ErrorBoundary viewKey={view} onHome={() => go('home')} onSettings={() => go('settings')}>
+      {view === 'home' && <Home onGo={go} records={store.records} cases={store.cases} />}
       {view === 'check' && (
         <Check
           mode={checkMode}
@@ -86,6 +100,8 @@ export default function App() {
           settings={store.settings}
           ui={uiRef.current}
           onGoSettings={() => go('settings')}
+          onGoTactic={(id) => go('tactics', id)}
+          records={store.records}
         />
       )}
       {view === 'tactics' && <Tactics focus={focus} anchor={focusAnchor} onFocusDone={clearFocus} ui={uiRef.current} />}
@@ -100,7 +116,14 @@ export default function App() {
           onSetMyHabits={store.setMyHabits}
         />
       )}
-      {view === 'sources' && <Sources focus={focus} anchor={focusAnchor} onFocusDone={clearFocus} />}
+      {view === 'sources' && (
+        <Sources
+          focus={focus}
+          anchor={focusAnchor}
+          onFocusDone={clearFocus}
+          onGoTactic={(id) => go('tactics', id)}
+        />
+      )}
       {view === 'toc' && <TableOfContents onGo={goFromToc} ui={uiRef.current} />}
       {view === 'myths' && <Myths focus={focus} anchor={focusAnchor} onFocusDone={clearFocus} />}
       {view === 'people' && (
@@ -117,8 +140,9 @@ export default function App() {
           personView={store.personView}
           onSetPersonView={store.setPersonView}
           myHabits={store.myHabits}
-          undoCase={store.undoCase}
+          undoCases={store.undoCases}
           onUndoRemove={store.undoRemoveCase}
+          onDismissUndo={store.dismissUndo}
           onClearPeople={store.clearPeople}
           onImportPeople={store.importPeople}
           onRemoveTry={store.removeTry}
@@ -131,6 +155,7 @@ export default function App() {
           records={store.records}
           onRemove={store.removeRecord}
           onGoCheck={() => go('check')}
+          onGoTactic={(id) => go('tactics', id)}
         />
       )}
       {view === 'settings' && (
@@ -143,6 +168,8 @@ export default function App() {
           tryCount={store.tries.length}
           habitCount={store.myHabits.length}
           storageSize={store.storageSize}
+          onExportAll={store.exportAll}
+          onImportAll={store.importAll}
         />
       )}
 

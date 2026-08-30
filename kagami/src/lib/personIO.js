@@ -85,9 +85,44 @@ export function mergeCases(mine = [], theirs = []) {
   const map = new Map(mine.map((c) => [c.id, c]));
   for (const c of theirs) {
     const cur = map.get(c.id);
-    if (!cur || (c.updatedAt || 0) > (cur.updatedAt || 0)) map.set(c.id, c);
+    if (!cur) {
+      map.set(c.id, c);
+      continue;
+    }
+    if ((c.updatedAt || 0) <= (cur.updatedAt || 0)) continue;
+    // **上書きで版を消さない。** あとから直したほうを採るときも、
+    // こちらの「移り変わり」と「いつ見たか」は残す（取り込みで履歴が消えていた）。
+    map.set(c.id, {
+      ...c,
+      snapshots: mergeSnapshots(cur, c),
+      seenAt: mergeSeenAt(cur.seenAt, c.seenAt),
+    });
   }
   return [...map.values()];
+}
+
+/** 両方の版を時刻で並べ、同じ時刻は1つにする。いまの中身も版として残す */
+function mergeSnapshots(mine, theirs) {
+  const all = [
+    ...(mine.snapshots || []),
+    { at: mine.updatedAt, checkedIds: mine.checkedIds || [] },
+    ...(theirs.snapshots || []),
+  ];
+  const seen = new Set();
+  return all
+    .filter((s) => s && Array.isArray(s.checkedIds))
+    .filter((s) => (seen.has(s.at) ? false : seen.add(s.at)))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 20);
+}
+
+/** 「いつ見たか」は**早いほう**を残す（あとから来た日付で上書きしない） */
+function mergeSeenAt(mine = {}, theirs = {}) {
+  const out = { ...theirs };
+  for (const [id, at] of Object.entries(mine)) {
+    out[id] = out[id] ? Math.min(out[id], at) : at;
+  }
+  return out;
 }
 
 /**

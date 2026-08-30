@@ -1,12 +1,28 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { SOURCES } from '../data/sources.js';
 import { TACTICS } from '../data/tactics.js';
+import { matchesLoose } from '../lib/personSearch.js';
+import Finder from './Finder.jsx';
 import { useFocusJump } from './useFocusJump.js';
 import { EyeSigil, Rule } from './Ornament.jsx';
 import { GLYPHS } from '../data/glyphs.js';
 
-export default function Sources({ focus, anchor, onFocusDone }) {
+export default function Sources({ focus, anchor, onFocusDone, onGoTactic }) {
+  const [query, setQuery] = useState('');
   useFocusJump(anchor || (focus ? `toc-source-${focus}` : ''), onFocusDone);
+
+  const shown = useMemo(
+    () =>
+      query.trim()
+        ? SOURCES.filter((x) =>
+            matchesLoose(
+              [x.tocTitle, x.title, x.author, x.year, x.kind, x.note].filter(Boolean).join(' '),
+              query,
+            ),
+          )
+        : SOURCES,
+    [query],
+  );
 
   return (
     <>
@@ -23,7 +39,16 @@ export default function Sources({ focus, anchor, onFocusDone }) {
         書名・発表者・年で辿れる形にしてあります。<strong>※要確認</strong>が付いているものは、こちらで確かめきれていないものです。
       </div>
 
-      {SOURCES.map((s) => {
+      <Finder
+        label="出典をさがす"
+        value={query}
+        onChange={setQuery}
+        total={SOURCES.length}
+        shown={shown.length}
+        hint="書名・発表者・年で引けます。"
+      />
+
+      {shown.map((s) => {
         const used = TACTICS.filter((t) => t.sourceIds.includes(s.id));
         return (
           <div className="card" key={s.id} id={`toc-source-${s.id}`}>
@@ -36,7 +61,14 @@ export default function Sources({ focus, anchor, onFocusDone }) {
             </p>
             <p>{s.note}</p>
             {used.length > 0 && (
-              <p className="tiny">この出典を使う型：{used.map((t) => t.name).join('、')}</p>
+              <div className="chips">
+                <span className="tiny">この出典を使う型：</span>
+                {used.map((t) => (
+                  <button key={t.id} className="chip" onClick={() => onGoTactic && onGoTactic(t.id)}>
+                    {t.name}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         );
