@@ -717,6 +717,12 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 3分の2バッファ術：基礎タスク進捗（実行役ビュー）＋ 未達が近い時のハリオのリマインド
   const bufRemaining = session.buffer ? session.target - session.pos : 0;
   const harioReminder = session.buffer && bufRemaining > 0 && bufRemaining <= 5 ? harioBaseTaskReminder(bufRemaining) : null;
+  // 前の問題／次の問題への移動（タップで戻る・進める）。
+  // target-1（このセッション最後の問題）より先へは進められない
+  // （それ以上先へ進むとセッション完了扱いになり、answered()を経ずに完了してしまうため）。
+  const canGoPrev = session.pos > 0;
+  const canGoNext = session.pos < session.target - 1;
+  const goToPos = (pos) => updateSession({ pos: Math.max(0, Math.min(session.target - 1, pos)) });
   return (
     <div className="view">
       <div className="sess-topbar">
@@ -728,6 +734,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       </div>
       <div className="progress">
         <span style={{ width: `${((session.pos + 1) / session.target) * 100}%` }} />
+      </div>
+      <div className="btn-row" style={{ justifyContent: 'center', gap: 10, margin: '6px 0' }}>
+        <button className="btn ghost sm" onClick={() => goToPos(session.pos - 1)} disabled={!canGoPrev}>← 前の問題</button>
+        <button className="btn ghost sm" onClick={() => goToPos(session.pos + 1)} disabled={!canGoNext}>次の問題 →</button>
       </div>
       {harioReminder && (
         <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{harioReminder}」</p>
