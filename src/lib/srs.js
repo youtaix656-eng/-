@@ -61,9 +61,11 @@ export function emptyState() {
 function normalize(state) {
   if (!state) return emptyState();
   if (state.ef != null && state.interval != null) {
-    // correctStreak が無い古い状態にも既定を補う
-    if (state.correctStreak == null) return { ...state, correctStreak: 0 };
-    return state;
+    // correctStreak が無い古い状態にも既定を補う。
+    // 呼び出し側（applyGrade等）がここで返した値を直接書き換えるため、
+    // 元のstateと同じ参照を返さない（同じ参照だとReact 18のStrictModeで
+    // setState更新関数が2回呼ばれた時に同じオブジェクトへ2回加点してしまう）。
+    return { ...state, correctStreak: state.correctStreak == null ? 0 : state.correctStreak };
   }
   const boxDays = [0, 1, 3, 7, 16, 35, 90];
   const box = state.box || 0;
