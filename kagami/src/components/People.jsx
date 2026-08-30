@@ -824,6 +824,13 @@ export default function People({
               </div>
               <p style={{ margin: '8px 0 4px' }}>{first.how}</p>
               <p className="script">「{first.script}」</p>
+              {first.effect && (
+                <p className="effect">
+                  <span className="tiny">相手はどうなるか</span>
+                  <br />
+                  {first.effect}
+                </p>
+              )}
               <p className="tiny">
                 いくつも同時にやろうとすると続きません。今日はこれだけ、で十分です。
               </p>
@@ -1153,6 +1160,13 @@ export default function People({
           </div>
           <p style={{ margin: '8px 0 4px' }}>{todays.counter.how}</p>
           <p className="script">「{todays.counter.script}」</p>
+          {todays.counter.effect && (
+            <p className="effect">
+              <span className="tiny">相手はどうなるか</span>
+              <br />
+              {todays.counter.effect}
+            </p>
+          )}
         </div>
       )}
 

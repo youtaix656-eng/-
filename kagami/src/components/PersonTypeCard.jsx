@@ -54,7 +54,7 @@ export default function PersonTypeCard({
 
       {(showCounters || open) && (
         <>
-          <h3>黒い心理学で返すなら</h3>
+          <h3>このタイプには、これがおすすめ（黒い心理学で返すなら）</h3>
           <CounterList
             type={type}
             scene={scene}

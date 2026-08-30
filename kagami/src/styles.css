@@ -498,3 +498,16 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
   padding: 14px;
   margin: 8px 0 4px;
 }
+
+/* 相手はどうなるか（言い方の下に置く。効き目の大きさは書かない） */
+.effect {
+  border-left: 1px dashed var(--ink-faint);
+  padding: 2px 0 2px 12px;
+  margin: 6px 0;
+  font-size: .88rem;
+  color: var(--ink-dim);
+}
+.effect .tiny { letter-spacing: 0.12em; }
+
+/* おすすめの順番（番号そのものに意味がある） */
+.order-mark { font-family: var(--serif); font-size: 1.1rem; color: var(--ink); line-height: 1; }

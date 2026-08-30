@@ -4,8 +4,8 @@ import {
   COUNTER_BEST_SCENES, COUNTER_SCENE_NOTES, COUNTER_NEXT, COUNTER_STEP, STEP_LABELS, SCENE_MAP,
 } from '../data/people.js';
 import { HABIT_MAP } from '../data/habits.js';
-import { orderCounters, summarize, triesOf, RESULTS, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
-import { GLYPHS } from '../data/glyphs.js';
+import { recommendThree, summarize, triesOf, RESULTS, RESULT_MAP, MIN_TRIES } from '../lib/tried.js';
+import { GLYPHS, ORDER_MARKS } from '../data/glyphs.js';
 
 /**
  * 「黒い心理学で返すなら」の一覧。**見立てと型の一覧で同じものを使う。**
@@ -19,7 +19,14 @@ export default function CounterList({
   const [explain, setExplain] = useState('');
   const [showNext, setShowNext] = useState('');
   const sum = summarize(tries);
-  const ordered = orderCounters(type.counters, { tries, scene, bestScenes: COUNTER_BEST_SCENES });
+  // おすすめの順は「後戻りのしにくさ」が先。自分の記録・場面は同じ段の中だけで効かせる
+  const ordered = recommendThree(type.counters, {
+    tries,
+    scene,
+    bestScenes: COUNTER_BEST_SCENES,
+    steps: COUNTER_STEP,
+    limit: type.counters.length,
+  });
   const shown = ordered.filter((c) => !hidden.includes(c.tacticId));
   const hiddenCount = ordered.length - shown.length;
 
@@ -32,7 +39,10 @@ export default function CounterList({
 
   return (
     <>
-      <p className="tiny">こちらが呑まれないための型を挙げています。</p>
+      <p className="tiny">
+        こちらが呑まれないための型を、<strong>この順に試すのがおすすめ</strong>という並びで
+        {shown.length}つ挙げています。上から順にどうぞ——下へ行くほど、あとから戻しにくい手です。
+      </p>
 
       {!practice && (
         <input
@@ -45,7 +55,8 @@ export default function CounterList({
         />
       )}
 
-      {shown.map((c) => {
+      {shown.map((c, idx) => {
+        const mark = ORDER_MARKS[idx] || `${idx + 1}.`;
         const s = sum.get(c.tacticId);
         const mine = triesOf(tries, c.tacticId);
         const fits = scene && (COUNTER_BEST_SCENES[c.tacticId] || []).includes(scene);
@@ -58,7 +69,7 @@ export default function CounterList({
           return (
             <div className="counter" key={c.tacticId}>
               <span className="tiny">
-                {STEP_LABELS[step]}・{akaNameOf(c.tacticId) || TACTIC_MAP[c.tacticId]?.name}
+                {mark} {STEP_LABELS[step]}・{akaNameOf(c.tacticId) || TACTIC_MAP[c.tacticId]?.name}
               </span>
               <p className="script practice">「{c.script}」</p>
               {sceneNote && <p className="tiny">{SCENE_MAP[scene].label}では：{sceneNote}</p>}
@@ -70,6 +81,7 @@ export default function CounterList({
           <div className="counter" key={c.tacticId}>
             <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
               <span className="row" style={{ gap: 6 }}>
+                <span className="order-mark">{mark}</span>
                 <span className="badge">{STEP_LABELS[step]}</span>
                 <button className="chip on" onClick={() => onGoTactic(c.tacticId)}>
                   {akaNameOf(c.tacticId) || TACTIC_MAP[c.tacticId]?.name || c.tacticId}
@@ -88,6 +100,14 @@ export default function CounterList({
 
             <p style={{ margin: '6px 0' }}>{c.how}</p>
             <p className="script">「{c.script}」</p>
+
+            {c.effect && (
+              <p className="effect">
+                <span className="tiny">相手はどうなるか</span>
+                <br />
+                {c.effect}
+              </p>
+            )}
 
             {sceneNote && (
               <p className="tiny">
@@ -154,6 +174,14 @@ export default function CounterList({
           </div>
         );
       })}
+
+      {!practice && (
+        <p className="tiny">
+          {GLYPHS.reference} 「相手はどうなるか」は、<strong>その場で何が起きやすいか</strong>です。
+          相手の性格が変わるという意味ではありませんし、逆に出ることもあります。
+          何割の人がそうなるかは書きません——それは相手にも場面にもよるので、数字にできません。
+        </p>
+      )}
 
       {hiddenCount > 0 && !practice && (
         <p className="tiny">

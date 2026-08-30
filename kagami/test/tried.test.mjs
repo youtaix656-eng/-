@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  makeTry, triesOf, summarize, orderCounters, untried, firstMove, RESULTS, RESULT_MAP, MIN_TRIES,
+  makeTry, triesOf, summarize, orderCounters, recommendThree, untried, firstMove, RESULTS, RESULT_MAP, MIN_TRIES,
 } from '../src/lib/tried.js';
-import { PERSON_TYPES, COUNTER_BEST_SCENES, SELF_DEFENSE_TACTIC_IDS } from '../src/data/people.js';
+import { PERSON_TYPES, COUNTER_BEST_SCENES, SELF_DEFENSE_TACTIC_IDS, COUNTER_STEP } from '../src/data/people.js';
 import { TACTIC_MAP, akaNameOf, tacticLabel } from '../src/data/tactics.js';
 import { caseToText } from '../src/lib/personExport.js';
 
@@ -143,4 +143,37 @@ test('呼び名を渡さなければ、書き出しは今までどおり', () =>
   const text = caseToText({ matches: [{ type: t, behaviors: [t.behaviors[0]] }] });
   assert.doesNotMatch(text, /沈黙の圧力/);
   assert.match(text, /断りを交渉ごとにしない/);
+});
+
+test('おすすめは3つまで（並べるほど選べなくなる）', () => {
+  assert.equal(recommendThree(crosses.counters, {}).length, 3);
+  assert.equal(recommendThree(crosses.counters, { limit: 2 }).length, 2);
+});
+
+test('段を渡さなければ、これまでどおりの並びのまま', () => {
+  assert.deepEqual(
+    recommendThree(crosses.counters, {}).map((c) => c.tacticId),
+    orderCounters(crosses.counters, {}).map((c) => c.tacticId),
+  );
+});
+
+test('同じ段の中では、自分の記録がこれまでどおり効く', () => {
+  // 「相手によって態度を変える」は同じ段（まず）の手を2つ持っている
+  const twoFaced = PERSON_TYPES.find((t) => t.id === 'two_faced');
+  const same = twoFaced.counters.filter((c) => COUNTER_STEP[c.tacticId] === 1);
+  assert.ok(same.length >= 2, 'この検査には同じ段の手が2つ要ります');
+  const later = same[same.length - 1];
+  const tries = [
+    makeTry({ tacticId: later.tacticId, result: 'ok' }),
+    makeTry({ tacticId: later.tacticId, result: 'ok' }),
+  ];
+  const out = recommendThree(twoFaced.counters, { tries, steps: COUNTER_STEP });
+  assert.equal(out[0].tacticId, later.tacticId, '同じ段の中で記録が効いていません');
+  assert.equal(COUNTER_STEP[out[0].tacticId], 1, '段を飛び越えています');
+});
+
+test('元の並びを壊さない（並べ替えても中身は同じ3つ）', () => {
+  const before = new Set(crosses.counters.map((c) => c.tacticId));
+  const after = new Set(recommendThree(crosses.counters, { steps: COUNTER_STEP }).map((c) => c.tacticId));
+  assert.deepEqual([...after].sort(), [...before].sort());
 });

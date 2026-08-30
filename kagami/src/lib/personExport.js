@@ -47,6 +47,7 @@ export function caseToText(input = {}) {
       const name = typeof input.nameOf === 'function' ? line(input.nameOf(c.tacticId)) : '';
       out.push(`  ▷ ${name ? `${name}：` : ''}${line(c.how)}${mark}`);
       if (c.script) out.push(`    「${line(c.script)}」`);
+      if (c.effect) out.push(`    相手はどうなるか：${line(c.effect)}`);
     }
   }
 
@@ -58,6 +59,7 @@ export function caseToText(input = {}) {
 
   out.push('');
   out.push('※ 人を採点したものではありません。決めているのは距離であって、その人の人格ではありません。');
+  out.push('※ 「相手はどうなるか」は、その場で何が起きやすいかです。逆に出ることもあります。');
   return out.join('\n');
 }
 

@@ -83,6 +83,28 @@ export function orderCounters(counters = [], { tries = [], scene = '', bestScene
     .map((x) => x.c);
 }
 
+/**
+ * このタイプにおすすめの3つ（番号を付けて出すもの）。
+ *
+ * **順番は「後戻りのしにくさ」が先**（`steps`＝まず／それでも続くなら／それも効かないなら）。
+ * 自分の記録や場面の合い方は**同じ段の中だけ**で効かせる——記録が2回付いただけの手が
+ * ①に来ると、いきなり後戻りしにくい手から始めることになる。
+ * `steps` を渡さなければ、これまでどおり `orderCounters` の順のまま。
+ *
+ * @param {Array} counters 型が持つ対応策
+ * @param {{tries?:Array, scene?:string, bestScenes?:object, steps?:object, limit?:number}} opts
+ */
+export function recommendThree(counters = [], opts = {}) {
+  const { steps = null, limit = 3 } = opts;
+  const ordered = orderCounters(counters, opts);
+  if (!steps) return ordered.slice(0, limit);
+  return ordered
+    .map((c, i) => ({ c, i, s: steps[c.tacticId] || 99 }))
+    .sort((a, b) => a.s - b.s || a.i - b.i)
+    .map((x) => x.c)
+    .slice(0, limit);
+}
+
 /** まだ一度も試していない手 */
 export function untried(counters = [], tries = []) {
   const done = new Set(tries.map((t) => t.tacticId));
