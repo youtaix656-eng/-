@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   PERSON_TYPES, PERSON_TYPE_MAP, CORES, CORE_MAP, SCENES, SCENE_MAP, allBehaviors,
-  STAGES, CASE_STATUSES, SCENE_HELPLINES, NOTE_TEMPLATE, STALE_DAYS, COUNTER_STEP, STEP_LABELS,
+  STAGES, CASE_STATUSES, SCENE_HELPLINES, NOTE_TEMPLATE, STALE_DAYS,
 } from '../data/people.js';
 import {
   timelineOf, compare, isStale, daysSince, undoAlive, seenAtOf, UNDO_MS, SNAPSHOT_MAX,
