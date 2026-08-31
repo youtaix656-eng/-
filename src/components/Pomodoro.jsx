@@ -32,6 +32,11 @@ function beep(times = 1) {
       o.stop(t + 0.26);
       t += 0.34;
     }
+    // 鳴らし終わったらcloseする。毎回new AudioContext()するだけで閉じないと、
+    // 通知音・フェーズ切り替え音が積み重なるたびにコンテキストが残り続け、
+    // 1日使い続けるとブラウザ側の上限（同時に開けるAudioContext数）に達しうる。
+    const totalMs = (t - ctx.currentTime) * 1000 + 100;
+    setTimeout(() => { ctx.close().catch(() => {}); }, totalMs);
   } catch (e) {
     /* noop */
   }
@@ -48,6 +53,36 @@ function notify(title, body) {
 }
 
 const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+// 分・回数などの数値入力欄。value(確定値)をそのままcontrolled inputに渡すと、
+// 全消しして2桁の新しい数字を打つ途中（一瞬空文字→0扱い）にmin側へ強制的に
+// スナップして「一桁残さないと入力できない」状態になる。ここでは入力中は
+// 自由な文字列（空欄も含む）をローカルに保持し、フォーカスが外れた時にだけ
+// min/maxへ丸めて確定する。
+function PomoNumberField({ label, value, min, max, onCommit }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => { setDraft(String(value)); }, [value]);
+  const commit = () => {
+    const n = parseInt(draft, 10);
+    const clamped = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : value;
+    setDraft(String(clamped));
+    if (clamped !== value) onCommit(clamped);
+  };
+  return (
+    <label>
+      {label}
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      />
+    </label>
+  );
+}
 
 // 科目の重さ・場面別プリセット（ワンタップで勉強/短い休憩の分数を切り替える）。
 // 長い休憩・サイクル回数は個人差が大きいのでプリセットに含めず、既存の設定のまま残す。
@@ -72,6 +107,21 @@ export default function Pomodoro({ store, onToast }) {
   const audioRef = useRef(null);
   const fileRef = useRef(null);
   const tickRef = useRef(null);
+  const barRef = useRef(null);
+
+  // 最小化バーとフルバーで実際の高さが違う（45px vs 66px）のに、下の.app-headerは
+  // 固定値--pomo-hしか見ていなかったため、最小化時に約21pxの隙間ができていた。
+  // 実測してCSS変数に反映することで、どちらの表示でも隙間が空かないようにする。
+  useEffect(() => {
+    if (!cfg.enabled || !barRef.current) return undefined;
+    const el = barRef.current;
+    const applyHeight = () => document.documentElement.style.setProperty('--pomo-h', `${el.offsetHeight}px`);
+    applyHeight();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(applyHeight);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [cfg.enabled, min]);
 
   const dur = (p) =>
     (p === 'study' ? cfg.study || 25 : p === 'short' ? cfg.shortBreak || 5 : p === 'long' ? cfg.longBreak || 15 : cfg.study || 25) * 60;
@@ -96,9 +146,13 @@ export default function Pomodoro({ store, onToast }) {
     if (phase === 'idle' && !running) setRemaining((cfg.study || 25) * 60);
   }, [cfg.study, phase, running]);
 
-  // 1秒ごとのカウントダウン
+  // 1秒ごとのカウントダウン。
+  // 設定画面で「表示」をオフにした時、この効果自体は無条件に呼ばれ続けるため
+  // （下のreturn nullは表示だけを止め、hooksの実行やintervalは止めない）、
+  // !cfg.enabledでも明示的に止めないと、非表示の間もカウントダウン・通知・
+  // 効果音が裏で進み続けてしまう（実際に確認された不具合）。
   useEffect(() => {
-    if (!running) {
+    if (!running || !cfg.enabled) {
       if (tickRef.current) clearInterval(tickRef.current);
       return;
     }
@@ -125,7 +179,7 @@ export default function Pomodoro({ store, onToast }) {
     }, 1000);
     return () => clearInterval(tickRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, phase, cfg.notifyEvery, cfg.study, cfg.shortBreak, cfg.longBreak, cfg.cycles]);
+  }, [running, cfg.enabled, phase, cfg.notifyEvery, cfg.study, cfg.shortBreak, cfg.longBreak, cfg.cycles]);
 
   const advance = () => {
     if (phase === 'study') {
@@ -222,14 +276,16 @@ export default function Pomodoro({ store, onToast }) {
   if (!cfg.enabled) return null;
 
   const total = dur(phase === 'idle' ? 'study' : phase);
-  const pct = total > 0 ? ((total - remaining) / total) * 100 : 0;
+  // 実行中に分数設定を変えて total < remaining になっても、進捗バーの幅が
+  // 負の%やCSS上不正な値にならないよう0〜100へ丸める。
+  const pct = total > 0 ? Math.min(100, Math.max(0, ((total - remaining) / total) * 100)) : 0;
   const ph = PHASES[phase];
   const cycles = cfg.cycles || 4;
 
   // 最小化表示（#12）：使っていない時は細い1行だけにして画面を占有しない
   if (min) {
     return (
-      <div className={`pomo-bar mini ${ph.cls}`}>
+      <div className={`pomo-bar mini ${ph.cls}`} ref={barRef}>
         <audio ref={audioRef} src={musicUrl || undefined} preload="auto" />
         <button className="pomo-mini-body" onClick={() => setMin(false)} aria-label="タイマーを開く">
           <span className="pomo-phase">{phase === 'study' ? '📖' : phase === 'short' ? '☕' : phase === 'long' ? '🌴' : '⏱️'}</span>
@@ -245,7 +301,7 @@ export default function Pomodoro({ store, onToast }) {
   }
 
   return (
-    <div className={`pomo-bar ${ph.cls}`}>
+    <div className={`pomo-bar ${ph.cls}`} ref={barRef}>
       <audio ref={audioRef} src={musicUrl || undefined} preload="auto" />
       <div className="pomo-main">
         <span className="pomo-phase">
@@ -283,22 +339,30 @@ export default function Pomodoro({ store, onToast }) {
             ))}
           </div>
           <div className="pomo-config-grid">
-            <label>勉強（分）
-              <input type="number" min="1" max="180" value={cfg.study || 25} onChange={(e) => setCfg({ study: Math.max(1, +e.target.value || 1) })} />
-            </label>
-            <label>短い休憩（分）
-              <input type="number" min="1" max="60" value={cfg.shortBreak || 5} onChange={(e) => setCfg({ shortBreak: Math.max(1, +e.target.value || 1) })} />
-            </label>
-            <label>長い休憩（分）
-              <input type="number" min="1" max="120" value={cfg.longBreak || 15} onChange={(e) => setCfg({ longBreak: Math.max(1, +e.target.value || 1) })} />
-            </label>
-            <label>長休憩まで（回）
-              <input type="number" min="1" max="12" value={cfg.cycles || 4} onChange={(e) => setCfg({ cycles: Math.max(1, +e.target.value || 1) })} />
-            </label>
-            <label>勉強中の通知（分おき・0でなし）
-              <input type="number" min="0" max="60" value={cfg.notifyEvery || 0} onChange={(e) => setCfg({ notifyEvery: Math.max(0, +e.target.value || 0) })} />
-            </label>
+            <PomoNumberField label="勉強（分）" min={1} max={180} value={cfg.study || 25} onCommit={(n) => setCfg({ study: n })} />
+            <PomoNumberField label="短い休憩（分）" min={1} max={60} value={cfg.shortBreak || 5} onCommit={(n) => setCfg({ shortBreak: n })} />
+            <PomoNumberField label="長い休憩（分）" min={1} max={120} value={cfg.longBreak || 15} onCommit={(n) => setCfg({ longBreak: n })} />
+            <PomoNumberField label="長休憩まで（回）" min={1} max={12} value={cfg.cycles || 4} onCommit={(n) => setCfg({ cycles: n })} />
+            <PomoNumberField
+              label="勉強中の通知（分おき・0でなし）"
+              min={0}
+              max={60}
+              value={cfg.notifyEvery || 0}
+              onCommit={(n) => {
+                setCfg({ notifyEvery: n });
+                // 実行中に0→有効へ切り替えた時、次のstart()を待たず今すぐ許可を求める
+                // （許可が無いままだと通知は一つも出ず、原因も画面に出ないまま気づけない）。
+                if (n > 0 && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                  Notification.requestPermission().catch(() => {});
+                }
+              }}
+            />
           </div>
+          {(cfg.notifyEvery || 0) > 0 && (cfg.notifyEvery || 0) >= (cfg.study || 25) && (
+            <p className="pomo-hint" style={{ color: 'var(--wrong, #c62828)' }}>
+              ⚠️ 通知間隔（{cfg.notifyEvery}分）が勉強時間（{cfg.study || 25}分）以上のため、この設定では通知が一度も鳴りません。
+            </p>
+          )}
 
           <div className="pomo-music">
             <label className="pomo-switch">
