@@ -420,6 +420,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           </span>
         </button>
 
+        <button className="menu-item wide" onClick={() => onNavigate('g100guide')}>
+          <span className="ico">💯</span>
+          <span className="title">G-100 1〜100周ガイド</span>
+          <span className="desc">
+            一問一答を1〜100周する学習法を、実際の画面・ボタンに対応させた手順表です。
+          </span>
+        </button>
+
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="section-label" style={{ marginTop: 0 }}>📍 今いる場所から始める</div>
           <p className="inline-note" style={{ marginTop: 0, marginBottom: 8 }}>

@@ -1,11 +1,14 @@
 // 周回速度ログ（G-100由来）— 学習(10・60・300・900)の1回分（1周）にかかった実時間を記録し、
-//   同じ目標での前回と比べて「短縮できているか」を見せる。端末内のみ・直近50件だけ保持する
+//   同じ目標での前回と比べて「短縮できているか」を見せる。端末内のみ・直近500件だけ保持する
 //   （無制限に増やさない。古いものは自然に落ちる）。
+//   500件にしているのはG-100（1〜100周）の「通算◯回目」表示のため。50件だと
+//   ターゲットを混在させて使うだけで100周分より先に古い記録が溢れ、通算カウンターが
+//   実際より少なく出てしまう。1エントリはごく小さいので500件でも容量上の問題は無い。
 
 import { idbGet, idbSet } from './db.js';
 
 const KEY = 'shinkyu:roundLog';
-const MAX_ENTRIES = 50;
+const MAX_ENTRIES = 500;
 
 export async function loadRoundLog() {
   try { return (await idbGet(KEY)) || []; } catch (e) { return []; }
@@ -24,6 +27,12 @@ export function previousForTarget(log, target, excludeAt) {
   const matches = (log || []).filter((e) => e.target === target && e.at !== excludeAt);
   if (matches.length === 0) return null;
   return matches.reduce((a, b) => (a.at > b.at ? a : b));
+}
+
+// 同じtargetで完了した回数（通算◯周目の表示用）。ログはMAX_ENTRIES件で古いものから
+// 落ちるため、あくまで直近の保持件数内での通算であることに注意（正確な生涯合計ではない）。
+export function countForTarget(log, target) {
+  return (log || []).filter((e) => e.target === target).length;
 }
 
 export function formatDuration(ms) {

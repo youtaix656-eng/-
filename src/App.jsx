@@ -61,6 +61,7 @@ const KeizetsuPageImages = lazy(() => import('./components/KeizetsuPageImages.js
 const Faq = lazy(() => import('./components/Faq.jsx'));
 const CognitiveStyleGuide = lazy(() => import('./components/CognitiveStyleGuide.jsx'));
 const CognitiveTraining = lazy(() => import('./components/CognitiveTraining.jsx'));
+const G100Guide = lazy(() => import('./components/G100Guide.jsx'));
 
 function ViewLoading() {
   return (
@@ -125,6 +126,7 @@ const VIEW_TITLES = {
   faq: '鍼灸国試アプリ Q&A',
   cognitivestyle: 'あなたの学習スタイル',
   cognitivetraining: '認知特性トレーニング',
+  g100guide: 'G-100 1〜100周ガイド',
   toc: '目次',
   settings: '設定',
 };
@@ -615,6 +617,8 @@ export default function App() {
             onConsumeInitialMode={() => setFocusTrainingMode(null)}
           />
         );
+      case 'g100guide':
+        return <G100Guide onNavigate={setView} />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':

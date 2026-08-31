@@ -13,7 +13,7 @@ import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLa
 import { loadTodayMood, moodToConditionScore } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
-import { loadRoundLog, appendRoundLog, previousForTarget, formatDuration, speedupPct } from '../lib/roundLog.js';
+import { loadRoundLog, appendRoundLog, previousForTarget, countForTarget, formatDuration, speedupPct } from '../lib/roundLog.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -169,7 +169,8 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     const count = session.pos;
     loadRoundLog().then((log) => {
       const prev = previousForTarget(log, target, session.startedAt);
-      setLastRoundInfo({ target, count, ms, prev });
+      const roundNo = countForTarget(log, target) + 1; // 今回を含めた通算回数
+      setLastRoundInfo({ target, count, ms, prev, roundNo });
       appendRoundLog({ target, count, ms, at: session.startedAt });
     });
   }, [session]);
@@ -543,7 +544,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           <p className="view-desc" style={{ textAlign: 'center' }}>{doneDesc}</p>
           {isStandardSession && lastRoundInfo && lastRoundInfo.target === requested && (
             <p className="inline-note" style={{ textAlign: 'center' }}>
-              ⏱ 所要時間 {formatDuration(lastRoundInfo.ms)}
+              🔁 通算{lastRoundInfo.roundNo}回目（{requested}問）・⏱ 所要時間 {formatDuration(lastRoundInfo.ms)}
               {lastRoundInfo.prev && (() => {
                 const pct = speedupPct(lastRoundInfo.ms, lastRoundInfo.count, lastRoundInfo.prev.ms, lastRoundInfo.prev.count);
                 if (pct == null) return null;
