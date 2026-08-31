@@ -652,7 +652,7 @@ export default function App() {
 
   return (
     <div className={`app${pomoOn ? ' has-pomo' : ''}`}>
-      <Pomodoro store={store} onToast={showToast} />
+      <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} />
       <header className="app-header">
         <h1>
           {view === 'home' ? (

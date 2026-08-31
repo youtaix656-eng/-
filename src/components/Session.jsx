@@ -459,6 +459,16 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           >
             この計画で基礎タスクを始める（{bufferPlan.baseTaskQuestionCount}問）
           </button>
+          <button
+            className="btn ghost sm block"
+            style={{ marginTop: 6 }}
+            onClick={() => {
+              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: true, study: bufferPlan.baseTaskMinutes } });
+              onToast?.(`🍅 ポモドーロの勉強時間を${bufferPlan.baseTaskMinutes}分に合わせました`);
+            }}
+          >
+            🍅 ポモドーロの勉強時間もこの分数（{bufferPlan.baseTaskMinutes}分）に合わせる
+          </button>
         </div>
       </div>
     );

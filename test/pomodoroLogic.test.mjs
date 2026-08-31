@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf } from '../src/lib/pomodoroLogic.js';
+import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, clampDraftCommit, ADVANCE_GUARD, BEEP_TONES, toneFreq } from '../src/lib/pomodoroLogic.js';
 
 test('durationSec: 各フェーズの分数をcfgから秒に変換する', () => {
   const cfg = { study: 25, shortBreak: 5, longBreak: 15 };
@@ -96,4 +96,45 @@ test('remainingSecOf: 実行中でも経過済みなら0未満にならない', 
   const now = 1000000;
   const sec = remainingSecOf({ running: true, phaseEndAt: now - 5000, remaining: 0 }, now);
   assert.equal(sec, 0);
+});
+
+test('ADVANCE_GUARD: 定数として公開されている', () => {
+  assert.equal(typeof ADVANCE_GUARD, 'number');
+  assert.ok(ADVANCE_GUARD > 0);
+});
+
+// PomoNumberField（数字入力欄）の「一桁残さないと打てない」バグ修正の核心部分。
+// 全消し（空文字）や打ちかけの非数値は直前の確定値へフォールバックし、min未満へ
+// 強制スナップしないことを保証する。
+test('clampDraftCommit: 空文字は直前の確定値に戻る（min勝手にスナップしない）', () => {
+  const r = clampDraftCommit('', 25, 1, 180);
+  assert.equal(r.clamped, 25);
+  assert.equal(r.changed, false);
+});
+
+test('clampDraftCommit: 範囲内の数値はそのまま確定する', () => {
+  const r = clampDraftCommit('45', 25, 1, 180);
+  assert.equal(r.clamped, 45);
+  assert.equal(r.changed, true);
+});
+
+test('clampDraftCommit: 範囲外はmin/maxへ丸める', () => {
+  assert.equal(clampDraftCommit('0', 25, 1, 180).clamped, 1);
+  assert.equal(clampDraftCommit('999', 25, 1, 180).clamped, 180);
+});
+
+test('clampDraftCommit: 値が変わらない場合はchanged=false', () => {
+  const r = clampDraftCommit('25', 25, 1, 180);
+  assert.equal(r.changed, false);
+});
+
+test('toneFreq: 未設定なら既定（chime）を使う', () => {
+  assert.equal(toneFreq({}, 'study'), BEEP_TONES[0].freq[0]);
+  assert.equal(toneFreq({}, 'break'), BEEP_TONES[0].freq[1]);
+});
+
+test('toneFreq: 指定した種類の周波数を返す', () => {
+  const low = BEEP_TONES.find((t) => t.id === 'low');
+  assert.equal(toneFreq({ beepTone: 'low' }, 'study'), low.freq[0]);
+  assert.equal(toneFreq({ beepTone: 'low' }, 'break'), low.freq[1]);
 });

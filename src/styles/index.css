@@ -3026,10 +3026,15 @@ code.block {
 .pomo-cycles-label { font-size: 10px; color: rgba(255,255,255,0.7); margin-left: auto; }
 
 .pomo-config {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 24;
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 31;
   background: var(--surface); border: 1px solid var(--border);
   border-top: none; border-radius: 0 0 var(--radius) var(--radius);
   padding: 12px; box-shadow: var(--shadow); color: var(--text);
+  /* 設定項目が増えて縦に長くなったため、下部ナビ（z-index:30）に隠れて押せなくならないよう
+     画面内に収まる高さで打ち切り、はみ出す分はパネル内でスクロールする。 */
+  max-height: calc(100vh - var(--nav-h) - var(--roadmap-bar-h) - 90px - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .pomo-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pomo-config-grid label { font-size: 11px; color: var(--text-sub); font-weight: 700; display: flex; flex-direction: column; gap: 3px; }
@@ -3061,6 +3066,47 @@ code.block {
   background: var(--surface-2); color: var(--text); font-size: 14px; width: 100%; box-sizing: border-box;
 }
 .pomo-stats { font-size: 10.5px; color: rgba(255,255,255,0.75); margin-top: 4px; }
+.pomo-progress.goal { height: 3px; margin-top: 3px; }
+.pomo-progress.goal > span { background: #ffd166; }
+
+/* 最小化中だけ画面下に浮かせる表示（設定でON時）。上部のヘッダー押し下げは
+   Pomodoro.jsx側で--pomo-hを0にして相殺するので、ここでは通常のドキュメント
+   フローから外すことだけ考える。 */
+.pomo-bar.mini.bottom-float {
+  position: fixed; left: 12px; right: 12px; top: auto; height: auto;
+  bottom: calc(var(--nav-h) + var(--roadmap-bar-h) + 10px + env(safe-area-inset-bottom, 0px));
+  border-radius: 999px; border-bottom: none; box-shadow: var(--shadow);
+  z-index: 26;
+}
+
+.chip-reorder {
+  width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,0.15);
+  color: inherit; font-size: 12px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.pomo-sound-sub { margin-top: 8px; padding-left: 4px; display: flex; flex-direction: column; gap: 6px; }
+.pomo-select-row { font-size: 12px; color: var(--text-sub); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.pomo-select-row select { padding: 5px 6px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+.pomo-select-row input[type="range"] { flex: 1; }
+
+.pomo-graph-wrap { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.pomo-graph { display: flex; align-items: flex-end; gap: 6px; height: 70px; }
+.pomo-graph-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.pomo-graph-bar { width: 70%; max-width: 20px; min-height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
+.pomo-graph-lbl { font-size: 9px; color: var(--text-mute); margin-top: 3px; }
+
+.pomo-focus-check, .pomo-pause-reason {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 6px;
+  background: rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 6px 10px;
+}
+.pomo-focus-btn {
+  background: none; border: none; font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 4px;
+}
+.pomo-focus-skip, .pomo-pause-reason .chip-remove {
+  margin-left: auto; background: rgba(255,255,255,0.15); border: none; color: inherit;
+  width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* ===== 試験日カウントダウン（ホーム） ===== */
 .exam-countdown {
