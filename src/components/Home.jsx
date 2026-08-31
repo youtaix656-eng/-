@@ -20,6 +20,15 @@ import { suggestUnvisitedFeature } from '../lib/featureDiscovery.js';
 
 const LONG_PRESS_MS = 550;
 
+// 場所別のおすすめモード（ホーム「今いる場所から始める」）。
+// 場所ごとに集中できる度合いが違うので、その場に合う学習形式へワンタップで飛べるようにする。
+// いずれも下部ナビ等から行ける既存画面へのショートカット（新しい画面は作らない）。
+const LOCATION_MODES = [
+  { id: 'home', icon: '🏠', label: '自宅', view: 'session', hint: 'じっくり集中できる場所。学習(10・60・300・900)で腰を据えて進める' },
+  { id: 'work', icon: '💼', label: '職場', view: 'audio', hint: '手が使えない・すきま時間向け。音声学習で耳から暗記物を回す' },
+  { id: 'room', icon: '🚪', label: '個室', view: 'exam', hint: '人目を気にせず時間を測れる場所。模擬試験を通しで解く' },
+];
+
 // 長押しで削除確認、タップで通常動作。ボタンに ...longPress(onLongPress, onTap) を展開して使う。
 function useLongPress(onLongPress, onTap) {
   const timerRef = useRef(null);
@@ -410,6 +419,20 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
             認知特性チェックの結果から、どの機能をどう使うと定着しやすいかをまとめました。
           </span>
         </button>
+
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div className="section-label" style={{ marginTop: 0 }}>📍 今いる場所から始める</div>
+          <p className="inline-note" style={{ marginTop: 0, marginBottom: 8 }}>
+            場所によって集中できる度合いは違うので、その場に合う形を選ぶと迷わず始められます。
+          </p>
+          <div className="chip-row">
+            {LOCATION_MODES.map((m) => (
+              <button key={m.id} className="chip" onClick={() => onNavigate(m.view)} title={m.hint}>
+                {m.icon} {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <button className="menu-item wide featured" onClick={() => onNavigate('session')}>
           <span className="ico">📚</span>

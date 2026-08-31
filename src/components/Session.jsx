@@ -13,6 +13,7 @@ import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLa
 import { loadTodayMood, moodToConditionScore } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
+import { loadRoundLog, appendRoundLog, previousForTarget, formatDuration, speedupPct } from '../lib/roundLog.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -153,6 +154,25 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 上位を変えたら下位をリセット
   useEffect(() => { setGenre(''); setKeyword(''); setRound(''); }, [subject]);
   useEffect(() => { setKeyword(''); }, [genre]);
+
+  // 周回速度ログ（G-100由来）：標準セッション（10・60・300・900。誤答復習・バッファ枠は対象外）が
+  // 完了した瞬間に1回だけ所要時間を記録し、同じ目標での前回と比べる。
+  const [lastRoundInfo, setLastRoundInfo] = useState(null);
+  const loggedRoundRef = useRef(null);
+  useEffect(() => {
+    if (!session || session.pos < session.target) return;
+    if (!session.startedAt || session.label || session.buffer) return;
+    if (loggedRoundRef.current === session.startedAt) return; // 同じ完了を二重記録しない
+    loggedRoundRef.current = session.startedAt;
+    const target = session.requestedTarget || session.target;
+    const ms = Date.now() - session.startedAt;
+    const count = session.pos;
+    loadRoundLog().then((log) => {
+      const prev = previousForTarget(log, target, session.startedAt);
+      setLastRoundInfo({ target, count, ms, prev });
+      appendRoundLog({ target, count, ms, at: session.startedAt });
+    });
+  }, [session]);
 
   // 開始ボタン共通の無効化条件（10・60・300・900のTARGETSボタンと、
   // 時間計画（3分の2バッファ術）の開始ボタンの両方で使う。以前は後者だけ
@@ -521,6 +541,20 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             </p>
           )}
           <p className="view-desc" style={{ textAlign: 'center' }}>{doneDesc}</p>
+          {isStandardSession && lastRoundInfo && lastRoundInfo.target === requested && (
+            <p className="inline-note" style={{ textAlign: 'center' }}>
+              ⏱ 所要時間 {formatDuration(lastRoundInfo.ms)}
+              {lastRoundInfo.prev && (() => {
+                const pct = speedupPct(lastRoundInfo.ms, lastRoundInfo.count, lastRoundInfo.prev.ms, lastRoundInfo.prev.count);
+                if (pct == null) return null;
+                return pct > 0
+                  ? `（前回の${requested}問より1問あたり${pct}%短縮）`
+                  : pct < 0
+                  ? `（前回の${requested}問より1問あたり${Math.abs(pct)}%遅くなっています）`
+                  : `（前回の${requested}問とほぼ同じペース）`;
+              })()}
+            </p>
+          )}
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
             {onGoAudio && (

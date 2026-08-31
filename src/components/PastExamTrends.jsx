@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
-import { overview, subjectBreakdown, genreFrequency, tagFrequency, subjectPriority } from '../lib/pastExamTrends.js';
+import { overview, subjectBreakdown, genreFrequency, tagFrequency, subjectPriority, rankBreakdown } from '../lib/pastExamTrends.js';
 import { formatRound } from '../lib/round.js';
 
 // 鍼灸過去問題の傾向と対策（Home画面から）。
 // 収録済みの過去問データ（round・tags・genre）を実際に集計し、頻出テーマ・頻出キーワードを
 // データドリブンに可視化する（「感覚」ではなく実データの頻度に基づく）。
 export default function PastExamTrends({ store, onStartQuiz, onOpenKeyword }) {
-  const { questions, links } = store;
+  const { questions, links, srs } = store;
   const ov = useMemo(() => overview(questions), [questions]);
   const bySubject = useMemo(() => subjectBreakdown(questions), [questions]);
   const topGenres = useMemo(() => genreFrequency(questions, { limit: 12 }), [questions]);
   const topTags = useMemo(() => tagFrequency(questions, links, { limit: 20 }), [questions, links]);
   const priority = useMemo(() => subjectPriority(questions, { limit: 6 }), [questions]);
+  const ranks = useMemo(() => rankBreakdown(questions, srs), [questions, srs]);
   const [showAllGenres, setShowAllGenres] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
 
@@ -22,6 +23,10 @@ export default function PastExamTrends({ store, onStartQuiz, onOpenKeyword }) {
   };
   const studyTag = (t) => {
     const qs = t.questionIds.map((id) => byId[id]).filter(Boolean);
+    if (qs.length && onStartQuiz) onStartQuiz(qs);
+  };
+  const studyRank = (r) => {
+    const qs = r.questionIds.map((id) => byId[id]).filter(Boolean);
     if (qs.length && onStartQuiz) onStartQuiz(qs);
   };
 
@@ -113,6 +118,34 @@ export default function PastExamTrends({ store, onStartQuiz, onOpenKeyword }) {
           </button>
         )}
       </div>
+
+      {/* A/B/Cランク別の達成率 */}
+      {ranks.some((r) => r.total > 0) && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>ランク別の○率（マスター済みの割合）</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            上の「頻出テーマ」と同じ出題回数を基準に、A（3回以上出題）／B（2回出題）／C（1回のみ出題）へ分けています。
+            Aランクほど落とせないテーマなので、○率を高く保つことを優先してください。
+          </p>
+          <ul className="wrong-list">
+            {ranks.filter((r) => r.total > 0).map((r) => {
+              const pct = r.rate == null ? null : Math.round(r.rate * 100);
+              return (
+                <li key={r.id}>
+                  <span className="wl-ans">{pct == null ? '－' : `${pct}%`}</span>
+                  <span className="wl-q">
+                    <strong>{r.label}</strong>｜{r.hint}
+                    <span className="hint" style={{ display: 'block' }}>
+                      マスター済み {r.mastered}/{r.total}問
+                    </span>
+                  </span>
+                  <button className="btn ghost sm" onClick={() => studyRank(r)}>この{r.total}問を解く</button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* 頻出キーワード */}
       <div className="card">

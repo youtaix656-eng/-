@@ -49,6 +49,14 @@ function notify(title, body) {
 
 const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
+// 科目の重さ・場面別プリセット（ワンタップで勉強/短い休憩の分数を切り替える）。
+// 長い休憩・サイクル回数は個人差が大きいのでプリセットに含めず、既存の設定のまま残す。
+const POMO_PRESETS = [
+  { id: 'heavy', label: '重い科目（25+5）', study: 25, shortBreak: 5, hint: '解剖学・生理学など、じっくり読み解く科目向け' },
+  { id: 'light', label: '軽い科目（15+5）', study: 15, shortBreak: 5, hint: '一問一答の反復など、テンポよく回す科目向け' },
+  { id: 'gap', label: '隙間時間（10分×3）', study: 10, shortBreak: 3, hint: '通勤・休憩の合間など、短時間だけ確保できる時' },
+];
+
 export default function Pomodoro({ store, onToast }) {
   const cfg = store.settings.pomodoro || {};
   const { updateSettings } = store;
@@ -262,6 +270,18 @@ export default function Pomodoro({ store, onToast }) {
 
       {open && (
         <div className="pomo-config">
+          <div className="chip-row" style={{ marginBottom: 8 }}>
+            {POMO_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                className={`chip ${cfg.study === p.study && cfg.shortBreak === p.shortBreak ? 'active' : ''}`}
+                onClick={() => setCfg({ study: p.study, shortBreak: p.shortBreak })}
+                title={p.hint}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <div className="pomo-config-grid">
             <label>勉強（分）
               <input type="number" min="1" max="180" value={cfg.study || 25} onChange={(e) => setCfg({ study: Math.max(1, +e.target.value || 1) })} />
