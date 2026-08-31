@@ -8,7 +8,7 @@ import type { AppState, Settings } from '../src/types/index.js';
 const AT = new Date(2026, 7, 21, 9, 5).getTime();
 const settings: Settings = {
   shiftEndDefault: '00:00', bedWithinMinutes: 90, offDayBedtime: '23:00',
-  audioLinkEnabled: false, audioLinkUrl: '', showStreakProminently: false,
+  audioLinkEnabled: false, audioLinkUrl: '', showStreakProminently: false, meditationBell: true, meditationDefaultMinutes: 10,
 };
 const state: AppState = { version: 1, habits: buildDefaultHabits(AT), days: {}, weeks: {}, cycles: [], settings };
 

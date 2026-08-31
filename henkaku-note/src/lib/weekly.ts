@@ -14,6 +14,7 @@
 import { weekDays, startOfWeek, diffDays, addDays } from './date.js';
 import { completionRate, habitsForDate } from './habits.js';
 import { bedtimeSummary } from './shift.js';
+import { summarize as summarizeMeditation } from './meditation.js';
 import type { DayRecord, Habit, Settings, WeeklyReview } from '../types/index.js';
 
 export const REVIEW_TEXT_MAX = 400;
@@ -78,6 +79,8 @@ export interface WeekSummary {
   workDays: number;
   offDays: number;
   bedtime: ReturnType<typeof bedtimeSummary>;
+  /** 瞑想。主役は「した日数」（量より継続の一貫性） */
+  meditation: ReturnType<typeof summarizeMeditation>;
 }
 
 /**
@@ -125,6 +128,7 @@ export function buildWeekSummary(
     workDays: records.filter((r) => r.shift === 'work').length,
     offDays: records.filter((r) => r.shift === 'off').length,
     bedtime: bedtimeSummary(records, settings),
+    meditation: summarizeMeditation(Object.fromEntries(keys.map((k) => [k, days[k]?.meditations]))),
   };
 }
 
@@ -142,6 +146,9 @@ export function managerHint(summary: WeekSummary, review: WeeklyReview | undefin
   if (summary.recordedDays === 0) return '今週は記録がありません。まずは1日ぶんだけ、チェックを付ける日を決めてみてください。';
   if (summary.workDays >= 5 && summary.averageRate < 0.5) {
     return `勤務が${summary.workDays}日ある週でした。この週に同じ量を置いたこと自体が重かったかもしれません。勤務日は項目を絞る前提で組み直せます。`;
+  }
+  if (summary.meditation.days >= 1 && summary.meditation.days <= 3 && summary.recordedDays >= 5) {
+    return `瞑想は${summary.meditation.days}日でした。長さを伸ばすより、短くても置く日を増やすほうが効くとされています。来週は3分の枠を毎日置いてみてください。`;
   }
   if (summary.averageRate >= 0.8) return '計画と実態が合っていた週です。この週の組み方をメモに残しておくと、次に再現できます。';
   return '達成できなかった項目は、量ではなく「置いた時間帯」が合っていないことがあります。時間帯を1つ動かすところから試せます。';

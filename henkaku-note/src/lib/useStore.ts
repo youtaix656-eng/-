@@ -8,6 +8,7 @@ import { DEFAULT_AUDIO_URL } from './audioLink.js';
 import { startOfWeek, toKey } from './date.js';
 import { emptyReview, isReviewWritten, reviewCheckDate } from './weekly.js';
 import { WEEKLY_REVIEW_HABIT_ID } from './habits.js';
+import { MEDITATION_HABIT_ID } from '../data/presets.js';
 import type { AppState, DayRecord, Habit, Settings, WeeklyReview, Cycle } from '../types/index.js';
 
 export const STATE_VERSION = 1;
@@ -20,6 +21,8 @@ export function defaultSettings(): Settings {
     audioLinkEnabled: false,
     audioLinkUrl: DEFAULT_AUDIO_URL,
     showStreakProminently: false,
+    meditationBell: true,
+    meditationDefaultMinutes: 10,
   };
 }
 
@@ -57,6 +60,7 @@ export function emptyDay(date: string, at: number): DayRecord {
     shift: null,
     shiftEndsAt: null,
     sleep: null,
+    meditations: [],
     updatedAt: at,
   };
 }
@@ -100,6 +104,27 @@ export const actions = {
   setSleep(date: string, sleep: DayRecord['sleep']) {
     set((s) => withDay(s, date, (d) => ({ ...d, sleep })));
   },
+  /** 瞑想を1回ぶん記録する（長さより「やった日」を数えるが、長さも残す） */
+  addMeditation(date: string, minutes: number) {
+    if (!(minutes > 0)) return;
+    set((s) => {
+      const hasHabit = s.habits.some((h) => h.id === MEDITATION_HABIT_ID && h.archivedAt === null);
+      return withDay(s, date, (d) => ({
+        ...d,
+        meditations: [...(d.meditations ?? []), { minutes: Math.round(minutes), recordedAt: Date.now() }],
+        // 記録したのに習慣が未チェックのままだと二度手間になるので、ここで入れる
+        checked: hasHabit && !d.checked.includes(MEDITATION_HABIT_ID) ? [...d.checked, MEDITATION_HABIT_ID] : d.checked,
+      }));
+    });
+  },
+  removeMeditation(date: string, index: number) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        meditations: (d.meditations ?? []).filter((_, i) => i !== index),
+      })),
+    );
+  },
   clearDay(date: string) {
     set((s) => {
       const days = { ...s.days };
@@ -130,6 +155,14 @@ export const actions = {
         days[key] = d.checked.includes(id) ? { ...d, checked: d.checked.filter((x) => x !== id) } : d;
       }
       return { ...s, habits: s.habits.filter((h) => h.id !== id), days };
+    });
+  },
+  /** プリセットから習慣を足す（すでにあれば休止を解除するだけ） */
+  addPresetHabit(habit: Habit) {
+    set((s) => {
+      const exists = s.habits.find((h) => h.id === habit.id);
+      if (exists) return { ...s, habits: s.habits.map((h) => (h.id === habit.id ? { ...h, archivedAt: null } : h)) };
+      return { ...s, habits: [...s.habits, habit] };
     });
   },
   resetHabitsToDefault() {

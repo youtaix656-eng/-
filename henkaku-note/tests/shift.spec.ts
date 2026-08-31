@@ -13,6 +13,8 @@ const settings: Settings = {
   audioLinkEnabled: false,
   audioLinkUrl: '',
   showStreakProminently: false,
+  meditationBell: true,
+  meditationDefaultMinutes: 10,
 };
 
 function day(over: Partial<DayRecord> = {}): DayRecord {
