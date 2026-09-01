@@ -626,7 +626,7 @@ export default function App() {
           />
         );
       case 'g100guide':
-        return <G100Guide onNavigate={setView} />;
+        return <G100Guide store={store} onNavigate={setView} />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':
