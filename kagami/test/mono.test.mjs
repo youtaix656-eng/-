@@ -90,9 +90,30 @@ test('飾りの SVG に色を書かない（周りの文字の色を受け継ぐ
   assert.doesNotMatch(src, /fill="(?!currentColor|none)[^"]+"/, 'fill は currentColor か none だけ');
 });
 
-test('飾りは画像ファイルを持たない（その場で線を引く）', () => {
+test('画像を使うのは地の面だけ（飾りはその場で線を引く）', () => {
+  // 2026-08-30 ユーザー了承：地に敷く面（src/assets/figures/*.webp）だけは画像で持つ。
+  // それ以外は今までどおり、その場で線を引く（読み込む量を増やさないため）。
   for (const f of srcFiles()) {
     const src = read(f);
-    assert.doesNotMatch(src, /\.(png|jpe?g|gif|webp|avif)\b/i, `${f}: 画像ファイルを参照しています`);
+    const hits = (src.match(/[\w./-]+\.(png|jpe?g|gif|webp|avif)\b/gi) || [])
+      .filter((x) => !x.includes('assets/figures/'));
+    assert.deepEqual(hits, [], `${f}: 地の面以外で画像ファイルを参照しています`);
   }
+});
+
+test('地の面は灰色だけで描く（絵にも色を入れない）', () => {
+  // 説明の行（// ではじまる）を除いた、実際の処理だけを見る
+  const gen = read('tools/draw-figures.js')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  // 使ってよいのは g()（灰色を組み立てるもの）だけ。生の色指定を書かない
+  assert.doesNotMatch(gen, /#[0-9a-fA-F]{3,8}\b/, '色が直接書かれています');
+  assert.doesNotMatch(gen, /hsla?\(/, 'hsl() は使わない');
+  for (const m of gen.match(/rgba?\([^)]*\)/g) || []) {
+    // g() の中の組み立て（テンプレート文字列）だけは許す
+    assert.match(m, /\$\{v\},\$\{v\},\$\{v\}/, `${m}: 灰色ではない色があります`);
+  }
+  const named = /(?:^|[\s:'"(])(red|blue|green|orange|yellow|purple|pink|brown|gold|teal|navy|cyan|magenta|crimson)\b/i;
+  assert.doesNotMatch(gen, named, '色の名前が使われています');
 });

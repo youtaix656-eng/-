@@ -558,7 +558,7 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
 .quote { max-height: 320px; overflow: auto; }
 
 /* ── 地に敷く面（おもて。開くたびに変わる）──────────
- * **画像ファイルを持たない**——`components/Figures.jsx` がその場で線を引く。
+ * 絵は `tools/draw-figures.js` が焼いた灰色だけの画像（src/assets/figures/*.webp）。
  * **文字の下に濃く敷かない。** 読みにくくなった時点で、雰囲気のために
  * 中身を犠牲にしている（飾りの共通ルール）。 */
 .figure-bg {
@@ -567,16 +567,22 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
   z-index: 0;
   pointer-events: none;
   color: var(--ink);
-  opacity: 0.3;
+  opacity: 0.55;
   overflow: hidden;
   /* 上を濃く、文字の多い下ほど薄く落とす */
   -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.85) 42%, rgba(0, 0, 0, 0.4) 72%, rgba(0, 0, 0, 0.16) 100%);
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.85) 42%, rgba(0, 0, 0, 0.4) 72%, rgba(0, 0, 0, 0.16) 100%);
 }
-.figure-bg svg { width: 100%; height: 100%; display: block; }
+.figure-bg img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: 50% 0;
+}
 .app > .figure-bg { z-index: 0; }
 
 /* 動きを減らす設定の端末では、いっそう控えめにする */
 @media (prefers-reduced-motion: reduce) {
-  .figure-bg { opacity: 0.22; }
+  .figure-bg { opacity: 0.42; }
 }

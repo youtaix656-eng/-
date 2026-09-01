@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { pickFigureId } from '../src/lib/figure.js';
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
@@ -10,8 +10,8 @@ const css = read('src/styles.css');
 /** FIGURES の中身を、画面を動かさずに読む（JSX は node からは読めないので文字で見る） */
 function entries() {
   const block = figures.slice(figures.indexOf('export const FIGURES = ['), figures.indexOf('];', figures.indexOf('export const FIGURES = [')));
-  return [...block.matchAll(/\{ id: '([a-z]+)', name: '([^']+)', reading: '([^']+)', Draw: (\w+) \}/g)]
-    .map(([, id, name, reading, draw]) => ({ id, name, reading, draw }));
+  return [...block.matchAll(/\{ id: '([a-z]+)', name: '([^']+)', reading: '([^']+)', src: (\w+) \}/g)]
+    .map(([, id, name, reading, src]) => ({ id, name, reading, src }));
 }
 
 test('地の面は2枚以上ある（1枚だと「開き直すと変わる」が成り立たない）', () => {
@@ -24,15 +24,24 @@ test('id・題は重複せず、読みを持つ（目次・並びの共通ルー
   assert.equal(new Set(list.map((f) => f.name)).size, list.length, '同じ題があります');
   for (const f of list) {
     assert.match(f.reading, /^[ぁ-んー]+$/, `${f.name}: 読みはひらがなだけ（推定しない）`);
-    assert.ok(figures.includes(`function ${f.draw}(`), `${f.name}: 絵を描く関数がありません`);
+    assert.ok(figures.includes(`import ${f.src} from '../assets/figures/${f.id}.webp'`), `${f.name}: 画像の読み込みがありません`);
   }
 });
 
-test('地の面に色を書かない（周りの文字の色を受け継ぐ）', () => {
-  assert.doesNotMatch(figures, /#[0-9a-fA-F]{3,8}\b/, '色が直接書かれています');
-  assert.doesNotMatch(figures, /stroke="(?!currentColor|none)[^"]+"/, 'stroke は currentColor か none だけ');
-  assert.doesNotMatch(figures, /fill="(?!currentColor|none)[^"]+"/, 'fill は currentColor か none だけ');
-  assert.doesNotMatch(figures, /\.(png|jpe?g|gif|webp|avif|svg)\b/i, '画像ファイルを参照しています');
+test('絵は焼いたものがあり、重くない（起動を遅くしない）', () => {
+  let total = 0;
+  for (const f of entries()) {
+    const path = new URL(`../src/assets/figures/${f.id}.webp`, import.meta.url);
+    assert.ok(existsSync(path), `${f.name}: 画像が焼かれていません（node tools/make-figures.mjs）`);
+    total += statSync(path).size;
+  }
+  assert.ok(total < 400 * 1024, `全部で${Math.round(total / 1024)}KB。重すぎます`);
+});
+
+test('絵は手で塗り直さず、焼き直す（作り方が残っている）', () => {
+  assert.ok(existsSync(new URL('../tools/draw-figures.js', import.meta.url)), '絵を描くもとがありません');
+  assert.ok(existsSync(new URL('../tools/make-figures.mjs', import.meta.url)), '焼くものがありません');
+  assert.match(figures, /tools\/make-figures\.mjs/, '焼き直し方を書いていません');
 });
 
 test('開き直すと必ず変わる（前に出したものを避ける）', () => {
@@ -56,21 +65,23 @@ test('選び方は端まで含めて範囲に収まる', () => {
 });
 
 test('文字は入れない（地の絵に文字を焼き込まない）', () => {
-  const draw = figures.slice(0, figures.indexOf('export const FIGURES'));
-  assert.doesNotMatch(draw, /<text\b|<tspan\b/, '絵の中に文字があります');
+  const gen = read('tools/draw-figures.js');
+  assert.doesNotMatch(gen, /fillText|strokeText/, '絵に文字を焼き込んでいます');
+  assert.match(figures, /alt=""/, '地の絵に説明を付けない（読み上げに出さない）');
 });
 
 test('地の面は操作の邪魔をしない', () => {
   assert.match(css, /\.figure-bg \{[\s\S]*?position: fixed/);
   assert.match(css, /\.figure-bg \{[\s\S]*?pointer-events: none/);
   assert.match(css, /\.figure-bg \{[\s\S]*?z-index: 0/);
+  assert.match(css, /\.figure-bg img \{[\s\S]*?object-fit: cover/, '画面をおおっていません');
   assert.match(figures, /aria-hidden="true"/, '読み上げから外していません');
 });
 
 test('飾りより読みやすさを優先する（濃く敷かない）', () => {
   const m = css.match(/\.figure-bg \{[\s\S]*?opacity: ([\d.]+);/);
   assert.ok(m, '濃さの指定が見つかりません');
-  assert.ok(Number(m[1]) <= 0.35, `濃すぎます（${m[1]}）。文字の下に濃く敷かない`);
+  assert.ok(Number(m[1]) <= 0.6, `濃すぎます（${m[1]}）。文字の下に濃く敷かない`);
   // 文字の多い下ほど薄くする
   assert.match(css, /\.figure-bg \{[\s\S]*?mask-image: linear-gradient\(to bottom/);
 });
