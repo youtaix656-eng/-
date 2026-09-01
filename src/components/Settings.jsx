@@ -22,6 +22,8 @@ import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 import { downloadFile } from '../lib/download.js';
 import { exportHistoryCsv } from '../lib/historyExport.js';
+import { loadMissTypes } from '../lib/missTypes.js';
+import { loadSelfKindCounts } from '../lib/starWeak.js';
 import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 
 // 設定・問題データ管理画面
@@ -471,7 +473,10 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         </p>
         <button
           className="btn"
-          onClick={() => downloadFile(exportHistoryCsv(history, questions), 'shinkyu_history.csv', 'text/csv')}
+          onClick={async () => {
+            const [missTypes, selfKindCounts] = await Promise.all([loadMissTypes(), loadSelfKindCounts()]);
+            downloadFile(exportHistoryCsv(history, questions, { missTypes, selfKindCounts }), 'shinkyu_history.csv', 'text/csv');
+          }}
         >
           解答履歴をCSVで保存
         </button>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { loadMissTypes, missTypeLabel } from '../lib/missTypes.js';
 import { weekKeyOf, buildWeeklyReport, loadWeeklyNotes, saveWeeklyNote } from '../lib/weeklyJournal.js';
+import { loadRoundLog } from '../lib/roundLog.js';
 import { formatPercent } from '../lib/stats.js';
 
 function formatWeekLabel(weekKeyStr) {
@@ -16,11 +17,13 @@ function formatWeekLabel(weekKeyStr) {
 export default function WeeklyJournal({ store, onNavigate }) {
   const { history, questions, links } = store;
   const [missTypes, setMissTypes] = useState({});
+  const [roundLog, setRoundLog] = useState([]);
   const [notes, setNotes] = useState({});
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  useEffect(() => { loadRoundLog().then(setRoundLog); }, []);
   useEffect(() => {
     loadWeeklyNotes().then((all) => {
       setNotes(all);
@@ -30,8 +33,8 @@ export default function WeeklyJournal({ store, onNavigate }) {
   }, []);
 
   const report = useMemo(
-    () => buildWeeklyReport(history, missTypes, questions, links),
-    [history, missTypes, questions, links]
+    () => buildWeeklyReport(history, missTypes, questions, links, Date.now(), roundLog),
+    [history, missTypes, questions, links, roundLog]
   );
 
   const thisWeekKey = weekKeyOf();
@@ -83,6 +86,13 @@ export default function WeeklyJournal({ store, onNavigate }) {
             {report.trend && (
               <p className="inline-note" style={{ marginTop: 4 }}>
                 最近増えている誤答理由は「{missTypeLabel(report.trend.type)}」です（直近7日で{report.trend.count}件）。
+              </p>
+            )}
+            {report.speedup300 != null && (
+              <p className="inline-note" style={{ marginTop: 4, color: report.speedup300 >= 0 ? 'var(--correct)' : undefined }}>
+                {report.speedup300 >= 0
+                  ? `300問1周の速さが前回より${report.speedup300}%縮んでいます。`
+                  : `300問1周の速さが前回より${-report.speedup300}%遅くなっています。`}
               </p>
             )}
             {report.weakTags.length > 0 && (

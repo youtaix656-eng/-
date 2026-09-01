@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { previousForTarget, formatDuration, speedupPct, countForTarget } from '../src/lib/roundLog.js';
+import { previousForTarget, formatDuration, speedupPct, countForTarget, latestSpeedup } from '../src/lib/roundLog.js';
 
 test('previousForTarget: 同じtargetで最新のものを返す', () => {
   const log = [
@@ -56,4 +56,18 @@ test('countForTarget: 同じtargetの完了回数を数える（通算◯回目�
   assert.equal(countForTarget(log, 10), 1);
   assert.equal(countForTarget(log, 60), 0);
   assert.equal(countForTarget([], 900), 0);
+});
+
+test('latestSpeedup: 同じtargetの直近2回を比べる（他のtargetは無視）', () => {
+  const log = [
+    { target: 300, ms: 60000, count: 300, at: 1 },
+    { target: 900, ms: 999999, count: 900, at: 2 }, // 別target。混ざらないことを確認
+    { target: 300, ms: 30000, count: 300, at: 3 },
+  ];
+  assert.equal(latestSpeedup(log, 300), 50); // 半分の時間になった＝50%短縮
+});
+
+test('latestSpeedup: 記録が2回未満ならnull', () => {
+  assert.equal(latestSpeedup([{ target: 300, ms: 1, count: 1, at: 1 }], 300), null);
+  assert.equal(latestSpeedup([], 300), null);
 });

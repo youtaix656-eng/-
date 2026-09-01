@@ -30,3 +30,15 @@ test('buildExperienceDraft: 得意/苦手モードなど午前午後以外の模
   const out = buildExperienceDraft({ examResults });
   assert.ok(!out.includes('99%'));
 });
+
+test('buildExperienceDraft: 模試が6回以上あればスコアの安定判定の一文が入る', () => {
+  const examResults = [82, 80, 78, 60, 58, 59].map((scorePct, i) => ({ mode: 'am', scorePct, at: i }));
+  const out = buildExperienceDraft({ examResults });
+  assert.match(out, /安定して得点できるようになりました/);
+});
+
+test('buildExperienceDraft: 模試が3回未満なら安定判定の一文は入らない', () => {
+  const examResults = [{ mode: 'am', scorePct: 70 }, { mode: 'am', scorePct: 72 }];
+  const out = buildExperienceDraft({ examResults });
+  assert.ok(!out.includes('安定'));
+});

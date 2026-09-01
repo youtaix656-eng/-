@@ -51,3 +51,13 @@ export function speedupPct(curMs, curCount, prevMs, prevCount) {
   if (prevPerQ <= 0) return null;
   return Math.round(((prevPerQ - curPerQ) / prevPerQ) * 100);
 }
+
+// 同じtargetの直近2回を比べた短縮率（これまでSession.jsxの完了画面にしか出ておらず、
+// 週次ジャーナルや合格体験記の下書きでは使われていなかった「成長の数字」）。
+// 記録が2回未満ならnull。
+export function latestSpeedup(log, target) {
+  const matches = (log || []).filter((e) => e.target === target).sort((a, b) => b.at - a.at);
+  if (matches.length < 2) return null;
+  const [latest, prev] = matches;
+  return speedupPct(latest.ms, latest.count, prev.ms, prev.count);
+}

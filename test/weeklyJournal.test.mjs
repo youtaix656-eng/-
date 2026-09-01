@@ -79,3 +79,17 @@ test('buildWeeklyReport: trendはmissTypeTrendをそのまま返す（データ�
   const out = buildWeeklyReport([], {}, [], {}, Date.now());
   assert.equal(out.trend, null); // missTypesが空＝母数不足でnull
 });
+
+test('buildWeeklyReport: roundLogを渡すと300問1周の短縮率が出る', () => {
+  const roundLog = [
+    { target: 300, ms: 60000, count: 300, at: 1 },
+    { target: 300, ms: 30000, count: 300, at: 2 },
+  ];
+  const out = buildWeeklyReport([], {}, [], {}, Date.now(), roundLog);
+  assert.equal(out.speedup300, 50);
+});
+
+test('buildWeeklyReport: roundLogを渡さなければspeedup300はnull（後方互換）', () => {
+  const out = buildWeeklyReport([], {}, [], {}, Date.now());
+  assert.equal(out.speedup300, null);
+});

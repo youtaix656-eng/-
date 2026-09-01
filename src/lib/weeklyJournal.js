@@ -7,6 +7,7 @@ import { idbGet, idbSet } from './db.js';
 import { weakTagClusters } from './weakClusters.js';
 import { latestMissType, missTypeTrend } from './missTypes.js';
 import { tagFrequency } from './pastExamTrends.js';
+import { latestSpeedup } from './roundLog.js';
 
 const KEY = 'shinkyu:weeklyJournal'; // { [weekKey]: { note, at } }
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -37,7 +38,9 @@ export async function saveWeeklyNote(weekKey, note) {
 }
 
 // 直近7日間（現在時刻を含む、当日を含む）の解答から週報を自動生成する
-export function buildWeeklyReport(history = [], missTypes = {}, questions = [], links = {}, now = Date.now()) {
+// roundLogは省略可（後方互換）。渡すと「300問1周の速度」がSession.jsxの完了画面だけでなく
+// 週報にも出るようになる（周回速度は成長を示す数字なのに、これまで週報では使われていなかった）。
+export function buildWeeklyReport(history = [], missTypes = {}, questions = [], links = {}, now = Date.now(), roundLog = []) {
   const since = now - WEEK_MS;
   const weekHistory = history.filter((h) => h.at >= since);
   const total = weekHistory.length;
@@ -63,5 +66,8 @@ export function buildWeeklyReport(history = [], missTypes = {}, questions = [], 
   // 両方返す（片方が他方の下位互換ではない）。
   const trend = missTypeTrend(missTypes, now);
 
-  return { since, total, correct, accuracy, wrongCount: wrongIds.length, typeCounts, topType, weakTags: weakTagsRanked, trend };
+  // 300問1周の速度が前回より縮んでいるか（roundLog.jsのlatestSpeedup。1問あたりの所要時間で比較）
+  const speedup300 = latestSpeedup(roundLog, 300);
+
+  return { since, total, correct, accuracy, wrongCount: wrongIds.length, typeCounts, topType, weakTags: weakTagsRanked, trend, speedup300 };
 }
