@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { coverageBySubject, coverageLevel, coverageSummary, EXAM_SESSIONS } from '../lib/coverage.js';
 import { integratedCoverage } from '../lib/integratedCoverage.js';
 import { EXAM_BLUEPRINTS } from '../data/examBlueprint.js';
+import { daikoumokuRank } from '../lib/pastExamTrends.js';
 
 const LEVEL_LABEL = { none: '未収録', thin: '手薄', ok: '収録あり', rich: '充実' };
+const RANK_BADGE = { A: '🔥A', B: '🔥B' };
 
 // 網羅マップ・ダッシュボード（#1）
 // 「出題基準の大項目 × 収録数」を全13科目で俯瞰し、手薄な所を色で可視化する。
@@ -12,6 +14,9 @@ export default function CoverageMap({ store, onStartSubject }) {
   const rows = useMemo(() => coverageBySubject(questions, history), [questions, history]);
   const summary = useMemo(() => coverageSummary(rows), [rows]);
   const integrated = useMemo(() => integratedCoverage(questions, EXAM_BLUEPRINTS), [questions]);
+  // 大項目ごとに「過去問での頻出度（A/B/C）」を重ねる（pastExamTrends.jsのAランク集計と同じ基準）。
+  // これまで網羅マップは収録数だけを見ており、「手薄なのに頻出」を見分けられなかった。
+  const daiRank = useMemo(() => daikoumokuRank(questions), [questions]);
   const [openId, setOpenId] = useState(null);
 
   const bySession = (sid) => rows.filter((r) => r.session === sid);
@@ -119,8 +124,15 @@ export default function CoverageMap({ store, onStartSubject }) {
                           {r.groups.map((g) => {
                             const ratio = g.count / maxG;
                             const glv = ratio >= 0.66 ? 'rich' : ratio >= 0.33 ? 'ok' : 'thin';
+                            const rank = daiRank.get(`${r.name}|${g.name}`);
+                            const badge = RANK_BADGE[rank];
                             return (
-                              <span className={`cov-chip lv-${glv}`} key={g.name} title={`${g.count}問`}>
+                              <span
+                                className={`cov-chip lv-${glv}`}
+                                key={g.name}
+                                title={badge ? `${g.count}問・過去問${rank}ランク（頻出）` : `${g.count}問`}
+                              >
+                                {badge && <span style={{ marginRight: 2 }}>{badge}</span>}
                                 {g.name}
                                 <b>{g.count}</b>
                               </span>

@@ -86,7 +86,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   const level = estimateLevel({ srs, history });
   const focusSubjects = useMemo(() => {
     const scope = scopeCoverage(questions, history);
-    return todayFocusSubjects(scope, daysUntil(settings.examDate));
+    return todayFocusSubjects(scope, daysUntil(settings.examDate), { questions });
   }, [questions, history, settings.examDate]);
   const reviewCount = reviewQuestions.length;
   const dueCount = (dueReviewQuestions || []).length;

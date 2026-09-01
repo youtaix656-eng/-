@@ -54,3 +54,28 @@ test('buildWeeklyReport: 解答が無ければaccuracyはnull', () => {
   assert.equal(out.accuracy, null);
   assert.equal(out.topType, null);
 });
+
+test('buildWeeklyReport: 弱点タグに過去問の出題回数（roundCount）が付く', () => {
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  const questions = [
+    { id: 'a', subject: 'X', tags: ['頻出語'], round: 30 },
+    { id: 'b', subject: 'X', tags: ['頻出語'], round: 31 },
+    { id: 'c', subject: 'X', tags: ['頻出語'], round: 32 },
+    { id: 'd', subject: 'X', tags: ['レア語'], round: 30 },
+  ];
+  const history = [
+    { questionId: 'a', correct: false, at: now - DAY, subject: 'X' },
+    { questionId: 'd', correct: false, at: now - DAY, subject: 'X' },
+  ];
+  const out = buildWeeklyReport(history, {}, questions, {}, now);
+  const freq = out.weakTags.find((w) => w.tag === '頻出語');
+  const rare = out.weakTags.find((w) => w.tag === 'レア語');
+  assert.equal(freq.roundCount, 3); // 3回にまたがって出題＝頻出
+  assert.equal(rare.roundCount, 1); // 1回のみ＝頻出ではない
+});
+
+test('buildWeeklyReport: trendはmissTypeTrendをそのまま返す（データ不足ならnull）', () => {
+  const out = buildWeeklyReport([], {}, [], {}, Date.now());
+  assert.equal(out.trend, null); // missTypesが空＝母数不足でnull
+});

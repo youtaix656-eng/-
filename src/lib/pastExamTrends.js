@@ -8,35 +8,9 @@
 import { effectiveTags } from './query.js';
 import { roundKey } from './round.js';
 import { normalize, MASTER_STREAK } from './srs.js';
+import { genreOf, daikoumoku } from './genreClassification.js';
 
-// 医療概論だけは genre（出題基準カテゴリ）を持たない設計（過去の変更でtagsへ折り込み済み。
-// 音声学習のジャンル検索でも医療概論だけ q.genre を使わない、というCLAUDE.md記載の仕様と同じ線）。
-// そのため genreFrequency 等の「頻出ジャンル」集計から医療概論だけが丸ごと抜け落ちていた
-// （Aランク○率の判定にも使われるため、医療概論の問題が一度もAランク判定に入らない状態だった）。
-// tags には元々「大項目」「中項目」の名称がキーワードと一緒に含まれているので、
-// データファイルを変更せず、既知の出題基準（examScope.jsのoutline）と照合して
-// tags から大項目｜中項目を復元する。復元できない場合は今までどおり集計対象から外す
-// （当てずっぽうな分類はしない）。
-const IRYOU_OUTLINE = {
-  '現代の医療と社会': ['医療と社会', '医療従事者', '医療・福祉施設', '医療経済'],
-  '社会保障制度': ['医療保険のしくみ', '公費負担医療', '介護サービス行政'],
-  '医療倫理': ['医療の倫理', '医療倫理教育', '施術者としての倫理'],
-};
-function iryouGenreFromTags(tags) {
-  const set = new Set(tags || []);
-  for (const [dai, mids] of Object.entries(IRYOU_OUTLINE)) {
-    if (!set.has(dai)) continue;
-    const mid = mids.find((m) => set.has(m));
-    if (mid) return `${dai}｜${mid}`;
-  }
-  return null;
-}
-// 問題1件のジャンル（大項目｜中項目）。genreがあればそのまま、無くて医療概論ならtagsから復元する。
-export function genreOf(q) {
-  if (q.genre) return q.genre;
-  if (q.subject === '医療概論') return iryouGenreFromTags(q.tags);
-  return null;
-}
+export { genreOf };
 
 export function pastExamQuestions(questions) {
   return questions.filter((q) => q.round != null);
@@ -165,4 +139,21 @@ export function rankBreakdown(questions, srs, { subject = null } = {}) {
     }
     return { ...def, total, mastered, rate: total > 0 ? mastered / total : null, questionIds: Array.from(ids) };
   });
+}
+
+// 科目｜大項目 ごとの最頻ランク（A/B/C）。同じ大項目に複数の中項目（ジャンル）があれば、
+// そのうち最も出題回数が多い中項目のランクを大項目の代表値として採用する。
+// 網羅マップ（CoverageMap.jsx）の大項目チップに「頻出かどうか」を重ねて見せるために使う
+// （網羅マップは収録数だけを見ており、頻出度は別画面のpastExamTrendsにしか無かった）。
+export function daikoumokuRank(questions) {
+  const genres = genreFrequency(questions, { limit: 9999 });
+  const best = new Map(); // "subject|daikoumoku" -> 最大roundCount
+  for (const g of genres) {
+    const key = `${g.subject}|${daikoumoku(g.genre)}`;
+    const cur = best.get(key) || 0;
+    if (g.roundCount > cur) best.set(key, g.roundCount);
+  }
+  const result = new Map();
+  for (const [key, roundCount] of best.entries()) result.set(key, rankIdFor(roundCount));
+  return result;
 }

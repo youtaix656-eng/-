@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { forgettingRisk } from '../lib/forgetting.js';
 import { hardestItems } from '../lib/difficulty.js';
-import { loadMissTypes, MISS_TYPES, missTypeLabel, latestMissType } from '../lib/missTypes.js';
+import { loadMissTypes, MISS_TYPES, missTypeLabel, latestMissType, missTypeTrend, missTypeAnomaly } from '../lib/missTypes.js';
+import { tagFrequency } from '../lib/pastExamTrends.js';
 
 // 学習インサイト（#6 忘却予測 / #7 弱点クラスタリング / #8 難易度推定 の可視化）。
 //   解答履歴と復習状態から「弱いテーマ・近く忘れそう・難しい問題」を自動抽出して表示する。
@@ -25,6 +26,16 @@ export default function InsightsSection({ store }) {
     return c;
   }, [missTypes]);
   const typeTotal = Object.values(typeCounts).reduce((a, b) => a + b, 0);
+  // 誤答理由の傾向（最近増えている型）・急増検知（今日だけ明らかに多い）。Review.jsxと同じ判定を共有する。
+  const typeTrend = useMemo(() => missTypeTrend(missTypes), [missTypes]);
+  const typeAnomaly = useMemo(() => missTypeAnomaly(missTypes), [missTypes]);
+
+  // 弱点テーマが、過去問で複数回出題されている頻出テーマでもあるか添える（pastExamTrends.jsのtagFrequency）。
+  // 「弱いだけ」と「弱くてよく出る」を区別できるように。
+  const freqByTag = useMemo(
+    () => new Map(tagFrequency(questions, links, { limit: 9999 }).map((f) => [f.tag, f.roundCount])),
+    [questions, links]
+  );
 
   const nothing = weak.length === 0 && risk.length === 0 && hard.length === 0 && typeTotal === 0;
 
@@ -53,15 +64,21 @@ export default function InsightsSection({ store }) {
                   })}
                 </div>
                 <div className="inline-note">対策：勘違い→対比で整理／知識不足→解説を精読／ケアレス→設問を最後まで確認。</div>
+                {(typeTrend || typeAnomaly?.isAnomaly) && (
+                  <div className="inline-note" style={{ marginTop: 4 }}>
+                    {typeAnomaly?.isAnomaly && <>今日は誤答が{typeAnomaly.todayTotal}件と、直近の1日平均（約{typeAnomaly.avgPerDay}件）よりかなり多めです。<br /></>}
+                    {typeTrend && <>最近は「{missTypeLabel(typeTrend.type)}」が増えています（直近7日で{typeTrend.count}件）。</>}
+                  </div>
+                )}
               </div>
             )}
             {weak.length > 0 && (
               <div className="insight-block">
-                <div className="insight-head">弱点テーマ（誤答が多い順）</div>
+                <div className="insight-head">弱点テーマ（誤答が多い順）<span className="section-hint">（🔥＝過去問で複数回出題の頻出テーマ）</span></div>
                 <div className="chip-row">
                   {weak.map((w) => (
                     <span key={w.tag} className="chip">
-                      {w.tag} <b>{w.wrong}</b>/{w.attempts}
+                      {(freqByTag.get(w.tag) || 0) >= 2 && '🔥 '}{w.tag} <b>{w.wrong}</b>/{w.attempts}
                     </span>
                   ))}
                 </div>

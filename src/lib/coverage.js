@@ -2,13 +2,9 @@
 // 「出題基準の大項目 × 収録数」を全13科目について集計し、手薄な所を可視化する。
 
 import { EXAM_SUBJECTS, EXAM_SESSIONS, subjectMatches } from '../data/examScope.js';
+import { genreOf, daikoumoku } from './genreClassification.js';
 
-// genre（"大項目｜中項目"）から大項目を取り出す
-function daikoumoku(genre) {
-  const g = String(genre || '').trim();
-  if (!g) return '（未分類）';
-  return g.split('｜')[0].trim() || '（未分類）';
-}
+export { daikoumoku };
 
 // 全13科目の網羅状況を返す。
 //   [{ id, name, session, category, outline, total, answered, correct, groups: [{name,count}] }]
@@ -28,7 +24,9 @@ export function coverageBySubject(questions, history = []) {
     let answered = 0;
     let correct = 0;
     inBank.forEach((q) => {
-      const k = daikoumoku(q.genre);
+      // genreOf()は医療概論のようにgenreを持たない科目でもtagsから大項目｜中項目を復元する
+      // （以前はq.genreを直接見ていたため、医療概論だけ常に「（未分類）」に丸められていた）。
+      const k = daikoumoku(genreOf(q));
       gmap.set(k, (gmap.get(k) || 0) + 1);
       const a = answeredById.get(q.id);
       if (a) {

@@ -80,12 +80,19 @@ export default function WeeklyJournal({ store, onNavigate }) {
                 今週いちばん多かった誤答理由は「{missTypeLabel(report.topType)}」でした。
               </p>
             )}
+            {report.trend && (
+              <p className="inline-note" style={{ marginTop: 4 }}>
+                最近増えている誤答理由は「{missTypeLabel(report.trend.type)}」です（直近7日で{report.trend.count}件）。
+              </p>
+            )}
             {report.weakTags.length > 0 && (
               <div style={{ marginTop: 10 }}>
-                <div className="section-hint">今週の弱点テーマ</div>
+                <div className="section-hint">今週の弱点テーマ<span className="section-hint">（🔥＝過去問で複数回出題の頻出テーマ）</span></div>
                 <div className="btn-row" style={{ flexWrap: 'wrap', marginTop: 4 }}>
                   {report.weakTags.map((t) => (
-                    <span className="chip" key={t.tag}>{t.tag}（誤答{t.wrong}）</span>
+                    <span className="chip" key={t.tag}>
+                      {t.roundCount >= 2 && '🔥 '}{t.tag}（誤答{t.wrong}）
+                    </span>
                   ))}
                 </div>
               </div>
