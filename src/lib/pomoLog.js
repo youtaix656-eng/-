@@ -2,14 +2,38 @@
 // 端末内のみ・直近500件だけ保持する。studyフェーズを完走した時にだけ1件追加する
 // （休憩は数えない）。
 
-import { idbGet, idbSet, idbDelete } from './db.js';
+import { idbGet, idbSet, idbDelete, isIdbSupported } from './db.js';
 
 const KEY = 'shinkyu:pomoLog';
 const MAX_ENTRIES = 500;
+const useIdb = isIdbSupported();
+
+// IndexedDB優先・localStorageフォールバック（pomoState.jsと同じ考え方）。
+async function readLog() {
+  try {
+    if (useIdb) {
+      const v = await idbGet(KEY);
+      if (v !== undefined) return v || [];
+    }
+  } catch (e) { /* 下のlocalStorageで試す */ }
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw == null ? [] : JSON.parse(raw);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function writeLog(next) {
+  try {
+    if (useIdb) { await idbSet(KEY, next); return; }
+  } catch (e) { /* 下のlocalStorageで試す */ }
+  try { localStorage.setItem(KEY, JSON.stringify(next)); } catch (e) { /* noop */ }
+}
 
 /** @returns {Promise<Array<{studySec:number, at:number, label?:string}>>} */
 export async function loadPomoLog() {
-  try { return (await idbGet(KEY)) || []; } catch (e) { return []; }
+  return readLog();
 }
 
 /**
@@ -19,20 +43,21 @@ export async function loadPomoLog() {
 export async function appendPomoLog(entry) {
   const log = await loadPomoLog();
   const next = [...log, entry].slice(-MAX_ENTRIES);
-  try { await idbSet(KEY, next); } catch (e) { /* noop */ }
+  await writeLog(next);
   return next;
 }
 
 /** 統計データをすべて消去する（本人の明示操作でのみ呼ぶこと）。 */
 export async function clearPomoLog() {
-  try { await idbDelete(KEY); } catch (e) { /* noop */ }
+  try { if (useIdb) await idbDelete(KEY); } catch (e) { /* noop */ }
+  try { localStorage.removeItem(KEY); } catch (e) { /* noop */ }
 }
 
 /** sinceMs より前の記録を取り除く（手動整理。件数上限とは別に、古いものだけ狙って消したい時用）。 */
 export async function trimPomoLogBefore(sinceMs) {
   const log = await loadPomoLog();
   const next = log.filter((e) => e.at >= sinceMs);
-  try { await idbSet(KEY, next); } catch (e) { /* noop */ }
+  await writeLog(next);
   return next;
 }
 

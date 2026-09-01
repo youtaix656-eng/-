@@ -175,6 +175,14 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [view]);
 
+  // 新しいバージョンの反映が、ポモドーロ実行中のため保留されていることを知らせる
+  // （main.jsxのService Worker更新ロジックから発火。黙って何も起きないと不安なため）。
+  useEffect(() => {
+    const onDeferred = () => showToast('🔄 新しいバージョンがあります。ポモドーロが一区切りつき次第、自動で反映されます');
+    window.addEventListener('app-update-deferred', onDeferred);
+    return () => window.removeEventListener('app-update-deferred', onDeferred);
+  }, []);
+
   // 学習セッションが完了画面（行き止まり）になっているかどうか。完了済みセッションを
   // 「前回開いていた画面」として復元・保存すると、タブの再読み込み（Androidが背面タブの
   // プロセスを回収した場合など）のたびに毎回この完了画面へ戻ってしまい、他画面へ
