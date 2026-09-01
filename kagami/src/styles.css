@@ -567,11 +567,12 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
   z-index: 0;
   pointer-events: none;
   color: var(--ink);
-  opacity: 0.55;
+  opacity: 0.5;
   overflow: hidden;
-  /* 上を濃く、文字の多い下ほど薄く落とす */
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.85) 42%, rgba(0, 0, 0, 0.4) 72%, rgba(0, 0, 0, 0.16) 100%);
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.85) 42%, rgba(0, 0, 0, 0.4) 72%, rgba(0, 0, 0, 0.16) 100%);
+  /* 上を濃く、文字の多い下ほど薄く落とす。
+     絵の明暗を強くしたぶん、本文に掛かるあたりは前より速く落とす */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.72) 38%, rgba(0, 0, 0, 0.26) 66%, rgba(0, 0, 0, 0.1) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.72) 38%, rgba(0, 0, 0, 0.26) 66%, rgba(0, 0, 0, 0.1) 100%);
 }
 .figure-bg img {
   width: 100%;
@@ -584,5 +585,5 @@ label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
 
 /* 動きを減らす設定の端末では、いっそう控えめにする */
 @media (prefers-reduced-motion: reduce) {
-  .figure-bg { opacity: 0.42; }
+  .figure-bg { opacity: 0.38; }
 }
