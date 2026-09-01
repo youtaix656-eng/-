@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import ResetInline from './ResetInline.jsx';
 import { getSubjects } from '../lib/stats.js';
@@ -12,6 +12,7 @@ import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { riskOf } from '../lib/reviewOrder.js';
+import { appendTimeAttackEntry } from '../lib/timeAttackLog.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import {
   shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder,
@@ -244,6 +245,13 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
     setAnswerLog((prev) => [...prev, { q, correct }]);
     setAnsweredThisQ(true);
+    // タイムアタック中だけ、実際の解答所要時間を記録する（G-100「即答5秒達成率」の実測用）。
+    // 制限時間切れでの自動「もう一度」（handleAnsweredがremain===0から呼ばれる場合）は
+    // 実質的に「間に合わなかった」なので、そのまま制限時間ぶんの経過として記録する。
+    if (timeAttack && q) {
+      const ms = Date.now() - questionShownAtRef.current;
+      appendTimeAttackEntry({ questionId: q.id, ms, correct, limitSec: taSeconds });
+    }
   };
 
   const handleNext = () => {
@@ -252,9 +260,11 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   };
 
   // タイムアタック：問題が変わるたびに残り時間をリセットして1秒ごとにカウントダウン
+  const questionShownAtRef = useRef(Date.now());
   useEffect(() => {
     setAnsweredThisQ(false);
     if (!timeAttack || !started || idx >= order.length) return;
+    questionShownAtRef.current = Date.now();
     setRemain(taSeconds);
     const timer = setInterval(() => {
       setRemain((r) => (r <= 1 ? 0 : r - 1));

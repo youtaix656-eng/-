@@ -7,6 +7,7 @@
 import { rankBreakdown } from './pastExamTrends.js';
 import { starLevelOf } from './starWeak.js';
 import { countForTarget } from './roundLog.js';
+import { quickAnswerRate } from './timeAttackLog.js';
 
 // 全問題のうち、一度でも解いたことがある問題の割合（Phase1の「全範囲1周」の目安）
 export function overallCoverageRate(questions, history) {
@@ -68,12 +69,13 @@ function phaseStatus(checks) {
 
 // フェーズごとの完了条件チェック。
 export function phaseChecks(data) {
-  const { questions = [], history = [], srs = {}, selfKindCounts = {}, examResults = [], roundLog = [] } = data || {};
+  const { questions = [], history = [], srs = {}, selfKindCounts = {}, examResults = [], roundLog = [], timeAttackLog = [] } = data || {};
   const coverage = overallCoverageRate(questions, history);
   const correctRate = overallCorrectRate(history);
   const aRank = aRankMasteryRate(questions, srs);
   const star3 = star3Count(questions, selfKindCounts);
   const examStability = examScoreStability(examResults);
+  const quickRate = quickAnswerRate(timeAttackLog);
 
   const phase1Checks = [
     { label: '全範囲1周（解いたことのある問題の割合）', value: coverage, target: 1, unit: 'pct', met: coverage >= 1 },
@@ -81,7 +83,14 @@ export function phaseChecks(data) {
   ];
   const phase2Checks = [
     { label: 'Aランク（頻出）○率', value: aRank, target: 0.85, unit: 'pct', met: aRank == null ? null : aRank >= 0.85 },
-    { label: '即答5秒達成率', value: null, target: 0.8, unit: 'pct', met: null, unmeasurable: true },
+    {
+      label: '即答5秒達成率',
+      value: quickRate,
+      target: 0.8,
+      unit: 'pct',
+      met: quickRate == null ? null : quickRate >= 0.8,
+      hint: 'タイムアタックモードで解いた問題から計測します',
+    },
   ];
   const phase3Checks = [
     { label: '★3（要注意）件数', value: star3, target: 0, unit: 'count', met: star3 === 0 },
@@ -104,5 +113,32 @@ export function phaseChecks(data) {
     phase1,
     phase2,
     phase3,
+  };
+}
+
+// 各チェック項目に対応する「次にやること」の案内文と、その場で開ける画面。
+const CHECK_ACTIONS = {
+  '全範囲1周（解いたことのある問題の割合）': { advice: 'まだ解いていない問題を「学習」で進めましょう。', view: 'session', label: '学習を開く' },
+  '全体の○率': { advice: '「間違えた問題」で復習を重ね、正答率を上げましょう。', view: 'review', label: '間違えた問題を開く' },
+  'Aランク（頻出）○率': { advice: '「傾向と対策」のAランクの問題を優先して解きましょう。', view: 'pasttrends', label: '傾向と対策を開く' },
+  '即答5秒達成率': { advice: '「一問一答」でタイムアタックモード（5秒）を試しましょう。', view: 'quiz', label: '一問一答を開く' },
+  '★3（要注意）件数': { advice: '「間違えた問題」の★★★（今日つぶす）から片づけましょう。', view: 'review', label: '間違えた問題を開く' },
+  '模試スコアの安定': { advice: '模試を受けてスコアの推移を記録しましょう。', view: 'exam', label: '模試を開く' },
+};
+
+// 今のフェーズで、次に何をすべきかの案内を1つ返す（未達（met:false）を優先し、
+// 無ければデータ不足（met:null）の項目。全フェーズ完了ならnull）。
+export function nextActionFor(result) {
+  const phase = { phase1: result.phase1, phase2: result.phase2, phase3: result.phase3 }[result.currentPhaseId];
+  if (!phase) return null;
+  const target = phase.checks.find((c) => c.met === false) || phase.checks.find((c) => c.met == null);
+  if (!target) return null;
+  const action = CHECK_ACTIONS[target.label];
+  return {
+    label: target.label,
+    reason: target.met === false ? 'blocked' : 'unknown',
+    advice: action?.advice || null,
+    view: action?.view || null,
+    linkLabel: action?.label || null,
   };
 }

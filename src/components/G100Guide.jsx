@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { G100_INTRO, G100_PHASES, G100_NOTEBOOK_NOTE } from '../data/g100Guide.js';
-import { phaseChecks } from '../lib/g100Progress.js';
+import { phaseChecks, nextActionFor } from '../lib/g100Progress.js';
 import { loadSelfKindCounts } from '../lib/starWeak.js';
 import { loadRoundLog } from '../lib/roundLog.js';
+import { loadTimeAttackLog } from '../lib/timeAttackLog.js';
 
 const PHASE_LABELS = { phase1: 'Phase1', phase2: 'Phase2', phase3: 'Phase3', complete: '卒業（100周完了相当）' };
 
 function formatCheckValue(c) {
-  if (c.unmeasurable) return 'このアプリでは測定不可';
   if (c.value == null) return 'データ不足';
   if (c.unit === 'pct') return `${Math.round(c.value * 100)}%`;
   return `${c.value}件`;
 }
 function formatCheckTarget(c) {
-  if (c.unmeasurable || c.target == null) return '';
+  if (c.target == null) return '';
   return c.unit === 'pct' ? `目標 ${Math.round(c.target * 100)}%` : `目標 ${c.target}件`;
 }
 
@@ -24,15 +24,18 @@ function ProgressSummary({ store, onNavigate }) {
   const { questions, history, srs, examResults } = store;
   const [selfKindCounts, setSelfKindCounts] = useState(null);
   const [roundLog, setRoundLog] = useState(null);
+  const [timeAttackLog, setTimeAttackLog] = useState(null);
   useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
   useEffect(() => { loadRoundLog().then(setRoundLog); }, []);
+  useEffect(() => { loadTimeAttackLog().then(setTimeAttackLog); }, []);
 
   const result = useMemo(() => {
-    if (selfKindCounts == null || roundLog == null) return null;
-    return phaseChecks({ questions, history, srs, selfKindCounts, examResults, roundLog });
-  }, [questions, history, srs, examResults, selfKindCounts, roundLog]);
+    if (selfKindCounts == null || roundLog == null || timeAttackLog == null) return null;
+    return phaseChecks({ questions, history, srs, selfKindCounts, examResults, roundLog, timeAttackLog });
+  }, [questions, history, srs, examResults, selfKindCounts, roundLog, timeAttackLog]);
 
   if (!result) return null;
+  const action = nextActionFor(result);
   const phases = [result.phase1, result.phase2, result.phase3];
   return (
     <div className="card">
@@ -60,11 +63,27 @@ function ProgressSummary({ store, onNavigate }) {
           </ul>
         </div>
       ))}
-      <div className="btn-row" style={{ marginTop: 10 }}>
-        <button className="btn ghost sm" onClick={() => onNavigate?.('review')}>間違えた問題を開く</button>
-        <button className="btn ghost sm" onClick={() => onNavigate?.('pasttrends')}>傾向と対策を開く</button>
-        <button className="btn ghost sm" onClick={() => onNavigate?.('exam')}>模試を開く</button>
-      </div>
+      {action ? (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border, #ddd)' }}>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>
+            👉 次にやること{action.reason === 'unknown' && '（データを増やす）'}
+          </div>
+          <p className="inline-note" style={{ marginTop: 4 }}>
+            {action.reason === 'blocked'
+              ? `「${action.label}」がまだ目標未達です。${action.advice || ''}`
+              : `「${action.label}」はまだ判定に必要なデータが足りません。${action.advice || ''}`}
+          </p>
+          {action.view && (
+            <button className="btn primary sm" onClick={() => onNavigate?.(action.view)}>
+              {action.linkLabel || '開く'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="inline-note" style={{ marginTop: 12, color: 'var(--correct)' }}>
+          🎉 測定できる範囲では、すべてのフェーズの終了条件を満たしています。
+        </p>
+      )}
     </div>
   );
 }

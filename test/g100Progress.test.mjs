@@ -8,6 +8,7 @@ import {
   examScoreStability,
   lapCount900,
   phaseChecks,
+  nextActionFor,
 } from '../src/lib/g100Progress.js';
 
 const questions = [
@@ -91,21 +92,48 @@ test('phaseChecks: 全問正解・全問解答済みでphase1完了、Aランク
   assert.equal(r.currentPhaseId, 'phase2');
 });
 
-test('phaseChecks: phase2の即答5秒はunmeasurable:trueで、それ以外の判定に影響しない', () => {
+test('phaseChecks: 即答5秒達成率はtimeAttackLogから実測される（データが無ければunknown）', () => {
   const history = questions.map((q) => ({ questionId: q.id, correct: true }));
   const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
-  const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults: [], roundLog: [] });
+  const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults: [], roundLog: [], timeAttackLog: [] });
   assert.equal(r.phase1.status, 'done');
-  assert.equal(r.phase2.status, 'done'); // Aランク100%達成、即答5秒はunmeasurableなのでmet:nullだがstatusはblockedにならない
-  const speedCheck = r.phase2.checks.find((c) => c.unmeasurable);
+  // Aランク100%達成だが、即答5秒はtimeAttackLogが空でmet:null＝判定不可なのでphase2はdoneにならない
+  assert.equal(r.phase2.status, 'unknown');
+  const speedCheck = r.phase2.checks.find((c) => c.label === '即答5秒達成率');
   assert.equal(speedCheck.met, null);
+});
+
+test('phaseChecks: timeAttackLogの実績が閾値を超えればphase2もdoneになる', () => {
+  const history = questions.map((q) => ({ questionId: q.id, correct: true }));
+  const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
+  const timeAttackLog = Array.from({ length: 10 }, () => ({ correct: true, ms: 3000 }));
+  const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults: [], roundLog: [], timeAttackLog });
+  assert.equal(r.phase2.status, 'done');
 });
 
 test('phaseChecks: すべて満たせばcurrentPhaseId=complete', () => {
   const history = questions.map((q) => ({ questionId: q.id, correct: true }));
   const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
   const examResults = [82, 80, 78, 75, 74, 73].map((scorePct) => ({ scorePct }));
-  const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults, roundLog: [] });
+  const timeAttackLog = Array.from({ length: 10 }, () => ({ correct: true, ms: 3000 }));
+  const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults, roundLog: [], timeAttackLog });
   assert.equal(r.phase3.checks.find((c) => c.label.includes('★3')).met, true);
   assert.equal(r.currentPhaseId, 'complete');
+});
+
+test('nextActionFor: phase1未達なら未達項目の案内を返す', () => {
+  const r = phaseChecks({ questions, history: [], srs: {}, selfKindCounts: {}, examResults: [], roundLog: [], timeAttackLog: [] });
+  const action = nextActionFor(r);
+  assert.equal(action.label, '全範囲1周（解いたことのある問題の割合）');
+  assert.equal(action.reason, 'blocked');
+  assert.equal(action.view, 'session');
+});
+
+test('nextActionFor: すべて完了ならnull', () => {
+  const history = questions.map((q) => ({ questionId: q.id, correct: true }));
+  const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
+  const examResults = [82, 80, 78, 75, 74, 73].map((scorePct) => ({ scorePct }));
+  const timeAttackLog = Array.from({ length: 10 }, () => ({ correct: true, ms: 3000 }));
+  const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults, roundLog: [], timeAttackLog });
+  assert.equal(nextActionFor(r), null);
 });
