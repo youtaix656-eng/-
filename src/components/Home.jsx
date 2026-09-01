@@ -6,6 +6,8 @@ import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress, clearQuizProgress, loadSyncMeta } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
+import { maruStatusList, excludeMastered, maruSubjectBreakdown } from '../lib/maruPool.js';
+import { phaseForDate } from '../data/roadmapPhases.js';
 import {
   detectBrokenYesterday,
   BREAK_REASONS,
@@ -97,6 +99,27 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     () => suggestUnvisitedFeature(featureRegistry, store.visitedViews),
     [store.visitedViews]
   );
+  // ✅ ○にした問題が溜まったら知らせる（学習画面「○にした問題をふりかえる」への導線）。
+  //   #5：マスター済み（5連続○）を除いた「まだ検証が浅い○」の件数を基準にする。
+  //   #6：科目内訳から最もマスター率が低い科目を名指しする。#9：直前期は件数によらず知らせる。
+  const maruAll = useMemo(() => maruStatusList(questions, history, srs), [questions, history, srs]);
+  const maruUnmastered = useMemo(() => excludeMastered(maruAll), [maruAll]);
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+  const isChokuzenPhase = useMemo(() => {
+    const phase = phaseForDate(todayStr);
+    return phase?.kind === 'chokuzen' || phase?.kind === 'final';
+  }, [todayStr]);
+  const MARU_NUDGE_THRESHOLD = 30;
+  const showMaruNudge = maruUnmastered.length > 0 && (isChokuzenPhase || maruUnmastered.length >= MARU_NUDGE_THRESHOLD);
+  const maruWeakestSubject = useMemo(() => {
+    if (!showMaruNudge) return null;
+    const rows = maruSubjectBreakdown(maruAll).filter((s) => s.total >= 3);
+    return rows.length > 0 ? [...rows].sort((a, b) => a.masteredPct - b.masteredPct)[0] : null;
+  }, [showMaruNudge, maruAll]);
+
   const sessionActive = session && session.pos < session.target;
   const { streak, longestStreak, studiedToday } = studyStreak(history);
   const examLeft = daysUntil(settings.examDate);
@@ -257,6 +280,22 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ✅ ○にした問題が溜まったら知らせる（学習画面「○にした問題をふりかえる」への導線） */}
+      {showMaruNudge && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>✅ ○にした問題をふりかえりませんか</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            まだ5連続○（マスター）に至っていない「○」が<strong>{maruUnmastered.length}問</strong>溜まっています。
+            {maruWeakestSubject && (
+              <>特に「{maruWeakestSubject.subject}」は定着率{Math.round(maruWeakestSubject.masteredPct * 100)}%とやや低めです。</>
+            )}
+            {isChokuzenPhase && <> 直前期なので、総ざらいしておくと安心です。</>}
+            時間が無ければ高速回転（⚡）で素早く確認できます。
+          </p>
+          <button className="btn primary sm" onClick={() => onNavigate('session')}>学習画面の「○にした問題をふりかえる」へ</button>
         </div>
       )}
 

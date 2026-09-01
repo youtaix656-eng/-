@@ -18,7 +18,7 @@ import { loadMissTypes, recordMissType, latestMissType } from '../lib/missTypes.
 import { loadSelfKindCounts, recordSelfKindCount } from '../lib/starWeak.js';
 import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { daysUntil } from '../lib/gamify.js';
-import { maruQuestions } from '../lib/maruPool.js';
+import { maruStatusList, excludeMastered, orderMaruStatus } from '../lib/maruPool.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -36,7 +36,7 @@ function poolFor(questions, subject) {
 }
 // 出題順の組み立ては src/lib/sessionOrder.js に集約（Quiz.jsxと共用）。
 
-export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio }) {
+export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio, onGoAnalytics }) {
   const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded } = store;
   // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
   const subjects = useMemo(() => {
@@ -129,7 +129,16 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // ○にした問題の見直し・高速回転用プール（上の絞り込み条件を引き継ぐ）。
   //   自己採点で最後に○（完璧）を選んだ問題だけを対象にし、
   //   ①問題演習で見直す（適当に○にしていないかの確認）②高速回転でインプット強化、の2通りに使う。
-  const maruPool = useMemo(() => maruQuestions(filteredPool, history), [filteredPool, history]);
+  const [maruExcludeMastered, setMaruExcludeMastered] = useState(false); // #5：マスター済み（5連続○）を除くか
+  const maruStatusAll = useMemo(() => maruStatusList(filteredPool, history, srs), [filteredPool, history, srs]);
+  const maruUncertainCount = useMemo(() => maruStatusAll.filter((s) => s.uncertain).length, [maruStatusAll]);
+  const maruStatusFiltered = useMemo(
+    () => (maruExcludeMastered ? excludeMastered(maruStatusAll) : maruStatusAll),
+    [maruStatusAll, maruExcludeMastered]
+  );
+  // #1・#4：うっかり○→古い順に並べる。begin()にはこの順のままidsを渡す（シャッフルさせない）。
+  const maruOrdered = useMemo(() => orderMaruStatus(maruStatusFiltered), [maruStatusFiltered]);
+  const maruPool = useMemo(() => maruOrdered.map((s) => s.question), [maruOrdered]);
 
   // 弱点タグ（#8）：直近の誤答が多いタグを上位に。タップでキーワードしぼり。
   const weakTags = useMemo(() => {
@@ -234,7 +243,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     // 初回（opts.allowSeen が無い）は繰り返さず、該当する問題数だけで1セッションとする。
     // 2周目・もう一度（opts.allowSeen）のときは従来通り全体を周回して指定問数まで埋める。
     let ids;
-    if (!opts.allowSeen) {
+    if (opts.ids) {
+      // #1・#4：呼び出し側が既に並び順を決めている場合（○の見直し等）はシャッフルしない。
+      ids = opts.ids;
+    } else if (!opts.allowSeen) {
       if (ratio >= 1) {
         ids = buildNewOnlyOrder(pool, target, srs);
         if (ids.length === 0) {
@@ -294,6 +306,13 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     }
     if (selfKind === 'sankaku' || selfKind === 'batsu') {
       recordSelfKindCount(cur.id, selfKind).then(setSelfKindCounts); // #9
+    }
+    // 「○の見直し」中に△・✕へ崩れた＝当初の○は思い違いだった可能性が高いので、
+    //   間違いノート（MistakeNote.jsx）で見分けられるよう自動でメモに印を付ける。
+    if (session.label === '○の見直し' && (selfKind === 'sankaku' || selfKind === 'batsu')) {
+      const tag = '⚠️見直しで判明：うろ覚えだった可能性';
+      const existing = memos[cur.id] || '';
+      if (!existing.includes(tag)) setMemo(cur.id, existing ? `${existing} / ${tag}` : tag);
     }
   };
   const advance = () => {
@@ -497,21 +516,33 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
         <div className="card">
           <div className="section-label" style={{ marginTop: 0 }}>✅ ○にした問題をふりかえる</div>
           <p className="inline-note" style={{ marginTop: 0 }}>
-            自己採点で最後に「○ 完璧」にした問題（現在の絞り込みで<strong>{maruPool.length}問</strong>）だけを対象にします。
+            自己採点で最後に「○ 完璧」にした問題（現在の絞り込みで<strong>{maruStatusAll.length}問</strong>）だけを対象にします。
             あとで△・✕に変わった問題は自動で対象から外れます。
           </p>
+          {maruUncertainCount > 0 && (
+            <p className="inline-note" style={{ marginTop: 0, color: 'var(--warn, #e0a800)' }}>
+              ⚠️ うち<strong>{maruUncertainCount}問</strong>は、選んだ答えが不正解なのに○のままにした「うっかり○」の可能性があります（見直しで先頭に出します）。
+            </p>
+          )}
+          <label className="autokw-row" style={{ marginTop: 6 }}>
+            <input type="checkbox" checked={maruExcludeMastered} onChange={(e) => setMaruExcludeMastered(e.target.checked)} />
+            <span>
+              マスター済み（5連続○）は除く（残り{maruStatusFiltered.length}問）。
+              直前期の総ざらいなど全部確認したい時はチェックを外してください
+            </span>
+          </label>
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button
               className="btn"
               disabled={maruPool.length === 0}
-              onClick={() => begin(maruPool.length, { pool: maruPool, subject, allowSeen: true, newRatio: 1, fast: false, label: '○の見直し' })}
+              onClick={() => begin(maruPool.length, { pool: maruPool, ids: maruPool.map((q) => q.id), subject, allowSeen: true, newRatio: 1, fast: false, label: '○の見直し' })}
             >
               📝 問題演習で見直す（適当に○にしていないか確認）
             </button>
             <button
               className="btn"
               disabled={maruPool.length === 0}
-              onClick={() => begin(maruPool.length, { pool: maruPool, subject, allowSeen: true, newRatio: 1, fast: true, label: '○の高速回転' })}
+              onClick={() => begin(maruPool.length, { pool: maruPool, ids: maruPool.map((q) => q.id), subject, allowSeen: true, newRatio: 1, fast: true, label: '○の高速回転' })}
             >
               ⚡ 高速回転でインプット強化
             </button>
@@ -520,6 +551,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             <p className="inline-note" style={{ marginTop: 8 }}>
               この条件で○にした問題はまだありません。学習を進めると、ここに対象が増えていきます。
             </p>
+          )}
+          {onGoAnalytics && (
+            <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onGoAnalytics()}>
+              🏅 得意科目の分析を見る
+            </button>
           )}
         </div>
 

@@ -491,6 +491,7 @@ export default function App() {
               setAudioReview(true);
               setView('audio');
             }}
+            onGoAnalytics={() => setView('analytics')}
           />
         );
       case 'review':
