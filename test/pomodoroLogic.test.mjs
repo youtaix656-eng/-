@@ -139,6 +139,21 @@ test('toneFreq: 指定した種類の周波数を返す', () => {
   assert.equal(toneFreq({ beepTone: 'low' }, 'break'), low.freq[1]);
 });
 
+test('BEEP_TONES: 6種類（既定3種＋追加3種）が重複IDなく揃っている', () => {
+  assert.equal(BEEP_TONES.length, 6);
+  const ids = BEEP_TONES.map((t) => t.id);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const id of ['bell', 'soft', 'alert']) assert.ok(ids.includes(id), `${id}が無い`);
+});
+
+test('toneFreq: 追加した3種でも周波数を正しく返す', () => {
+  for (const id of ['bell', 'soft', 'alert']) {
+    const tone = BEEP_TONES.find((t) => t.id === id);
+    assert.equal(toneFreq({ beepTone: id }, 'study'), tone.freq[0]);
+    assert.equal(toneFreq({ beepTone: id }, 'break'), tone.freq[1]);
+  }
+});
+
 // 「長休憩まで（回）」を変更した直後でも位置表示が食い違わないことを固定化する
 // （サイクル数変更で周回位置が壊れないことのテスト、項目22）。
 test('cyclePosition: 一度も完走していなければ0', () => {

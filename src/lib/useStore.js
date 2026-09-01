@@ -3,7 +3,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as storage from './storage.js';
-import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK } from './srs.js';
+import {
+  applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK,
+  justBecameLeech, justResolvedLeech, resetDueForReview,
+} from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
 import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
@@ -740,16 +743,22 @@ export function useStore() {
     });
   }, []);
 
-  // 解答を記録（grade 省略時は正誤から自動判定）
+  // 解答を記録（grade 省略時は正誤から自動判定）。復習ペース倍率（設定）を反映する。
+  // 戻り値：この解答でリーチ（要注意）に突入／脱出した場合のみ 'became'|'resolved'、それ以外は null
+  //   （Review.jsxがトースト表示に使う。実際の状態更新は従来どおりsetSrsのprevから安全に行い、
+  //   検知だけ直前のsrsから計算する＝実更新の安全性を変えない）。
+  const paceMultiplier = settings.srsPaceMultiplier || 1;
   const recordAnswer = useCallback((question, correct, grade, source, selfKind) => {
     const now = Date.now();
-    setSrs((prev) => ({
-      ...prev,
-      [question.id]:
-        grade != null
-          ? applyGrade(prev[question.id], grade, now)
-          : applyAnswer(prev[question.id], correct, now),
-    }));
+    const prevState = normalize(srs[question.id]);
+    const nextState =
+      grade != null
+        ? applyGrade(srs[question.id], grade, now, { paceMultiplier })
+        : applyAnswer(srs[question.id], correct, now, { paceMultiplier });
+    setSrs((prev) => ({ ...prev, [question.id]: nextState }));
+    let leechEvent = null;
+    if (justBecameLeech(prevState, nextState)) leechEvent = 'became';
+    else if (justResolvedLeech(prevState, nextState)) leechEvent = 'resolved';
     setHistory((prev) => [
       ...prev,
       // source: 'review' なら復習由来（復習専用の到達集計に使う）
@@ -761,6 +770,12 @@ export function useStore() {
       ...prev,
       answersSinceBackup: (prev.answersSinceBackup || 0) + 1,
     }));
+    return leechEvent;
+  }, [srs, paceMultiplier]);
+
+  // 復習対象（isInReview）の期限をすべて「今」に揃える（G-16 全体の間隔リセット）
+  const resetAllReviewDue = useCallback(() => {
+    setSrs((prev) => resetDueForReview(prev));
   }, []);
 
   // 復習リストから手動で外す（○5回連続＝マスターと同じ状態にする。誤登録・簡単すぎる問題対策）
@@ -1066,6 +1081,7 @@ export function useStore() {
     reviewQuestions,
     dueReviewQuestions,
     recordAnswer,
+    resetAllReviewDue,
     removeFromReview,
     setNextDue,
     setMemo,

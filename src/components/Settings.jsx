@@ -180,6 +180,27 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             （±5%の範囲）。勤務シフト連携は未対応のため、この比率が基準になります。
           </div>
         </div>
+        <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+          <label htmlFor="settings-srs-pace">復習の間隔ペース</label>
+          <div className="range-row">
+            <input
+              id="settings-srs-pace"
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={settings.srsPaceMultiplier ?? 1}
+              onChange={(e) => updateSettings({ srsPaceMultiplier: Number(e.target.value) })}
+            />
+            <span className="range-val">
+              ×{(settings.srsPaceMultiplier ?? 1).toFixed(1)}{Math.abs((settings.srsPaceMultiplier ?? 1) - 1) < 0.01 ? '（標準）' : ''}
+            </span>
+          </div>
+          <div className="hint">
+            ○（完璧）が続いた時の次回間隔に掛ける倍率です。大きくするほど間隔が伸びてゆっくり回り、
+            小さくするほど短い間隔で頻繁に復習します。誤答・△・✕の後の約20分後リセットは変わりません。
+          </div>
+        </div>
         <label className="switch-row" style={{ marginTop: 6 }}>
           <input
             type="checkbox"

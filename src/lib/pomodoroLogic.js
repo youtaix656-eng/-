@@ -13,6 +13,9 @@ export const BEEP_TONES = [
   { id: 'chime', label: 'チャイム風（既定）', freq: [660, 880] },
   { id: 'low', label: '低め・落ち着いた音', freq: [440, 550] },
   { id: 'high', label: '高め・目立つ音', freq: [880, 1175] },
+  { id: 'bell', label: 'ベル風', freq: [784, 1046] },
+  { id: 'soft', label: 'やわらかい音', freq: [523, 659] },
+  { id: 'alert', label: '鋭め・気づきやすい音', freq: [990, 1318] },
 ];
 export function toneFreq(cfg, kind) {
   const tone = BEEP_TONES.find((t) => t.id === (cfg && cfg.beepTone)) || BEEP_TONES[0];

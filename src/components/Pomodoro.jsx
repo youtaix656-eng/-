@@ -68,7 +68,9 @@ function beep(times = 1, freq = 880, volumePct = 100, onBlocked) {
     if (!Ctx) return;
     const ctx = new Ctx();
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    const peakGain = Math.max(0.0001, 0.3 * Math.min(100, volumePct) / 100);
+    // 音量100%時の最大振幅。以前は0.3で控えめだったため、ユーザー指定で0.7へ引き上げた
+    // （音割れしない範囲＝1.0未満を保ちつつ、はっきり気づける大きさにする）。
+    const peakGain = Math.max(0.0001, 0.7 * Math.min(100, volumePct) / 100);
     let t = ctx.currentTime;
     for (let i = 0; i < times; i++) {
       const o = ctx.createOscillator();

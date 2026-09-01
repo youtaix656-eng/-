@@ -9,7 +9,10 @@ import { relatedQuestions } from '../lib/related.js';
 import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
 import { comparisonsForKeyword, COMPARISONS } from '../data/mindmapData.js';
-import { loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS, MISS_TYPES } from '../lib/missTypes.js';
+import {
+  loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS, MISS_TYPES,
+  latestMissType, missTypeTrend, missTypeAnomaly,
+} from '../lib/missTypes.js';
 import { loadSelfKindCounts, recordSelfKindCount, starLevelOf, starLabel } from '../lib/starWeak.js';
 import { buildGraphFromSolved } from '../lib/kgService.js';
 import { conceptsOf } from '../lib/concepts.js';
@@ -109,6 +112,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     questions, dueReviewQuestions, reviewQuestions, history,
     memos, links, recordAnswer, setMemo, setLink, srs, GRADES,
     bookmarks, toggleBookmark, removeFromReview, setNextDue, session,
+    resetAllReviewDue,
   } = store;
 
   const [started, setStarted] = useState(false);
@@ -150,6 +154,9 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const [weeklyExpanded, setWeeklyExpanded] = useState(false); // 週間バー→月間ヒートマップ
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  // 誤答理由の型の傾向（直近で増えた型）・急増検知（今日だけ明らかに多い）
+  const missTrend = useMemo(() => missTypeTrend(missTypes), [missTypes]);
+  const missAnomaly = useMemo(() => missTypeAnomaly(missTypes), [missTypes]);
   useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
   useEffect(() => { loadTodayMood().then(setMood); }, []);
   const onMissType = (id, type) => {
@@ -442,7 +449,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const handleAnswered = (correct, grade, selfKind) => {
     const q = order[idx];
     const priorStreak = normalize(srs[q?.id]).correctStreak || 0;
-    recordAnswer(q, correct, grade, 'review', selfKind); // 復習由来として記録（到達集計用）
+    const leechEvent = recordAnswer(q, correct, grade, 'review', selfKind); // 復習由来として記録（到達集計用）
+    if (q && leechEvent === 'became') {
+      onToast?.(`⚠️ 要注意（${LEECH_THRESHOLD}回以上の誤答）：「${(q.question || '（図の問題）').slice(0, 20)}」。解説の読み方を変えてみましょう`);
+    } else if (q && leechEvent === 'resolved') {
+      onToast?.(`✅ 要注意を脱出！「${(q.question || '（図の問題）').slice(0, 20)}」がマスターになりました`);
+    }
     // ○（完璧）以外＝不正解・△・✕ は「まだ定着していない」として記憶
     if (!correct && q) missRef.current.push({ q, selfKind });
     // △✕の累計回数を記録（★弱点タグの判定材料。ここでの選択が起点）
@@ -552,6 +564,21 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
               <span className="weekbar-label">{weeklyExpanded ? '35日（タップで戻す）' : '7日（タップで月間）'}</span>
             </button>
           </div>
+        )}
+
+        {reviewQuestions.length > 0 && (
+          <button
+            className="btn ghost sm"
+            style={{ marginBottom: 10 }}
+            onClick={() => {
+              if (window.confirm('復習リストの全問題（マスター済みを除く）の次回期限を「今」にリセットします。誤答回数・連続記録は消えません。よろしいですか？')) {
+                resetAllReviewDue?.();
+                onToast?.('🔄 復習の間隔をすべてリセットしました');
+              }
+            }}
+          >
+            🔄 復習の間隔をすべてリセット（{reviewQuestions.length}問が対象）
+          </button>
         )}
 
         {masterySubjectStats.length > 0 && (
@@ -695,6 +722,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
             </button>
           ))}
         </div>
+        {(missTrend || missAnomaly?.isAnomaly) && (
+          <p className="inline-note" style={{ marginTop: 6 }}>
+            {missAnomaly?.isAnomaly && <>今日は誤答が{missAnomaly.todayTotal}件と、直近の1日平均（約{missAnomaly.avgPerDay}件）よりかなり多めです。無理せず休憩も挟みましょう。<br /></>}
+            {missTrend && <>最近は「{missTypeLabel(missTrend.type)}」が増えています（直近7日で{missTrend.count}件）。{missTrend.type === 'careless' ? '落ち着いて設問を最後まで読みましょう。' : missTrend.type === 'chishiki' ? '解説を読み込む時間を作りましょう。' : '対比で整理してみましょう。'}</>}
+          </p>
+        )}
 
         <div className="review-count">
           この条件で <strong>{startPool.length}</strong> 問
@@ -782,7 +815,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
               <div className="li-q">{q.question || '（図の問題）'}</div>
               <div className="li-stat">
                 完璧 {cs}/{MASTER_STREAK} ・ 誤答 {st.wrongCount || 0}回 ・ {dueLabel}
-                {missTypes[q.id] && <span className="misstype-tag">型: {missTypeLabel(missTypes[q.id].type)}</span>}
+                {latestMissType(missTypes[q.id]) && <span className="misstype-tag">型: {missTypeLabel(latestMissType(missTypes[q.id]).type)}</span>}
               </div>
               <div className="streak-dots" aria-label={`完璧 ${cs}/${MASTER_STREAK}`}>
                 {Array.from({ length: MASTER_STREAK }).map((_, i) => (
@@ -1029,7 +1062,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
         fast={fast}
         onMissType={onMissType}
         simple={simple}
-        missType={missTypes[current.id]?.type || ''}
+        missType={latestMissType(missTypes[current.id])?.type || ''}
       />
       <ResetInline label="復習をリセット" onReset={resetReview} />
     </div>

@@ -5,6 +5,7 @@
 
 import { idbGet, idbSet } from './db.js';
 import { weakTagClusters } from './weakClusters.js';
+import { latestMissType } from './missTypes.js';
 
 const KEY = 'shinkyu:weeklyJournal'; // { [weekKey]: { note, at } }
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -45,7 +46,7 @@ export function buildWeeklyReport(history = [], missTypes = {}, questions = [], 
   const wrongIds = [...new Set(weekHistory.filter((h) => !h.correct).map((h) => h.questionId))];
   const typeCounts = {};
   for (const id of wrongIds) {
-    const t = missTypes[id]?.type;
+    const t = latestMissType(missTypes[id])?.type;
     if (t) typeCounts[t] = (typeCounts[t] || 0) + 1;
   }
   const topType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;

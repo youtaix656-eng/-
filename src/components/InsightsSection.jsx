@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { forgettingRisk } from '../lib/forgetting.js';
 import { hardestItems } from '../lib/difficulty.js';
-import { loadMissTypes, MISS_TYPES, missTypeLabel } from '../lib/missTypes.js';
+import { loadMissTypes, MISS_TYPES, missTypeLabel, latestMissType } from '../lib/missTypes.js';
 
 // 学習インサイト（#6 忘却予測 / #7 弱点クラスタリング / #8 難易度推定 の可視化）。
 //   解答履歴と復習状態から「弱いテーマ・近く忘れそう・難しい問題」を自動抽出して表示する。
@@ -18,7 +18,10 @@ export default function InsightsSection({ store }) {
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
   const typeCounts = useMemo(() => {
     const c = {};
-    for (const v of Object.values(missTypes)) if (v && v.type) c[v.type] = (c[v.type] || 0) + 1;
+    for (const v of Object.values(missTypes)) {
+      const latest = latestMissType(v);
+      if (latest) c[latest.type] = (c[latest.type] || 0) + 1;
+    }
     return c;
   }, [missTypes]);
   const typeTotal = Object.values(typeCounts).reduce((a, b) => a + b, 0);
