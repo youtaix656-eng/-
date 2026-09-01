@@ -4,6 +4,8 @@ import { formatDateJa } from '../lib/date';
 import { activeHabits, completionRate, habitsForDate, sortHabits } from '../lib/habits';
 import { bedtimeTarget, guessCrossesMidnight, judgeBedtime } from '../lib/shift';
 import { suggestionsFor } from '../lib/audioLink';
+import { MEDITATION_HABIT_ID } from '../data/presets';
+import MeditationCard from './MeditationCard';
 import type { AppState } from '../types';
 
 interface Props {
@@ -186,6 +188,10 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
             </p>
           ))}
         </div>
+      )}
+
+      {state.habits.some((h) => h.id === MEDITATION_HABIT_ID && h.archivedAt === null) && (
+        <MeditationCard state={state} date={date} canRunTimer={date === today} />
       )}
 
       <BedtimeCard state={state} date={date} />

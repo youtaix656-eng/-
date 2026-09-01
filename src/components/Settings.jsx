@@ -21,6 +21,7 @@ import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 import { downloadFile } from '../lib/download.js';
 import { exportHistoryCsv } from '../lib/historyExport.js';
+import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 
 // 設定・問題データ管理画面
 export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText, onNavigate }) {
@@ -231,9 +232,15 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           />
           <span>
             画面上部にポモドーロタイマーを表示
-            <small>勉強／休憩の時間・通知・開始Musicは、表示されたバーの ⚙ から設定できます。</small>
+            <small>オフの間もここで分数などを調整できます（表示中はバーの ⚙ からも同じ設定に入れます）。</small>
           </span>
         </label>
+        <div style={{ marginTop: 10 }}>
+          <PomodoroConfigFields
+            cfg={settings.pomodoro || {}}
+            setCfg={(patch) => updateSettings({ pomodoro: { ...(settings.pomodoro || {}), ...patch } })}
+          />
+        </div>
       </div>
 
       {/* ===== バックアップと復元（端末間の持ち運び） ===== */}

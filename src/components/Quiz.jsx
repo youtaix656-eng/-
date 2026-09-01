@@ -423,7 +423,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
           </label>
           {timeAttack && (
             <div className="chip-row" style={{ marginTop: 6 }}>
-              {[10, 15, 20].map((s) => (
+              {[5, 10, 15, 20].map((s) => (
                 <button key={s} className={`chip ${taSeconds === s ? 'active' : ''}`} onClick={() => setTaSeconds(s)}>
                   {s}秒
                 </button>

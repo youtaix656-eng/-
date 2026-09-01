@@ -10,6 +10,7 @@ import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
 import { comparisonsForKeyword, COMPARISONS } from '../data/mindmapData.js';
 import { loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS, MISS_TYPES } from '../lib/missTypes.js';
+import { loadSelfKindCounts, recordSelfKindCount, starLevelOf, starLabel } from '../lib/starWeak.js';
 import { buildGraphFromSolved } from '../lib/kgService.js';
 import { conceptsOf } from '../lib/concepts.js';
 import { elaborationSuggestions, chainNext } from '../lib/kgRecall.js';
@@ -144,10 +145,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const [fast, setFast] = useState(false); // 高速回転モード
   const [simple, setSimple] = useState(true); // 段階表示：シンプル/じっくり
   const [missTypes, setMissTypes] = useState({}); // 間違いの型
+  const [selfKindCounts, setSelfKindCounts] = useState({}); // △✕の累計回数（★弱点タグの元）
   const [mood, setMood] = useState(null); // 今日の調子（Homeで記録したもの）
   const [weeklyExpanded, setWeeklyExpanded] = useState(false); // 週間バー→月間ヒートマップ
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
   useEffect(() => { loadTodayMood().then(setMood); }, []);
   const onMissType = (id, type) => {
     recordMissType(id, type).then(setMissTypes);
@@ -297,6 +300,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     startWith(batch > 0 ? pool.slice(0, batch) : pool);
   };
 
+  // ★3（✕2回以上の要注意問題）だけを集めたプール。G-100の「★3｜毎日」に相当。
+  const star3Questions = useMemo(
+    () => extendedReviewPool.filter((q) => starLevelOf(selfKindCounts[q.id]) === 3),
+    [extendedReviewPool, selfKindCounts]
+  );
+
   // 直近の学習セッション（10・60・300・900）で間違えた問題を、その場ですぐ復習できるように
   const lastSessionMisses = useMemo(() => {
     if (!session || !session.startedAt || !Array.isArray(session.ids)) return [];
@@ -436,6 +445,10 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     recordAnswer(q, correct, grade, 'review', selfKind); // 復習由来として記録（到達集計用）
     // ○（完璧）以外＝不正解・△・✕ は「まだ定着していない」として記憶
     if (!correct && q) missRef.current.push({ q, selfKind });
+    // △✕の累計回数を記録（★弱点タグの判定材料。ここでの選択が起点）
+    if (q && (selfKind === 'sankaku' || selfKind === 'batsu')) {
+      recordSelfKindCount(q.id, selfKind).then(setSelfKindCounts);
+    }
     // ちょうど5回連続の○に到達＝マスターの瞬間。その場でお祝いする
     if (correct && q && priorStreak === MASTER_STREAK - 1) {
       masteredRef.current.push(q);
@@ -511,6 +524,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
         {lastSessionMisses.length > 0 && (
           <button className="btn block lg" style={{ marginBottom: 10 }} onClick={() => startWith(lastSessionMisses)}>
             📚 さっきの学習で間違えた{lastSessionMisses.length}問をすぐ復習
+          </button>
+        )}
+
+        {star3Questions.length > 0 && (
+          <button className="btn danger block lg" style={{ marginBottom: 10 }} onClick={() => startWith(star3Questions)}>
+            {starLabel(3)} 今日つぶす（✕2回以上の問題・{star3Questions.length}問）
           </button>
         )}
 
@@ -743,10 +762,19 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
           const risk = Math.round(riskOf(q, srs, now) * 100);
           const rlvl = risk >= 70 ? 'hot' : risk >= 40 ? 'warm' : 'mild';
           const nagame = !reviewIdSet.has(q.id);
+          const starLv = starLevelOf(selfKindCounts[q.id]);
           return (
             <div className="list-item" key={q.id}>
               <div className="li-top">
                 <span className="li-subject">{q.subject}</span>
+                {starLv > 0 && (
+                  <span
+                    className="risk-badge lv-hot"
+                    title={starLv >= 3 ? '復習中に✕（わからない）が2回以上ありました。今日つぶしたい問題です' : '復習中に△（あいまい）が3回以上ありました'}
+                  >
+                    {starLabel(starLv)}
+                  </span>
+                )}
                 {nagame && <span className="risk-badge lv-mild" title="マスター済みだが保持率が下がってきたので念のため確認">念のため</span>}
                 {isLeech(q) && <span className="risk-badge lv-hot" title={`${LEECH_THRESHOLD}回以上間違えています。解説の読み方を変えてみましょう`}>⚠️ 要注意</span>}
                 <span className={`risk-badge lv-${rlvl}`} title="忘却リスク（高いほど早く復習を）">忘却{risk}%</span>

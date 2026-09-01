@@ -13,6 +13,7 @@ import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLa
 import { loadTodayMood, moodToConditionScore } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
+import { loadRoundLog, appendRoundLog, previousForTarget, countForTarget, formatDuration, speedupPct } from '../lib/roundLog.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -153,6 +154,26 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 上位を変えたら下位をリセット
   useEffect(() => { setGenre(''); setKeyword(''); setRound(''); }, [subject]);
   useEffect(() => { setKeyword(''); }, [genre]);
+
+  // 周回速度ログ（G-100由来）：標準セッション（10・60・300・900。誤答復習・バッファ枠は対象外）が
+  // 完了した瞬間に1回だけ所要時間を記録し、同じ目標での前回と比べる。
+  const [lastRoundInfo, setLastRoundInfo] = useState(null);
+  const loggedRoundRef = useRef(null);
+  useEffect(() => {
+    if (!session || session.pos < session.target) return;
+    if (!session.startedAt || session.label || session.buffer) return;
+    if (loggedRoundRef.current === session.startedAt) return; // 同じ完了を二重記録しない
+    loggedRoundRef.current = session.startedAt;
+    const target = session.requestedTarget || session.target;
+    const ms = Date.now() - session.startedAt;
+    const count = session.pos;
+    loadRoundLog().then((log) => {
+      const prev = previousForTarget(log, target, session.startedAt);
+      const roundNo = countForTarget(log, target) + 1; // 今回を含めた通算回数
+      setLastRoundInfo({ target, count, ms, prev, roundNo });
+      appendRoundLog({ target, count, ms, at: session.startedAt });
+    });
+  }, [session]);
 
   // 開始ボタン共通の無効化条件（10・60・300・900のTARGETSボタンと、
   // 時間計画（3分の2バッファ術）の開始ボタンの両方で使う。以前は後者だけ
@@ -438,6 +459,16 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           >
             この計画で基礎タスクを始める（{bufferPlan.baseTaskQuestionCount}問）
           </button>
+          <button
+            className="btn ghost sm block"
+            style={{ marginTop: 6 }}
+            onClick={() => {
+              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: true, study: bufferPlan.baseTaskMinutes } });
+              onToast?.(`🍅 ポモドーロの勉強時間を${bufferPlan.baseTaskMinutes}分に合わせました`);
+            }}
+          >
+            🍅 ポモドーロの勉強時間もこの分数（{bufferPlan.baseTaskMinutes}分）に合わせる
+          </button>
         </div>
       </div>
     );
@@ -521,6 +552,20 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             </p>
           )}
           <p className="view-desc" style={{ textAlign: 'center' }}>{doneDesc}</p>
+          {isStandardSession && lastRoundInfo && lastRoundInfo.target === requested && (
+            <p className="inline-note" style={{ textAlign: 'center' }}>
+              🔁 通算{lastRoundInfo.roundNo}回目（{requested}問）・⏱ 所要時間 {formatDuration(lastRoundInfo.ms)}
+              {lastRoundInfo.prev && (() => {
+                const pct = speedupPct(lastRoundInfo.ms, lastRoundInfo.count, lastRoundInfo.prev.ms, lastRoundInfo.prev.count);
+                if (pct == null) return null;
+                return pct > 0
+                  ? `（前回の${requested}問より1問あたり${pct}%短縮）`
+                  : pct < 0
+                  ? `（前回の${requested}問より1問あたり${Math.abs(pct)}%遅くなっています）`
+                  : `（前回の${requested}問とほぼ同じペース）`;
+              })()}
+            </p>
+          )}
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
             {onGoAudio && (
@@ -717,6 +762,12 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 3分の2バッファ術：基礎タスク進捗（実行役ビュー）＋ 未達が近い時のハリオのリマインド
   const bufRemaining = session.buffer ? session.target - session.pos : 0;
   const harioReminder = session.buffer && bufRemaining > 0 && bufRemaining <= 5 ? harioBaseTaskReminder(bufRemaining) : null;
+  // 前の問題／次の問題への移動（タップで戻る・進める）。
+  // target-1（このセッション最後の問題）より先へは進められない
+  // （それ以上先へ進むとセッション完了扱いになり、answered()を経ずに完了してしまうため）。
+  const canGoPrev = session.pos > 0;
+  const canGoNext = session.pos < session.target - 1;
+  const goToPos = (pos) => updateSession({ pos: Math.max(0, Math.min(session.target - 1, pos)) });
   return (
     <div className="view">
       <div className="sess-topbar">
@@ -728,6 +779,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       </div>
       <div className="progress">
         <span style={{ width: `${((session.pos + 1) / session.target) * 100}%` }} />
+      </div>
+      <div className="btn-row" style={{ justifyContent: 'center', gap: 10, margin: '6px 0' }}>
+        <button className="btn ghost sm" onClick={() => goToPos(session.pos - 1)} disabled={!canGoPrev}>← 前の問題</button>
+        <button className="btn ghost sm" onClick={() => goToPos(session.pos + 1)} disabled={!canGoNext}>次の問題 →</button>
       </div>
       {harioReminder && (
         <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{harioReminder}」</p>

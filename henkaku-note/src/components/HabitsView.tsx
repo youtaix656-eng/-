@@ -4,6 +4,7 @@ import {
   activeHabits, makeCustomHabit, sortHabits, validateHabit, HABIT_TITLE_MAX, HABIT_CRITERION_MAX,
 } from '../lib/habits';
 import { hasAudioLink } from '../lib/audioLink';
+import { HABIT_PRESETS, MEDITATION_SOURCE, presetToHabit } from '../data/presets';
 import type { AppState, Habit } from '../types';
 
 interface Props {
@@ -99,6 +100,35 @@ export default function HabitsView({ state }: Props) {
         <button type="button" className="btn" onClick={() => setAdding((v) => !v)}>
           {adding ? '追加をやめる' : '＋ 習慣を追加する'}
         </button>
+      </div>
+
+      <div className="card">
+        <h3>学んだことから足す</h3>
+        <p className="small muted" style={{ margin: 0 }}>
+          取り込んだ内容を、そのまま習慣にできます。効果の断定はせず、注意点も一緒に持ちます。
+        </p>
+        {HABIT_PRESETS.map((p) => {
+          const existing = state.habits.find((h) => h.id === p.id);
+          const active = existing && existing.archivedAt === null;
+          return (
+            <div key={p.id} className="card" style={{ gap: 6, background: 'rgba(16,20,43,0.55)' }}>
+              <div className="row">
+                <h4 style={{ flex: 1 }}>{p.title}</h4>
+                {active && <span className="tag dawn">追加ずみ</span>}
+              </div>
+              <p className="small" style={{ margin: 0 }}>{p.criterion}</p>
+              <p className="note-line" style={{ margin: 0 }}>{p.note}</p>
+              {!active && (
+                <button type="button" className="btn slim secondary" onClick={() => actions.addPresetHabit(presetToHabit(p, Date.now()))}>
+                  習慣に追加する
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <p className="small muted" style={{ margin: 0 }}>
+          出典：{MEDITATION_SOURCE.origin}（{MEDITATION_SOURCE.receivedAt} 受領）。{MEDITATION_SOURCE.caution}
+        </p>
       </div>
 
       {adding && (

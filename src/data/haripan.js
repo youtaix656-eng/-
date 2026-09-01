@@ -139,6 +139,17 @@ export function harioBaseTaskReminder(remaining) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+// ポモドーロで1セット（長い休憩まで）やり切った時の一言。
+export function harioPomoEncourage(setCount) {
+  const list = [
+    'よし、1セット終わりだ。……肩の力、抜いとけよ。',
+    'いいペースだ。無理せずこのまま積み重ねてけ。',
+    '今日はもう十分がんばった。あとは休むのも仕事のうちだぜ。',
+  ];
+  const idx = Number.isFinite(setCount) ? setCount % list.length : 0;
+  return list[idx];
+}
+
 // リマインド通知用の一言
 export function haripanReminder(examDate, dueCount = 0) {
   const left = daysUntil(examDate);
