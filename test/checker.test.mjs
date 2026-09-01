@@ -5,6 +5,7 @@ import {
   checkDuplicates,
   checkContradictions,
   checkAgainstKB,
+  checkTagsGenre,
   runAllChecks,
 } from '../src/lib/checker.js';
 
@@ -71,6 +72,22 @@ test('KB照合: 経穴と経絡の不一致を検出', () => {
 test('KB照合: 正しい問題は指摘されない', () => {
   const f = checkAgainstKB([ok]);
   assert.equal(f.filter((x) => x.category === 'kb').length, 0);
+});
+
+test('checkTagsGenre: tags・genreが空だと指摘する（#20）', () => {
+  const f = checkTagsGenre({ id: 'x', subject: '解剖学' });
+  assert.equal(f.length, 2);
+  assert.ok(f.every((x) => x.severity === 'info'));
+});
+
+test('checkTagsGenre: 医療概論はgenre未設定でも指摘しない', () => {
+  const f = checkTagsGenre({ id: 'x', subject: '医療概論', tags: ['a'] });
+  assert.equal(f.length, 0);
+});
+
+test('checkTagsGenre: tags・genreがあれば指摘なし', () => {
+  const f = checkTagsGenre({ id: 'x', subject: '解剖学', tags: ['a'], genre: '大項目｜中項目' });
+  assert.equal(f.length, 0);
 });
 
 test('runAllChecks が要約を返す', () => {

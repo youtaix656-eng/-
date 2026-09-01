@@ -156,10 +156,26 @@ function meridianNameToId() {
   return _nameMap;
 }
 
+// ---- 5. 連携チェック（#20：語呂合わせ・マインドマップ連携の付け漏れ） ----
+// tags（キーワード検索・音声学習・語呂合わせ連携）とgenre（ジャンル絞り込み・網羅マップ）が
+// 空のまま収録された問題を検出する。医療概論はgenreを持たない設計（tagsへ折り込み済み）
+// なので対象外にする。
+export function checkTagsGenre(q) {
+  const findings = [];
+  if (!q.tags || q.tags.length === 0) {
+    findings.push({ questionId: q.id, severity: 'info', category: 'linkage', message: 'tagsが空です（キーワード検索・語呂合わせ連携に使われません）。' });
+  }
+  if (!q.genre && q.subject !== '医療概論') {
+    findings.push({ questionId: q.id, severity: 'info', category: 'linkage', message: 'genreが空です（網羅マップの大項目集計に入りません）。' });
+  }
+  return findings;
+}
+
 // ---- すべてのチェックを集約 ----
 export function runAllChecks(questions) {
   const findings = [];
   questions.forEach((q) => findings.push(...checkFormat(q)));
+  questions.forEach((q) => findings.push(...checkTagsGenre(q)));
   findings.push(...checkDuplicates(questions));
   findings.push(...checkContradictions(questions));
   findings.push(...checkAgainstKB(questions));

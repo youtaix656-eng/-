@@ -9,6 +9,8 @@ import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import { maruStatusList, excludeMastered, maruSubjectBreakdown } from '../lib/maruPool.js';
 import { phaseForDate } from '../data/roadmapPhases.js';
 import { loadDismissedPriorityFocus, dismissPriorityFocus, suggestPriorityFocus } from '../lib/priorityFocus.js';
+import { coverageBySubject } from '../lib/coverage.js';
+import { suggestThinSubjectReminder } from '../lib/coveragePriority.js';
 import {
   detectBrokenYesterday,
   BREAK_REASONS,
@@ -108,6 +110,19 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   const dismissPriority = (id) => {
     dismissPriorityFocus(id).then(setPriorityDismissed);
   };
+  // #17：網羅マップの手薄科目を日替わりで1件だけリマインド（#27：①のカードの説明文にも実データを差し込む）。
+  const coverageRows = useMemo(
+    () => coverageBySubject(questions, history, { thin: settings.coverageThinThreshold ?? undefined, rich: settings.coverageRichThreshold ?? undefined }),
+    [questions, history, settings.coverageThinThreshold, settings.coverageRichThreshold]
+  );
+  const thinSubjectReminder = useMemo(() => suggestThinSubjectReminder(coverageRows), [coverageRows]);
+  const priorityFocusReason = useMemo(() => {
+    if (!priorityFocus) return '';
+    if (priorityFocus.id === 'coverage' && thinSubjectReminder) {
+      return `${priorityFocus.reason}　今日は「${thinSubjectReminder.name}」（${thinSubjectReminder.total}問）から見てみましょう。`;
+    }
+    return priorityFocus.reason;
+  }, [priorityFocus, thinSubjectReminder]);
   // ✅ ○にした問題が溜まったら知らせる（学習画面「○にした問題をふりかえる」への導線）。
   //   #5：マスター済み（5連続○）を除いた「まだ検証が浅い○」の件数を基準にする。
   //   #6：科目内訳から最もマスター率が低い科目を名指しする。#9：直前期は件数によらず知らせる。
@@ -296,7 +311,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
       {priorityFocus && (
         <div className="card" style={{ borderColor: 'var(--accent)' }}>
           <div className="section-label" style={{ marginTop: 0 }}>🎯 今強化すべきポイント：{priorityFocus.title}</div>
-          <p className="inline-note" style={{ marginTop: 0 }}>{priorityFocus.reason}</p>
+          <p className="inline-note" style={{ marginTop: 0 }}>{priorityFocusReason}</p>
           <div className="btn-row">
             <button className="btn primary sm" onClick={() => onNavigate(priorityFocus.view)}>{priorityFocus.cta}</button>
             <button className="btn ghost sm" onClick={() => dismissPriority(priorityFocus.id)}>もう表示しない</button>

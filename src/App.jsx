@@ -250,6 +250,16 @@ export default function App() {
     }
   }, [store.importedToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // コンテンツ拡充パイプライン（#15）：同梱データの版上げで新しい問題が追加されたら知らせる
+  useEffect(() => {
+    if (store.contentSeedToast) {
+      const { total, bySubject } = store.contentSeedToast;
+      const detail = (bySubject || []).map((s) => `${s.subject}+${s.count}`).join('・');
+      showToast(`問題データが更新されました：+${total}問${detail ? `（${detail}）` : ''}`);
+      store.clearContentSeedToast();
+    }
+  }, [store.contentSeedToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 別端末からQR/URLで進捗を取り込んだら知らせてホームへ
   useEffect(() => {
     if (store.syncToast > 0) {
@@ -535,7 +545,7 @@ export default function App() {
       case 'numbers':
         return <NumberFacts store={store} onToast={showToast} />;
       case 'coverage':
-        return <CoverageMap store={store} onStartSubject={startSubjectQuiz} />;
+        return <CoverageMap store={store} onStartSubject={startSubjectQuiz} onNavigate={setView} onToast={showToast} />;
       case 'pasttrends':
         return <PastExamTrends store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'migrationguide':

@@ -7,6 +7,7 @@ import { forgettingRisk } from '../lib/forgetting.js';
 import { loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { loadNextTask } from '../lib/nextTask.js';
 import { MOODS, loadTodayMood, recordTodayMood } from '../lib/mood.js';
+import { loadContentSeedLog, seedEntriesSince } from '../lib/contentSeedLog.js';
 
 const HARIO_IMG = `${import.meta.env.BASE_URL}haripan.png`;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -27,6 +28,7 @@ export default function Mascot({ store, onNavigate }) {
   const [streakBreakReasonLabel, setStreakBreakReasonLabel] = useState(null);
   const [nextTaskText, setNextTaskText] = useState(null);
   const [mood, setMood] = useState(null);
+  const [contentAdded, setContentAdded] = useState(0); // #23：直近7日でコンテンツが増えたか
 
   useEffect(() => {
     let alive = true;
@@ -42,6 +44,11 @@ export default function Mascot({ store, onNavigate }) {
     });
     loadNextTask().then((t) => { if (alive && t && t.text) setNextTaskText(t.text); });
     loadTodayMood().then((m) => { if (alive) setMood(m); });
+    loadContentSeedLog().then((log) => {
+      if (!alive) return;
+      const recent = seedEntriesSince(log, Date.now() - 7 * DAY_MS);
+      setContentAdded(recent.reduce((s, e) => s + (e.totalAdded || 0), 0));
+    });
     return () => { alive = false; };
   }, []);
 
@@ -84,8 +91,9 @@ export default function Mascot({ store, onNavigate }) {
       nextTaskText,
       latestExam,
       mood,
+      contentAdded,
     }),
-    [settings.examDate, dueReviewQuestions, history, weak, risk, streakBreakReasonLabel, nextTaskText, latestExam, mood]
+    [settings.examDate, dueReviewQuestions, history, weak, risk, streakBreakReasonLabel, nextTaskText, latestExam, mood, contentAdded]
   );
   const messages = useMemo(() => haripanMessages(ctx), [ctx]);
   const [i, setI] = useState(() => Math.floor(Math.random() * Math.max(1, haripanMessages(ctx).length)));

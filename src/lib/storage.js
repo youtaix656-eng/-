@@ -310,6 +310,8 @@ const DEFAULT_SETTINGS = {
   sessionNewRatio: 1, // 学習セッションの新規割合（0〜1、1=すべて新規）
   srsPaceMultiplier: 1, // 復習間隔の倍率（0.5〜2。1=標準、大きいほど間隔を伸ばしてゆっくり回す）
   dailyGoal: 300, // 1日の目標問題数（ハリオ先生の「今日の進捗」表示に使用）
+  coverageThinThreshold: null, // 網羅マップ「手薄」の全科目共通しきい値（null=科目ごとの自動目安/既定値）
+  coverageRichThreshold: null, // 網羅マップ「充実」の全科目共通しきい値（null=科目ごとの自動目安/既定値）
   reminder: { enabled: false, time: '07:00', lastNotified: '' }, // 毎日の学習リマインド通知
   // ボイスクローン（音声学習の読み上げ声）。APIキー本体は含まない（voiceCloneSecretへ別保存）。
   voiceClone: { enabled: false, voiceId: '', voiceName: '' },

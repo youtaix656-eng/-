@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { loadMissTypes, missTypeLabel } from '../lib/missTypes.js';
-import { weekKeyOf, buildWeeklyReport, loadWeeklyNotes, saveWeeklyNote } from '../lib/weeklyJournal.js';
+import { weekKeyOf, weekStartOf, buildWeeklyReport, loadWeeklyNotes, saveWeeklyNote } from '../lib/weeklyJournal.js';
 import { loadRoundLog } from '../lib/roundLog.js';
 import { formatPercent } from '../lib/stats.js';
+import { loadContentSeedLog, seedEntriesSince } from '../lib/contentSeedLog.js';
 
 function formatWeekLabel(weekKeyStr) {
   const start = new Date(Number(weekKeyStr));
@@ -21,9 +22,11 @@ export default function WeeklyJournal({ store, onNavigate }) {
   const [notes, setNotes] = useState({});
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState(false);
+  const [seedLog, setSeedLog] = useState([]); // #30：今週埋めた手薄科目の自動追記候補
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
   useEffect(() => { loadRoundLog().then(setRoundLog); }, []);
+  useEffect(() => { loadContentSeedLog().then(setSeedLog); }, []);
   useEffect(() => {
     loadWeeklyNotes().then((all) => {
       setNotes(all);
@@ -36,6 +39,17 @@ export default function WeeklyJournal({ store, onNavigate }) {
     () => buildWeeklyReport(history, missTypes, questions, links, Date.now(), roundLog),
     [history, missTypes, questions, links, roundLog]
   );
+
+  // #30：今週追加された問題（contentSeedLog.js）を「今週埋めた手薄科目」として一言候補にする。
+  const contentSummary = useMemo(() => {
+    const entries = seedEntriesSince(seedLog, weekStartOf());
+    const bySubject = new Map();
+    for (const e of entries) for (const s of e.bySubject || []) bySubject.set(s.subject, (bySubject.get(s.subject) || 0) + s.count);
+    const total = [...bySubject.values()].reduce((a, b) => a + b, 0);
+    if (total === 0) return null;
+    const detail = [...bySubject.entries()].map(([subject, count]) => `${subject}+${count}`).join('・');
+    return `今週は${detail}を追加した（計${total}問）。`;
+  }, [seedLog]);
 
   const thisWeekKey = weekKeyOf();
   const pastWeeks = useMemo(
@@ -113,6 +127,15 @@ export default function WeeklyJournal({ store, onNavigate }) {
 
       <div className="section-label">✍️ 来週の方針（一言）</div>
       <div className="card">
+        {contentSummary && (
+          <button
+            className="chip"
+            style={{ marginBottom: 8 }}
+            onClick={() => setDraft((d) => (d ? `${d} / ${contentSummary}` : contentSummary))}
+          >
+            ＋ {contentSummary}
+          </button>
+        )}
         <textarea
           className="journal-textarea"
           rows={3}

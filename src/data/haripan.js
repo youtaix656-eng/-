@@ -29,7 +29,7 @@ export function haripanMessages(ctx = {}) {
     examDate, dueCount = 0, streak = 0, historyLen = 0,
     weakTag = null, riskCount = 0, streakBreakReasonLabel = null,
     nextTaskText = null, latestExam = null, mood = null,
-    hour = new Date().getHours(),
+    hour = new Date().getHours(), contentAdded = 0,
   } = ctx;
   const left = daysUntil(examDate);
   const ph = phaseForDate(todayStr());
@@ -73,6 +73,9 @@ export function haripanMessages(ctx = {}) {
   // 弱点タグ・忘却リスク（詳しくは「分析」カードへ）
   if (weakTag) msgs.push(`最近「${weakTag}」でよく詰まってるな。……そこ、集中的にほぐすか？`);
   if (riskCount > 0) msgs.push(`忘れかけてる問題が${riskCount}問あるぞ。放っておくと消えちまう。`);
+
+  // コンテンツ拡充（#23）：問題データが増えた時に気づいて褒める
+  if (contentAdded > 0) msgs.push(`問題が${contentAdded}問増えてるな。……手薄なとこ、ちゃんと埋まってきてるぞ。`);
 
   // きのう出来なかった理由を踏まえて（責めずに、また今日から）
   if (streakBreakReasonLabel) {

@@ -41,6 +41,41 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 ユーザーが実際に対応した・優先度が変わったら、`priorityFocus.js`の`PRIORITY_FOCUS_ITEMS`と
 このセクションの両方を更新する（消すのはアプリ内のボタンからユーザー自身が行う想定）。
 
+## 網羅マップ・コンテンツ拡充パイプラインの強化（2026-09-02追加）
+「今強化すべき機能ベスト3」の1位（網羅マップ＋手薄科目の問題拡充パイプライン）をユーザー指定で
+30案→全実装したもの。新しいファイルが増えたので、単一の正の置き場をここにまとめる。
+- **`src/lib/coverage.js`**：しきい値（手薄/充実）は`settings.coverageThinThreshold`/
+  `coverageRichThreshold`（全科目共通の上書き、未設定ならnull）と、出題基準の大項目数から
+  自動計算する`suggestedThresholds()`（今はoutlineを持つ医療概論のみ有効）の二段構え。
+  `coverageBySubject()`の`groups[].subgroups`が中項目までの内訳、`format`が原問/一問一答等/
+  画像・図つきの内訳（原問の定義は`round`が設定されている問題＝pastExamTrends.jsと同じ基準）。
+  `coverageSummary().fillRatio`が「手薄でも未収録でもない科目の割合」＝充足率。
+- **`src/lib/coveragePriority.js`**：頻出度（daikoumokuRank）×手薄さで「埋めるべき順」を
+  スコアリング（`priorityTodo`）。手薄科目の内訳テキスト化・依頼文の定型コピー・
+  日替わりの手薄科目リマインド（`suggestThinSubjectReminder`）もここ。
+- **`src/lib/roundGaps.js`**：科目ごとの「回の抜け漏れ」を、他科目に複数ある回がその科目だけ
+  無いことから相対的に検出する（手元に無い公式基準は作らない）。
+- **`src/lib/contentSeedLog.js`**：`useStore.js`が同梱データの版上げで新しい問題を追加した時、
+  質問id集合の差分（バージョン管理された各科目の増分ブロックの前後比較）から科目別の追加数を
+  記録する**唯一の発生源**。App.jsxの起動時トースト・CoverageMap.jsxの最終更新表示・
+  ハリオ先生のお祝い（haripan.jsの`contentAdded`）・週次の弱点ジャーナルの自動追記チップは
+  すべてこのログだけを参照する。**新しい科目データのバージョン増分ブロックを追加する時も、
+  この仕組みは`baseQuestions`のid差分から自動検出するので、個別の計装は不要**（既存ブロックの
+  構造を変えなくてよい設計）。
+- **`src/lib/seedQuality.js`**：↑のログのid一覧を使い、新規追加ぶんの正答率が0%/100%に
+  極端に振れていないかを検出する（新しさの判定はこのログにしか無いので、他の手段で推測しない）。
+- **`src/lib/unreadablePages.js`**：標準変換プロンプト手順⑨「読み取れないリスト」をアプリ内の
+  簡易CRUDメモとして持てるようにしたもの（端末内のみ）。読み取れたら削除し、削除した旨は
+  従来どおり必ずユーザーへ連絡する運用は変えない。
+- **`src/data/contentPipelineChecklist.js`**：標準変換プロンプトの手順を網羅マップからも
+  見返せるようにした参照用データ。**この配列とCLAUDE.mdの「標準変換プロンプト」セクションの
+  内容は必ず一致させる**（手順を変えたら両方直す。片方だけ直すと再びズレる）。
+- **`npm run validate`（scripts/validate-content.mjs）が手薄科目・優先度ToDo・回の抜け漏れの
+  実データ出力を強化済み**。CLAUDE.mdの「継続して意識する開発方針」にある「現状の手薄科目」
+  リストを更新する時は、必ずこの出力から書き写す（手入力で古いまま放置しない）。
+- 得意科目分析（maruPool.jsのmaruSubjectBreakdown）を網羅マップの科目詳細にも重ねて表示し、
+  量（収録数）と質（○の定着率）を1画面で見られるようにした。
+
 ## このリポジトリに同梱されている他アプリ（鍼灸アプリ本体とは独立）
 main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物にまとめて配置する。
 それぞれ独立した package.json / ビルドを持つので、**鍼灸アプリ側の作業では触らない**。

@@ -11,6 +11,7 @@ import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
 import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
 import { dedupeAgainst } from './importer.js';
+import { appendContentSeedLog } from './contentSeedLog.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
@@ -77,6 +78,7 @@ export function useStore() {
   const [numberOverrides, setNumberOverridesState] = useState({}); // 数値ファクトの上書き（毎年更新）
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
+  const [contentSeedToast, setContentSeedToast] = useState(null); // 同梱データの版上げで追加された問題（{ total, bySubject }）
   const [syncToast, setSyncToast] = useState(0); // 別端末からの進捗取り込み
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
   const [cloudAutoSyncToast, setCloudAutoSyncToast] = useState(0); // クラウド自動同期で他端末の進捗を取り込んだ回数
@@ -173,6 +175,11 @@ export function useStore() {
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか
+      // コンテンツ拡充パイプラインのログ（#15・#24）：同梱データの版上げで実際に何問・
+      // どの科目に追加されたかを、以下の各バッチ増分ブロックが終わった時点で差分から求める
+      // （各ブロックを個別に計装するのではなく、質問オブジェクト自体が持つsubjectで
+      // まとめて集計する方が変更箇所が少なく、既存ブロックの構造も変えずに済む）。
+      const beforeSeedIds = new Set(baseQuestions.map((qq) => qq.id));
       // アプリ同梱の医療概論 一問一答（92問）を初回だけ問題バンクへ取り込む。
       // 既存ユーザーにも1回だけ追加され、削除しても再追加されないよう cfg にフラグを持つ。
       if (!cfg.iryouSeeded) {
@@ -285,6 +292,17 @@ export function useStore() {
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.integratedVersion = INTEGRATED_VERSION;
         mutated = true;
+      }
+      // コンテンツ拡充パイプラインのログ（#15・#24）：上のバッチ増分ブロック群で実際に
+      // 追加された問題を科目別に集計し、起動時トースト（App.jsx）と履歴（contentSeedLog.js、
+      // CoverageMap.jsxの最終更新表示・週次の弱点ジャーナルの自動追記・ハリオ先生のお祝いで共用）に残す。
+      const newlySeeded = baseQuestions.filter((qq) => !beforeSeedIds.has(qq.id));
+      if (newlySeeded.length > 0) {
+        const bySubjectMap = new Map();
+        for (const qq of newlySeeded) bySubjectMap.set(qq.subject, (bySubjectMap.get(qq.subject) || 0) + 1);
+        const bySubject = [...bySubjectMap.entries()].map(([subject, count]) => ({ subject, count }));
+        setContentSeedToast({ total: newlySeeded.length, bySubject });
+        appendContentSeedLog({ totalAdded: newlySeeded.length, bySubject, ids: newlySeeded.map((qq) => qq.id) });
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
       const importSeed = readImportFromHash();
@@ -885,6 +903,7 @@ export function useStore() {
   }, []);
   const clearSeedToast = useCallback(() => setSeedToast(0), []);
   const clearImportedToast = useCallback(() => setImportedToast(0), []);
+  const clearContentSeedToast = useCallback(() => setContentSeedToast(null), []);
   const clearSyncToast = useCallback(() => setSyncToast(0), []);
 
   // キーワードのメタ（語呂合わせ）を更新
@@ -1073,6 +1092,8 @@ export function useStore() {
     clearSeedToast,
     importedToast,
     clearImportedToast,
+    contentSeedToast,
+    clearContentSeedToast,
     syncToast,
     clearSyncToast,
     cloudAutoSyncToast,
