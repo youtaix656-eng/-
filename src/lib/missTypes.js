@@ -9,7 +9,9 @@
 import { idbGet, idbSet } from './db.js';
 
 const KEY = 'shinkyu:missTypes';
-const MAX_HISTORY_PER_QUESTION = 20;
+// 以前は問題ごとに直近20件だけを自動で残していたが、ユーザー指定により
+// 「誤答理由は消さない（自動で間引かない）。消すときは手動で消す」仕様に変更（#23）。
+// 削除は clearMissTypeHistory / clearAllMissTypes からのみ行う（Settings.jsx導線）。
 
 export const MISS_TYPES = [
   { id: 'kanchigai', label: '勘違い', hint: '対比で整理' },
@@ -50,9 +52,33 @@ export function latestMissType(entry) {
 export async function recordMissType(questionId, type) {
   const m = await loadMissTypes();
   const history = historyOf(m[questionId]);
-  m[questionId] = [...history, { type, at: Date.now() }].slice(-MAX_HISTORY_PER_QUESTION);
+  // 自動では間引かない（#23）。件数の上限は持たず、消すのは手動のみ。
+  m[questionId] = [...history, { type, at: Date.now() }];
   try { await idbSet(KEY, m); } catch (e) { /* noop */ }
   return m;
+}
+
+// この問題の誤答理由の記録だけを手動で消す（#23）。
+export async function clearMissTypeHistory(questionId) {
+  const m = await loadMissTypes();
+  if (m[questionId] == null) return m;
+  const next = { ...m };
+  delete next[questionId];
+  try { await idbSet(KEY, next); } catch (e) { /* noop */ }
+  return next;
+}
+
+// 誤答理由の記録をすべて手動で消す（#23。設定画面から確認のうえ実行）。
+export async function clearAllMissTypes() {
+  try { await idbSet(KEY, {}); } catch (e) { /* noop */ }
+  return {};
+}
+
+// 全問題ぶんの誤答理由の記録件数（Settings.jsxの削除確認表示に使う）。
+export function totalMissTypeCount(missTypes) {
+  let n = 0;
+  for (const entry of Object.values(missTypes || {})) n += historyOf(entry).length;
+  return n;
 }
 
 // 基準時刻以降の型別件数（全問題ぶんの記録を横断して集計）。

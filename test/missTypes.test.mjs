@@ -7,6 +7,7 @@ import {
   missTypeCounts,
   missTypeTrend,
   missTypeAnomaly,
+  totalMissTypeCount,
 } from '../src/lib/missTypes.js';
 
 test('missTypeLabel: 既知のidはラベルを返し、未知は空文字', () => {
@@ -97,4 +98,18 @@ test('MISS_TYPES: 3種類（勘違い・知識不足・ケアレス）', () => {
   assert.equal(MISS_TYPES.length, 3);
   const ids = MISS_TYPES.map((t) => t.id);
   assert.deepEqual(new Set(ids), new Set(['kanchigai', 'chishiki', 'careless']));
+});
+
+// #23: 誤答理由は自動で間引かない（消すのは手動のみ）。totalMissTypeCountで件数を数える。
+test('totalMissTypeCount: 新旧形式を横断して件数を数える', () => {
+  const missTypes = {
+    q1: [{ type: 'kanchigai', at: 1 }, { type: 'careless', at: 2 }],
+    q2: { type: 'chishiki', at: 3 }, // 旧形式（単一オブジェクト）も1件として数える
+  };
+  assert.equal(totalMissTypeCount(missTypes), 3);
+});
+
+test('totalMissTypeCount: 記録が無ければ0', () => {
+  assert.equal(totalMissTypeCount({}), 0);
+  assert.equal(totalMissTypeCount(undefined), 0);
 });

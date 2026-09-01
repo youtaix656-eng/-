@@ -444,6 +444,9 @@ export default function App() {
   const reviewCount = store.reviewQuestions.length;
   const needBackup =
     (store.settings.answersSinceBackup || 0) >= (store.settings.backupReminderEvery || 50);
+  // #22：学習セッション（10・60・300・900）を実際に解いている最中はバナーを出さない
+  //   （問題に集中している途中で割り込むと、解答フローが途切れる）。完了画面・開始画面は対象外。
+  const inActiveSession = view === 'session' && !!store.session && store.session.pos < store.session.target;
 
   const renderView = () => {
     switch (view) {
@@ -702,7 +705,7 @@ export default function App() {
 
       <main>
         {/* バックアップ促しバナー */}
-        {needBackup && view !== 'settings' && (
+        {needBackup && view !== 'settings' && !inActiveSession && (
           <div className="reminder-banner">
             <span>
               📌 前回のバックアップから{store.settings.answersSinceBackup}問解きました。データ消失に備えて保存しましょう。

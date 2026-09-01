@@ -748,7 +748,7 @@ export function useStore() {
   //   （Review.jsxがトースト表示に使う。実際の状態更新は従来どおりsetSrsのprevから安全に行い、
   //   検知だけ直前のsrsから計算する＝実更新の安全性を変えない）。
   const paceMultiplier = settings.srsPaceMultiplier || 1;
-  const recordAnswer = useCallback((question, correct, grade, source, selfKind) => {
+  const recordAnswer = useCallback((question, correct, grade, source, selfKind, objectiveCorrect) => {
     const now = Date.now();
     const prevState = normalize(srs[question.id]);
     const nextState =
@@ -763,7 +763,13 @@ export function useStore() {
       ...prev,
       // source: 'review' なら復習由来（復習専用の到達集計に使う）
       // selfKind: 自己採点の種類（'maru'|'sankaku'|'batsu'）。○△✕を区別する自己採点UIからのみ付与
-      { questionId: question.id, subject: question.subject, correct, at: now, ...(source ? { source } : {}), ...(selfKind ? { selfKind } : {}) },
+      // objectiveCorrect: 選択肢の客観的な正誤（selfKindの自己申告と食い違うことがある＝#1/#2）。
+      //   自己採点UI（QuestionCard.jsx）から選択肢を選んだ場合のみ渡される。
+      {
+        questionId: question.id, subject: question.subject, correct, at: now,
+        ...(source ? { source } : {}), ...(selfKind ? { selfKind } : {}),
+        ...(objectiveCorrect != null ? { objectiveCorrect } : {}),
+      },
     ]);
     // バックアップ促し用のカウンタ
     setSettings((prev) => ({

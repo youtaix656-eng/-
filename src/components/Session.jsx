@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
-import { GRADES } from '../lib/srs.js';
+import { GRADES, LEECH_THRESHOLD, isLeech as isLeechState } from '../lib/srs.js';
 import { getSubjects } from '../lib/stats.js';
-import { subjectMatches, SUBJECT_TAG_NAMES } from '../data/examScope.js';
+import { subjectMatches, SUBJECT_TAG_NAMES, scopeCoverage } from '../data/examScope.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { effectiveTags } from '../lib/query.js';
 import { COMPARISONS } from '../data/mindmapData.js';
@@ -10,10 +10,14 @@ import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/rev
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
 import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLabel, managerReviewMessage } from '../lib/bufferSession.js';
-import { loadTodayMood, moodToConditionScore } from '../lib/mood.js';
+import { loadTodayMood, moodToConditionScore, MOODS } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import { loadRoundLog, appendRoundLog, previousForTarget, countForTarget, formatDuration, speedupPct } from '../lib/roundLog.js';
+import { loadMissTypes, recordMissType, latestMissType } from '../lib/missTypes.js';
+import { loadSelfKindCounts, recordSelfKindCount } from '../lib/starWeak.js';
+import { todayFocusSubjects } from '../lib/todayFocus.js';
+import { daysUntil } from '../lib/gamify.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -139,6 +143,32 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       .slice(0, 8);
   }, [history, byId, links]);
 
+  // 誤答理由の記録・△✕の累計回数（Review.jsxと同じデータを、学習セッション側でも参照する。
+  //   #6のリーチtoast・#8の間違いの型・#9の★弱点タグ記録に使う）。
+  const [missTypes, setMissTypes] = useState({});
+  const [selfKindCounts, setSelfKindCounts] = useState({});
+  useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
+  const onMissType = (id, type) => {
+    recordMissType(id, type).then(setMissTypes);
+  };
+
+  // #7：要注意（リーチ、LEECH_THRESHOLD回以上の誤答）件数。開始前の画面で見えるようにし、
+  //   復習画面への導線を出す（Review.jsxの一覧バッジと同じ定義）。
+  const leechCount = useMemo(
+    () => questions.filter((q) => isLeechState(srs[q.id])).length,
+    [questions, srs]
+  );
+
+  // #11：今日集中すべき科目（todayFocus.js。Home.jsxと同じロジックを再利用）。
+  //   問題の進捗や科目の手薄さ・過去問の頻出度から1件だけ提案し、
+  //   「たまには苦手分野の〇〇にも挑戦してみましょう」と声掛けする。
+  const focusSubject = useMemo(() => {
+    const scope = scopeCoverage(questions, history);
+    const picks = todayFocusSubjects(scope, daysUntil(settings.examDate), { questions, limit: 1 });
+    return picks[0] || null;
+  }, [questions, history, settings.examDate]);
+
   // 現在の条件で「まだ解いていない新規問題」が何問残っているか
   //   新規＝未着手（srs.seen が 0 または未登録）。buildMixedOrder の newPool と同じ定義。
   const newRemaining = useMemo(
@@ -243,12 +273,33 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     onToast?.('学習をリセットしました');
   };
 
-  const answered = (correct, grade, selfKind) => {
+  // 記録（record）と次へ進める（advance）を分ける（Review.jsxと同じ形）。
+  //   以前はonAnswered一発でrecordAnswer＋pos更新の両方を行っていたため、QuestionCardの
+  //   key={id+pos}が次の問題へ即座に切り替わり、間違いの型を選ぶUI（onMissType）が
+  //   表示される前に消えてしまっていた（#8はこの分離が前提）。
+  const recordCurrent = (correct, grade, selfKind, objectiveCorrect) => {
     const cur = byId[session.ids[session.pos]];
-    if (cur) recordAnswer(cur, correct, grade, undefined, selfKind);
+    if (!cur) return;
+    const leechEvent = recordAnswer(cur, correct, grade, undefined, selfKind, objectiveCorrect);
+    if (leechEvent === 'became') {
+      onToast?.(`⚠️ 要注意（${LEECH_THRESHOLD}回以上の誤答）：「${(cur.question || '（図の問題）').slice(0, 20)}」。解説の読み方を変えてみましょう`); // #6
+    } else if (leechEvent === 'resolved') {
+      onToast?.(`✅ 要注意を脱出！「${(cur.question || '（図の問題）').slice(0, 20)}」がマスターになりました`); // #6
+    }
+    if (selfKind === 'sankaku' || selfKind === 'batsu') {
+      recordSelfKindCount(cur.id, selfKind).then(setSelfKindCounts); // #9
+    }
+  };
+  const advance = () => {
     const newPos = session.pos + 1;
     updateSession({ pos: newPos });
     if (newPos < session.target && newPos % SET_SIZE === 0) setShowBreak(true);
+  };
+  // FastCard（高速回転モード）には間違いの型を尋ねる仕組みが無いため、
+  //   記録と前進を1回でまとめて行う従来通りの動きにする。
+  const answeredFast = (correct, grade, selfKind) => {
+    recordCurrent(correct, grade, selfKind, undefined);
+    advance();
   };
 
   // ===== 開始・続きから 画面 =====
@@ -316,6 +367,23 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
               </div>
             </div>
           )}
+
+          {/* #7：要注意（リーチ）件数。増えていることに気づけないと放置されがちなので開始前に見せる */}
+          {leechCount > 0 && (
+            <p className="inline-note" style={{ marginTop: 8 }}>
+              ⚠️ 要注意（{LEECH_THRESHOLD}回以上の誤答）の問題が<strong>{leechCount}問</strong>あります。
+              {onGoReview && <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => onGoReview()}>復習で見る</button>}
+            </p>
+          )}
+
+          {/* #11：今日集中すべき科目の声掛け（問題の進捗・科目の手薄さ・過去問の頻出度から自動提案） */}
+          {focusSubject && (
+            <p className="inline-note" style={{ marginTop: 8 }}>
+              🧭 たまには苦手分野の「{focusSubject.subject.name}」にも挑戦してみましょう（{focusSubject.reason}）。
+              <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => setSubject(focusSubject.subject.name)}>この科目にしぼる</button>
+            </p>
+          )}
+
           <input
             type="text"
             value={term}
@@ -450,6 +518,13 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           <p className="hint" style={{ marginTop: 8 }}>
             基礎タスク:バッファ = {Math.round(bufferPlan.ratio * 100)}:{100 - Math.round(bufferPlan.ratio * 100)}
             （設定画面で調整できます）。問題数は、あなたの過去の平均解答時間（1問あたり約{bufferPlan.secPerQuestion}秒）から概算しています。
+            {/* #19：体調による比率の微調整を、既に効いていることが分かるよう明示する */}
+            {mood && (
+              <>
+                <br />
+                今日の調子「{MOODS.find((m) => m.id === mood)?.label || mood}」に合わせて±5%の範囲で調整済みです。
+              </>
+            )}
           </p>
           <button
             className="btn primary block lg"
@@ -497,13 +572,14 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     // これが無いと、これらの可変長セッションの長さがたまたま60/300/900をまたいだ時に
     // 無関係な「今日の目標300問達成！」等の文言・2周目ボタンが出てしまう。
     const isStandardSession = !session.label && !session.buffer;
-    const doneIco = !isStandardSession ? (session.buffer ? '🧩' : '🔁') : requested >= 900 ? '🏆' : requested >= 300 ? '🎉' : '✅';
+    const dailyGoal = settings.dailyGoal ?? 300; // #12：今日の目標問数（設定で調整可）。300問固定の表示をやめる
+    const doneIco = !isStandardSession ? (session.buffer ? '🧩' : '🔁') : requested >= 900 ? '🏆' : requested >= dailyGoal ? '🎉' : '✅';
     const doneTitle = !isStandardSession
       ? `${session.label || '基礎タスク'}完了！（${requested}問）`
       : requested >= 900
       ? '1周（900問）終了！'
-      : requested >= 300
-      ? '今日の目標 300問 達成！'
+      : requested >= dailyGoal
+      ? `今日の目標 ${dailyGoal}問 達成！`
       : requested >= 60
       ? '1セット（60問）完了！'
       : `すきま学習（${requested}問）完了！`;
@@ -511,7 +587,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       ? 'おつかれさまでした。この調子で続けましょう。'
       : requested >= 900
       ? 'おつかれさまでした。苦手を分析して2周目へ進みましょう。'
-      : requested >= 300
+      : requested >= dailyGoal
       ? 'すばらしい集中力です。苦手の復習で定着させましょう。'
       : requested >= 60
       ? 'いいペースです。続けて次のセットへ。'
@@ -566,18 +642,6 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
               })()}
             </p>
           )}
-          <div className="btn-row" style={{ marginTop: 8 }}>
-            <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
-            {onGoAudio && (
-              <button className="btn" onClick={() => onGoAudio?.()}>🔊 音声で復習する</button>
-            )}
-            {isStandardSession && requested >= 900 ? (
-              <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>2周目を開始</button>
-            ) : (
-              <button className="btn primary" onClick={() => begin(requested, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true, label: session.label })}>もう一度</button>
-            )}
-          </div>
-          <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>
         </div>
 
         {/* 3分の2バッファ術：振り返り後のバッファ枠（ご褒美復習／積み残し消化） */}
@@ -685,6 +749,23 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           </div>
         )}
 
+        {/* #30：弱点分析・誤答一覧を見たあとに次の行動を選べるよう、「もう一度」等はここに置く
+            （以前は完了直後の最上部にあり、下の弱点分析を見る前に押せてしまっていた） */}
+        <div className="card">
+          <div className="btn-row">
+            <button className="btn accent" onClick={() => onGoReview?.()}>苦手を復習する</button>
+            {onGoAudio && (
+              <button className="btn" onClick={() => onGoAudio?.()}>🔊 音声で復習する</button>
+            )}
+            {isStandardSession && requested >= 900 ? (
+              <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>2周目を開始</button>
+            ) : (
+              <button className="btn primary" onClick={() => begin(requested, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true, label: session.label })}>もう一度</button>
+            )}
+          </div>
+          <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>
+        </div>
+
         {/* 明日の最初の1タスク：次に開いた時「何から始めるか」で迷わないよう、1つだけ決めておく */}
         <div className="card">
           <div className="section-label" style={{ marginTop: 0 }}>📌 明日の最初の1タスクを決めておく</div>
@@ -721,12 +802,13 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     // target===300（かつ誤答復習・バッファ枠等の可変長セッションではない）の時だけ
     // 「今日の目標達成」を出す。posだけで判定すると、900問（1周）セッション中に
     // 300問地点を通過した瞬間に誤って表示されてしまう。
-    const isDaily = !session.label && !session.buffer && session.target === 300 && session.pos === 300;
+    const dailyGoal = settings.dailyGoal ?? 300; // #12
+    const isDaily = !session.label && !session.buffer && session.target === dailyGoal && session.pos === dailyGoal;
     return (
       <div className="view">
         <div className="card sess-break">
           <div className="sess-done-ico">{isDaily ? '🎉' : '☕'}</div>
-          <h2>{isDaily ? '今日の目標 300問 達成！' : `ひと区切り（${session.pos}問）`}</h2>
+          <h2>{isDaily ? `今日の目標 ${dailyGoal}問 達成！` : `ひと区切り（${session.pos}問）`}</h2>
           <p className="view-desc" style={{ textAlign: 'center' }}>
             {isDaily ? 'ここまでで今日の基本目標はクリア。休んでもOK、続けてもOK。' : 'よく集中できました。少し休むと定着します。'}
           </p>
@@ -788,7 +870,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
         <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{harioReminder}」</p>
       )}
       {session.fast ? (
-        <FastCard key={current.id + '@' + session.pos} question={current} onGraded={answered} GRADES={GRADES} />
+        <FastCard key={current.id + '@' + session.pos} question={current} onGraded={answeredFast} GRADES={GRADES} />
       ) : (
         <QuestionCard
           key={current.id + '@' + session.pos}
@@ -798,14 +880,16 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           link={links[current.id]}
           onSetLink={setLink}
           onOpenKeyword={onOpenKeyword}
-          onAnswered={answered}
-          onNext={() => {}}
+          onAnswered={recordCurrent}
+          onNext={advance}
           selfGrade
           simple
           compact
           bookmarked={!!bookmarks[current.id]}
           onToggleBookmark={toggleBookmark}
           GRADES={GRADES}
+          onMissType={onMissType}
+          missType={latestMissType(missTypes[current.id])?.type || ''}
         />
       )}
       <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={() => setShowBreak(true)}>
@@ -921,6 +1005,11 @@ function FastCard({ question, onGraded, GRADES }) {
             <strong>正解：{question.type === 'ox' ? answer : `${question.answer + 1}. ${answer}`}</strong>
             {question.explanation && <div style={{ marginTop: 6 }}>{question.explanation}</div>}
           </div>
+          {question.explanation && (
+            <div className="recheck-prompt">
+              📖 解説を読んでから選びましょう。読まずに進めると、次に同じ問題が出た時も同じ所で間違えます。
+            </div>
+          )}
           <div className="selfgrade-row" style={{ marginTop: 14 }}>
             <button className="btn self-maru" onClick={() => pick('maru')}><span className="sg-mark">○</span>完璧</button>
             <button className="btn self-sankaku" onClick={() => pick('sankaku')}><span className="sg-mark">△</span>あいまい</button>

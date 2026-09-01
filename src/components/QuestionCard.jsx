@@ -17,7 +17,7 @@ export default function QuestionCard({
   link, // { keywords, note, related } 連結学習データ
   onSetLink, // (questionId, patch)
   onOpenKeyword, // (keyword) 連結マップへ飛ぶ
-  onAnswered, // (correct, grade?) 解答確定時
+  onAnswered, // (correct, grade?, kind?, objectiveCorrect?) 解答確定時
   onNext,
   showMemo = true,
   gradeMode = false,
@@ -43,6 +43,7 @@ export default function QuestionCard({
   const [memoOpen, setMemoOpen] = useState(false);
   const [memoText, setMemoText] = useState(memo || '');
   const [askType, setAskType] = useState(false); // 間違いの型を尋ねている最中
+  const [confirmMismatch, setConfirmMismatch] = useState(false); // 客観的には不正解なのに「○完璧」を押した時の確認（#1）
   const [moreOpen, setMoreOpen] = useState(false); // 「もっと」（メモ・連結）の開閉
   const [addedKw, setAddedKw] = useState([]); // この問題で精緻化として追加した語（✓表示用）
   const [zoom, setZoom] = useState(false); // 図の拡大表示（#17）
@@ -84,6 +85,7 @@ export default function QuestionCard({
     setMemoOpen(false);
     setMemoText(memo || '');
     setAskType(false);
+    setConfirmMismatch(false);
     setMoreOpen(false);
     setAddedKw([]);
     setWhy('');
@@ -106,14 +108,14 @@ export default function QuestionCard({
     setRevealed(true);
     if (!gradeMode && !selfGrade) {
       // 通常モードは即記録
-      onAnswered?.(idx === question.answer);
+      onAnswered?.(idx === question.answer, undefined, undefined, idx === question.answer);
       setRecorded(true);
     }
   };
 
   // 評価ボタン（復習モード）
   const grade = (g) => {
-    onAnswered?.(correct, g);
+    onAnswered?.(correct, g, undefined, correct);
     setRecorded(true);
     onNext?.();
   };
@@ -121,15 +123,27 @@ export default function QuestionCard({
   // ○△✕ の自己評価（毎問）。△✕は「間違えた問題」として復習サイクルへ。
   //   kind（'maru'|'sankaku'|'batsu'）はonAnsweredの第3引数でそのまま渡し、
   //   あとで△（あいまい）と✕（わからない）を区別できるようにする。
-  const pickSelf = (kind) => {
+  //   4番目のobjectiveCorrectは選択肢の客観的な正誤（selected===question.answer）で、
+  //   自己申告の○△✕と食い違うことがある（#1・#2）。
+  //
+  // #1：選択肢を選んだうえで客観的には不正解なのに「○完璧」を押した場合、
+  //   そのまま記録せず一度確認を挟む（選び間違い・押し間違いの可能性があるため）。
+  //   opts.forced=trueで確認後に「はい、○のままにする」を選んだ時だけ、そのまま記録する。
+  const pickSelf = (kind, opts = {}) => {
     if (kind === 'maru') {
-      onAnswered?.(true, GRADES ? GRADES.easy : 5, kind);
+      if (!opts.forced && selected !== null && !correct) {
+        setConfirmMismatch(true);
+        return;
+      }
+      setConfirmMismatch(false);
+      onAnswered?.(true, GRADES ? GRADES.easy : 5, kind, correct);
       setRecorded(true);
       onNext?.();
       return;
     }
     // △・✕：復習対象に。型記録が有効なら型を尋ねてから次へ。
-    onAnswered?.(false, GRADES ? GRADES.again : 0, kind);
+    setConfirmMismatch(false);
+    onAnswered?.(false, GRADES ? GRADES.again : 0, kind, correct);
     setRecorded(true);
     if (onMissType) setAskType(true);
     else onNext?.();
@@ -176,7 +190,7 @@ export default function QuestionCard({
         return;
       }
       // 回答後
-      if (selfGrade && !askType) {
+      if (selfGrade && !askType && !confirmMismatch) {
         if (e.key === '1') { pickSelf('maru'); return; }
         if (e.key === '2') { pickSelf('sankaku'); return; }
         if (e.key === '3') { pickSelf('batsu'); return; }
@@ -482,6 +496,24 @@ export default function QuestionCard({
                 <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => pickType(null)}>
                   記録せず次へ →
                 </button>
+              </div>
+            ) : confirmMismatch ? (
+              <div className="grade-section">
+                <div className="grade-label">
+                  選んだ答えは不正解でした（正解は
+                  {question.type === 'ox'
+                    ? (question.answer === 0 ? '○' : '✕')
+                    : `${question.answer + 1}. ${question.choices[question.answer]}`}
+                  ）。それでも「完璧」でよいですか？
+                </div>
+                <div className="btn-row">
+                  <button className="btn self-maru" onClick={() => pickSelf('maru', { forced: true })}>
+                    はい、○のままにする
+                  </button>
+                  <button className="btn self-sankaku" onClick={() => pickSelf('sankaku')}>
+                    △にする（正解は分からなかった）
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grade-section">

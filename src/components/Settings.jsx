@@ -15,6 +15,7 @@ import VoiceClone from './VoiceClone.jsx';
 import P2PTransfer from './P2PTransfer.jsx';
 import FileBackupCard from './FileBackupCard.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
+import MissTypeHistoryCard from './MissTypeHistoryCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
 import { requestPersistent } from '../lib/storageHealth.js';
 import SnapshotsCard from './SnapshotsCard.jsx';
@@ -586,6 +587,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       <SnapshotsCard onToast={onToast} />
       <Diagnostics store={store} onToast={onToast} />
       <ErrorLogCard onToast={onToast} />
+      <MissTypeHistoryCard onToast={onToast} />
     </div>
   );
 }
