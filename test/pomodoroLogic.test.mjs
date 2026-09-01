@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, clampDraftCommit, ADVANCE_GUARD, BEEP_TONES, toneFreq } from '../src/lib/pomodoroLogic.js';
+import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, clampDraftCommit, ADVANCE_GUARD, BEEP_TONES, toneFreq, cyclePosition } from '../src/lib/pomodoroLogic.js';
 
 test('durationSec: 各フェーズの分数をcfgから秒に変換する', () => {
   const cfg = { study: 25, shortBreak: 5, longBreak: 15 };
@@ -137,4 +137,30 @@ test('toneFreq: 指定した種類の周波数を返す', () => {
   const low = BEEP_TONES.find((t) => t.id === 'low');
   assert.equal(toneFreq({ beepTone: 'low' }, 'study'), low.freq[0]);
   assert.equal(toneFreq({ beepTone: 'low' }, 'break'), low.freq[1]);
+});
+
+// 「長休憩まで（回）」を変更した直後でも位置表示が食い違わないことを固定化する
+// （サイクル数変更で周回位置が壊れないことのテスト、項目22）。
+test('cyclePosition: 一度も完走していなければ0', () => {
+  assert.equal(cyclePosition(0, 4), 0);
+});
+
+test('cyclePosition: 割り切れない位置はそのまま剰余', () => {
+  assert.equal(cyclePosition(1, 4), 1);
+  assert.equal(cyclePosition(3, 4), 3);
+});
+
+test('cyclePosition: ちょうど割り切れた直後はcyclesを返す（0に戻さない）', () => {
+  assert.equal(cyclePosition(4, 4), 4);
+  assert.equal(cyclePosition(8, 4), 4);
+});
+
+test('cyclePosition: cyclesを設定変更しても計算式は同じ（doneはそのまま新しいcyclesで数え直される）', () => {
+  assert.equal(cyclePosition(5, 6), 5);
+  assert.equal(cyclePosition(6, 6), 6);
+  assert.equal(cyclePosition(7, 6), 1);
+});
+
+test('cyclePosition: cyclesが未指定でも既定4で計算する', () => {
+  assert.equal(cyclePosition(4, undefined), 4);
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import * as storage from '../lib/storage.js';
-import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, toneFreq } from '../lib/pomodoroLogic.js';
-import { loadPomoState, savePomoState, clearPomoState } from '../lib/pomoState.js';
+import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, toneFreq, cyclePosition } from '../lib/pomodoroLogic.js';
+import { loadPomoState, savePomoState, clearPomoState, loadPomoUi, savePomoUi } from '../lib/pomoState.js';
 import {
   loadPomoLog, appendPomoLog, todayStart, weekStart, totalStudySecSince, countSince,
   exportPomoLogCsv, clearPomoLog,
@@ -13,6 +13,8 @@ import { requestNotifyPermissionIfNeeded } from '../lib/pomoNotify.js';
 import { useLongPress } from '../lib/useLongPress.js';
 import { downloadFile } from '../lib/download.js';
 import { harioPomoEncourage } from '../data/haripan.js';
+import { setPomoRunning } from '../lib/runtimeFlags.js';
+import { logError } from '../lib/errorLog.js';
 
 // 設定パネル（プリセット・分数・音・統計のUI一式）はここでだけlazy importする。
 // Pomodoro自体はApp.jsxの常時マウント対象（下部ナビ以外で唯一の例外）なので、
@@ -47,7 +49,8 @@ const PHASES = {
 
 const BC_NAME = 'shinkyu-pomo';
 const HELLO_INTERVAL_MS = 4000; // 幹事タブ判定のための生存報告の間隔
-const LEADER_SETTLE_MS = 300; // 起動直後の復元処理だけ、他タブのhelloが届くのを少し待つ
+const LEADER_SETTLE_MS = 500; // 起動直後の復元処理だけ、他タブのhelloが届くのを少し待つ
+const RESTORED_TIMEOUT_MS = 3000; // 復元処理が固まった場合の保険（表示だけは出す）
 const PERSIST_INTERVAL_TICKS = 10; // 実行中の秒だけの保存間隔（毎秒書き込みしない）
 const BREAK_TIPS = ['👀 遠くを見て目を休めましょう', '🧘 肩を軽く回してみましょう', '💧 水分をとりましょう', '🚶 少し立って伸びをしましょう'];
 
@@ -109,7 +112,10 @@ function notify(title, body) {
 export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   const cfg = store.settings.pomodoro || {};
   const { updateSettings } = store;
-  const setCfg = useCallback((patch) => updateSettings({ pomodoro: { ...(store.settings.pomodoro || {}), ...patch } }), [store.settings.pomodoro, updateSettings]);
+  // updatedAtを毎回スタンプする：クラウド同期時にpomodoro設定だけは自分自身の
+  // 更新時刻で新旧を判定するため（progressMerge.jsのmergeSettings参照。無関係な
+  // 設定変更で他端末のポモドーロ設定が巻き戻るのを防ぐ）。
+  const setCfg = useCallback((patch) => updateSettings({ pomodoro: { ...(store.settings.pomodoro || {}), ...patch, updatedAt: Date.now() } }), [store.settings.pomodoro, updateSettings]);
 
   const [phase, setPhase] = useState('idle');
   const [running, setRunning] = useState(false);
@@ -129,6 +135,9 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   const [restored, setRestored] = useState(false);
   const [focusPrompt, setFocusPrompt] = useState(false); // 勉強フェーズ終了直後の集中度セルフチェック
   const [pauseReasonPrompt, setPauseReasonPrompt] = useState(false); // 勉強中に一時停止した理由（任意）
+  const [confirmClose, setConfirmClose] = useState(false); // 「閉じる（オフにする）」の確認
+  const [lastSavedAt, setLastSavedAt] = useState(0); // 診断表示：最後に保存できた時刻
+  const [leaderDisplay, setLeaderDisplay] = useState(true); // 診断表示：自分が幹事タブか
 
   const audioRef = useRef(null);
   const fileRef = useRef(null);
@@ -141,6 +150,8 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   const peersRef = useRef(new Map());
   const longBreakCountRef = useRef(0);
   const refreshDebounceRef = useRef(null);
+  const didRestoreRef = useRef(false);
+  const pendingRetryRef = useRef(false); // 直近の保存が失敗し、次のtickで再試行が必要か
 
   const now = () => Date.now();
 
@@ -152,36 +163,84 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   }, []);
 
   // ---- 起動時：保存済みの状態を復元し、閉じていた間の経過を追いつかせる ----
+  // store.settingsは非同期に読み込まれる（最初はDEFAULT_SETTINGSでpomodoroが無く、
+  // cfgが{}になっている）ため、store.loadedになるまで待ってから復元する。
+  // ここを待たずに復元すると、ユーザーが設定した勉強・休憩の分数ではなく既定値
+  // （25分等）で「経過した分の休憩の長さ」等を計算してしまうことがある。
   useEffect(() => {
+    if (!store.loaded || didRestoreRef.current) return undefined;
+    didRestoreRef.current = true;
     let alive = true;
-    loadPomoState().then((s) => {
-      if (!alive || !s) { setRestored(true); return; }
-      if (s.running && s.phaseEndAt) {
-        const r = advanceState({ phase: s.phase, phaseEndAt: s.phaseEndAt, done: s.done || 0, cfg });
-        setPhase(r.phase);
-        setPhaseEndAt(r.phaseEndAt);
-        setDone(r.done);
-        setRunning(r.phase !== 'idle');
-        if (r.transitions.length > 0) {
-          // 他タブも同時に復元中かもしれないので、少しだけ待って幹事タブが確定してから
-          // 統計記録・通知を行う（両方のタブがここを通っても2重に記録しないため）。
-          setTimeout(() => {
-            if (!alive || !isLeaderNow()) return;
-            processTransitions(r.transitions, { silent: r.transitions.length > 1 });
-            persistAndBroadcast({ phase: r.phase, running: r.phase !== 'idle', remaining, phaseEndAt: r.phaseEndAt, done: r.done });
-          }, LEADER_SETTLE_MS);
+    loadPomoState()
+      .then((s) => {
+        if (!alive || !s) return;
+        if (s.running && s.phaseEndAt) {
+          const r = advanceState({ phase: s.phase, phaseEndAt: s.phaseEndAt, done: s.done || 0, cfg });
+          setPhase(r.phase);
+          setPhaseEndAt(r.phaseEndAt);
+          setDone(r.done);
+          setRunning(r.phase !== 'idle');
+          if (r.transitions.length > 0) {
+            // 他タブも同時に復元中かもしれないので、少しだけ待って幹事タブが確定してから
+            // 統計記録・通知を行う（両方のタブがここを通っても2重に記録しないため）。
+            setTimeout(() => {
+              if (!alive || !isLeaderNow()) return;
+              processTransitions(r.transitions, { silent: r.transitions.length > 1 });
+              persistAndBroadcast({ phase: r.phase, running: r.phase !== 'idle', remaining, phaseEndAt: r.phaseEndAt, done: r.done });
+            }, LEADER_SETTLE_MS);
+          }
+        } else {
+          setPhase(s.phase || 'idle');
+          setRemaining(s.remaining ?? (cfg.study || 25) * 60);
+          setDone(s.done || 0);
+          setRunning(false);
         }
-      } else {
-        setPhase(s.phase || 'idle');
-        setRemaining(s.remaining ?? (cfg.study || 25) * 60);
-        setDone(s.done || 0);
-        setRunning(false);
-      }
-      setRestored(true);
-    });
+      })
+      .catch((e) => {
+        if (!alive) return;
+        // IndexedDB・localStorageの両方が失敗した本当の異常系。「何も保存していない」
+        // （＝初回利用）とは区別して知らせる。
+        logError('pomoState-load', e?.message || String(e));
+        onToast?.('⚠️ 前回のタイマー状態を復元できませんでした（待機中から始めます）');
+      })
+      .finally(() => {
+        if (alive) setRestored(true);
+      });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.loaded]);
+
+  // 保険：復元処理が何らかの理由で固まっても、一定時間後には表示だけ出す
+  // （store.loadedが永遠にtrueにならない等、通常は起こらない異常系向け）。
+  useEffect(() => {
+    const t = setTimeout(() => setRestored(true), RESTORED_TIMEOUT_MS);
+    return () => clearTimeout(t);
   }, []);
+
+  // ---- 表示だけの一時状態（最小化/展開・設定パネル開閉・入力中のタグ・各種プロンプト）を復元 ----
+  // フェーズ計算とは無関係な「見た目」の情報。SW更新などで予期せずページが再読み込みされても、
+  // 開いていた表示状態がいきなり畳まれたり入力中の文字が消えたりしないようにする。
+  useEffect(() => {
+    let alive = true;
+    loadPomoUi().then((ui) => {
+      if (!alive || !ui) return;
+      if (typeof ui.min === 'boolean') setMin(ui.min);
+      if (typeof ui.open === 'boolean') setOpen(ui.open);
+      if (typeof ui.tag === 'string') setTag(ui.tag);
+      if (typeof ui.focusPrompt === 'boolean') setFocusPrompt(ui.focusPrompt);
+      if (typeof ui.pauseReasonPrompt === 'boolean') setPauseReasonPrompt(ui.pauseReasonPrompt);
+    });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    savePomoUi({ min, open, tag, focusPrompt, pauseReasonPrompt });
+  }, [min, open, tag, focusPrompt, pauseReasonPrompt]);
+
+  // SW更新等でのリロード判断（main.jsx）が、実行中を巻き込んで断りなく起きないようにする。
+  useEffect(() => {
+    setPomoRunning(running);
+    return () => setPomoRunning(false);
+  }, [running]);
 
   // ---- 今日・今週の統計を読み込む（複数のフェーズ完走が短時間に続いても1回にまとめる） ----
   const refreshStats = useCallback(() => {
@@ -238,9 +297,44 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   // 実行中はphaseEndAtがあればremainingは受信側で使わないため、送るデータを削って
   // BroadcastChannelのメッセージを小さくする（保存の方は復元用にそのまま残す）。
   const persistAndBroadcast = useCallback((s) => {
-    savePomoState(s);
+    savePomoState(s).then((ok) => {
+      if (ok) {
+        setLastSavedAt(Date.now());
+        pendingRetryRef.current = false;
+      } else {
+        // 失敗した瞬間だけ記録する（毎tick同じ失敗を書き続けて埋もれさせない）。
+        if (!pendingRetryRef.current) logError('pomoState-save', '保存に失敗しました（次のtickで再試行します）');
+        pendingRetryRef.current = true;
+      }
+    });
     broadcast(s.running ? { phase: s.phase, running: true, phaseEndAt: s.phaseEndAt, done: s.done } : s);
   }, []);
+
+  // タブを閉じる・隠す・別ページへ移る直前に、間引き保存を待たず今の状態を確実に書き込む
+  // （SW更新でのリロードやOSによるタブ破棄など、あらゆる「不意に終わる」場面への保険）。
+  useEffect(() => {
+    const flushNow = () => {
+      if (phase === 'idle') return;
+      const r = running ? remainingSecOf({ running, phaseEndAt, remaining }, Date.now()) : remaining;
+      persistAndBroadcast({ phase, running, remaining: r, phaseEndAt, done });
+    };
+    const onHidden = () => { if (document.visibilityState === 'hidden') flushNow(); };
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', flushNow);
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', flushNow);
+    };
+  }, [phase, running, phaseEndAt, remaining, done, persistAndBroadcast]);
+
+  // 診断表示用：自分が幹事タブかどうかを、設定パネルを開いている間だけ定期的に見直す
+  // （閉じている間は不要な計算をしない）。
+  useEffect(() => {
+    if (!open) return undefined;
+    setLeaderDisplay(isLeaderNow());
+    const t = setInterval(() => setLeaderDisplay(isLeaderNow()), 2000);
+    return () => clearInterval(t);
+  }, [open, isLeaderNow]);
 
   // 開始Music（保存済みBlob）を読み込む
   useEffect(() => {
@@ -356,7 +450,8 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
           }
         }
         persistTickRef.current += 1;
-        if (persistTickRef.current >= PERSIST_INTERVAL_TICKS) {
+        // 通常は間引き保存だが、直前の保存が失敗していた時は次のtickで即座に再試行する。
+        if (persistTickRef.current >= PERSIST_INTERVAL_TICKS || pendingRetryRef.current) {
           persistTickRef.current = 0;
           persistAndBroadcast({ phase, running: true, remaining, phaseEndAt, done });
         }
@@ -450,6 +545,21 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
     // 進行中の記録が無ければ確認せずリセットする（待機中に押しても失うものが無いため）
     if (phase === 'idle' && done === 0) { doReset(); return; }
     setConfirmReset(true);
+  };
+
+  // 「閉じる（オフにする）」は内部的にリセットも兼ねる、リセットボタンと同じかそれ以上に
+  // 破壊的な操作（進行状況を失った上に表示ごと消える）。以前は無条件に即実行していたため、
+  // 設定パネルを開いて別の項目を押そうとして誤ってこれを押すと、確認なしに全部失っていた。
+  // リセットボタンと同じ基準（進行中の記録が無ければ確認しない）で確認を挟む。
+  const doClose = () => {
+    doReset();
+    setCfg({ enabled: false });
+    setOpen(false);
+    setConfirmClose(false);
+  };
+  const closePomodoro = () => {
+    if (phase === 'idle' && done === 0) { doClose(); return; }
+    setConfirmClose(true);
   };
 
   const skip = () => {
@@ -628,7 +738,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
         {Array.from({ length: cycles }).map((_, i) => (
           <i key={i} className={i < done % cycles || (done > 0 && done % cycles === 0 && phase === 'long') ? 'on' : ''} />
         ))}
-        <span className="pomo-cycles-label">サイクル {(done % cycles) || (done > 0 && done % cycles === 0 ? cycles : 0)}/{cycles}</span>
+        <span className="pomo-cycles-label">サイクル {cyclePosition(done, cycles)}/{cycles}</span>
       </div>
       <div className="pomo-stats">
         今日 {Math.round(stats.todaySec / 60)}分（{stats.todayCount}回）・今週 {Math.round(stats.weekSec / 60)}分
@@ -674,67 +784,85 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
 
       {open && !confirmReset && (
         <div className="pomo-config">
-          <p className="pomo-hint" style={{ marginTop: 0 }}>📖勉強・☕短い休憩・🌴長い休憩</p>
-          <Suspense fallback={<p className="pomo-hint">読み込み中…</p>}>
-            <PomodoroConfigFields cfg={cfg} setCfg={setCfg} />
-          </Suspense>
-
-          <div className="pomo-tag-row">
-            <label className="pomo-tag-label">
-              今回の勉強内容（任意）
-              <input
-                type="text"
-                value={tag}
-                onChange={(e) => setTag(e.target.value)}
-                onBlur={commitTagToHistory}
-                placeholder="例：解剖学・上肢神経"
-                maxLength={40}
-              />
-            </label>
-            {(cfg.tagHistory || []).length > 0 && (
-              <div className="chip-row" style={{ marginTop: 6 }}>
-                {(cfg.tagHistory || []).map((t) => (
-                  <button key={t} className="chip" onClick={() => setTag(t)}>{t}</button>
-                ))}
+          {confirmClose ? (
+            <>
+              <p className="pomo-hint" style={{ margin: '0 0 8px', color: 'var(--text)' }}>
+                本当にポモドーロを閉じますか？（現在の進行状況が失われ、表示もオフになります）
+              </p>
+              <div className="btn-row">
+                <button className="btn danger sm" onClick={doClose}>はい、閉じる</button>
+                <button className="btn ghost sm" onClick={() => setConfirmClose(false)}>いいえ</button>
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              <p className="pomo-hint" style={{ marginTop: 0 }}>📖勉強・☕短い休憩・🌴長い休憩</p>
+              <Suspense fallback={<p className="pomo-hint">読み込み中…</p>}>
+                <PomodoroConfigFields cfg={cfg} setCfg={setCfg} />
+              </Suspense>
 
-          <div className="pomo-music">
-            <label className="pomo-switch">
-              <input type="checkbox" checked={!!cfg.startMusic} onChange={(e) => setCfg({ startMusic: e.target.checked })} disabled={!hasMusic} />
-              <span>勉強開始Musicを鳴らす（気分を上げる）</span>
-            </label>
-            <div className="pomo-music-row">
-              <input ref={fileRef} type="file" accept="audio/*" onChange={pickMusic} style={{ display: 'none' }} />
-              <button className="btn sm" onClick={() => fileRef.current?.click()}>🎵 音楽ファイルを選ぶ</button>
-              {hasMusic && (
-                <>
-                  <button className="btn sm ghost" onClick={playStartMusic}>試聴</button>
-                  <button className="btn sm ghost" onClick={removeMusic}>削除</button>
-                </>
+              <div className="pomo-tag-row">
+                <label className="pomo-tag-label">
+                  今回の勉強内容（任意）
+                  <input
+                    type="text"
+                    value={tag}
+                    onChange={(e) => setTag(e.target.value)}
+                    onBlur={commitTagToHistory}
+                    placeholder="例：解剖学・上肢神経"
+                    maxLength={40}
+                  />
+                </label>
+                {(cfg.tagHistory || []).length > 0 && (
+                  <div className="chip-row" style={{ marginTop: 6 }}>
+                    {(cfg.tagHistory || []).map((t) => (
+                      <button key={t} className="chip" onClick={() => setTag(t)}>{t}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="pomo-music">
+                <label className="pomo-switch">
+                  <input type="checkbox" checked={!!cfg.startMusic} onChange={(e) => setCfg({ startMusic: e.target.checked })} disabled={!hasMusic} />
+                  <span>勉強開始Musicを鳴らす（気分を上げる）</span>
+                </label>
+                <div className="pomo-music-row">
+                  <input ref={fileRef} type="file" accept="audio/*" onChange={pickMusic} style={{ display: 'none' }} />
+                  <button className="btn sm" onClick={() => fileRef.current?.click()}>🎵 音楽ファイルを選ぶ</button>
+                  {hasMusic && (
+                    <>
+                      <button className="btn sm ghost" onClick={playStartMusic}>試聴</button>
+                      <button className="btn sm ghost" onClick={removeMusic}>削除</button>
+                    </>
+                  )}
+                </div>
+                <div className="pomo-hint">
+                  {hasMusic ? '設定済み。勉強開始時に再生されます。' : '端末の音楽ファイルを選ぶと、勉強開始時に再生できます（15MBまで）。'}
+                </div>
+              </div>
+
+              <Suspense fallback={null}>
+                <PomodoroStatsPanel log={pomoLogRaw} onExportCsv={exportStatsCsv} onResetStats={resetStats} />
+              </Suspense>
+
+              {onNavigate && (
+                <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={() => onNavigate('g100guide')}>
+                  ⏱️ G-100ガイドの「時間攻め」も見る（一問一答の5秒/10秒モード）
+                </button>
               )}
-            </div>
-            <div className="pomo-hint">
-              {hasMusic ? '設定済み。勉強開始時に再生されます。' : '端末の音楽ファイルを選ぶと、勉強開始時に再生できます（15MBまで）。'}
-            </div>
-          </div>
 
-          <Suspense fallback={null}>
-            <PomodoroStatsPanel log={pomoLogRaw} onExportCsv={exportStatsCsv} onResetStats={resetStats} />
-          </Suspense>
+              <p className="pomo-hint">キーボードのスペースキーで開始/一時停止できます（入力欄にフォーカスが無い時）。</p>
+              <p className="pomo-hint">
+                🔧 診断：最後に保存 {lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString('ja-JP') : '-'}
+                ／幹事タブ：{leaderDisplay ? 'はい' : 'いいえ（別タブが担当）'}
+              </p>
 
-          {onNavigate && (
-            <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={() => onNavigate('g100guide')}>
-              ⏱️ G-100ガイドの「時間攻め」も見る（一問一答の5秒/10秒モード）
-            </button>
+              <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={closePomodoro}>
+                ポモドーロを閉じる（オフにする）
+              </button>
+            </>
           )}
-
-          <p className="pomo-hint">キーボードのスペースキーで開始/一時停止できます（入力欄にフォーカスが無い時）。</p>
-
-          <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={() => { doReset(); setCfg({ enabled: false }); setOpen(false); }}>
-            ポモドーロを閉じる（オフにする）
-          </button>
         </div>
       )}
     </div>

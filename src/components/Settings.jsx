@@ -16,6 +16,7 @@ import P2PTransfer from './P2PTransfer.jsx';
 import FileBackupCard from './FileBackupCard.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
+import { requestPersistent } from '../lib/storageHealth.js';
 import SnapshotsCard from './SnapshotsCard.jsx';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
@@ -226,9 +227,12 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           <input
             type="checkbox"
             checked={!!(settings.pomodoro && settings.pomodoro.enabled)}
-            onChange={(e) =>
-              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: e.target.checked } })
-            }
+            onChange={(e) => {
+              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: e.target.checked, updatedAt: Date.now() } });
+              // 消えにくいストレージへの格上げは、ユーザー操作を起点に依頼すると通りやすい。
+              // ONにする操作自体がその起点として自然なので、ここで一度だけ依頼する。
+              if (e.target.checked) requestPersistent().catch(() => {});
+            }}
           />
           <span>
             画面上部にポモドーロタイマーを表示
@@ -238,7 +242,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         <div style={{ marginTop: 10 }}>
           <PomodoroConfigFields
             cfg={settings.pomodoro || {}}
-            setCfg={(patch) => updateSettings({ pomodoro: { ...(settings.pomodoro || {}), ...patch } })}
+            setCfg={(patch) => updateSettings({ pomodoro: { ...(settings.pomodoro || {}), ...patch, updatedAt: Date.now() } })}
           />
         </div>
       </div>

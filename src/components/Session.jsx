@@ -463,7 +463,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             className="btn ghost sm block"
             style={{ marginTop: 6 }}
             onClick={() => {
-              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: true, study: bufferPlan.baseTaskMinutes } });
+              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: true, study: bufferPlan.baseTaskMinutes, updatedAt: Date.now() } });
               onToast?.(`🍅 ポモドーロの勉強時間を${bufferPlan.baseTaskMinutes}分に合わせました`);
             }}
           >

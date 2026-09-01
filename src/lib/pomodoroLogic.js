@@ -106,6 +106,19 @@ export function clampDraftCommit(raw, value, min, max) {
 }
 
 /**
+ * サイクル表示（◯/◯）の位置。「長休憩まで（回）」をユーザーが変更した直後でも、
+ * 位置の数え方がここ1か所（doneとcyclesの剰余）に集約されているので食い違わない。
+ * @param {number} done これまでに完走したstudyフェーズ数
+ * @param {number} cycles 長い休憩までの回数
+ * @returns {number} 0〜cycles（ちょうど割り切れた直後は0ではなくcyclesを返す＝直前に長休憩へ入った位置）
+ */
+export function cyclePosition(done, cycles) {
+  const c = cycles || 4;
+  if (done <= 0) return 0;
+  return (done % c) || c;
+}
+
+/**
  * 表示用の残り秒数（running中はphaseEndAtから逆算、停止中はremainingをそのまま使う）。
  * @param {{running:boolean, phaseEndAt:number, remaining:number}} state
  * @param {number} [now=Date.now()]
