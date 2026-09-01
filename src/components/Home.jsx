@@ -8,6 +8,7 @@ import { loadQuizProgress, clearQuizProgress, loadSyncMeta } from '../lib/storag
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import { maruStatusList, excludeMastered, maruSubjectBreakdown } from '../lib/maruPool.js';
 import { phaseForDate } from '../data/roadmapPhases.js';
+import { loadDismissedPriorityFocus, dismissPriorityFocus, suggestPriorityFocus } from '../lib/priorityFocus.js';
 import {
   detectBrokenYesterday,
   BREAK_REASONS,
@@ -99,6 +100,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     () => suggestUnvisitedFeature(featureRegistry, store.visitedViews),
     [store.visitedViews]
   );
+  // 🎯 開発優先度メモ（2026-09-02、ユーザー指定でホーム画面に日替わり提案）：
+  //   「今強化すべき機能ベスト3」を1件ずつ、消すまでずっと出し続ける（priorityFocus.js）。
+  const [priorityDismissed, setPriorityDismissed] = useState([]);
+  useEffect(() => { loadDismissedPriorityFocus().then(setPriorityDismissed); }, []);
+  const priorityFocus = useMemo(() => suggestPriorityFocus(priorityDismissed), [priorityDismissed]);
+  const dismissPriority = (id) => {
+    dismissPriorityFocus(id).then(setPriorityDismissed);
+  };
   // ✅ ○にした問題が溜まったら知らせる（学習画面「○にした問題をふりかえる」への導線）。
   //   #5：マスター済み（5連続○）を除いた「まだ検証が浅い○」の件数を基準にする。
   //   #6：科目内訳から最もマスター率が低い科目を名指しする。#9：直前期は件数によらず知らせる。
@@ -279,6 +288,18 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
                 <span className="inline-note" style={{ marginLeft: 4 }}>（{f.reason}）</span>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 🎯 開発優先度メモ：今強化すべき機能ベスト3を1件ずつ、消すまでずっと日替わりで提案する */}
+      {priorityFocus && (
+        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>🎯 今強化すべきポイント：{priorityFocus.title}</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>{priorityFocus.reason}</p>
+          <div className="btn-row">
+            <button className="btn primary sm" onClick={() => onNavigate(priorityFocus.view)}>{priorityFocus.cta}</button>
+            <button className="btn ghost sm" onClick={() => dismissPriority(priorityFocus.id)}>もう表示しない</button>
           </div>
         </div>
       )}
