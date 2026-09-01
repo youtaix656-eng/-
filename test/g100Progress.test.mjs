@@ -28,8 +28,32 @@ test('overallCoverageRate: 問題が無ければ0', () => {
 });
 
 test('overallCorrectRate: 正答率を返し、履歴が空ならnull', () => {
-  assert.equal(overallCorrectRate([{ correct: true }, { correct: false }, { correct: true }]), 2 / 3);
+  const history = [
+    { correct: true, at: 1 },
+    { correct: false, at: 2 },
+    { correct: true, at: 3 },
+  ];
+  assert.equal(overallCorrectRate(history), 2 / 3);
   assert.equal(overallCorrectRate([]), null);
+});
+
+test('overallCorrectRate: 直近windowSize件だけを見る（古い誤答に生涯引っ張られない）', () => {
+  // 最初に9問連続で誤答（ずっと前）、直近3問は全問正解
+  const old = Array.from({ length: 9 }, (_, i) => ({ correct: false, at: i }));
+  const recent = Array.from({ length: 3 }, (_, i) => ({ correct: true, at: 100 + i }));
+  const history = [...old, ...recent];
+  assert.equal(overallCorrectRate(history, 3), 1); // 直近3件だけなら全問正解
+  assert.equal(overallCorrectRate(history, 100), 3 / 12); // 全期間で見れば低いまま
+});
+
+test('overallCorrectRate: 履歴の並び順に依存しない（atで並べ替えてから直近を見る）', () => {
+  // 配列としては新しい解答が先頭に来ている（同期マージ等で順序が崩れたケースを想定）
+  const history = [
+    { correct: true, at: 300 },
+    { correct: false, at: 1 },
+    { correct: false, at: 2 },
+  ];
+  assert.equal(overallCorrectRate(history, 1), 1); // atが最大＝最新は正解
 });
 
 test('star3Count: ✕2回以上の問題数を数える', () => {
@@ -85,7 +109,7 @@ test('phaseChecks: 何も解いていない状態はphase1・未達（blocked/un
 });
 
 test('phaseChecks: 全問正解・全問解答済みでphase1完了、Aランク未達でphase2に留まる', () => {
-  const history = questions.map((q) => ({ questionId: q.id, correct: true }));
+  const history = questions.map((q, i) => ({ questionId: q.id, correct: true, at: i }));
   const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 0 }, q3: { correctStreak: 0 }, q4: { correctStreak: 5 } };
   const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults: [], roundLog: [] });
   assert.equal(r.phase1.status, 'done');
@@ -93,7 +117,7 @@ test('phaseChecks: 全問正解・全問解答済みでphase1完了、Aランク
 });
 
 test('phaseChecks: 即答5秒達成率はtimeAttackLogから実測される（データが無ければunknown）', () => {
-  const history = questions.map((q) => ({ questionId: q.id, correct: true }));
+  const history = questions.map((q, i) => ({ questionId: q.id, correct: true, at: i }));
   const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
   const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults: [], roundLog: [], timeAttackLog: [] });
   assert.equal(r.phase1.status, 'done');
@@ -104,7 +128,7 @@ test('phaseChecks: 即答5秒達成率はtimeAttackLogから実測される（�
 });
 
 test('phaseChecks: timeAttackLogの実績が閾値を超えればphase2もdoneになる', () => {
-  const history = questions.map((q) => ({ questionId: q.id, correct: true }));
+  const history = questions.map((q, i) => ({ questionId: q.id, correct: true, at: i }));
   const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
   const timeAttackLog = Array.from({ length: 10 }, () => ({ correct: true, ms: 3000 }));
   const r = phaseChecks({ questions, history, srs, selfKindCounts: {}, examResults: [], roundLog: [], timeAttackLog });
@@ -112,7 +136,7 @@ test('phaseChecks: timeAttackLogの実績が閾値を超えればphase2もdone�
 });
 
 test('phaseChecks: すべて満たせばcurrentPhaseId=complete', () => {
-  const history = questions.map((q) => ({ questionId: q.id, correct: true }));
+  const history = questions.map((q, i) => ({ questionId: q.id, correct: true, at: i }));
   const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
   const examResults = [82, 80, 78, 75, 74, 73].map((scorePct) => ({ scorePct }));
   const timeAttackLog = Array.from({ length: 10 }, () => ({ correct: true, ms: 3000 }));
@@ -130,7 +154,7 @@ test('nextActionFor: phase1未達なら未達項目の案内を返す', () => {
 });
 
 test('nextActionFor: すべて完了ならnull', () => {
-  const history = questions.map((q) => ({ questionId: q.id, correct: true }));
+  const history = questions.map((q, i) => ({ questionId: q.id, correct: true, at: i }));
   const srs = { q1: { correctStreak: 5 }, q2: { correctStreak: 5 }, q3: { correctStreak: 5 }, q4: { correctStreak: 5 } };
   const examResults = [82, 80, 78, 75, 74, 73].map((scorePct) => ({ scorePct }));
   const timeAttackLog = Array.from({ length: 10 }, () => ({ correct: true, ms: 3000 }));

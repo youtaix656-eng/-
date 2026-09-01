@@ -17,11 +17,18 @@ export function overallCoverageRate(questions, history) {
   return covered / questions.length;
 }
 
-// 全履歴を通した正答率（Phase1の「○率50%」の目安）
-export function overallCorrectRate(history) {
+// 直近の正答率（Phase1の「○率50%」の目安）。全期間の履歴で計算すると、
+// Phase1をとうに終えた人でも初期の誤答が生涯ずっと足を引っ張り続けてしまうため、
+// 直近の解答（既定300問＝学習セッションの「300問」バッチと同じ単位）だけを見る。
+// 300問に満たない場合はその時点の全件で計算する。
+export const RECENT_ACCURACY_WINDOW = 300;
+export function overallCorrectRate(history, windowSize = RECENT_ACCURACY_WINDOW) {
   if (!history || history.length === 0) return null;
-  const correct = history.filter((h) => h.correct).length;
-  return correct / history.length;
+  // atで並べ替えてから直近windowSize件を見る（履歴が入力順とは限らないため。
+  // 端末間同期のマージ等で順序が崩れているケースへの備え）。
+  const recent = [...history].sort((a, b) => a.at - b.at).slice(-windowSize);
+  const correct = recent.filter((h) => h.correct).length;
+  return correct / recent.length;
 }
 
 // ★3（✕2回以上）の件数（Phase3の「★3件数が0件」の判定に使う）

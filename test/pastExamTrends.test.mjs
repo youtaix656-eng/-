@@ -8,6 +8,7 @@ import {
   tagFrequency,
   subjectPriority,
   rankBreakdown,
+  genreOf,
 } from '../src/lib/pastExamTrends.js';
 import { applyAnswer, MASTER_STREAK } from '../src/lib/srs.js';
 
@@ -124,4 +125,55 @@ test('rankBreakdown: genre未設定の過去問はランク付けの対象外', 
   const rows = rankBreakdown(qs, {});
   const totalRanked = rows.reduce((s, r) => s + r.total, 0);
   assert.equal(totalRanked, 0);
+});
+
+// 医療概論は genre を持たない設計（tagsへ折り込み済み）のため、genreOf()がtagsから
+// 大項目｜中項目を復元できることを確認する。他科目はgenreがあればそのまま使う。
+function iryouQ(over) {
+  return { id: over.id, subject: '医療概論', tags: [], ...over };
+}
+
+test('genreOf: genreがあればそのまま返す（医療概論以外）', () => {
+  assert.equal(genreOf(q({ id: 'a', genre: 'あはき法｜免許' })), 'あはき法｜免許');
+});
+
+test('genreOf: 医療概論はtagsの末尾2つ（大項目・中項目）から復元する', () => {
+  const question = iryouQ({ id: 'iryo-1', tags: ['医療法', '地域医療支援病院', '現代の医療と社会', '医療と社会'] });
+  assert.equal(genreOf(question), '現代の医療と社会｜医療と社会');
+});
+
+test('genreOf: 医療概論でtagsの順序が違っても大項目・中項目の組が見つかれば復元する', () => {
+  const question = iryouQ({ id: 'iryo-55', tags: ['公費負担医療', '労災保険', '社会保障制度'] });
+  assert.equal(genreOf(question), '社会保障制度｜公費負担医療');
+});
+
+test('genreOf: 医療概論で該当する大項目・中項目がtagsに無ければnull（当てずっぽうにしない）', () => {
+  const question = iryouQ({ id: 'iryo-x', tags: ['よく分からないタグ'] });
+  assert.equal(genreOf(question), null);
+});
+
+test('genreOf: 医療概論以外でgenreが無ければnull', () => {
+  assert.equal(genreOf(q({ id: 'a', genre: undefined })), null);
+});
+
+test('genreFrequency: 医療概論もtagsから復元したジャンルで集計に入る', () => {
+  const qs = [
+    iryouQ({ id: 'iryo-1', round: 32, tags: ['医療法', '地域医療支援病院', '現代の医療と社会', '医療と社会'] }),
+    iryouQ({ id: 'iryo-2', round: 33, tags: ['特定機能病院', '現代の医療と社会', '医療と社会'] }),
+  ];
+  const genres = genreFrequency(qs, { subject: '医療概論' });
+  assert.equal(genres.length, 1);
+  assert.equal(genres[0].genre, '現代の医療と社会｜医療と社会');
+  assert.equal(genres[0].roundCount, 2);
+});
+
+test('rankBreakdown: 医療概論もtagsから復元したジャンルでAランク判定に入る', () => {
+  const qs = [
+    iryouQ({ id: 'iryo-1', round: 25, tags: ['現代の医療と社会', '医療と社会'] }),
+    iryouQ({ id: 'iryo-2', round: 32, tags: ['現代の医療と社会', '医療と社会'] }),
+    iryouQ({ id: 'iryo-3', round: 33, tags: ['現代の医療と社会', '医療と社会'] }),
+  ];
+  const rows = rankBreakdown(qs, {});
+  const a = rows.find((r) => r.id === 'A');
+  assert.equal(a.total, 3); // 3回にまたがって出題＝Aランク
 });
