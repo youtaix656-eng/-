@@ -18,6 +18,7 @@ import { loadMissTypes, recordMissType, latestMissType } from '../lib/missTypes.
 import { loadSelfKindCounts, recordSelfKindCount } from '../lib/starWeak.js';
 import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { daysUntil } from '../lib/gamify.js';
+import { maruQuestions } from '../lib/maruPool.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -124,6 +125,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       return hay.includes(t);
     });
   }, [afterRound, bookmarkOnly, bookmarks, term, links]);
+
+  // ○にした問題の見直し・高速回転用プール（上の絞り込み条件を引き継ぐ）。
+  //   自己採点で最後に○（完璧）を選んだ問題だけを対象にし、
+  //   ①問題演習で見直す（適当に○にしていないかの確認）②高速回転でインプット強化、の2通りに使う。
+  const maruPool = useMemo(() => maruQuestions(filteredPool, history), [filteredPool, history]);
 
   // 弱点タグ（#8）：直近の誤答が多いタグを上位に。タップでキーワードしぼり。
   const weakTags = useMemo(() => {
@@ -483,6 +489,36 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           ) : (
             <p className="inline-note" style={{ marginTop: 10 }}>
               新規と復習を混ぜる場合、同じ問題は繰り返さず該当する分だけ出題します（収録数が少ないと指定問数に満たないことがあります）。
+            </p>
+          )}
+        </div>
+
+        {/* ○にした問題の見直し・高速回転（上の絞り込みを引き継ぐ） */}
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>✅ ○にした問題をふりかえる</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            自己採点で最後に「○ 完璧」にした問題（現在の絞り込みで<strong>{maruPool.length}問</strong>）だけを対象にします。
+            あとで△・✕に変わった問題は自動で対象から外れます。
+          </p>
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button
+              className="btn"
+              disabled={maruPool.length === 0}
+              onClick={() => begin(maruPool.length, { pool: maruPool, subject, allowSeen: true, newRatio: 1, fast: false, label: '○の見直し' })}
+            >
+              📝 問題演習で見直す（適当に○にしていないか確認）
+            </button>
+            <button
+              className="btn"
+              disabled={maruPool.length === 0}
+              onClick={() => begin(maruPool.length, { pool: maruPool, subject, allowSeen: true, newRatio: 1, fast: true, label: '○の高速回転' })}
+            >
+              ⚡ 高速回転でインプット強化
+            </button>
+          </div>
+          {maruPool.length === 0 && (
+            <p className="inline-note" style={{ marginTop: 8 }}>
+              この条件で○にした問題はまだありません。学習を進めると、ここに対象が増えていきます。
             </p>
           )}
         </div>
