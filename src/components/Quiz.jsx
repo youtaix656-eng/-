@@ -303,6 +303,12 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
       <div className="view">
         <h2 className="view-title">一問一答</h2>
         <p className="view-desc">科目・条件を選んで演習を始めましょう。ランダムに出題されます。</p>
+        {history.length < 100 && (
+          <p className="inline-note" style={{ marginTop: -6, marginBottom: 10 }}>
+            はじめのうちは正答率を気にしなくて大丈夫です。まずは「分からない所をあぶり出す」つもりで進めましょう。
+            間違えた問題は自動で復習リストに入ります。
+          </p>
+        )}
 
         {streakBreakReasonLabel && (
           <div className="card" style={{ marginBottom: 10 }}>

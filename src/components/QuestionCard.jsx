@@ -363,6 +363,9 @@ export default function QuestionCard({
           {(whyPrompt || (selfGrade && revealed && selected !== null && !correct)) && onSetMemo && (
             <div className="why-box">
               <div className="elaborate-head">🤔 なぜこの答え？（自分の言葉で一言）</div>
+              <div className="inline-note" style={{ marginTop: 0, marginBottom: 6 }}>
+                書いておくと、同じ間違いを繰り返しにくくなります。
+              </div>
               <div className="goro-edit">
                 <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="理由・つながりを一言" />
                 <button className="btn primary sm" disabled={!why.trim()} onClick={() => { onSetMemo(question.id, (memo ? memo + ' / ' : '') + 'なぜ:' + why.trim()); setWhy(''); }}>記録</button>
@@ -487,7 +490,10 @@ export default function QuestionCard({
                     📖 解説を読んでから選びましょう。読まずに進めると、次に同じ問題が出た時も同じ所で間違えます。
                   </div>
                 )}
-                <div className="grade-label">この問題の理解度は？（△・✕は自動で復習リストに入ります）</div>
+                <div className="grade-label">
+                  この問題の理解度は？（正解・不正解ではなく「今また出たら自信を持って答えられるか」で選びましょう。
+                  △・✕は自動で復習リストに入ります）
+                </div>
                 <div className="selfgrade-row">
                   <button className="btn self-maru" onClick={() => pickSelf('maru')}>
                     <span className="sg-mark">○</span>完璧！自信あり
