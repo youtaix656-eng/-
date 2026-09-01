@@ -223,6 +223,16 @@
 70. **入力欄には必ずラベルを付ける**（placeholder は入力すると消えるので、
    何の欄か分からなくなる）。テストが機械チェックする。
 
+71. **地に敷く面（おもて）は、開くたびに変わる**（`components/Figures.jsx`＋`lib/figure.js`）。
+   **画像ファイルを持たない**——銅版画と同じで、明るいところに線を引き、暗いところは線を抜く。
+   目や口は「線を抜いた穴」として作る（塗りつぶしで隠さない）。色は `currentColor` だけ。
+   **前に出したものを避けて選ぶ**（ただの乱数だと同じものが続けて出て「変わらない」と見える。
+   選んだものは `settings.lastFigure` に覚えておく）。1枚足せば候補が自動で増える。
+72. **地の絵に文字を焼き込まない。** 文字は画面が出すもので、絵は地に徹する。
+   `<text>` を書かないことをテストが機械チェックする。
+73. **飾りより読みやすさを優先する**（`.figure-bg` の濃さは 0.35 以下・文字の多い下ほど
+   薄く落とす・`pointer-events: none`・読み上げからは外す）。テストが濃さの上限を見張る。
+
 ## 構成
 
 ```
@@ -251,6 +261,8 @@ src/lib/storage.js    localStorage のみ。**ネットワークに触れない*
 src/lib/focus.js      目次から飛んだ先へ運ぶ（React に依存しない。印は data-flash）
 src/data/glyphs.js    画面に出る印（絵文字を使わない）
 src/components/Ornament.jsx  飾りの線画（ウロボロス・六芒星と目・十字）
+src/components/Figures.jsx   地に敷く面（開くたびに変わる。画像ファイルを持たない）
+src/lib/figure.js     どの面を出すか選ぶ（前に出したものを避ける）
 src/lib/yomi.js       読み・並び・行分け（全アプリ共通の目次ルール）
 ```
 
@@ -264,7 +276,7 @@ src/lib/yomi.js       読み・並び・行分け（全アプリ共通の目次�
 ```bash
 npm install
 npm run dev      # 開発サーバー
-npm test         # node --test（270件）
+npm test         # node --test（280件）
 npm run build    # dist/ へ
 ```
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GLYPHS } from './data/glyphs.js';
 import { useStore } from './lib/useStore.js';
 import Home from './components/Home.jsx';
@@ -13,6 +13,8 @@ import TableOfContents from './components/TableOfContents.jsx';
 import Records from './components/Records.jsx';
 import Settings from './components/Settings.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import FigureBackground, { FIGURES } from './components/Figures.jsx';
+import { pickFigureId } from './lib/figure.js';
 
 const NAV = [
   { id: 'home', label: 'ホーム', icon: GLYPHS.sun },
@@ -46,6 +48,18 @@ export default function App() {
    */
   const uiRef = useRef({});
 
+  /**
+   * 地に敷く面（おもて）。**開き直すたびに変わる。**
+   * 前に出したものを避けて選び、選んだものを覚えておく
+   * （ただの乱数だと同じものが続けて出て「変わらない」と見える）。
+   */
+  const [figureId] = useState(() =>
+    pickFigureId(FIGURES.map((f) => f.id), store.settings.lastFigure),
+  );
+  useEffect(() => {
+    if (figureId && store.settings.lastFigure !== figureId) store.setSetting('lastFigure', figureId);
+  }, [figureId]);
+
   // 画面の先頭へ戻すのは**操作の一部**として行う。
   // 「focus が空なら先頭へ」という副作用にすると、目次から飛んだ直後に
   // focus を空へ戻した瞬間そちらが走り、飛び先まで運んだ画面が先頭へ引き戻される
@@ -78,6 +92,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <FigureBackground id={figureId} />
       {store.saveFailed && (
         <div className="note warn save-warn" role="alert">
           <strong>この端末に保存できていません。</strong>
