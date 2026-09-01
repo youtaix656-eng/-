@@ -9,11 +9,17 @@ import {
   removeCustomItem,
   buildChecklist,
 } from '../lib/examDayChecklist.js';
+import { phaseChecks } from '../lib/g100Progress.js';
+import { loadSelfKindCounts } from '../lib/starWeak.js';
+import { loadRoundLog } from '../lib/roundLog.js';
+import { loadTimeAttackLog } from '../lib/timeAttackLog.js';
+
+const PHASE_LABELS = { phase1: 'Phase1（全問精読）', phase2: 'Phase2（即答化）', phase3: 'Phase3（反射化）', complete: '卒業相当' };
 
 // 試験当日チェックリスト・タイムライン（⑧）。
 // 持ち物・当日の流れを「前日までに／当日の朝／会場に着いたら」の時系列でまとめて確認できる。
 export default function ExamDayChecklist({ store, onNavigate }) {
-  const { settings } = store;
+  const { settings, questions, history, srs, examResults } = store;
   const examLeft = daysUntil(settings.examDate);
 
   const [checked, setCheckedState] = useState({});
@@ -27,6 +33,19 @@ export default function ExamDayChecklist({ store, onNavigate }) {
   }, []);
 
   const checklist = useMemo(() => buildChecklist(customItems, checked), [customItems, checked]);
+
+  // 「実際に準備できているか」の目安（G-100の推定フェーズ・網羅率・★3件数はすでに他画面で
+  // 計算済みだったのに、当日チェックリストは持ち物チェックだけの静的な画面だった）。
+  const [selfKindCounts, setSelfKindCounts] = useState(null);
+  const [roundLog, setRoundLog] = useState(null);
+  const [timeAttackLog, setTimeAttackLog] = useState(null);
+  useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
+  useEffect(() => { loadRoundLog().then(setRoundLog); }, []);
+  useEffect(() => { loadTimeAttackLog().then(setTimeAttackLog); }, []);
+  const readiness = useMemo(() => {
+    if (selfKindCounts == null || roundLog == null || timeAttackLog == null) return null;
+    return phaseChecks({ questions, history, srs, selfKindCounts, examResults, roundLog, timeAttackLog });
+  }, [questions, history, srs, examResults, selfKindCounts, roundLog, timeAttackLog]);
 
   const toggle = async (itemId, done) => {
     const next = await saveChecked(itemId, done);
@@ -65,6 +84,19 @@ export default function ExamDayChecklist({ store, onNavigate }) {
             <div className="num">{checklist.done}/{checklist.total}</div>
             <div className="lbl">チェック済み</div>
           </div>
+        </div>
+      )}
+
+      {readiness && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>📍 実際の準備状況（実データから）</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            推定フェーズ：<strong>{PHASE_LABELS[readiness.currentPhaseId]}</strong>
+            {readiness.phase3.checks.find((c) => c.label.includes('★3'))?.value > 0 && (
+              <> ・ ★3（要注意）が<strong>{readiness.phase3.checks.find((c) => c.label.includes('★3')).value}件</strong>残っています</>
+            )}
+          </p>
+          <button className="btn ghost sm" onClick={() => onNavigate?.('g100guide')}>G-100ガイドで詳しく見る</button>
         </div>
       )}
 
