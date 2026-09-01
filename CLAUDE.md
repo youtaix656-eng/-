@@ -76,6 +76,51 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 - 得意科目分析（maruPool.jsのmaruSubjectBreakdown）を網羅マップの科目詳細にも重ねて表示し、
   量（収録数）と質（○の定着率）を1画面で見られるようにした。
 
+## 模試（Exam.jsx）の精度・使い回し対策の強化（2026-09-02追加）
+「今強化すべき機能ベスト3」の2位（模試＝合否判定の測定器そのもの）をユーザー指定で
+30案→全実装したもの。ユーザーの懸念は2つ：①午前/午後の科目別配分（examBlueprint.js）が
+出題基準と本当に一致しているか、②直前期に同じ問題を繰り返して「覚えているから解けた」に
+ならないか。新しいファイルが増えたので、単一の正の置き場をここにまとめる。
+- **`src/data/examBlueprint.js`**：配分数値・総合問題のfallbackSubjectsは公式出題基準との
+  突き合わせが済んでいない（手元に確認手段が無い）ことをファイル冒頭のコメントで明記した。
+  変更する時は`test/examBlueprint.test.mjs`（合計問題数の整合性チェック）も一緒に直す。
+- **`src/lib/examUsageLog.js`**：模試の出題id履歴（直近20回、IndexedDB）を記録する唯一の
+  発生源。`recentlyUsedIds(log, mode, {withinCount})`が「直近◯回で使ったid」を返し、
+  `overlapWithLast(log, mode, currentIds)`が直前の同モードとの重複率(%)を返す。
+- **`src/lib/examBuilder.js`**：`buildBlueprintExam`/`pickFromSlot`に`avoidIds`（直近使った
+  問題）・`srs`（通常学習で解いたことがある問題を未出題の中で優先＝定着確認としての意味づけ）を
+  追加。`preferUnused(pool, avoidIds)`は得意/苦手/選択式モードでも同じ考え方を使うための
+  共通関数。`blueprintAvailability`は`roundsPossible`（収録数から理論上あと何回ぶん
+  ユニークな模試を組めるか）も返す——**これが「直前期に問題プールが枯渇しないか」を
+  数値で見える化する仕組み**（1位の網羅マップ・優先度ToDoと直結）。
+- **`src/lib/examScoreContribution.js`**：`scoreContribution(perSubject, blueprint)`は
+  出題数の重み×失点率で「伸ばすと全体スコアに効く科目」を出す。**配点そのものは公式に未確認
+  のため「配点」ではなく「出題数の重み」と呼び、断定しない**（CLAUDE.mdの他アプリと同じ
+  手元に無い基準を作らない方針）。`pointsShortOfPassLine`は合格ラインまでの不足問数。
+- **Exam.jsxの変更点**：
+  - モードに「午前+午後 通し」（180問、`modeId==='full'`）を追加。`fullPhase`
+    （'am'|'pm'）と`amSnapshot`（午前終了時点の解答・時間データ）で状態管理し、
+    午前が終わると採点せず`stage==='break'`（休憩画面）を挟んでから午後を組み立てる。
+    結果は`combinedOrder`/`combinedAnswers`で180問分をまとめて1回の履歴として記録する
+    （`examResults`の`mode:'full', count:180`）。続きから機能（保存済み途中経過）も
+    `fullPhase`/`amSnapshot`を含めて復元できるようにした。
+  - セットアップ画面（午前/午後/通し）に「直近使った問題を避けて出題する」トグルを追加。
+    **直前期（`phaseForDate`が`chokuzen`/`final`）は常にON固定**（新規ストップの方針と
+    同じ考え方）。収録数が少ない科目（`roundsPossible < 2`）は警告し、網羅マップへの
+    ボタンを出す（`onNavigate('coverage')`）。
+  - 結果画面に、伸ばすと効く科目（午前/午後のみ・#6）・合格ラインまでの不足問数（#25）・
+    2回連続合格ライン到達の通知（CLAUDE.mdのユーザー本人のゴールと同じ定義、#22）・
+    前回の同モードとの問題重複率（#15）・一時停止の回数と合計時間（#28）・
+    時間を使いすぎた問題への頻出度バッジ（`daikoumokuRank`、#24）・苦手科目だけの
+    再挑戦チップ（#26）を追加。
+  - モード選択画面に「前回の模試から◯日」（#30）、ExamHistory（記録グラフ）の各バーに
+    ロードマップのフェーズ番号（#27、`phaseForDate`）をtitle属性で表示。
+  - 得意/苦手/選択式モードの結果画面にも、合格ラインは非対象である旨を明記した上で
+    参考スコアを表示（#29。配分が本番と異なるモードを誤って合否判定しないため）。
+- 実装後、`scripts/check-bundle-size.mjs`の予算をユーザー指定で900KB→
+  `MAX_BUNDLE_SIZE = 1024 * 1024`（1MB）に引き上げた（実測899KB、以前の900KB予算だと
+  ほぼ余裕が無かったため）。
+
 ## このリポジトリに同梱されている他アプリ（鍼灸アプリ本体とは独立）
 main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物にまとめて配置する。
 それぞれ独立した package.json / ビルドを持つので、**鍼灸アプリ側の作業では触らない**。

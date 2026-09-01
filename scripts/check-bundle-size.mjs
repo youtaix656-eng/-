@@ -23,7 +23,9 @@ const INDEX_HTML = join(DIST, 'index.html');
 // （約802KB）に、今後の機能追加を見込んだ余裕を乗せて設定した新しい基準値。
 // 以前の「dist/assets全体で1400KB」は測り方自体が誤っていたため、この値には
 // 連続性が無い（過去の推移とは比較しないこと）。
-const BUDGET_KB = { js: 900, css: 150 };
+// 2026-09-02、900KB予算が残り僅かになった（888KB）ためユーザー指定で1MBへ引き上げ。
+const MAX_BUNDLE_SIZE = 1024 * 1024; // 1MB
+const BUDGET_KB = { js: MAX_BUNDLE_SIZE / 1024, css: 150 };
 
 if (!existsSync(INDEX_HTML)) {
   console.error('✗ dist/index.html がありません。先に `npm run build` を実行してください。');
