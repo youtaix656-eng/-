@@ -482,6 +482,11 @@ export default function QuestionCard({
               </div>
             ) : (
               <div className="grade-section">
+                {question.explanation && (
+                  <div className="recheck-prompt">
+                    📖 解説を読んでから選びましょう。読まずに進めると、次に同じ問題が出た時も同じ所で間違えます。
+                  </div>
+                )}
                 <div className="grade-label">この問題の理解度は？（△・✕は自動で復習リストに入ります）</div>
                 <div className="selfgrade-row">
                   <button className="btn self-maru" onClick={() => pickSelf('maru')}>
