@@ -188,6 +188,10 @@ export function PomodoroConfigFields({ cfg, setCfg }) {
         <input type="checkbox" checked={cfg.barPosition === 'bottom'} onChange={(e) => setCfg({ barPosition: e.target.checked ? 'bottom' : 'top' })} />
         <span>最小化中は画面下に表示する（既定は上部。開くと通常どおり上部に表示します）</span>
       </label>
+      <label className="pomo-switch" style={{ marginTop: 6 }}>
+        <input type="checkbox" checked={!!cfg.confirmBeforeClose} onChange={(e) => setCfg({ confirmBeforeClose: e.target.checked })} />
+        <span>勉強中にタブを閉じようとしたら一声かける（PCブラウザのみ有効。既定オフ）</span>
+      </label>
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import * as storage from '../lib/storage.js';
-import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, toneFreq, cyclePosition } from '../lib/pomodoroLogic.js';
+import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, toneFreq, cyclePosition, formatAwaySpan } from '../lib/pomodoroLogic.js';
 import { loadPomoState, savePomoState, clearPomoState, loadPomoUi, savePomoUi } from '../lib/pomoState.js';
 import {
   loadPomoLog, appendPomoLog, todayStart, weekStart, totalStudySecSince, countSince,
@@ -15,6 +15,11 @@ import { downloadFile } from '../lib/download.js';
 import { harioPomoEncourage } from '../data/haripan.js';
 import { setPomoRunning } from '../lib/runtimeFlags.js';
 import { logError } from '../lib/errorLog.js';
+import {
+  setAppBadgeMinutes, clearAppBadgeSafe,
+  hasNotificationTrigger, scheduleTimestampNotification, cancelTimestampNotification,
+  tryRegisterPeriodicSync, backgroundCapabilities,
+} from '../lib/pomoBackground.js';
 
 // 設定パネル（プリセット・分数・音・統計のUI一式）はここでだけlazy importする。
 // Pomodoro自体はApp.jsxの常時マウント対象（下部ナビ以外で唯一の例外）なので、
@@ -109,7 +114,7 @@ function notify(title, body) {
   }
 }
 
-export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
+export default function Pomodoro({ store, onToast, activeView, onNavigate, installPrompt, onInstall }) {
   const cfg = store.settings.pomodoro || {};
   const { updateSettings } = store;
   // updatedAtを毎回スタンプする：クラウド同期時にpomodoro設定だけは自分自身の
@@ -138,6 +143,8 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   const [confirmClose, setConfirmClose] = useState(false); // 「閉じる（オフにする）」の確認
   const [lastSavedAt, setLastSavedAt] = useState(0); // 診断表示：最後に保存できた時刻
   const [leaderDisplay, setLeaderDisplay] = useState(true); // 診断表示：自分が幹事タブか
+  const [awayMs, setAwayMs] = useState(0); // 診断表示：前回開いてからの経過（「閉じても」の目安）
+  const [periodicSyncStatus, setPeriodicSyncStatus] = useState('unsupported'); // 診断表示
 
   const audioRef = useRef(null);
   const fileRef = useRef(null);
@@ -152,6 +159,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   const refreshDebounceRef = useRef(null);
   const didRestoreRef = useRef(false);
   const pendingRetryRef = useRef(false); // 直近の保存が失敗し、次のtickで再試行が必要か
+  const originalTitleRef = useRef(typeof document !== 'undefined' ? document.title : '');
 
   const now = () => Date.now();
 
@@ -220,6 +228,9 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   // ---- 表示だけの一時状態（最小化/展開・設定パネル開閉・入力中のタグ・各種プロンプト）を復元 ----
   // フェーズ計算とは無関係な「見た目」の情報。SW更新などで予期せずページが再読み込みされても、
   // 開いていた表示状態がいきなり畳まれたり入力中の文字が消えたりしないようにする。
+  // lastSeenAt（前回このUIを保存した時刻）から「前回開いてからどれだけ経ったか」も分かる
+  // ——「閉じている間は動かせない」ことの裏返しとして、少なくとも
+  // どれだけ離れていたかは正直に見せる。
   useEffect(() => {
     let alive = true;
     loadPomoUi().then((ui) => {
@@ -229,18 +240,85 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
       if (typeof ui.tag === 'string') setTag(ui.tag);
       if (typeof ui.focusPrompt === 'boolean') setFocusPrompt(ui.focusPrompt);
       if (typeof ui.pauseReasonPrompt === 'boolean') setPauseReasonPrompt(ui.pauseReasonPrompt);
+      if (typeof ui.lastSeenAt === 'number') setAwayMs(Math.max(0, Date.now() - ui.lastSeenAt));
     });
     return () => { alive = false; };
   }, []);
-  useEffect(() => {
-    savePomoUi({ min, open, tag, focusPrompt, pauseReasonPrompt });
+  const persistUi = useCallback(() => {
+    savePomoUi({ min, open, tag, focusPrompt, pauseReasonPrompt, lastSeenAt: Date.now() });
   }, [min, open, tag, focusPrompt, pauseReasonPrompt]);
+  useEffect(() => { persistUi(); }, [persistUi]);
+  // lastSeenAtは「見た目が変わった時」だけでなく、開いている間は生きている印として
+  // 定期的に更新する（そうしないと、ずっと開きっぱなしでも古い時刻のままになり、
+  // 次に本当に離れて戻ってきた時の経過表示が不正確になる）。
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') persistUi(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const t = setInterval(() => { if (document.visibilityState === 'visible') persistUi(); }, 60000);
+    return () => { document.removeEventListener('visibilitychange', onVisible); clearInterval(t); };
+  }, [persistUi]);
 
   // SW更新等でのリロード判断（main.jsx）が、実行中を巻き込んで断りなく起きないようにする。
   useEffect(() => {
     setPomoRunning(running);
     return () => setPomoRunning(false);
   }, [running]);
+
+  // ---- アプリを閉じても唯一「効くかもしれない」おまけの3つ ----
+  // ①アプリアイコンのバッジ（対応端末・PWAインストール時のみ）
+  const badgeMinutes = running && phase !== 'idle' ? Math.max(0, Math.ceil(remainingSecOf({ running, phaseEndAt, remaining }, Date.now()) / 60)) : 0;
+  useEffect(() => {
+    if (!cfg.enabled) return undefined;
+    if (badgeMinutes > 0) setAppBadgeMinutes(badgeMinutes);
+    else clearAppBadgeSafe();
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg.enabled, badgeMinutes]);
+  useEffect(() => () => { clearAppBadgeSafe(); }, []); // アンマウント時（オフにした時等）は必ず消す
+
+  // ②終了予定時刻の通知トリガー予約（対応ブラウザが実質無い実験的API。効かなくても害は無い）
+  const scheduleEndNotification = useCallback(async (endAt) => {
+    if (!hasNotificationTrigger() || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await scheduleTimestampNotification(reg, endAt, { title: 'ポモドーロ', body: '設定した時間になりました' });
+    } catch (e) { /* noop */ }
+  }, []);
+  const cancelEndNotification = useCallback(async () => {
+    if (!hasNotificationTrigger()) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await cancelTimestampNotification(reg);
+    } catch (e) { /* noop */ }
+  }, []);
+
+  // ③Periodic Background Sync（対応環境・PWAインストール時のみ、粗い精度のベストエフォート）
+  useEffect(() => {
+    if (!cfg.enabled || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    let alive = true;
+    navigator.serviceWorker.ready
+      .then((reg) => tryRegisterPeriodicSync(reg))
+      .then((status) => { if (alive) setPeriodicSyncStatus(status); })
+      .catch(() => { if (alive) setPeriodicSyncStatus('error'); });
+    return () => { alive = false; };
+  }, [cfg.enabled]);
+
+  // 隠れている間にフェーズが切り替わったら、次に見た瞬間気づけるようタブのタイトルを変える
+  // （裏のタブとして開いたままの場合だけ効く。完全に閉じている間は当然効かない）。
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') document.title = originalTitleRef.current; };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  // 勉強フェーズ実行中に閉じようとした時、任意で一声かける（既定オフ・PCブラウザのみ有効。
+  // モバイルの多くはこの確認を無視して閉じるため、過度な期待はさせない）。
+  useEffect(() => {
+    if (!cfg.confirmBeforeClose || phase !== 'study' || !running) return undefined;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [cfg.confirmBeforeClose, phase, running]);
 
   // ---- 今日・今週の統計を読み込む（複数のフェーズ完走が短時間に続いても1回にまとめる） ----
   const refreshStats = useCallback(() => {
@@ -388,12 +466,17 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
     const volume = cfg.beepVolume ?? 100;
     const suppressSound = activeView === 'audio'; // 音声学習中はビープを鳴らさず振動のみにする
     if (silent) {
+      // 内訳（勉強・短い休憩・長い休憩）を分けて見せる（①②③の②の一環：閉じていた間に
+      // 何が起きたかを具体的に伝える。「◯回分」だけだと休憩まで勉強したように誤解しうる）。
       const studyCount = transitions.filter((t) => t.wasStudy).length;
-      const msg = `⏱️ 離れている間に${transitions.length}回分のフェーズが経過しました（勉強${studyCount}回分）`;
+      const shortCount = transitions.filter((t) => t.to === 'short').length;
+      const longCount = transitions.filter((t) => t.to === 'long').length;
+      const msg = `⏱️ 離れている間に勉強${studyCount}回・短い休憩${shortCount}回・長い休憩${longCount}回が経過しました`;
       onToast?.(msg);
       setAnnounce(msg);
       if (cfg.beepEnabled !== false && !suppressSound) beep(1, toneFreq(cfg, 'break'), volume, onBeepBlocked);
       vibrate([120]);
+      if (document.hidden) document.title = `⏰終了しました - ${originalTitleRef.current}`;
       return;
     }
     const last = transitions[transitions.length - 1];
@@ -413,6 +496,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
     notify('ポモドーロ', msg);
     if (cfg.beepEnabled !== false && !suppressSound) beep(2, last.to === 'study' ? toneFreq(cfg, 'study') : toneFreq(cfg, 'break'), volume, onBeepBlocked);
     vibrate([200, 80, 200]);
+    if (document.hidden) document.title = `⏰終了しました - ${originalTitleRef.current}`;
     if (last.wasStudy) setFocusPrompt(true); // 勉強フェーズが終わった直後：集中できたか聞く
   }, [cfg, tag, onToast, refreshStats, activeView, onBeepBlocked]);
 
@@ -435,6 +519,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
           processTransitions(r.transitions);
           persistTickRef.current = 0;
           persistAndBroadcast({ phase: r.phase, running: r.phase !== 'idle', remaining, phaseEndAt: r.phaseEndAt, done: r.done });
+          if (r.phase !== 'idle') scheduleEndNotification(r.phaseEndAt);
         }
       } else if (isLeaderNow()) {
         // 勉強中の途中通知（例：30分で10分おき）
@@ -519,6 +604,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
     }
     setRunning(true);
     persistAndBroadcast({ phase: nextPhase, running: true, remaining, phaseEndAt: nextEnd, done });
+    scheduleEndNotification(nextEnd); // 対応環境でだけ効くおまけ（未対応なら何もしない）
   };
   const pause = () => {
     const r = remainingSecOf({ running: true, phaseEndAt, remaining }, now());
@@ -526,6 +612,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
     setRunning(false);
     if (phase === 'study') setPauseReasonPrompt(true); // 勉強中の中断だけ理由を任意で聞く
     persistAndBroadcast({ phase, running: false, remaining: r, phaseEndAt, done });
+    cancelEndNotification();
   };
   const toggle = () => (running ? pause() : start());
 
@@ -540,6 +627,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
     stopMusic();
     clearPomoState();
     broadcast({ phase: 'idle', running: false, remaining: durationSec('study', cfg), phaseEndAt: 0, done: 0 });
+    cancelEndNotification();
   };
   const reset = () => {
     // 進行中の記録が無ければ確認せずリセットする（待機中に押しても失うものが無いため）
@@ -579,6 +667,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
     setPhaseEndAt(nextEnd);
     processTransitions([{ from: phase, to: next, wasStudy, elapsedSec }]);
     persistAndBroadcast({ phase: next, running: true, remaining, phaseEndAt: nextEnd, done: newDone });
+    scheduleEndNotification(nextEnd);
   };
   // 勉強中のスキップは長押しでだけ確定する（誤操作で進行中の勉強を失わないため）。
   // 休憩中は失うものが無いので普通のタップでよい。
@@ -687,6 +776,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
   const cycles = cfg.cycles || 4;
   const dueReviewCount = store?.dueReviewQuestions?.length || 0;
   const beepOn = cfg.beepEnabled !== false;
+  const caps = backgroundCapabilities();
 
   const srAnnounce = <div aria-live="polite" className="sr-only">{announce}</div>;
 
@@ -853,9 +943,33 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate }) {
               )}
 
               <p className="pomo-hint">キーボードのスペースキーで開始/一時停止できます（入力欄にフォーカスが無い時）。</p>
+
+              <div className="pomo-bg-note">
+                <p className="pomo-hint" style={{ marginTop: 0 }}>
+                  📴 <strong>アプリを閉じている間、タイマーは動きません</strong>（Webの仕組み上の制約です）。
+                  代わりに①裏のタブなら動き続ける ②閉じても次に開いた時に正確な位置まで自動で追いつく
+                  ③終わったら知らせる、の3つで補います。
+                </p>
+                {(caps.badging || caps.notificationTrigger || periodicSyncStatus === 'registered') && (
+                  <p className="pomo-hint">
+                    ⚙️ このブラウザで使えるおまけ：
+                    {caps.badging && 'アプリアイコンのバッジ表示 '}
+                    {caps.notificationTrigger && '終了時刻の通知予約 '}
+                    {periodicSyncStatus === 'registered' && '定期バックグラウンド確認（粗い精度） '}
+                    （いずれも完全に閉じている間の代わりにはなりません）
+                  </p>
+                )}
+                {installPrompt && (
+                  <button className="btn ghost sm" onClick={onInstall}>
+                    📲 ホーム画面に追加する（通知が安定しやすくなります）
+                  </button>
+                )}
+              </div>
+
               <p className="pomo-hint">
                 🔧 診断：最後に保存 {lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString('ja-JP') : '-'}
                 ／幹事タブ：{leaderDisplay ? 'はい' : 'いいえ（別タブが担当）'}
+                {awayMs > 0 && `／前回から${formatAwaySpan(awayMs)}経過`}
               </p>
 
               <button className="btn ghost sm block" style={{ marginTop: 8 }} onClick={closePomodoro}>

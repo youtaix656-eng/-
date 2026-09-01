@@ -3107,6 +3107,11 @@ code.block {
   width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 12px;
   display: flex; align-items: center; justify-content: center;
 }
+.pomo-bg-note {
+  margin-top: 10px; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.pomo-bg-note .pomo-hint { color: var(--text-sub); }
 
 /* ===== 試験日カウントダウン（ホーム） ===== */
 .exam-countdown {

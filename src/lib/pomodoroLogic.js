@@ -106,6 +106,25 @@ export function clampDraftCommit(raw, value, min, max) {
 }
 
 /**
+ * 「前回開いてからどれだけ経ったか」の表示用整形。分・時間・日の単位で見やすく丸める
+ * （mmss()は勉強・休憩の残り時間用の分:秒表示なので、閉じていた期間のような
+ * 長い幅には向かない）。
+ * @param {number} ms
+ * @returns {string} 例: "3分", "2時間15分", "3日と4時間"
+ */
+export function formatAwaySpan(ms) {
+  const totalMin = Math.max(0, Math.round(ms / 60000));
+  if (totalMin < 1) return '1分未満';
+  if (totalMin < 60) return `${totalMin}分`;
+  const totalHours = Math.floor(totalMin / 60);
+  const restMin = totalMin % 60;
+  if (totalHours < 24) return restMin > 0 ? `${totalHours}時間${restMin}分` : `${totalHours}時間`;
+  const days = Math.floor(totalHours / 24);
+  const restHours = totalHours % 24;
+  return restHours > 0 ? `${days}日と${restHours}時間` : `${days}日`;
+}
+
+/**
  * サイクル表示（◯/◯）の位置。「長休憩まで（回）」をユーザーが変更した直後でも、
  * 位置の数え方がここ1か所（doneとcyclesの剰余）に集約されているので食い違わない。
  * @param {number} done これまでに完走したstudyフェーズ数

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, clampDraftCommit, ADVANCE_GUARD, BEEP_TONES, toneFreq, cyclePosition } from '../src/lib/pomodoroLogic.js';
+import { durationSec, mmss, nextPhaseAfter, advanceState, remainingSecOf, clampDraftCommit, ADVANCE_GUARD, BEEP_TONES, toneFreq, cyclePosition, formatAwaySpan } from '../src/lib/pomodoroLogic.js';
 
 test('durationSec: 各フェーズの分数をcfgから秒に変換する', () => {
   const cfg = { study: 25, shortBreak: 5, longBreak: 15 };
@@ -163,4 +163,20 @@ test('cyclePosition: cyclesを設定変更しても計算式は同じ（doneは�
 
 test('cyclePosition: cyclesが未指定でも既定4で計算する', () => {
   assert.equal(cyclePosition(4, undefined), 4);
+});
+
+test('formatAwaySpan: 1分未満は「1分未満」', () => {
+  assert.equal(formatAwaySpan(10000), '1分未満');
+});
+
+test('formatAwaySpan: 分・時間・日で見やすく丸める', () => {
+  assert.equal(formatAwaySpan(5 * 60000), '5分');
+  assert.equal(formatAwaySpan(135 * 60000), '2時間15分');
+  assert.equal(formatAwaySpan(2 * 60 * 60000), '2時間');
+  assert.equal(formatAwaySpan((3 * 24 + 4) * 60 * 60000), '3日と4時間');
+  assert.equal(formatAwaySpan(2 * 24 * 60 * 60000), '2日');
+});
+
+test('formatAwaySpan: 負の値でも落ちない', () => {
+  assert.equal(formatAwaySpan(-1000), '1分未満');
 });
