@@ -1,14 +1,16 @@
 import React from 'react';
+import scream from '../assets/figures/scream.webp';
+import upside from '../assets/figures/upside.webp';
+import crowd from '../assets/figures/crowd.webp';
+import skull from '../assets/figures/skull.webp';
 import veil from '../assets/figures/veil.webp';
-import grin from '../assets/figures/grin.webp';
-import water from '../assets/figures/water.webp';
-import noh from '../assets/figures/noh.webp';
-import hood from '../assets/figures/hood.webp';
-import pair from '../assets/figures/pair.webp';
+import rabbit from '../assets/figures/rabbit.webp';
+import shadow from '../assets/figures/shadow.webp';
 import close from '../assets/figures/close.webp';
 import eyes from '../assets/figures/eyes.webp';
 import hand from '../assets/figures/hand.webp';
 import peek from '../assets/figures/peek.webp';
+import water from '../assets/figures/water.webp';
 
 // 地に敷く面（おもて）。
 //
@@ -25,16 +27,18 @@ import peek from '../assets/figures/peek.webp';
  * 1件足せば、開くたびに出る候補が自動で増える。
  */
 export const FIGURES = [
+  { id: 'scream', name: '叫ぶ頭', reading: 'さけぶあたま', src: scream },
+  { id: 'upside', name: '逆さの顔', reading: 'さかさのかお', src: upside },
+  { id: 'crowd', name: '群れ', reading: 'むれ', src: crowd },
+  { id: 'skull', name: '骨の顔', reading: 'ほねのかお', src: skull },
   { id: 'veil', name: '長い髪の面', reading: 'ながいかみのおもて', src: veil },
-  { id: 'grin', name: '笑う面', reading: 'わらうおもて', src: grin },
-  { id: 'water', name: '水面の目', reading: 'みなものめ', src: water },
-  { id: 'noh', name: '割れた面', reading: 'われたおもて', src: noh },
-  { id: 'hood', name: 'フードの影', reading: 'ふーどのかげ', src: hood },
-  { id: 'pair', name: '後ろにもう一人', reading: 'うしろにもうひとり', src: pair },
+  { id: 'rabbit', name: '兎の面', reading: 'うさぎのおもて', src: rabbit },
+  { id: 'shadow', name: '影の人', reading: 'かげのひと', src: shadow },
   { id: 'close', name: '近すぎる顔', reading: 'ちかすぎるかお', src: close },
   { id: 'eyes', name: '闇の中の目', reading: 'やみのなかのめ', src: eyes },
   { id: 'hand', name: '伸びてくる手', reading: 'のびてくるて', src: hand },
   { id: 'peek', name: '覗いている顔', reading: 'のぞいているかお', src: peek },
+  { id: 'water', name: '水面の目', reading: 'すいめんのめ', src: water },
 ];
 
 export const FIGURE_MAP = Object.fromEntries(FIGURES.map((f) => [f.id, f]));
