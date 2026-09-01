@@ -121,6 +121,59 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
   `MAX_BUNDLE_SIZE = 1024 * 1024`（1MB）に引き上げた（実測899KB、以前の900KB予算だと
   ほぼ余裕が無かったため）。
 
+## 復習・SRSを毎日ゼロに戻す運用の強化（2026-09-02追加）
+「今強化すべき機能ベスト3」の3位（仕組み自体は強いので、要注意バッジと○ふりかえりを
+実際に毎日使う運用そのものを支援する）をユーザー指定で30案→全実装したもの。
+新しいファイルが増えたので、単一の正の置き場をここにまとめる。
+- **`src/lib/reviewZeroLog.js`**：復習（期限が来ているもの）が0件になった日を記録する
+  唯一の発生源（`markReviewZeroToday`、`useStore.js`の中央エフェクトが呼ぶ）。
+  `zeroDaysSummary`（直近◯日中◯日）・`daysSinceLastZero`（最後の達成から何日か。
+  3日以上は`recommendNewPct`が新規:復習比率を自動でさらに復習寄りにする＝#17）・
+  `zeroRateByWeekday`（曜日別の達成率）・`finishDaysSummary`（history上の
+  `source:'maru-review'`と合算した「毎日の仕上げ実施率」）・`reviewZeroLogToCsv`
+  （設定画面の書き出し）を持つ。Home・Review・週次ジャーナル・ハリオのリマインドが
+  すべてこのログ（`store.reviewZeroLog`）を参照する。
+- **`src/lib/reviewDwell.js`**：`srs.js`はwrongCount/correctStreakの"今の値"しか
+  持たないため、「いつから要注意か」「いつから復習対象のままか」はhistoryを辿って
+  求める。`leechSince`/`leechDwellDays`/`leechList`（Home・Reviewの要注意バッジで
+  滞留日数を表示）・`leechBySubject`（Analyticsの学習インサイト）・
+  `reviewDwellBySubject`（未解消の復習対象の科目別平均滞留日数）・
+  `resolvedLeechEvents`/`resolvedLeechesSince`（要注意化→5連続○のマスター到達を
+  correctness再生で検知。週次ジャーナルの「今週解消できた件数」に使う）。
+- **`src/lib/reviewGoal.js`**：Review.jsxだけが持っていた「今日の復習目標」計算
+  （今日こなした復習＋残り期限数、しんどい日は半分に緩める）を切り出し、Homeにも
+  同じリング表示を出せるようにした（単一の正。画面ごとに計算がズレるのを防ぐ）。
+- **`src/lib/snoozeLog.js`**：「😴 明日まで先送り」ボタンを押した記録だけを別に持つ
+  （`setNextDue`自体は誤答理由別の自動間隔調整でも呼ばれるため、ボタン操作だけを
+  区別する必要があった）。3回以上先送りしている問題には「先送りグセ」バッジ。
+- **`src/lib/weakClusters.js`の`tagTrend`**：Review.jsxが inline で持っていた
+  「今週 vs 先週の誤答率トレンド」計算を切り出し、週次ジャーナルの
+  「先週より改善したテーマ」チップでも同じ関数を使う。
+- **`src/lib/forgetting.js`の`dailyForgettingPick`**：忘却予測（forgettingRisk）の
+  上位から、priorityFocus.js等と同じ日付ローテーション方式で1件だけHomeに出す。
+- **`src/data/roadmapPhases.js`**：`upcomingPhaseChange`（フェーズ切り替えが1週間
+  以内に迫っていたらHomeで予告）・`parseMixRatio`（`mix`文字列「新規X：復習Y」を
+  機械可読な形に変換。自由文の説明はnullを返す＝手元に無い基準を作らない）。
+- **Session.jsx**：「○の見直し／○の高速回転」セッションの`recordAnswer`に
+  `source:'maru-review'`を付けた（`maruPool.js`の`lastMaruReviewAt`がこれを参照。
+  「最後にいつふりかえったか」をhistoryだけから追跡できるようにするため）。
+  「今日のおすすめ」比率提案は`reviewStalledDays`（daysSinceLastZero）を渡して
+  停滞時により復習へ寄せる。
+- **App.jsx**：Home「復習だけ◯問」「要注意だけ今すぐ」からReview.jsxをワンタップ
+  自動開始するための`reviewQuickStart`中継（数値＝件数指定、`{ids}`＝問題id直接指定。
+  既存の`audioReview`と同じ考え方）。Homeの音声復習ショートカットも同じ`audioReview`
+  パターンに相乗り。
+- **既存の「毎日のリマインド通知」（`settings.reminder`）に相乗り**：復習専用の
+  別リマインド設定は作らず、`haripanReminder`が`daysSinceLastZero`を受け取り、
+  3日以上ゼロに戻せていない時だけ一言追加する（同じ機能を2か所に持たない）。
+- **Review.jsx**：開始前に過去の解答ペース（`bufferSession.js`の
+  `estimatedAnswerSeconds`）から所要時間の目安を表示。期限0件でも「念のため確認」
+  枠だけはワンタップで始められるボタン。完了画面で復習を完全にゼロにできた時は
+  専用の演出＋直近30日の達成日数を表示。
+- **Calendar.jsx**：日別詳細の復習期限件数に、うち要注意が何件かを重ねて表示。
+- **Analytics.jsx（InsightsSection.jsx）**：要注意の科目別内訳・未解消の復習対象の
+  科目別平均滞留日数を追加。
+
 ## このリポジトリに同梱されている他アプリ（鍼灸アプリ本体とは独立）
 main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物にまとめて配置する。
 それぞれ独立した package.json / ビルドを持つので、**鍼灸アプリ側の作業では触らない**。

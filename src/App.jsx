@@ -3,6 +3,7 @@ import { useStore } from './lib/useStore.js';
 import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import { daysUntil } from './lib/gamify.js';
 import { haripanReminder } from './data/haripan.js';
+import { daysSinceLastZero } from './lib/reviewZeroLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
 // 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
 import Home from './components/Home.jsx';
@@ -154,6 +155,8 @@ export default function App() {
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
+  // #18：Homeの「復習だけ◯問」からワンタップでReviewを自動開始するための中継。
+  const [reviewQuickStart, setReviewQuickStart] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
     try {
@@ -290,8 +293,13 @@ export default function App() {
       const target = new Date(now);
       target.setHours(hh || 7, mm || 0, 0, 0);
       if (now < target) return;
-      // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）。復習期限の件数も伝える。
-      const body = haripanReminder(store.settings.examDate, (store.dueReviewQuestions || []).length);
+      // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）。復習期限の件数・
+      //   何日ゼロに戻せていないか（#6）も伝える。
+      const body = haripanReminder(
+        store.settings.examDate,
+        (store.dueReviewQuestions || []).length,
+        daysSinceLastZero(store.reviewZeroLog)
+      );
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('ハリオ先生', { body });
@@ -473,6 +481,14 @@ export default function App() {
             onInstall={installApp}
             onJumpToRoadmapLevel={jumpToRoadmapLevel}
             onStartSubjectQuiz={startSubjectQuiz}
+            onQuickReview={(n) => {
+              setReviewQuickStart(n);
+              setView('review');
+            }}
+            onGoAudioReview={() => {
+              setAudioReview(true);
+              setView('audio');
+            }}
           />
         );
       case 'quiz':
@@ -514,6 +530,8 @@ export default function App() {
               setAudioReview(ids && ids.length ? { ids } : true);
               setView('audio');
             }}
+            quickStartCount={reviewQuickStart}
+            onConsumeQuickStart={() => setReviewQuickStart(null)}
           />
         );
       case 'audio':

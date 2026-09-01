@@ -154,9 +154,13 @@ export function harioPomoEncourage(setCount) {
 }
 
 // リマインド通知用の一言
-export function haripanReminder(examDate, dueCount = 0) {
+// stalledDays（#6）：復習が何日ゼロに戻せていないか（reviewZeroLog.jsのdaysSinceLastZero）。
+//   既存の「毎日のリマインド通知」（settings.reminder）に相乗りさせる形で拡張した
+//   （復習専用の別リマインド設定は作らない＝同じ機能を2か所に持たない）。
+export function haripanReminder(examDate, dueCount = 0, stalledDays = null) {
   const left = daysUntil(examDate);
   const tail = left != null && left >= 0 ? `本番まであと${left}日だ。` : '';
   const due = dueCount > 0 ? `復習が${dueCount}問たまってるぞ。` : '';
-  return `よう、ハリオだ。${tail}${due}今日も一問からいくぞ。`;
+  const stalled = stalledDays != null && stalledDays >= 3 ? `復習が${stalledDays}日ゼロに戻せてないぞ。今日は復習優先だ。` : '';
+  return `よう、ハリオだ。${tail}${due}${stalled}今日も一問からいくぞ。`;
 }

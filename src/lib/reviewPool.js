@@ -69,9 +69,17 @@ export function weaknessSummaryToText(summary) {
 }
 
 // 「今日のおすすめ」：復習の溜まり具合から新規◯割を自動で決める（迷ったときの初期値提案）。
-export function recommendNewPct(newRemaining, reviewRemaining) {
+//   stalledDays（#17）：復習が何日ゼロに戻せていないか（reviewZeroLog.jsのdaysSinceLastZero）。
+//   3日以上溜まったまま戻せていない時は、通常の比率よりさらに復習へ寄せる。
+export function recommendNewPct(newRemaining, reviewRemaining, stalledDays = 0) {
   if (reviewRemaining === 0) return { pct: 100, reason: '復習対象が無いので、すべて新規にしました。' };
   if (newRemaining === 0) return { pct: 0, reason: '新規問題が無いので、すべて復習にしました。' };
+  if (stalledDays >= 3) {
+    if (reviewRemaining >= 10) {
+      return { pct: 10, reason: `復習が${stalledDays}日ゼロに戻せていないので、今日は復習を最優先にしました。` };
+    }
+    return { pct: 30, reason: `復習が${stalledDays}日ゼロに戻せていないので、復習多めにしました。` };
+  }
   if (reviewRemaining >= 30) return { pct: 30, reason: `復習対象が${reviewRemaining}問溜まっているので、復習多めにしました。` };
   if (reviewRemaining >= 10) return { pct: 50, reason: `復習対象が${reviewRemaining}問あるので、半々にしました。` };
   return { pct: 70, reason: `復習対象は${reviewRemaining}問だけなので、新規多めにしました。` };

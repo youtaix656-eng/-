@@ -6,8 +6,13 @@ import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress, clearQuizProgress, loadSyncMeta } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
-import { maruStatusList, excludeMastered, maruSubjectBreakdown } from '../lib/maruPool.js';
-import { phaseForDate } from '../data/roadmapPhases.js';
+import { maruStatusList, excludeMastered, maruSubjectBreakdown, lastMaruReviewAt } from '../lib/maruPool.js';
+import { phaseForDate, upcomingPhaseChange, parseMixRatio } from '../data/roadmapPhases.js';
+import { zeroDaysSummary, daysSinceLastZero } from '../lib/reviewZeroLog.js';
+import { reviewDailyGoal } from '../lib/reviewGoal.js';
+import { leechList } from '../lib/reviewDwell.js';
+import { dailyForgettingPick } from '../lib/forgetting.js';
+import { LEECH_THRESHOLD } from '../lib/srs.js';
 import { loadDismissedPriorityFocus, dismissPriorityFocus, suggestPriorityFocus } from '../lib/priorityFocus.js';
 import { coverageBySubject } from '../lib/coverage.js';
 import { suggestThinSubjectReminder } from '../lib/coveragePriority.js';
@@ -76,8 +81,8 @@ function timeAgoJa(at) {
 
 const SYNC_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
 
-export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz }) {
-  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus } = store;
+export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz, onQuickReview, onGoAudioReview }) {
+  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus, reviewZeroLog } = store;
 
   // 直近の同期試行が失敗続きでも、実際に最後に成功したのがいつかを別途持っておく
   // （cloudSyncStatusは直近1回の結果しか持たないため）。syncMetaは同期が成功した時だけ
@@ -143,6 +148,42 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     const rows = maruSubjectBreakdown(maruAll).filter((s) => s.total >= 3);
     return rows.length > 0 ? [...rows].sort((a, b) => a.masteredPct - b.masteredPct)[0] : null;
   }, [showMaruNudge, maruAll]);
+  // #12：最後に○ふりかえりをやったのは何日前か
+  const maruDaysAgo = useMemo(() => {
+    const at = lastMaruReviewAt(history);
+    return at == null ? null : Math.floor((Date.now() - at) / (24 * 60 * 60 * 1000));
+  }, [history]);
+  // #13：うっかり○（選んだ答えは不正解なのに○を通した）が一定数溜まったら優先アラート
+  const UNCERTAIN_ALERT_THRESHOLD = 3;
+  const maruUncertainCount = useMemo(() => maruAll.filter((s) => s.uncertain).length, [maruAll]);
+
+  // ---- 復習（SRS）を毎日ゼロに戻す運用そのものを支援するカード群（#1・#3・#7・#8・#15・#18・#20〜#22・#24・#28） ----
+  const zeroSummary30 = useMemo(() => zeroDaysSummary(reviewZeroLog, 30), [reviewZeroLog]);
+  const stalledDays = useMemo(() => daysSinceLastZero(reviewZeroLog), [reviewZeroLog]);
+  const isStalled = stalledDays != null && stalledDays >= 3;
+  const { todayReviewDone, dailyGoal: reviewDailyGoalCount, goalPct: reviewGoalPct } = useMemo(
+    () => reviewDailyGoal(history, dueCount, null),
+    [history, dueCount]
+  );
+  const leeches = useMemo(() => leechList(reviewQuestions, srs, history), [reviewQuestions, srs, history]);
+  // #22：11月末（合格実力ゴール、CLAUDE.mdの学習スケジュールと同じ期限）までの残り日数
+  const NOV_END = new Date(new Date().getFullYear(), 10, 30, 23, 59, 59);
+  const daysToNovEnd = Math.max(0, Math.ceil((NOV_END.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+  // #20・#21：ロードマップのフェーズ切り替わりが近いか／実際の消化比率とのズレ
+  const phaseChangeSoon = useMemo(() => upcomingPhaseChange(todayStr, 7), [todayStr]);
+  const ratioGap = useMemo(() => {
+    const phase = phaseForDate(todayStr);
+    const target = phase ? parseMixRatio(phase.mix) : null;
+    if (!target) return null; // 自由文（機械可読でない）は手元に無い基準を作らないため対象外
+    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recent = history.filter((h) => h.at >= since);
+    if (recent.length < 10) return null; // 母数が少なすぎる時は当てずっぽうを出さない
+    const reviewN = recent.filter((h) => h.source === 'review').length;
+    const actualReviewPct = Math.round((reviewN / recent.length) * 100);
+    return { target, actualReviewPct, gap: actualReviewPct - target.reviewPct };
+  }, [todayStr, history]);
+  // #24：忘却リスク上位から日替わりで1件
+  const forgettingPick = useMemo(() => dailyForgettingPick(questions, srs), [questions, srs]);
 
   const sessionActive = session && session.pos < session.target;
   const { streak, longestStreak, studiedToday } = studyStreak(history);
@@ -330,6 +371,10 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
             )}
             {isChokuzenPhase && <> 直前期なので、総ざらいしておくと安心です。</>}
             時間が無ければ高速回転（⚡）で素早く確認できます。
+            {maruDaysAgo != null && <><br />最後にふりかえったのは{maruDaysAgo}日前です。</>}
+            {maruUncertainCount >= UNCERTAIN_ALERT_THRESHOLD && (
+              <><br />⚠️ 選んだ答えは不正解なのに○にした「うっかり○」が<strong>{maruUncertainCount}問</strong>あります。優先的に見直しましょう。</>
+            )}
           </p>
           <button className="btn primary sm" onClick={() => onNavigate('session')}>学習画面の「○にした問題をふりかえる」へ</button>
         </div>
@@ -415,6 +460,80 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           </span>
           <span className="trc-cta">復習する →</span>
         </button>
+      )}
+
+      {/* 復習を毎日ゼロに戻す運用そのものを支援するカード（#1・#3・#15・#18・#28） */}
+      {reviewQuestions.length > 0 && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>🔁 復習を毎日ゼロに</div>
+          <div className="review-goal" style={{ marginTop: 0 }}>
+            <div className="goal-ring" style={{ '--pct': reviewGoalPct }}>
+              <div className="goal-ring-in">{reviewGoalPct}%</div>
+            </div>
+            <div className="goal-text">
+              <div className="goal-line">今日の復習 <strong>{todayReviewDone}</strong> / {reviewDailyGoalCount} 問</div>
+              <div className="goal-sub">直近30日中 <strong>{zeroSummary30.achieved}</strong>日でゼロ達成</div>
+            </div>
+          </div>
+          {isStalled && (
+            <p className="inline-note" style={{ color: 'var(--wrong)' }}>
+              ⚠ 復習が{stalledDays}日、一度もゼロに戻せていません。今日は新規を減らして復習を優先しましょう（#3）。
+            </p>
+          )}
+          <div className="chip-row" style={{ marginTop: 6 }}>
+            <button className="chip" onClick={() => onQuickReview?.(5)}>復習だけ5問</button>
+            <button className="chip" onClick={() => onQuickReview?.(10)}>復習だけ10問</button>
+            {onGoAudioReview && (
+              <button className="chip" onClick={onGoAudioReview}>🎧 音声で復習</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 要注意（リーチ）専用カード（#7・#8・#22） */}
+      {leeches.length > 0 && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>⚠️ 要注意の問題</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            {LEECH_THRESHOLD}回以上間違えている問題が <strong style={{ color: 'var(--wrong)' }}>{leeches.length}問</strong> あります。
+            {leeches[0].dwellDays != null && <>最も長いものは要注意になってから<strong>{leeches[0].dwellDays}日</strong>経っています。</>}
+            <br />11月末（仕上げ期）まで残り{daysToNovEnd}日です。
+          </p>
+          <button className="btn primary sm" onClick={() => onQuickReview?.({ ids: leeches.map((l) => l.question.id) })}>
+            要注意だけ今すぐ解く
+          </button>
+        </div>
+      )}
+
+      {/* ロードマップのフェーズ切り替わり予告・実際の新規:復習比率とのズレ（#20・#21） */}
+      {(phaseChangeSoon || ratioGap) && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>📊 配分の目安</div>
+          {phaseChangeSoon && (
+            <p className="inline-note" style={{ marginTop: 0 }}>
+              あと{phaseChangeSoon.daysUntil}日で「{phaseChangeSoon.next.label}」フェーズへ切り替わります（新規:復習の目安比率が変わります）。
+            </p>
+          )}
+          {ratioGap && (
+            <p className="inline-note">
+              直近7日の実際の復習比率は約{ratioGap.actualReviewPct}%（今のフェーズの目安は復習{ratioGap.target.reviewPct}%）。
+              {Math.abs(ratioGap.gap) >= 15
+                ? (ratioGap.gap < 0 ? '目安より新規に寄っています。' : '目安より復習に寄っています。')
+                : '目安に近い配分で進められています。'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 忘却リスク上位から日替わりで1件（#24） */}
+      {forgettingPick && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>🧠 忘れそうな1問</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            「{(forgettingPick.question.question || '（図の問題）').slice(0, 40)}」の保持率は約{Math.round(forgettingPick.retrievability * 100)}%まで下がってきています。
+          </p>
+          <button className="btn ghost sm" onClick={() => onNavigate('review')}>復習画面で確認する</button>
+        </div>
       )}
 
       {/* 連続日数（ストリーク）だけを大きく表示 */}

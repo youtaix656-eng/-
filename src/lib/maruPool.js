@@ -59,6 +59,16 @@ export function orderMaruStatus(list) {
   });
 }
 
+// #12：最後に「○の見直し／○の高速回転」セッションをやったのはいつか（Session.jsxが
+//   recordAnswerに source:'maru-review' を付けて記録している。無ければnull）。
+export function lastMaruReviewAt(history) {
+  let latest = null;
+  for (const h of history || []) {
+    if (h.source === 'maru-review' && (latest == null || h.at > latest)) latest = h.at;
+  }
+  return latest;
+}
+
 // #6：科目ごとの○の内訳。マスター済みの割合が高い科目＝得意科目、として使う
 //   （Analytics.jsxの得意科目分析・Home.jsx/ExamDayChecklist.jsxのメッセージで共用）。
 export function maruSubjectBreakdown(list) {

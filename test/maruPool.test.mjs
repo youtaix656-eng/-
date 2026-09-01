@@ -7,6 +7,7 @@ import {
   excludeMastered,
   orderMaruStatus,
   maruSubjectBreakdown,
+  lastMaruReviewAt,
 } from '../src/lib/maruPool.js';
 
 test('latestSelfKinds: selfKind付きの履歴だけを、問題ごとに最新の1件へまとめる', () => {
@@ -94,4 +95,18 @@ test('maruSubjectBreakdown: 科目ごとにマスター率が高い順に並ぶ'
 test('maruSubjectBreakdown: 空リストなら空配列', () => {
   assert.deepEqual(maruSubjectBreakdown([]), []);
   assert.deepEqual(maruSubjectBreakdown(undefined), []);
+});
+
+test('lastMaruReviewAt: source:maru-reviewの最新時刻を返す（#12）', () => {
+  const history = [
+    { source: 'maru-review', at: 10 },
+    { source: 'review', at: 20 },
+    { source: 'maru-review', at: 30 },
+  ];
+  assert.equal(lastMaruReviewAt(history), 30);
+});
+
+test('lastMaruReviewAt: 記録が無ければnull', () => {
+  assert.equal(lastMaruReviewAt([{ source: 'review', at: 1 }]), null);
+  assert.equal(lastMaruReviewAt([]), null);
 });

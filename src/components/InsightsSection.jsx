@@ -4,6 +4,8 @@ import { forgettingRisk } from '../lib/forgetting.js';
 import { hardestItems } from '../lib/difficulty.js';
 import { loadMissTypes, MISS_TYPES, missTypeLabel, latestMissType, missTypeTrend, missTypeAnomaly } from '../lib/missTypes.js';
 import { tagFrequency } from '../lib/pastExamTrends.js';
+import { leechBySubject, reviewDwellBySubject } from '../lib/reviewDwell.js';
+import { LEECH_THRESHOLD } from '../lib/srs.js';
 
 // 学習インサイト（#6 忘却予測 / #7 弱点クラスタリング / #8 難易度推定 の可視化）。
 //   解答履歴と復習状態から「弱いテーマ・近く忘れそう・難しい問題」を自動抽出して表示する。
@@ -37,7 +39,12 @@ export default function InsightsSection({ store }) {
     [questions, links]
   );
 
-  const nothing = weak.length === 0 && risk.length === 0 && hard.length === 0 && typeTotal === 0;
+  // #11：要注意（リーチ）の科目別内訳。#23：まだ解消していない復習対象の科目別平均滞留日数。
+  const leechSubjects = useMemo(() => leechBySubject(questions, srs), [questions, srs]);
+  const dwellSubjects = useMemo(() => reviewDwellBySubject(questions, srs, history), [questions, srs, history]);
+
+  const nothing = weak.length === 0 && risk.length === 0 && hard.length === 0 && typeTotal === 0
+    && leechSubjects.length === 0 && dwellSubjects.length === 0;
 
   return (
     <>
@@ -105,6 +112,29 @@ export default function InsightsSection({ store }) {
                     <li key={h.id}>
                       <span className="insight-risk">{Math.round(h.difficulty * 100)}%</span>
                       {String(h.question.question || '').slice(0, 34)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {leechSubjects.length > 0 && (
+              <div className="insight-block">
+                <div className="insight-head">要注意（{LEECH_THRESHOLD}回以上の誤答）の科目別内訳</div>
+                <div className="chip-row">
+                  {leechSubjects.map((s) => (
+                    <span key={s.subject} className="chip">⚠️ {s.subject} <b>{s.count}</b></span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {dwellSubjects.length > 0 && (
+              <div className="insight-block">
+                <div className="insight-head">復習の滞留（未解消の平均日数・科目別）</div>
+                <ul className="insight-list">
+                  {dwellSubjects.slice(0, 6).map((s) => (
+                    <li key={s.subject}>
+                      <span className="insight-risk">{s.avgDays}日</span>
+                      {s.subject}（{s.count}問）
                     </li>
                   ))}
                 </ul>

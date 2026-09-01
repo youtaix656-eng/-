@@ -19,6 +19,7 @@ import { loadSelfKindCounts, recordSelfKindCount } from '../lib/starWeak.js';
 import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { daysUntil } from '../lib/gamify.js';
 import { maruStatusList, excludeMastered, orderMaruStatus } from '../lib/maruPool.js';
+import { loadReviewZeroLog, daysSinceLastZero } from '../lib/reviewZeroLog.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -164,6 +165,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const [selfKindCounts, setSelfKindCounts] = useState({});
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
   useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
+  // #17：復習が何日ゼロに戻せていないか（「今日のおすすめ」の比率を復習側へさらに寄せる材料）
+  const [reviewZeroLog, setReviewZeroLog] = useState({});
+  useEffect(() => { loadReviewZeroLog().then(setReviewZeroLog); }, []);
+  const reviewStalledDays = useMemo(() => daysSinceLastZero(reviewZeroLog) || 0, [reviewZeroLog]);
   const onMissType = (id, type) => {
     recordMissType(id, type).then(setMissTypes);
   };
@@ -298,7 +303,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const recordCurrent = (correct, grade, selfKind, objectiveCorrect) => {
     const cur = byId[session.ids[session.pos]];
     if (!cur) return;
-    const leechEvent = recordAnswer(cur, correct, grade, undefined, selfKind, objectiveCorrect);
+    // ○の見直し／○の高速回転セッションはsourceに印を付ける（#4・#12・#14。
+    //   「最後にいつふりかえったか」「今日この仕上げをやったか」をhistoryだけから追跡できるように）。
+    const isMaruSession = session.label === '○の見直し' || session.label === '○の高速回転';
+    const leechEvent = recordAnswer(cur, correct, grade, isMaruSession ? 'maru-review' : undefined, selfKind, objectiveCorrect);
     if (leechEvent === 'became') {
       onToast?.(`⚠️ 要注意（${LEECH_THRESHOLD}回以上の誤答）：「${(cur.question || '（図の問題）').slice(0, 20)}」。解説の読み方を変えてみましょう`); // #6
     } else if (leechEvent === 'resolved') {
@@ -438,7 +446,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
               className="btn ghost sm"
               style={{ float: 'right' }}
               onClick={() => {
-                const rec = recommendNewPct(newRemaining, reviewRemaining);
+                const rec = recommendNewPct(newRemaining, reviewRemaining, reviewStalledDays);
                 setNewPct(rec.pct);
                 onToast?.(rec.reason);
               }}

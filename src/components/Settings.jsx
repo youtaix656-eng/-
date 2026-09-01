@@ -23,6 +23,7 @@ import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 import { downloadFile } from '../lib/download.js';
 import { exportHistoryCsv } from '../lib/historyExport.js';
+import { reviewZeroLogToCsv } from '../lib/reviewZeroLog.js';
 import { loadMissTypes } from '../lib/missTypes.js';
 import { loadSelfKindCounts } from '../lib/starWeak.js';
 import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
@@ -43,6 +44,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     summarizeOldHistory,
     voiceCloneApiKey,
     saveVoiceCloneApiKey,
+    reviewZeroLog,
   } = store;
 
   const HISTORY_SUMMARY_CUTOFF_DAYS = 90;
@@ -480,6 +482,15 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           }}
         >
           解答履歴をCSVで保存
+        </button>
+        {/* #29：復習を毎日ゼロに戻せた日のログをCSVで書き出す */}
+        <button
+          className="btn"
+          style={{ marginTop: 8 }}
+          onClick={() => downloadFile(reviewZeroLogToCsv(reviewZeroLog), 'shinkyu_review_zero_log.csv', 'text/csv')}
+          disabled={Object.keys(reviewZeroLog || {}).length === 0}
+        >
+          復習ゼロ達成ログをCSVで保存
         </button>
       </div>
 

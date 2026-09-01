@@ -4,6 +4,9 @@ import { weekKeyOf, weekStartOf, buildWeeklyReport, loadWeeklyNotes, saveWeeklyN
 import { loadRoundLog } from '../lib/roundLog.js';
 import { formatPercent } from '../lib/stats.js';
 import { loadContentSeedLog, seedEntriesSince } from '../lib/contentSeedLog.js';
+import { zeroDaysSummary } from '../lib/reviewZeroLog.js';
+import { resolvedLeechesSince } from '../lib/reviewDwell.js';
+import { weakTagClusters, tagTrend } from '../lib/weakClusters.js';
 
 function formatWeekLabel(weekKeyStr) {
   const start = new Date(Number(weekKeyStr));
@@ -16,7 +19,7 @@ function formatWeekLabel(weekKeyStr) {
 //   3分の2バッファ術のマネージャービューと同じく「うまくいかなかったのは実行役ではなく
 //   計画の立て方」という前向きな前提でまとめる（自己否定を招く表現は使わない）。
 export default function WeeklyJournal({ store, onNavigate }) {
-  const { history, questions, links } = store;
+  const { history, questions, links, reviewZeroLog } = store;
   const [missTypes, setMissTypes] = useState({});
   const [roundLog, setRoundLog] = useState([]);
   const [notes, setNotes] = useState({});
@@ -50,6 +53,30 @@ export default function WeeklyJournal({ store, onNavigate }) {
     const detail = [...bySubject.entries()].map(([subject, count]) => `${subject}+${count}`).join('・');
     return `今週は${detail}を追加した（計${total}問）。`;
   }, [seedLog]);
+
+  // #5：今週、復習を溜めた（ゼロに戻せなかった）日数
+  const reviewStallSummary = useMemo(() => {
+    const s = zeroDaysSummary(reviewZeroLog, 7);
+    const stalled = s.total - s.achieved;
+    if (stalled === 0) return null;
+    return `今週は復習を溜めた（ゼロに戻せなかった）日が${stalled}日あった。`;
+  }, [reviewZeroLog]);
+
+  // #10：今週、要注意（リーチ）を解消できた件数
+  const resolvedLeechSummary = useMemo(() => {
+    const n = resolvedLeechesSince(history, weekStartOf());
+    if (n === 0) return null;
+    return `今週、要注意だった問題を${n}問マスターに導けた。`;
+  }, [history]);
+
+  // #25：先週より誤答率が改善した弱点テーマ
+  const improvedClusterSummary = useMemo(() => {
+    const clusters = weakTagClusters(history, questions, links, { minWrong: 1, limit: 12 });
+    const trended = tagTrend(history, questions, links, clusters);
+    const better = trended.filter((t) => t.trend === 'better').slice(0, 3);
+    if (better.length === 0) return null;
+    return `先週より「${better.map((t) => t.tag).join('」「')}」の誤答率が改善した。`;
+  }, [history, questions, links]);
 
   const thisWeekKey = weekKeyOf();
   const pastWeeks = useMemo(
@@ -127,14 +154,20 @@ export default function WeeklyJournal({ store, onNavigate }) {
 
       <div className="section-label">✍️ 来週の方針（一言）</div>
       <div className="card">
-        {contentSummary && (
-          <button
-            className="chip"
-            style={{ marginBottom: 8 }}
-            onClick={() => setDraft((d) => (d ? `${d} / ${contentSummary}` : contentSummary))}
-          >
-            ＋ {contentSummary}
-          </button>
+        {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary].filter(Boolean).length > 0 && (
+          <div className="chip-row" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+            {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary]
+              .filter(Boolean)
+              .map((summary) => (
+                <button
+                  key={summary}
+                  className="chip"
+                  onClick={() => setDraft((d) => (d ? `${d} / ${summary}` : summary))}
+                >
+                  ＋ {summary}
+                </button>
+              ))}
+          </div>
         )}
         <textarea
           className="journal-textarea"

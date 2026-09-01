@@ -104,6 +104,35 @@ export function phaseForDate(dateStr) {
   return ROADMAP_PHASES.find((p) => dateStr >= p.start && dateStr <= p.end) || null;
 }
 
+// 直近withinDays日以内に次のフェーズへ切り替わるか（#20）。
+//   切り替わる場合は { current, next, daysUntil } を返し、無ければnull。
+export function upcomingPhaseChange(dateStr, withinDays = 7) {
+  const idx = ROADMAP_PHASES.findIndex((p) => dateStr >= p.start && dateStr <= p.end);
+  if (idx < 0 || idx + 1 >= ROADMAP_PHASES.length) return null;
+  const current = ROADMAP_PHASES[idx];
+  const next = ROADMAP_PHASES[idx + 1];
+  const [y, m, d] = current.end.split('-').map(Number);
+  const endMs = new Date(y, m - 1, d).getTime();
+  const [ty, tm, td] = dateStr.split('-').map(Number);
+  const todayMs = new Date(ty, tm - 1, td).getTime();
+  const daysUntil = Math.round((endMs - todayMs) / (24 * 60 * 60 * 1000)) + 1; // 現フェーズ最終日を含む残り日数
+  if (daysUntil > withinDays) return null;
+  return { current, next, daysUntil: Math.max(0, daysUntil) };
+}
+
+// フェーズの mix 文字列（例「新規7：復習3」）を機械的に読める形へ（#21）。
+//   「新規X：復習Y」の形だけを対象にし、それ以外（自由文の説明）は手元に無い基準を
+//   作らないためnullを返す（断定しない）。
+export function parseMixRatio(mixStr) {
+  const m = /新規(\d+)：復習(\d+)/.exec(mixStr || '');
+  if (!m) return null;
+  const newN = Number(m[1]);
+  const reviewN = Number(m[2]);
+  const total = newN + reviewN;
+  if (total <= 0) return null;
+  return { newPct: Math.round((newN / total) * 100), reviewPct: Math.round((reviewN / total) * 100) };
+}
+
 // 指定の年月(0始まりmonth)に重なるフェーズ一覧
 export function phasesInMonth(year, month) {
   const pad = (n) => String(n).padStart(2, '0');

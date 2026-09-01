@@ -12,6 +12,7 @@ import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare
 import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
 import { dedupeAgainst } from './importer.js';
 import { appendContentSeedLog } from './contentSeedLog.js';
+import { loadReviewZeroLog, markReviewZeroToday } from './reviewZeroLog.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
@@ -1043,6 +1044,15 @@ export function useStore() {
     return sortByPriority(pool, srs);
   }, [reviewQuestions, srs]);
 
+  // #1・#3・#5・#14・#19・#26・#29：復習が「ゼロに戻った日」を記録する単一の発生源。
+  //   復習対象は1件以上あるが、今まさに期限が来ているものは無い＝今日ぶんは片付いた、という状態。
+  const [reviewZeroLog, setReviewZeroLog] = useState({});
+  useEffect(() => { loadReviewZeroLog().then(setReviewZeroLog); }, []);
+  useEffect(() => {
+    if (!loaded || reviewQuestions.length === 0 || dueReviewQuestions.length > 0) return;
+    markReviewZeroToday().then(setReviewZeroLog);
+  }, [loaded, reviewQuestions.length, dueReviewQuestions.length]);
+
   return {
     loaded,
     questions,
@@ -1107,6 +1117,7 @@ export function useStore() {
     settings,
     reviewQuestions,
     dueReviewQuestions,
+    reviewZeroLog,
     recordAnswer,
     resetAllReviewDue,
     removeFromReview,
