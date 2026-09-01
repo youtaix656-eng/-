@@ -5,6 +5,10 @@ import water from '../assets/figures/water.webp';
 import noh from '../assets/figures/noh.webp';
 import hood from '../assets/figures/hood.webp';
 import pair from '../assets/figures/pair.webp';
+import close from '../assets/figures/close.webp';
+import eyes from '../assets/figures/eyes.webp';
+import hand from '../assets/figures/hand.webp';
+import peek from '../assets/figures/peek.webp';
 
 // 地に敷く面（おもて）。
 //
@@ -24,9 +28,13 @@ export const FIGURES = [
   { id: 'veil', name: '長い髪の面', reading: 'ながいかみのおもて', src: veil },
   { id: 'grin', name: '笑う面', reading: 'わらうおもて', src: grin },
   { id: 'water', name: '水面の目', reading: 'みなものめ', src: water },
-  { id: 'noh', name: '能の面', reading: 'のうのおもて', src: noh },
+  { id: 'noh', name: '割れた面', reading: 'われたおもて', src: noh },
   { id: 'hood', name: 'フードの影', reading: 'ふーどのかげ', src: hood },
-  { id: 'pair', name: '二つの影', reading: 'ふたつのかげ', src: pair },
+  { id: 'pair', name: '後ろにもう一人', reading: 'うしろにもうひとり', src: pair },
+  { id: 'close', name: '近すぎる顔', reading: 'ちかすぎるかお', src: close },
+  { id: 'eyes', name: '闇の中の目', reading: 'やみのなかのめ', src: eyes },
+  { id: 'hand', name: '伸びてくる手', reading: 'のびてくるて', src: hand },
+  { id: 'peek', name: '覗いている顔', reading: 'のぞいているかお', src: peek },
 ];
 
 export const FIGURE_MAP = Object.fromEntries(FIGURES.map((f) => [f.id, f]));
