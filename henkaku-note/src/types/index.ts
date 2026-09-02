@@ -93,6 +93,21 @@ export interface MealRecord {
   signs: string[];
 }
 
+/** モンクモードの記録（既存と重なっていない項目だけ） */
+export interface MonkRecord {
+  waterMl: number;
+  electrolyte: boolean;
+  steps: number;
+  workoutMinutes: number;
+  /** 運動した時刻 'HH:MM'（運動後の集中しやすい時間帯を出すのに使う） */
+  workoutAt: string | null;
+  readingMinutes: number;
+  /** 決めたSNSのルールを守れたか */
+  snsRuleKept: boolean | null;
+  /** 一人で集中した時間（分）。※「人間関係を切る」ではなく時間の確保として持つ */
+  soloMinutes: number;
+}
+
 export interface DayRecord {
   /** 'YYYY-MM-DD' */
   date: string;
@@ -113,6 +128,7 @@ export interface DayRecord {
   condition?: ConditionRecord;
   sleepQuality?: SleepQualityRecord;
   meal?: MealRecord;
+  monk?: MonkRecord;
   updatedAt: number;
 }
 
@@ -185,6 +201,15 @@ export interface Settings {
   fastingPlanSince: string | null;
   /** 始める前の確認で当てはまった項目 */
   fastingPrechecks: string[];
+
+  // ── モンクモード ──
+  monkWaterMl: number;
+  monkSteps: number;
+  monkWorkoutPerWeek: number;
+  /** 選んでいるSNSの制限の仕方（SNS_RULES の id） */
+  monkSnsRule: string | null;
+  /** 塩・血圧まわりの事前確認で当てはまった項目 */
+  monkPrechecks: string[];
 }
 
 export interface AppState {

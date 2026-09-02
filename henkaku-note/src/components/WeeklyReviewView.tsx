@@ -10,6 +10,7 @@ import { splitFocusText, writtenDays } from '../lib/threeRules';
 import { weeklyCondition, weakestDomain } from '../lib/condition';
 import { summarizeSleepQuality } from '../lib/sleepQuality';
 import { summarizeMeals, pauseAdvice } from '../lib/fasting';
+import { weeklyMonk, bodyReminder, isolationWarning } from '../lib/monkMode';
 import type { AppState } from '../types';
 
 interface Props {
@@ -54,6 +55,9 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
     () => pauseAdvice(summary.days.map((d) => state.days[d])),
     [state.days, summary.days],
   );
+  const monk = useMemo(() => weeklyMonk(state.days, summary.days, state.settings), [state.days, summary.days, state.settings]);
+  const monkReminder = useMemo(() => bodyReminder(monk, state.settings), [monk, state.settings]);
+  const monkIsolation = useMemo(() => isolationWarning(state.days, summary.days), [state.days, summary.days]);
   const sleepQuality = useMemo(
     () => summarizeSleepQuality(summary.days.map((d) => state.days[d]?.sleepQuality)),
     [state.days, summary.days],
@@ -106,6 +110,16 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
         <div className="rate-bar" aria-hidden="true"><span style={{ width: `${Math.round(summary.averageRate * 100)}%` }} /></div>
         {comparison && <p className="small muted" style={{ margin: 0 }}>{comparison.text}</p>}
 
+        {(monk.workouts > 0 || monk.readingMinutes > 0 || monk.snsKeptDays > 0) && (
+          <p className="small" style={{ margin: 0 }}>
+            モンクモード：運動 {monk.workouts}回／目安 週{state.settings.monkWorkoutPerWeek}回
+            {monk.averageSteps !== null && `　歩数の平均 ${monk.averageSteps.toLocaleString()}歩`}
+            {monk.readingMinutes > 0 && `　読書 ${monk.readingMinutes}分`}
+            {monk.snsKeptDays > 0 && `　SNSの約束を守れた日 ${monk.snsKeptDays}日`}
+          </p>
+        )}
+        {monkReminder && <p className="note-line warm" style={{ margin: 0 }}>{monkReminder}</p>}
+        {monkIsolation && <p className="note-line" style={{ margin: 0, borderLeftColor: 'var(--ember)' }}>{monkIsolation}</p>}
         {meals.recorded > 0 && (
           <p className="small" style={{ margin: 0 }}>
             食事：記録した日 {meals.recorded}／7

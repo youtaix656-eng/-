@@ -31,6 +31,11 @@ export function defaultSettings(): Settings {
     fastingPlan: 'three',
     fastingPlanSince: null,
     fastingPrechecks: [],
+    monkWaterMl: 2000,
+    monkSteps: 8000,
+    monkWorkoutPerWeek: 3,
+    monkSnsRule: null,
+    monkPrechecks: [],
   };
 }
 
@@ -166,6 +171,21 @@ export const actions = {
       })),
     );
   },
+  /** モンクモードの記録（水・歩数・運動・読書・SNS・一人の時間） */
+  setMonk(date: string, patch: Partial<import('../types/index.js').MonkRecord>) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        monk: {
+          waterMl: 0, electrolyte: false, steps: 0, workoutMinutes: 0, workoutAt: null,
+          readingMinutes: 0, snsRuleKept: null, soloMinutes: 0,
+          ...(d.monk ?? {}),
+          ...patch,
+        },
+      })),
+    );
+  },
+
   /** 段階を変える。変えた日を覚えておき、次の段階へ進める判断に使う */
   setFastingPlan(planId: string, date: string) {
     set((s) => ({ ...s, settings: { ...s.settings, fastingPlan: planId, fastingPlanSince: date } }));

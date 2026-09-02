@@ -47,6 +47,16 @@ export const MEAL_SOURCE: KnowledgeSource = {
     + '自己判断せず医師に相談してください。このアプリは医療の判断をしません。',
 };
 
+export const MONK_SOURCE: KnowledgeSource = {
+  id: 'monk-mode-2026-09',
+  label: 'モンクモード（海外式）',
+  origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
+  receivedAt: '2026-09-02',
+  caution:
+    '原典の動画・研究には当たっていません。効果や数字は「そう紹介されている」水準の話です。'
+    + '塩の量・運動量・特定の食品を毎日決まった数、といった話は、持病がある場合は自己判断で始めないでください。',
+};
+
 export interface HabitPreset {
   id: string;
   title: string;
