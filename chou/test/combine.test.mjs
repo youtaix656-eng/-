@@ -284,11 +284,11 @@ test('受診メモにもストレス・運動を入れられる（入れない�
   const keys = ['2026-09-01', '2026-09-02'];
   assert.ok(NOTE_PARTS.some((p) => p.id === 'life'));
   const withLife = buildVisitNote(days, keys, ['life']);
-  assert.match(withLife, /ストレス・体を動かしたか/);
+  assert.match(withLife, /暮らしのこと/);
   assert.match(withLife, /ストレス：ある 1日/);
   assert.match(withLife, /体を動かした：すこし動いた 1日/);
   const without = buildVisitNote(days, keys, []);
-  assert.doesNotMatch(without, /ストレス・体を動かしたか/);
+  assert.doesNotMatch(without, /暮らしのこと/);
 });
 
 test('目次から食べ合わせのすべてに辿り着ける', () => {

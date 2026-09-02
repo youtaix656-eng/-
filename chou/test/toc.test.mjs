@@ -31,6 +31,13 @@ import { FODMAP_FOODS } from '../src/data/fodmap.js';
 import { SPEED_NAMED, BAD_PAIRS, ADAMSKI_UNVERIFIED } from '../src/data/adamski.js';
 import { BACTERIA, PRODUCTS, PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from '../src/data/probiotics.js';
 import { SEASONINGS } from '../src/data/seasonings.js';
+import {
+  CLEANUP_STEPS,
+  STRESS_RELIEF,
+  POSTURE_TIPS,
+  CLEANUP_CORRECTIONS,
+  CLEANUP_UNVERIFIED,
+} from '../src/data/cleanup.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -197,6 +204,14 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     BACTERIA.length + PRODUCTS.length + PROBIOTIC_UNVERIFIED.length + PROBIOTIC_CORRECTIONS.length + SEASONINGS.length + 1;
   for (const b of BACTERIA) assert.ok(entries.some((e) => e.title === b.name), b.name);
   for (const s of SEASONINGS) assert.ok(entries.some((e) => e.title === `${s.title}の選び方`), s.title);
+  // 腸のお掃除から来るぶん
+  const fromCleanupCount =
+    CLEANUP_STEPS.length +
+    STRESS_RELIEF.length +
+    POSTURE_TIPS.length +
+    CLEANUP_CORRECTIONS.length +
+    CLEANUP_UNVERIFIED.length;
+  for (const step of CLEANUP_STEPS) assert.ok(entries.some((e) => e.title === step.title), step.title);
   assert.equal(
     entries.length,
     TERMS.length +
@@ -205,7 +220,8 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       RED_FLAGS.length +
       FODMAP_FOODS.length +
       fromAdamskiCount +
-      fromCareCount,
+      fromCareCount +
+      fromCleanupCount,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BELLY_STEPS, LEVELS, EXERCISE_STEPS, STOOL_MARKS } from '../data/scales.js';
+import { BELLY_STEPS, LEVELS, EXERCISE_STEPS, SLEEP_STEPS, POSTURE_STEPS, STOOL_MARKS } from '../data/scales.js';
 import { nowTime } from '../lib/dates.js';
 import { flagMarksOf } from '../lib/days.js';
 import BristolPicker from './Bristol.jsx';
@@ -162,6 +162,23 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
           options={EXERCISE_STEPS}
           value={day.exercise}
           onChange={(v) => store.updateDay(date, { exercise: v })}
+        />
+      </div>
+
+      <div className="two" id="rec-body">
+        <Choice
+          name="sleep"
+          label="眠れたか"
+          options={SLEEP_STEPS}
+          value={day.sleep}
+          onChange={(v) => store.updateDay(date, { sleep: v })}
+        />
+        <Choice
+          name="posture"
+          label="姿勢"
+          options={POSTURE_STEPS}
+          value={day.posture}
+          onChange={(v) => store.updateDay(date, { posture: v })}
         />
       </div>
 

@@ -13,6 +13,7 @@ import TableOfContents from './components/TableOfContents.jsx';
 import Combine from './components/Combine.jsx';
 import Probiotics from './components/Probiotics.jsx';
 import Seasonings from './components/Seasonings.jsx';
+import Cleanup from './components/Cleanup.jsx';
 
 // 下部ナビは4つ。そのすぐ上に「受診メモをつくる」の常設バーを置く。
 // 受診メモはこのアプリを持つ理由なので、思い立った時にどの画面からでも開けること。
@@ -96,6 +97,9 @@ export default function App() {
           <Probiotics store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
         )}
         {view === 'seasonings' && <Seasonings store={store} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'cleanup' && (
+          <Cleanup store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
         {view === 'settings' && <Settings store={store} focus={focus} onFocusDone={clearFocus} />}
         {view === 'toc' && (
           <TableOfContents store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />

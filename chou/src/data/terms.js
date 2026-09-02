@@ -527,6 +527,91 @@ export const TERMS = [
     descriptionStatus: 'needs_review',
     destinations: [{ type: 'page', view: 'seasonings', targetId: 'seasoning-soy', label: '醤油の見分け方' }],
   },
+  {
+    id: 'term-gut-brain',
+    title: '腸脳相関',
+    reading: 'ちょうのうそうかん',
+    aliases: [{ name: '脳と腸のつながり', reading: 'のうとちょうのつながり' }],
+    description:
+      '脳と腸が互いに影響しあうという考え方です。緊張するとお腹に来る、という形でよく知られています。ただし「腸を整えれば心も整う」と一方向に読まないでください——気分の落ち込みが続くときは医療機関へ。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'cleanup', targetId: 'cleanup-stress', label: 'ストレスの項を読む' },
+      { type: 'question', view: 'home', targetId: 'rec-life', label: 'ストレスを記録する' },
+    ],
+  },
+  {
+    id: 'term-serotonin',
+    title: 'セロトニン',
+    reading: 'せろとにん',
+    aliases: [{ name: '幸福ホルモン', reading: 'こうふくほるもん' }],
+    description:
+      '体の中のセロトニンの多くが腸にある、とよく言われます。ただし腸で作られたセロトニンは脳へ入れません（関門を通れないため）。「腸のセロトニンを増やす＝脳のセロトニンが増える」ではありません。うつの原因をセロトニン不足とする考え方も、近年強く見直されています。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'cleanup', targetId: 'ccorrection-serotonin_pool', label: '訂正を読む' },
+      { type: 'system', view: 'cleanup', targetId: 'ccorrection-depression', label: 'うつとの関係を読む' },
+    ],
+  },
+  {
+    id: 'term-ros',
+    title: '活性酸素',
+    reading: 'かっせいさんそ',
+    aliases: [],
+    description:
+      '細胞を傷つけるとされるものです。出典は「異常発生の90%が腸で起きる」と言っていますが、出どころをたどれていません。活性酸素は体のいろいろな場所で出ます。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'system', view: 'cleanup', targetId: 'cunverified-ros90', label: '裏が取れていない主張として読む' }],
+  },
+  {
+    id: 'term-fermented',
+    title: '発酵食品',
+    reading: 'はっこうしょくひん',
+    aliases: [{ name: '生きた菌の食べもの', reading: 'いきたきんのたべもの' }],
+    description:
+      'ヨーグルト・甘酒・乳酸菌飲料・ぬか漬け・味噌・キムチ・納豆など。腸活では勧められますが、低FODMAP では「多め／量による」に入るものがあり、言うことが反対になります。このアプリはどちらが正しいかを決めません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'cleanup', targetId: 'cleanup-ferment', label: '3つの考え方から見る' },
+      { type: 'page', view: 'fodmap', targetId: 'fodmap-notes', label: '低FODMAP の一覧' },
+    ],
+  },
+  {
+    id: 'term-autonomic',
+    title: '自律神経',
+    reading: 'じりつしんけい',
+    aliases: [],
+    description:
+      '腸の動きを調節している神経です。出典は「よく眠ると自律神経が整い、腸も整う」と説明しています。眠りの記録はこのアプリでも残せますが、時間は数えません。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'question', view: 'home', targetId: 'rec-body', label: '眠れたかを記録する' }],
+  },
+  {
+    id: 'term-sleep-record',
+    title: '眠れたかの記録',
+    reading: 'ねむれたかのきろく',
+    aliases: [{ name: '睡眠の記録', reading: 'すいみんのきろく' }],
+    description:
+      '3つの段（よく眠れなかった／まあまあ／よく眠れた）で残します。時間は数えません——「何時間で足りる」という基準が手元に無いのと、時計の数字より本人の感じ方のほうが確かだからです。',
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'question', view: 'home', targetId: 'rec-body', label: 'きょうの記録へ' },
+      { type: 'page', view: 'look', targetId: 'look-life', label: 'ふりかえりで見る' },
+    ],
+  },
+  {
+    id: 'term-posture-record',
+    title: '姿勢の記録',
+    reading: 'しせいのきろく',
+    aliases: [],
+    description:
+      '3つの段（前かがみが多かった／気づいて伸ばした／だいたい保てた）で残します。採点しません——出典自身が「ずっと保てなくてよい。気づいたら伸ばす」と言っています。',
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'question', view: 'home', targetId: 'rec-body', label: 'きょうの記録へ' },
+      { type: 'page', view: 'cleanup', targetId: 'cleanup-posture', label: '姿勢の項を読む' },
+    ],
+  },
 ];
 
 /** 目次に出す画面（飛び先の入口）。**画面を足したらここにも足す** */
@@ -602,5 +687,14 @@ export const SCREENS = [
     description: 'さしすせそ＋みりん・甘酒の見分け方と、いまの自分の棚おろしの画面です。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'seasonings', targetId: 'seasoning-list', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-cleanup',
+    title: '腸のお掃除の画面',
+    reading: 'ちょうのおそうじのがめん',
+    aliases: [],
+    description: '出典が挙げる5つと、3つの考え方が食い違う所、訂正、裏が取れていない主張をまとめた画面です。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'cleanup', targetId: 'cleanup-steps', label: 'ひらく' }],
   },
 ];

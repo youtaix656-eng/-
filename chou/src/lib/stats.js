@@ -7,7 +7,16 @@
 //     「◯を食べたから△になった」は言わない（画面の文言でも言わない）。
 //  3. **1日だけのものを「よく」と呼ばない**（`MIN_FOOD_DAYS`）。1回は重なりではない。
 
-import { BELLY_STEPS, BELLY_BY_ID, BRISTOL_GROUPS, bristolGroupOf, LEVELS, EXERCISE_STEPS } from '../data/scales.js';
+import {
+  BELLY_STEPS,
+  BELLY_BY_ID,
+  BRISTOL_GROUPS,
+  bristolGroupOf,
+  LEVELS,
+  EXERCISE_STEPS,
+  SLEEP_STEPS,
+  POSTURE_STEPS,
+} from '../data/scales.js';
 import { hasRecord, recordedKeys, foodsOfDay } from './days.js';
 
 /** 「よく食べていたもの」に出すための下限（これ未満は出さない） */
@@ -143,8 +152,12 @@ export function series(days, keys) {
 export function lifeCounts(days, keys) {
   const stress = Object.fromEntries(LEVELS.map((l) => [l.id, 0]));
   const exercise = Object.fromEntries(EXERCISE_STEPS.map((e) => [e.id, 0]));
+  const sleep = Object.fromEntries(SLEEP_STEPS.map((e) => [e.id, 0]));
+  const posture = Object.fromEntries(POSTURE_STEPS.map((e) => [e.id, 0]));
   let stressDays = 0;
   let exerciseDays = 0;
+  let sleepDays = 0;
+  let postureDays = 0;
   for (const key of keys) {
     const day = days[key];
     if (!day) continue;
@@ -156,6 +169,14 @@ export function lifeCounts(days, keys) {
       exercise[day.exercise] += 1;
       exerciseDays += 1;
     }
+    if (day.sleep && sleep[day.sleep] !== undefined) {
+      sleep[day.sleep] += 1;
+      sleepDays += 1;
+    }
+    if (day.posture && posture[day.posture] !== undefined) {
+      posture[day.posture] += 1;
+      postureDays += 1;
+    }
   }
-  return { stress, exercise, stressDays, exerciseDays };
+  return { stress, exercise, sleep, posture, stressDays, exerciseDays, sleepDays, postureDays };
 }

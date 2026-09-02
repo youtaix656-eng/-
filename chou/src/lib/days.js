@@ -8,7 +8,15 @@
 //  3. 外から来たもの（取り込んだファイル）は必ず `normalizeDay` を通してから画面へ渡す。
 //     項目が1つ欠けているだけで画面が落ちるのを防ぐ。
 
-import { BELLY_BY_ID, LEVEL_BY_ID, EXERCISE_BY_ID, STOOL_MARKS, FLAG_MARK_IDS } from '../data/scales.js';
+import {
+  BELLY_BY_ID,
+  LEVEL_BY_ID,
+  EXERCISE_BY_ID,
+  SLEEP_BY_ID,
+  POSTURE_BY_ID,
+  STOOL_MARKS,
+  FLAG_MARK_IDS,
+} from '../data/scales.js';
 import { parseKey, timeOrder } from './dates.js';
 
 const MARK_IDS = STOOL_MARKS.map((m) => m.id);
@@ -30,6 +38,8 @@ export function emptyDay(date) {
     bloat: null,
     stress: null,
     exercise: null,
+    sleep: null,
+    posture: null,
     probiotic: false,
     stools: [],
     meals: [],
@@ -74,6 +84,8 @@ export function normalizeDay(raw) {
   day.bloat = LEVEL_BY_ID[raw.bloat] ? raw.bloat : null;
   day.stress = LEVEL_BY_ID[raw.stress] ? raw.stress : null;
   day.exercise = EXERCISE_BY_ID[raw.exercise] ? raw.exercise : null;
+  day.sleep = SLEEP_BY_ID[raw.sleep] ? raw.sleep : null;
+  day.posture = POSTURE_BY_ID[raw.posture] ? raw.posture : null;
   day.probiotic = raw.probiotic === true;
   day.stools = (Array.isArray(raw.stools) ? raw.stools : [])
     .map(normalizeStool)
@@ -107,6 +119,8 @@ export function hasRecord(day) {
       (day.bloat && day.bloat !== 'none') ||
       (day.stress && day.stress !== 'none') ||
       (day.exercise && day.exercise !== 'none') ||
+      day.sleep ||
+      day.posture ||
       day.probiotic ||
       day.stools.length ||
       day.meals.length ||

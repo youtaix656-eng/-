@@ -11,6 +11,13 @@ import { FODMAP_FOODS, FODMAP_LEVELS, FODMAP_SOURCE } from './fodmap.js';
 import { SPEED_NAMED, SPEED_BY_ID, BAD_PAIRS, ADAMSKI_UNVERIFIED } from './adamski.js';
 import { BACTERIA, PRODUCTS, PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from './probiotics.js';
 import { SEASONINGS, SEASONING_AVOID } from './seasonings.js';
+import {
+  CLEANUP_STEPS,
+  STRESS_RELIEF,
+  POSTURE_TIPS,
+  CLEANUP_CORRECTIONS,
+  CLEANUP_UNVERIFIED,
+} from './cleanup.js';
 import { readingKey, normalizeAlnum } from '../lib/yomi.js';
 
 /** 飛び先の種類。**この4つだけ**（画面／記録の設問／機能／仕組み・決まり） */
@@ -31,6 +38,7 @@ export const TOC_GROUPS = [
   { id: 'food', label: '食材' },
   { id: 'combine', label: '食べ合わせ' },
   { id: 'care', label: '整腸剤・調味料' },
+  { id: 'cleanup', label: '腸のお掃除' },
   { id: 'screen', label: '画面' },
   { id: 'user', label: '自分で追加' },
 ];
@@ -229,6 +237,72 @@ function fromCare() {
   return [...bacteria, ...products, ...claims, ...fixes, ...seasonings, avoid];
 }
 
+/** 腸のお掃除（5つ）から。**訂正した所も目次に置く**（何を直したか辿れるように） */
+function fromCleanup() {
+  const steps = CLEANUP_STEPS.map((step) => ({
+    id: `toc-cleanup-${step.id}`,
+    title: step.title,
+    reading: step.reading,
+    group: 'cleanup',
+    aliases: [],
+    description: `${step.body}${step.caution ? ` 注意：${step.caution.replace(/\*\*/g, '')}` : ''}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'cleanup', targetId: `cleanup-${step.id}`, label: '読む' },
+      { type: 'question', view: step.record.view, targetId: step.record.targetId, label: step.record.label },
+    ],
+  }));
+  const relief = STRESS_RELIEF.map((item) => ({
+    id: `toc-relief-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'cleanup',
+    aliases: [],
+    description: `ストレスを減らす方法として挙げられているもの。${item.body}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'cleanup', targetId: `relief-${item.id}`, label: '読む' },
+      { type: 'question', view: 'home', targetId: 'rec-life', label: 'ストレスを記録する' },
+    ],
+  }));
+  const posture = POSTURE_TIPS.map((item) => ({
+    id: `toc-posture-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'cleanup',
+    aliases: [],
+    description: item.body,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'cleanup', targetId: `posture-${item.id}`, label: '読む' },
+      { type: 'question', view: 'home', targetId: 'rec-body', label: '姿勢を記録する' },
+    ],
+  }));
+  const fixes = CLEANUP_CORRECTIONS.map((item) => ({
+    id: `toc-ccorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'cleanup',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'system', view: 'cleanup', targetId: `ccorrection-${item.id}`, label: '読む' }],
+  }));
+  const claims = CLEANUP_UNVERIFIED.map((item) => ({
+    id: `toc-cunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'cleanup',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'cleanup', targetId: `cunverified-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...steps, ...relief, ...posture, ...fixes, ...claims];
+}
+
 function withGroup(list, group) {
   return list.map((entry) => ({ aliases: [], destinations: [], ...entry, group }));
 }
@@ -251,6 +325,7 @@ export function buildTocEntries(state = {}) {
     ...fromFoods(),
     ...fromAdamski(),
     ...fromCare(),
+    ...fromCleanup(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

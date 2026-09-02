@@ -3,6 +3,29 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { GUT_LINES } from '../src/lib/gutLine.js';
+import { ADAMSKI_UNVERIFIED } from '../src/data/adamski.js';
+import { PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from '../src/data/probiotics.js';
+import { CLEANUP_UNVERIFIED, CLEANUP_CORRECTIONS } from '../src/data/cleanup.js';
+
+/**
+ * **引用して否定している出典の言い分**は、見張りの対象から外す。
+ * このアプリは「出典はこう言っているが、そのままにできない」を並べる作りなので、
+ * 引用した文まで弾くと、**間違いを指摘した所だけが落ちる**（黙って消すことになり本末転倒）。
+ * 見張るのは「アプリ自身が言っていること」。
+ */
+const QUOTED = [
+  ...ADAMSKI_UNVERIFIED.map((i) => i.claim),
+  ...PROBIOTIC_UNVERIFIED.map((i) => i.claim),
+  ...PROBIOTIC_CORRECTIONS.map((i) => i.claim),
+  ...CLEANUP_UNVERIFIED.map((i) => i.claim),
+  ...CLEANUP_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+].filter(Boolean);
+
+function stripQuoted(text) {
+  let out = text;
+  for (const quote of QUOTED) out = out.split(quote).join('');
+  return out;
+}
 
 // README「決めていること」を、文章ではなくコードの側から見張る。
 // ここが落ちたら、決まりのほうを変えるか、コードを直すかを**必ずどちらか選ぶ**
@@ -35,7 +58,7 @@ function stripCommentLines(text) {
 
 const files = walk(SRC).map((path) => ({
   path,
-  text: stripCommentLines(readFileSync(path, 'utf8')),
+  text: stripQuoted(stripCommentLines(readFileSync(path, 'utf8'))),
 }));
 const code = files.filter((f) => /\.jsx?$/.test(f.path));
 

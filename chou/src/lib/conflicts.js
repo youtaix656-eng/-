@@ -9,7 +9,9 @@
 
 import { FODMAP_FOODS, FODMAP_LEVELS } from '../data/fodmap.js';
 import { SPEED_NAMED, SPEED_BY_ID } from '../data/adamski.js';
-import { speedOf } from './combine.js';
+import { FERMENTED_FOODS } from '../data/cleanup.js';
+import { SPEED_BASIS_LABELS } from '../data/adamski.js';
+import { speedOf, speedLabel } from './combine.js';
 
 const levelLabel = (id) => {
   const found = FODMAP_LEVELS.find((l) => l.id === id);
@@ -68,3 +70,54 @@ export function onlyInAdamski() {
 }
 
 export { speedOf };
+
+/**
+ * 発酵食品を、**3つの考え方から同時に見る**。
+ *  - 腸活（この素材）：発酵食品として勧められている
+ *  - 低FODMAP：多め／量による＝減らす候補になりうる
+ *  - アダムスキー式：速い／遅い／ニュートラル
+ *
+ * **どれが正しいかを決めない。** 3つとも並べて、決めるのは本人。
+ * ヨーグルトはこの3つが全部ぶつかる（勧められる／減らす候補／朝に勧められる）代表例。
+ */
+export function fermentViews() {
+  return FERMENTED_FOODS.map((food) => {
+    const inFodmap = FODMAP_FOODS.find((f) => f.name === food.name);
+    const speed = speedOf(food.name);
+    const level = inFodmap ? levelLabel(inFodmap.level) : null;
+    return {
+      name: food.name,
+      reading: food.reading,
+      cleanup: '発酵食品として勧められています',
+      fodmap: level,
+      fodmapId: inFodmap ? inFodmap.level : null,
+      speed: speed.basis === 'unknown' ? null : speedLabel(speed.speed),
+      speedBasis: speed.basis,
+      // 低FODMAP が「多め／量による」なら、勧める側とぶつかる
+      conflict: Boolean(inFodmap && inFodmap.level !== 'low'),
+      views: [
+        `腸活では：発酵食品として勧められています。`,
+        level ? `低FODMAP の一覧では「${level}」に入っています。` : '低FODMAP の一覧には出てきません。',
+        // **当てはめただけのものを名指しと同じ顔で見せない**（出どころを必ず添える）
+        speed.basis === 'unknown'
+          ? 'アダムスキー式には出てきません。'
+          : `アダムスキー式では「${speedLabel(speed.speed)}」`
+            + `（${SPEED_BASIS_LABELS[speed.basis]}）。`,
+      ],
+    };
+  });
+}
+
+/**
+ * 3つの考え方が全部そろっていて、しかも食い違うもの（いちばん迷うところ）。
+ * **出典が名指ししているものだけ**を数える——区分から当てはめただけのものを
+ * 「3つの考え方がぶつかっている」と見せると、当てずっぽうを断定にしてしまう。
+ */
+export function threeWayConflicts() {
+  return fermentViews().filter((v) => v.conflict && v.speedBasis === 'named');
+}
+
+/** 発酵食品の食い違いにも、同じ一文を出す（どちらが正しいかを決めない） */
+export const FERMENT_NOTE =
+  '同じ食べものについて、考え方によって言うことが変わります。'
+  + 'このアプリはどれが正しいかを決めません。合うかどうかは、しばらく試して自分の記録で見つけてください。';

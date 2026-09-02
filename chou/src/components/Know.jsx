@@ -23,6 +23,14 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('cleanup')}>
+            <strong>腸のお掃除（5つ）</strong>
+            <span className="muted small">
+              食べ物・発酵食品・ストレス・姿勢・運動と睡眠。3つの考え方が食い違う所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('combine')}>
             <strong>食べ合わせ（アダムスキー式）</strong>
             <span className="muted small">

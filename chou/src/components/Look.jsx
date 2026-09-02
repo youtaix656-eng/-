@@ -1,5 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { BELLY_STEPS, BRISTOL, BRISTOL_GROUPS, STOOL_MARKS, LEVELS, EXERCISE_STEPS } from '../data/scales.js';
+import {
+  BELLY_STEPS,
+  BRISTOL,
+  BRISTOL_GROUPS,
+  STOOL_MARKS,
+  LEVELS,
+  EXERCISE_STEPS,
+  SLEEP_STEPS,
+  POSTURE_STEPS,
+} from '../data/scales.js';
 import { lastKeys, todayKey, formatShort } from '../lib/dates.js';
 import { perDayText } from '../lib/visitNote.js';
 import { useFocusJump } from './useFocusJump.js';
@@ -197,9 +206,9 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
 
           <section className="block" id="look-life">
             <div className="block-head">
-              <h2>ストレスと、体を動かしたか</h2>
+              <h2>暮らしのこと</h2>
             </div>
-            {life.stressDays === 0 && life.exerciseDays === 0 ? (
+            {life.stressDays === 0 && life.exerciseDays === 0 && life.sleepDays === 0 && life.postureDays === 0 ? (
               <p className="muted">この期間の記録はまだありません。「きょう」の画面から記録できます。</p>
             ) : (
               <>
@@ -219,10 +228,26 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
                       .join(' / ')}
                   </p>
                 )}
+                {life.sleepDays > 0 && (
+                  <p>
+                    眠れたか：
+                    {SLEEP_STEPS.filter((e) => life.sleep[e.id])
+                      .map((e) => `${e.label} ${life.sleep[e.id]}日`)
+                      .join(' / ')}
+                  </p>
+                )}
+                {life.postureDays > 0 && (
+                  <p>
+                    姿勢：
+                    {POSTURE_STEPS.filter((e) => life.posture[e.id])
+                      .map((e) => `${e.label} ${life.posture[e.id]}日`)
+                      .join(' / ')}
+                  </p>
+                )}
               </>
             )}
             <p className="muted small">
-              ここも並べているだけです。ストレスや運動とお腹の調子のあいだに
+              ここも並べているだけです。ストレス・運動・睡眠・姿勢とお腹の調子のあいだに
               どちらが原因かは、この表からは分かりません。
             </p>
           </section>
