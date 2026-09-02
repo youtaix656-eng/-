@@ -1249,10 +1249,6 @@ code.block {
 .sess-target:active { transform: scale(0.98); }
 .sess-target-n { font-size: 24px; font-weight: 800; color: var(--navy-light); }
 .sess-target-l { font-size: 11px; color: var(--text-sub); font-weight: 600; text-align: center; }
-.sess-resume-head { font-size: 12px; font-weight: 700; color: var(--text-sub); }
-.sess-resume-main { display: flex; align-items: baseline; justify-content: space-between; margin-top: 4px; }
-.sess-resume-main strong { font-size: 16px; }
-.sess-frac { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy-light); }
 .sess-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .sess-topbar-sub { font-size: 13px; font-weight: 700; color: var(--text); }
 .sess-topbar-frac { font-size: 12.5px; color: var(--text-sub); font-variant-numeric: tabular-nums; }
@@ -2403,10 +2399,6 @@ code.block {
   color: #fff;
   background: rgba(63, 157, 176, 0.22);
 }
-.kw-picker .chip-row {
-  max-height: 168px;
-  overflow-y: auto;
-}
 
 /* ---- 体験談ノート ---- */
 .exp-head {
@@ -2541,16 +2533,6 @@ code.block {
 .suggest-box { margin: 8px 0; }
 .suggest-label { font-size: 12px; color: var(--text-sub); font-weight: 700; }
 .chip.suggest { background: rgba(63,157,176,0.16); border-color: var(--accent); color: var(--text); }
-.rel-reason {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  background: rgba(63,157,176,0.14);
-  border-radius: 6px;
-  padding: 1px 7px;
-  margin-right: 6px;
-}
 
 /* 地図（グラフ） */
 .graph-wrap {
@@ -2586,8 +2568,6 @@ code.block {
 .kwd-title { font-size: 18px; font-weight: 800; color: var(--text); }
 .kwd-stat { font-size: 13px; font-weight: 700; }
 .kwd-related { margin-top: 10px; }
-.kwd-image { margin-top: 10px; }
-.kwd-image img { width: 100%; border-radius: 10px; margin-bottom: 6px; }
 .recall-hidden { text-align: center; color: var(--text-sub); font-size: 14px; }
 .cluster-q-card .cqc-q { font-weight: 600; margin: 4px 0 6px; }
 .cluster-q-card .cqc-a { font-size: 13px; color: var(--correct); font-weight: 700; }
@@ -3479,8 +3459,6 @@ code.block {
 .review-count strong { color: var(--text); font-size: 16px; }
 
 /* ===== 復習UI強化（#1/#2/#3/#4/#5/#7） ===== */
-.review-streak { display: flex; gap: 16px; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 10px; font-size: 13px; color: var(--text-sub); }
-.review-streak strong { color: var(--text); font-size: 16px; }
 .section-hint { font-size: 11px; font-weight: 400; color: var(--text-mute); margin-left: 6px; }
 
 /* 弱点チップ（絞り込み＋▶即復習＋誤答率の色） */

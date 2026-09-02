@@ -8,9 +8,12 @@ import { MEDITATION_HABIT_ID } from '../data/presets';
 import MeditationCard from './MeditationCard';
 import ConditionCard from './ConditionCard';
 import MealCard from './MealCard';
+import MonkModeCard from './MonkModeCard';
+import MorningRoutineCard from './MorningRoutineCard';
 import ThreeRules from './ThreeRules';
 import { getThree } from '../lib/threeRules';
 import { SLEEP_CRITERIA, durationVerdict, judgeSleepQuality, emptySleepQuality } from '../lib/sleepQuality';
+import { BEDTIME_MINDSET_NOTE, hoursUntilWake, sleepPhrase } from '../lib/morningRoutine';
 import type { AppState } from '../types';
 
 interface Props {
@@ -112,8 +115,27 @@ function BedtimeCard({ state, date }: { state: AppState; date: string }) {
         </p>
       )}
 
+      <BedtimeMindset state={state} date={date} />
+
       <SleepQualityBlock state={state} date={date} />
     </div>
+  );
+}
+
+/**
+ * 寝る前の言い方（モーニングメソッドの「朝起きて最初に考えることは、寝る前に最後に考えたことと同じ」）。
+ * 「◯時間しか眠れない」ではなく「◯時間も眠れる」と言い換える。
+ * 就寝目標（shift.ts）と起床の目標時刻がそろっている時だけ出す。
+ */
+function BedtimeMindset({ state, date }: { state: AppState; date: string }) {
+  const target = bedtimeTarget(state.days[date], state.settings);
+  const hours = hoursUntilWake(target ? target.minutes : null, state.settings.wakeTargetAt);
+  if (hours === null) return null;
+  return (
+    <p className="note-line warm" style={{ margin: 0 }}>
+      {sleepPhrase(hours)}
+      <span className="muted small" style={{ display: 'block', marginTop: 4 }}>{BEDTIME_MINDSET_NOTE}</span>
+    </p>
   );
 }
 
@@ -238,6 +260,8 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
         ) : null}
       </div>
 
+      <MorningRoutineCard state={state} date={date} today={today} />
+
       <ThreeRules
         state={state}
         scope="day"
@@ -282,6 +306,8 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
       <ConditionCard state={state} date={date} />
 
       <MealCard state={state} date={date} today={today} />
+
+      <MonkModeCard state={state} date={date} today={today} />
 
       {suggestions.length > 0 && (
         <div className="card">

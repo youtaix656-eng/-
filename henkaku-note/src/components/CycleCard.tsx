@@ -4,6 +4,7 @@ import {
   currentCycle, cycleProgress, makeCycle, shouldPromptClosing, streak, totalPracticedDays, DEFAULT_CYCLE_DAYS,
 } from '../lib/cycle';
 import { formatDateJa } from '../lib/date';
+import { MONK_DAYS, MONK_PERIOD_NOTE } from '../lib/monkMode';
 import type { AppState } from '../types';
 
 /**
@@ -44,14 +45,18 @@ export default function CycleCard({ state, today }: { state: AppState; today: st
               <span className="field-label">この期間の最上位目標（1つだけ）</span>
               <input type="text" maxLength={80} value={goal} placeholder="例：鍼灸国試の過去問を5年分やりきる" onChange={(e) => setGoal(e.target.value)} />
             </label>
-            <label className="field">
-              <span className="field-label">日数</span>
+            {/* label でボタン群を包むと、読み上げ名に全部のボタンの文字が混ざる。div にする */}
+            <div>
+              <p className="section-title">日数</p>
               <div className="chips">
-                {[30, 60, 90].map((d) => (
-                  <button key={d} type="button" className="chip" aria-pressed={days === d} onClick={() => setDays(d)}>{d}日</button>
+                {[30, MONK_DAYS, 90].map((d) => (
+                  <button key={d} type="button" className="chip" aria-pressed={days === d} onClick={() => setDays(d)}>
+                    {d}日{d === MONK_DAYS ? '（モンクモード）' : ''}
+                  </button>
                 ))}
               </div>
-            </label>
+            </div>
+            {days === MONK_DAYS && <p className="small muted" style={{ margin: 0 }}>{MONK_PERIOD_NOTE}</p>}
             <div className="row" style={{ flexWrap: 'nowrap' }}>
               <button type="button" className="btn slim secondary" onClick={() => setStarting(false)}>やめる</button>
               <button

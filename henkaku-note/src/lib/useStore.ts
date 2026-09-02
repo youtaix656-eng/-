@@ -31,6 +31,16 @@ export function defaultSettings(): Settings {
     fastingPlan: 'three',
     fastingPlanSince: null,
     fastingPrechecks: [],
+    monkWaterMl: 2000,
+    monkSteps: 8000,
+    monkWorkoutPerWeek: 3,
+    monkSnsRule: null,
+    monkPrechecks: [],
+    routinePreset: 'full',
+    routineCustomMinutes: {},
+    routineOrder: [],
+    affirmations: [],
+    wakeTargetAt: null,
   };
 }
 
@@ -166,6 +176,49 @@ export const actions = {
       })),
     );
   },
+  /** 起きて最初のルーティンの記録 */
+  setRoutine(date: string, patch: Partial<import('../types/index.js').RoutineRecord>) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        routine: { doneSteps: [], startedAt: null, wakeAt: null, waterOnWaking: false, ...(d.routine ?? {}), ...patch },
+      })),
+    );
+  },
+  /** ステップを1つ終えた印を付ける（同じidを二重に入れない） */
+  completeRoutineStep(date: string, stepId: string) {
+    set((s) =>
+      withDay(s, date, (d) => {
+        const cur = d.routine ?? { doneSteps: [], startedAt: null, wakeAt: null, waterOnWaking: false };
+        if (cur.doneSteps.includes(stepId)) return d;
+        return { ...d, routine: { ...cur, doneSteps: [...cur.doneSteps, stepId] } };
+      }),
+    );
+  },
+  setAffirmation(index: number, text: string) {
+    set((s) => {
+      const list = [...(s.settings.affirmations ?? [])];
+      while (list.length < 3) list.push('');
+      list[index] = text.slice(0, 80);
+      return { ...s, settings: { ...s.settings, affirmations: list.slice(0, 3) } };
+    });
+  },
+
+  /** モンクモードの記録（水・歩数・運動・読書・SNS・一人の時間） */
+  setMonk(date: string, patch: Partial<import('../types/index.js').MonkRecord>) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        monk: {
+          waterMl: 0, electrolyte: false, steps: 0, workoutMinutes: 0, workoutAt: null,
+          readingMinutes: 0, snsRuleKept: null, soloMinutes: 0,
+          ...(d.monk ?? {}),
+          ...patch,
+        },
+      })),
+    );
+  },
+
   /** 段階を変える。変えた日を覚えておき、次の段階へ進める判断に使う */
   setFastingPlan(planId: string, date: string) {
     set((s) => ({ ...s, settings: { ...s.settings, fastingPlan: planId, fastingPlanSince: date } }));

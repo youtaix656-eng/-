@@ -5,14 +5,10 @@ import {
   FULLNESS_OPTIONS, PRECHECKS, PRECHECK_NOTICE, STOP_SIGNS, pauseAdvice, stepUpAdvice,
   summarizeMeals, UNVERIFIED_CLAIMS, FOOD_GUIDE, PAUSE_THRESHOLD,
 } from '../src/lib/fasting.js';
-import type { DayRecord, MealRecord, Settings } from '../src/types/index.js';
+import { testSettings } from './fixtures.js';
+import type { DayRecord, MealRecord } from '../src/types/index.js';
 
-const settings: Settings = {
-  shiftEndDefault: '00:00', bedWithinMinutes: 90, offDayBedtime: '23:00',
-  audioLinkEnabled: false, audioLinkUrl: '', showStreakProminently: false,
-  meditationBell: true, meditationDefaultMinutes: 10,
-  fastingTargetHours: 12, fastingWorkdayHours: 0, fastingPlan: 'three', fastingPlanSince: null, fastingPrechecks: [],
-};
+const settings = testSettings();
 
 function meal(over: Partial<MealRecord> = {}): MealRecord {
   return { firstMealAt: null, lastMealAt: null, lastMealCrossesMidnight: false, fullness: null, signs: [], ...over };
