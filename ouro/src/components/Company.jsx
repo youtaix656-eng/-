@@ -139,6 +139,13 @@ export default function Company({ store, go }) {
         onClick={() => go('studio')}
       />
       <Row
+        glyph="❏"
+        title="型パック"
+        sub="うまくいった流れを、売れる形（結果つき）に固める"
+        preload="kits"
+        onClick={() => go('kits')}
+      />
+      <Row
         glyph="◎"
         title="収益導線"
         sub="どこで人が減っているかを見る（数字は端末内だけ）"

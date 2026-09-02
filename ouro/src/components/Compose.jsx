@@ -94,6 +94,10 @@ export default function Compose({ store, preset = {}, go }) {
       // 事業から依頼した時の紐づけ。**提案では推測しない**
       // （呼び出し元が決めているものを推測で上書きしない、と同じ理由）。
       ventureId: preset.ventureId || null,
+      // 型パックから依頼した時の紐づけ（片方向）。これが無いと
+      // 「その型で何回回したか」が数えられず、3回ルールが効かない。
+      // **提案では推測しない**（呼び出し元が決めているものを上書きしない）。
+      kitId: preset.kitId || null,
       // この依頼だけモデルを下げる／上げる（設定の既定より優先）
       costMode,
       context,

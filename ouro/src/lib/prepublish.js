@@ -15,6 +15,8 @@ import { checkPersonal } from './privacy.js';
 import { similarOpenings } from './opening.js';
 import { checkSummary } from './checks.js';
 import { hasSections } from './outline.js';
+// 型パックを売り物として出すときの確認（`kit` が渡された時だけ効く）。
+import { runsOf as kitRuns, MIN_RUNS } from './kit.js';
 
 /** 重い順。画面の並びもこの順。 */
 export const LEVELS = ['stop', 'warn', 'ok', 'skip'];
@@ -30,9 +32,12 @@ function worstOf(items) {
  * @param {string} o.text 出そうとしている本文
  * @param {object} o.task 仕事（完成条件の確認に使う。無くてよい）
  * @param {{id,title,text}[]} o.past 過去の成果物（書き出しの重なりに使う）
+ * @param {object} o.kit 売り物として出す型（型パックを出すときだけ。無くてよい）
+ * @param {object[]} o.kitTasks その型で回した仕事を数えるための一覧
+ * @param {number} o.rivalCount 競合台帳の件数（0件を「空いている」と読ませないため）
  * @returns {{items, worst, blocked}}
  */
-export function prepublishChecks({ text = '', task = null, past = [] } = {}) {
+export function prepublishChecks({ text = '', task = null, past = [], kit = null, kitTasks = [], rivalCount = null } = {}) {
   const body = String(text || '');
   const items = [];
 
@@ -105,6 +110,39 @@ export function prepublishChecks({ text = '', task = null, past = [] } = {}) {
     ok: '①結論から始まっています。',
     ng: '枠に沿っていない文章です（短いものはこれで構いません）。',
   });
+
+  // ⑦〜⑨ 型パックを売り物として出すときだけ（`kit` が渡された時に限る）。
+  // **止めない**——足りないものを並べるだけ（他の見張りと同じ線）。
+  if (kit) {
+    const runs = kitRuns(kit, kitTasks);
+    items.push({
+      id: 'kitRuns',
+      title: `自分で ${MIN_RUNS} 回やったか`,
+      level: runs >= MIN_RUNS ? 'ok' : 'warn',
+      hits: [],
+      ok: `${runs} 回まわしています。ただし**中身の違う ${MIN_RUNS} 回かは機械では見られません。**`,
+      ng: `まだ ${runs} 回です。${MIN_RUNS} 回そろえてから出すと事故が減ります（出すこと自体は止めません）。`,
+    });
+    items.push({
+      id: 'kitSamples',
+      title: '結果の見本が付いているか',
+      level: (kit.samples || []).length > 0 ? 'ok' : 'warn',
+      hits: [],
+      ok: '出てくる結果の見本が付いています。',
+      ng: '見本がありません。**買う人が欲しいのは手順ではなく、そこから出てくる結果です。**',
+    });
+    if (rivalCount !== null) {
+      items.push({
+        id: 'kitMarket',
+        title: '競合を見たか',
+        level: rivalCount > 0 ? 'ok' : 'warn',
+        hits: [],
+        ok: `競合台帳に ${rivalCount} 件あります。`,
+        ng: '競合台帳が0件です。**0件は「空いている」ではなく「まだ見ていない」**——'
+          + '誰もやっていない理由が先にあることもあります。',
+      });
+    }
+  }
 
   const shown = items.filter((i) => i.level !== 'skip');
   return {
