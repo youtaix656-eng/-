@@ -49,6 +49,7 @@ export const KEYS = {
   rivals: 'ouro:rivals',     // 競合台帳（実際に見た1件ずつ。推測は入れない）
   voices: 'ouro:voices',     // 需要の観測（実際に見た困りごとの声）
   kits: 'ouro:kits',         // 型パック（売り物にする型。結びつきは task.kitId の片方向）
+  packs: 'ouro:packs',       // パック（複数の型を1つの商品にまとめたもの）
   funnel: 'ouro:funnel', // 収益導線（週ごとの数字）
   board: 'ouro:board',   // 社内掲示板（社員どうしの共通記憶・30日で消える）
   pitfalls: 'ouro:pitfalls', // つまずき集（役職別の失敗・消えない）

@@ -48,6 +48,25 @@ export const SELL_MODES = {
 };
 
 const str = (v, n) => String(v || '').trim().slice(0, n);
+
+/**
+ * SKILL.md の `name` に使える形（小文字の英数字とハイフン）に整える。
+ * **日本語から自動で作らない**——漢字の読みを推定しないのと同じ理由で、
+ * ローマ字化はどうやっても当てずっぽうになる。入っていなければ空を返す。
+ */
+export function slugOf(v) {
+  return String(v || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+/** SKILL.md の name。決めていなければ、型の id から**置き換えの名前**を作る（推定はしない）。 */
+export function skillName(kit) {
+  const k = kit || {};
+  return slugOf(k.slug) || `skill-${String(k.id || '').slice(-6) || 'untitled'}`;
+}
 const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -65,6 +84,12 @@ export function makeKit(data = {}) {
     title,
     // 何が出てくるか（買う人がいちばん知りたいところ）
     outcome: str(data.outcome, 200),
+    // どんな時に使うか。SKILL.md の description はここから作る
+    // （「何が出てくるか」だけだと、AIがいつ使えばよいか分からない）。
+    whenToUse: str(data.whenToUse, 300),
+    // SKILL.md の name に入る英数字の名前。**読みを推定しないのと同じ理由で、
+    // 日本語の題名から自動で作らない**——ユーザーが自分で決める。
+    slug: slugOf(data.slug),
     // 依頼文の型。これに流すと同じ結果が出る、という中身。
     request: str(data.request, 2000),
     // 手順（役職の並び。仕事から型にすると、その仕事の担当がそのまま入る）
@@ -93,6 +118,8 @@ export function normalizeKit(k) {
     id: k.id,
     title: str(k.title, 60),
     outcome: str(k.outcome, 200),
+    whenToUse: str(k.whenToUse, 300),
+    slug: slugOf(k.slug),
     request: str(k.request, 2000),
     steps: (Array.isArray(k.steps) ? k.steps : []).map((s) => str(s, 40)).filter(Boolean).slice(0, 12),
     doneWhen: str(k.doneWhen, 600),
@@ -356,4 +383,228 @@ export function exportKit(kit, { tasks = [], roleName = (id) => id, usdJpy = 155
     }
   }
   return out.join('\n');
+}
+
+// ── SKILL.md 形式で書き出す ───────────────────────────────────────
+// 買う人が欲しいのは「そのまま使える形」。だから中身だけでなく**形式**もそろえる。
+// SKILL.md は先頭に `---` で囲んだ name / description があり、そのあとが本文。
+//   name        … 小文字の英数字とハイフン（**日本語からは作れない**ので人が決める）
+//   description … **いつ使うか**（何が出るか だけだと、AIが使いどきを判断できない）
+
+/** description に入る1行。`whenToUse` が空なら `outcome` で埋め、無ければ空。 */
+export function skillDescription(kit) {
+  const k = kit || {};
+  const when = str(k.whenToUse, 300);
+  const out = str(k.outcome, 200);
+  if (when && out) return `${when} 出てくるもの：${out}`;
+  return when || out || '';
+}
+
+/** YAML の1行に安全に入れる（改行を畳み、引用符を escape する）。 */
+function yamlValue(v) {
+  const one = String(v || '').replace(/\s*\n\s*/g, ' ').trim();
+  return `"${one.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * SKILL.md（買った人がそのまま置いて使える形）。
+ * **足りないものは黙って埋めない**——警告を本文に残す（`exportKit` の「未検証」と同じ線）。
+ * @returns {{name:string, text:string, warnings:string[]}}
+ */
+export function exportSkillMd(kit, { tasks = [], roleName = (id) => id } = {}) {
+  const k = normalizeKit(kit);
+  if (!k) return { name: '', text: '', warnings: ['型がありません'] };
+  const name = skillName(k);
+  const desc = skillDescription(k);
+  const ready = kitReady(k, { tasks });
+  const warnings = [];
+  if (!k.slug) warnings.push(`英数字の名前が決まっていないので、置き換えの名前「${name}」で出しています（日本語からは作れません）。`);
+  if (!desc) warnings.push('「どんな時に使うか」が空です。ここが空だと、AIがこの型をいつ使えばよいか判断できません。');
+  if (ready.runs < MIN_RUNS) warnings.push(`まだ ${ready.runs} 回しか回していません（${MIN_RUNS} 回が目安）。`);
+  if (!k.samples.length) warnings.push('結果の見本が付いていません。');
+
+  const body = [];
+  body.push('---');
+  body.push(`name: ${name}`);
+  body.push(`description: ${yamlValue(desc || `${k.title}（説明が未記入）`)}`);
+  body.push('---');
+  body.push('');
+  body.push(`# ${k.title}`);
+  body.push('');
+  if (ready.runs < MIN_RUNS) {
+    body.push(`> ⚠ 未検証：作った本人がまだ ${ready.runs} 回しか試していません。`);
+    body.push('');
+  }
+  if (k.outcome) { body.push(`**出てくるもの**：${k.outcome}`); body.push(''); }
+
+  body.push('## 手順');
+  if (k.steps.length) k.steps.forEach((id, i) => body.push(`${i + 1}. ${roleName(id)}`));
+  else body.push('1. そのまま依頼する');
+  body.push('');
+
+  body.push('## 依頼文');
+  body.push('```');
+  body.push(k.request || '（未記入）');
+  body.push('```');
+
+  if (k.doneWhen.trim()) {
+    body.push('');
+    body.push('## 完成条件');
+    for (const l of k.doneWhen.split('\n').map((x) => x.trim()).filter(Boolean)) body.push(`- ${l}`);
+  }
+  if (k.notes.trim()) {
+    body.push('');
+    body.push('## 使うときの注意');
+    body.push(k.notes);
+  }
+  if (k.samples.length) {
+    body.push('');
+    body.push('## 出てくる結果の見本');
+    for (const smp of k.samples) {
+      body.push('');
+      body.push(`### ${smp.title}`);
+      body.push(smp.excerpt);
+    }
+  }
+  return { name, text: body.join('\n'), warnings };
+}
+
+// ── パック（複数の型を1つの商品にまとめる）────────────────────────
+// 動画で言われているのは「スキルをパックにして売る」——1本ずつではなく束で売る。
+// **パックは型の一覧を持つが、これは商品の目次であって同期する列ではない**
+// （型の側にパック名を持たせない＝結びつきは片方向のまま）。
+
+export const MAX_PACKS = 10;
+export const MAX_PACK_KITS = 12;
+
+export function makePack(data = {}) {
+  const title = str(data.title, 60);
+  if (!title) return null;
+  const now = Date.now();
+  return {
+    id: data.id || newId('pack'),
+    title,
+    outcome: str(data.outcome, 300),
+    // 中に入れる型の id。**順番に意味がある**ので Set にしない。
+    kitIds: [...new Set((Array.isArray(data.kitIds) ? data.kitIds : []).filter(Boolean))].slice(0, MAX_PACK_KITS),
+    sellMode: SELL_MODES[data.sellMode] ? data.sellMode : 'guide',
+    ventureId: data.ventureId || null,
+    version: 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function normalizePack(p) {
+  if (!p || !p.id || !p.title) return null;
+  return {
+    id: p.id,
+    title: str(p.title, 60),
+    outcome: str(p.outcome, 300),
+    kitIds: [...new Set((Array.isArray(p.kitIds) ? p.kitIds : []).filter(Boolean))].slice(0, MAX_PACK_KITS),
+    sellMode: SELL_MODES[p.sellMode] ? p.sellMode : 'guide',
+    ventureId: p.ventureId || null,
+    version: Math.max(1, Math.round(num(p.version)) || 1),
+    createdAt: p.createdAt || Date.now(),
+    updatedAt: p.updatedAt || p.createdAt || Date.now(),
+  };
+}
+
+export function normalizePacks(list) {
+  return (Array.isArray(list) ? list : []).map(normalizePack).filter(Boolean).slice(0, MAX_PACKS);
+}
+
+/**
+ * パックの中身。**消された型は静かに落とす**（無いものを目次に出さない）。
+ * 型の側に pack の id を持たせないので、ここが唯一の照合になる。
+ */
+export function kitsInPack(pack, kits = []) {
+  const p = normalizePack(pack);
+  if (!p) return [];
+  const all = normalizeKits(kits);
+  return p.kitIds.map((id) => all.find((k) => k.id === id)).filter(Boolean);
+}
+
+/**
+ * パックとして出せるか。**関門にしない**——足りないものを並べるだけ。
+ * 1つでも未検証の型が入っていたら、それは必ず伝える。
+ */
+export function packReady(pack, { kits = [], tasks = [], rivalCount = 0 } = {}) {
+  const list = kitsInPack(pack, kits);
+  const reasons = [];
+  const notes = [];
+  if (!list.length) reasons.push('中に型が1つも入っていません');
+  const unverified = list.filter((k) => runsOf(k, tasks).length < MIN_RUNS);
+  const noSample = list.filter((k) => !k.samples.length);
+  if (unverified.length) {
+    reasons.push(`${MIN_RUNS}回に足りない型が ${unverified.length} 個あります（${unverified.map((k) => k.title).join('・')}）`);
+  }
+  if (noSample.length) {
+    reasons.push(`結果の見本が無い型が ${noSample.length} 個あります（${noSample.map((k) => k.title).join('・')}）`);
+  }
+  if (!normalizePack(pack) || !normalizePack(pack).outcome) {
+    reasons.push('「このパックで何ができるようになるか」が書かれていません');
+  }
+  if (rivalCount === 0) {
+    notes.push('競合台帳が0件です。**0件は「空いている」ではなく「まだ見ていない」**です。');
+  }
+  return { counted: list.length, unverified: unverified.length, ready: reasons.length === 0, reasons, notes };
+}
+
+/**
+ * パックを書き出す。目次（README.md）と、型ごとの SKILL.md を並べて返す。
+ * **1つでも未検証があれば、目次の先頭にそう書く**（束にすると個々の印が埋もれるため）。
+ * @returns {{files:{path:string, text:string}[], warnings:string[]}}
+ */
+export function exportPack(pack, { kits = [], tasks = [], roleName = (id) => id } = {}) {
+  const p = normalizePack(pack);
+  if (!p) return { files: [], warnings: ['パックがありません'] };
+  const list = kitsInPack(p, kits);
+  const ready = packReady(p, { kits, tasks });
+  const warnings = [];
+
+  const index = [];
+  index.push(`# ${p.title}`);
+  index.push('');
+  if (p.outcome) { index.push(p.outcome); index.push(''); }
+  index.push(`**入っているもの**：${list.length} 個の型`);
+  index.push(`**売り方**：${SELL_MODES[p.sellMode].name}`);
+  if (ready.unverified > 0) {
+    index.push('');
+    index.push(`> ⚠ このパックには、作った本人が ${MIN_RUNS} 回に満たない型が ${ready.unverified} 個入っています。`);
+  }
+  index.push('');
+  index.push('## 中身');
+  const files = [];
+  const used = new Map();
+  for (const k of list) {
+    const one = exportSkillMd(k, { tasks, roleName });
+    // 同じ名前がぶつかったら後ろに番号を足す（上書きで1つ消えるのを防ぐ）
+    let name = one.name;
+    if (used.has(name)) {
+      const n = used.get(name) + 1;
+      used.set(one.name, n);
+      name = `${one.name}-${n}`;
+    } else {
+      used.set(name, 1);
+    }
+    const runs = runsOf(k, tasks).length;
+    index.push(`- **${k.title}**（\`${name}/SKILL.md\`）${k.outcome ? ` — ${k.outcome}` : ''}`
+      + (runs < MIN_RUNS ? ` ※未検証（${runs}回）` : ''));
+    files.push({ path: `${name}/SKILL.md`, text: one.text });
+    for (const w of one.warnings) warnings.push(`${k.title}：${w}`);
+  }
+  files.unshift({ path: 'README.md', text: index.join('\n') });
+  return { files, warnings };
+}
+
+/** 画面に出す1行。 */
+export function packLine(pack, kits = [], tasks = []) {
+  const p = normalizePack(pack);
+  if (!p) return '';
+  const list = kitsInPack(p, kits);
+  const unverified = list.filter((k) => runsOf(k, tasks).length < MIN_RUNS).length;
+  const parts = [`型 ${list.length} 個`];
+  if (unverified) parts.push(`未検証 ${unverified} 個`);
+  return parts.join(' ・ ');
 }

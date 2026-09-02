@@ -147,6 +147,7 @@ const REST_KEYS = [
   KEYS.voices,
   // 型パック。型の画面と、依頼するときにしか要らない。
   KEYS.kits,
+  KEYS.packs,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -175,6 +176,7 @@ const EMPTY = {
   rivals: [],
   voices: [],
   kits: [],
+  packs: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -1205,6 +1207,62 @@ export function useStore() {
     async (kitId, sampleId) => {
       const { removeSample } = await import('./kit.js');
       put(KEYS.kits, (stateRef.current.kits || []).map((k) => (k.id === kitId ? removeSample(k, sampleId) : k)));
+    },
+    [put]
+  );
+
+  // ── パック（複数の型を1つの商品にまとめる）──
+  // パックは型の一覧（kitIds）を持つが、これは**商品の目次**であって同期する列ではない
+  // （型の側にパックの id を持たせない＝結びつきは片方向のまま）。
+
+  const addPack = useCallback(
+    async (data) => {
+      const { makePack, MAX_PACKS } = await import('./kit.js');
+      const made = makePack(data || {});
+      if (!made) return null;
+      const list = stateRef.current.packs || [];
+      if (list.length >= MAX_PACKS) return null;
+      put(KEYS.packs, [made, ...list]);
+      log({ actor: 'user', action: 'packAdded', target: made.title });
+      return made;
+    },
+    [put, log]
+  );
+
+  const updatePack = useCallback(
+    (id, patch) => {
+      put(
+        KEYS.packs,
+        (stateRef.current.packs || []).map((p) =>
+          p.id === id ? { ...p, ...patch, id: p.id, updatedAt: Date.now() } : p
+        )
+      );
+    },
+    [put]
+  );
+
+  const removePack = useCallback(
+    (id) => {
+      put(KEYS.packs, (stateRef.current.packs || []).filter((p) => p.id !== id));
+    },
+    [put]
+  );
+
+  /** パックに型を入れる／外す。**順番に意味がある**ので末尾に足す。 */
+  const togglePackKit = useCallback(
+    (packId, kitId) => {
+      put(
+        KEYS.packs,
+        (stateRef.current.packs || []).map((p) => {
+          if (p.id !== packId) return p;
+          const ids = Array.isArray(p.kitIds) ? p.kitIds : [];
+          return {
+            ...p,
+            kitIds: ids.includes(kitId) ? ids.filter((x) => x !== kitId) : [...ids, kitId],
+            updatedAt: Date.now(),
+          };
+        })
+      );
     },
     [put]
   );
@@ -2694,6 +2752,10 @@ export function useStore() {
     bumpKitVersion,
     addKitSample,
     removeKitSample,
+    addPack,
+    updatePack,
+    removePack,
+    togglePackKit,
     updatePattern: updatePatternAction,
     removePattern: removePatternAction,
     // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）

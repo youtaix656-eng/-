@@ -5,7 +5,9 @@ import { readFileSync } from 'node:fs';
 import {
   makeKit, normalizeKit, normalizeKits, kitFromTask, runsOf, sampleFromTask,
   addSample, removeSample, bumpVersion, kitEffort, kitReady, kitLine, kitsLine, exportKit,
-  SELL_MODES, MIN_RUNS, MIN_SAMPLES, MAX_SAMPLES, MAX_KITS,
+  slugOf, skillName, skillDescription, exportSkillMd,
+  makePack, normalizePack, normalizePacks, kitsInPack, packReady, packLine, exportPack,
+  SELL_MODES, MIN_RUNS, MIN_SAMPLES, MAX_SAMPLES, MAX_KITS, MAX_PACKS, MAX_PACK_KITS,
 } from '../src/lib/kit.js';
 import { prepublishChecks } from '../src/lib/prepublish.js';
 import { createTask } from '../src/lib/workflow.js';
@@ -247,4 +249,138 @@ test("go('compose', arg) の arg は preset そのもの（1段包まない）",
   // App 側は arg をそのまま preset に渡している、という前提の確認
   const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
   assert.match(app, /<Compose store=\{store\} preset=\{arg \|\| \{\}\}/);
+});
+
+// ── SKILL.md の形で書き出す ──
+
+test('英数字の名前を日本語から自動で作らない', () => {
+  assert.equal(slugOf('SNS投稿の型'), 'sns', '入力そのものを整えるだけ');
+  assert.equal(slugOf('日本語だけ'), '', 'ローマ字化は当てずっぽうになるのでしない');
+  assert.equal(slugOf('  My Kit! '), 'my-kit');
+  // 決めていない時は、型の id から**置き換えの名前**を作る（推定ではない）
+  const k = makeKit({ title: '型' });
+  assert.match(skillName(k), /^skill-[a-z0-9]+$/);
+  assert.equal(skillName(makeKit({ title: '型', slug: 'my-kit' })), 'my-kit');
+  assert.equal(skillName(null), 'skill-untitled', '壊れた値でも落ちない');
+});
+
+test('SKILL.md の形（先頭に name / description）で出る', () => {
+  const k = addSample(makeKit({
+    title: 'SNS投稿の型', slug: 'sns-posts', whenToUse: 'SNSの投稿をまとめて作りたいとき',
+    outcome: '下書き5本', request: '5本つくって',
+  }), { id: 's1', excerpt: '見本' });
+  const tasks = ['a', 'b', 'c'].map((i) => ({ id: i, kitId: k.id, status: 'done' }));
+  const out = exportSkillMd(k, { tasks });
+  const lines = out.text.split('\n');
+  assert.equal(lines[0], '---');
+  assert.equal(lines[1], 'name: sns-posts');
+  assert.match(lines[2], /^description: "/);
+  assert.equal(lines[3], '---');
+  assert.equal(out.name, 'sns-posts');
+  assert.deepEqual(out.warnings, [], '揃っていれば警告は出ない');
+});
+
+test('description は「いつ使うか」から作る（何が出るかだけにしない）', () => {
+  assert.match(skillDescription({ whenToUse: 'AとBのとき', outcome: 'C' }), /AとBのとき/);
+  assert.match(skillDescription({ whenToUse: 'AとBのとき', outcome: 'C' }), /出てくるもの：C/);
+  assert.equal(skillDescription({ outcome: 'C' }), 'C', '片方しか無ければそれを使う');
+  assert.equal(skillDescription({}), '');
+  assert.equal(skillDescription(null), '');
+});
+
+test('足りないものは黙って埋めず、警告に出す', () => {
+  const k = makeKit({ title: '型', request: 'x' });
+  const out = exportSkillMd(k, { tasks: [] });
+  assert.ok(out.warnings.some((w) => w.includes('英数字の名前')));
+  assert.ok(out.warnings.some((w) => w.includes('どんな時に使うか')));
+  assert.ok(out.warnings.some((w) => w.includes(`${MIN_RUNS} 回`)));
+  assert.ok(out.warnings.some((w) => w.includes('見本')));
+  // それでも壊れないファイルが出る（行き止まりにしない）
+  assert.match(out.text, /^---\nname: skill-/);
+  assert.match(out.text, /未検証/);
+});
+
+test('description の改行と引用符で YAML を壊さない', () => {
+  const k = makeKit({ title: '型', slug: 'x', whenToUse: '1行目\n2行目の "引用" つき' });
+  const line = exportSkillMd(k, { tasks: [] }).text.split('\n')[2];
+  assert.ok(!line.includes('\n'));
+  assert.match(line, /^description: ".*"$/);
+  assert.ok(line.includes('\\"'), '引用符を escape する');
+});
+
+// ── パック（束にして売る）──
+
+test('パックは名前が無ければ作れない', () => {
+  assert.equal(makePack({}), null);
+  assert.equal(normalizePack({ id: 'p' }), null);
+  assert.deepEqual(normalizePacks(null), []);
+});
+
+test('パックの一覧は商品の目次であって、同期する列ではない', () => {
+  const k1 = makeKit({ title: 'A' });
+  const k2 = makeKit({ title: 'B' });
+  const pack = makePack({ title: 'パック', kitIds: [k1.id, k2.id, k1.id] });
+  assert.equal(pack.kitIds.length, 2, '同じ型を二重に入れない');
+  // 消された型は静かに落とす（無いものを目次に出さない）
+  assert.deepEqual(kitsInPack(pack, [k1]).map((k) => k.title), ['A']);
+  // 型の側にパックの id を持たせない
+  assert.ok(!('packId' in k1) && !('packIds' in k1));
+  const code = readFileSync(new URL('../src/lib/kit.js', import.meta.url), 'utf8')
+    .replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/packId[s]?:/.test(code));
+});
+
+test('パックの順番は入れた順のまま（並べ替えない）', () => {
+  const ks = ['A', 'B', 'C'].map((t) => makeKit({ title: t }));
+  const pack = makePack({ title: 'p', kitIds: [ks[2].id, ks[0].id, ks[1].id] });
+  assert.deepEqual(kitsInPack(pack, ks).map((k) => k.title), ['C', 'A', 'B']);
+});
+
+test('1つでも未検証の型が入っていたら、目次の先頭にそう書く', () => {
+  const ok = addSample(makeKit({ title: 'できてる' }), { id: 's', excerpt: 'x' });
+  const ng = addSample(makeKit({ title: 'まだ' }), { id: 's2', excerpt: 'y' });
+  const tasks = ['a', 'b', 'c'].map((i) => ({ id: i, kitId: ok.id, status: 'done' }));
+  const pack = makePack({ title: 'パック', outcome: 'できること', kitIds: [ok.id, ng.id] });
+  const r = packReady(pack, { kits: [ok, ng], tasks, rivalCount: 1 });
+  assert.equal(r.unverified, 1);
+  assert.equal(r.ready, false);
+  const out = exportPack(pack, { kits: [ok, ng], tasks });
+  assert.match(out.files[0].text, /未検証/, '束にすると個々の印が埋もれるので目次に出す');
+  assert.match(out.files[0].text, /※未検証（0回）/);
+});
+
+test('パックは目次と型ごとの SKILL.md を並べて出す', () => {
+  const k = addSample(makeKit({ title: 'A', slug: 'a-kit' }), { id: 's', excerpt: 'x' });
+  const tasks = ['a', 'b', 'c'].map((i) => ({ id: i, kitId: k.id, status: 'done' }));
+  const out = exportPack(makePack({ title: 'パック', outcome: 'x', kitIds: [k.id] }), { kits: [k], tasks });
+  assert.deepEqual(out.files.map((f) => f.path), ['README.md', 'a-kit/SKILL.md']);
+  assert.match(out.files[1].text, /^---\nname: a-kit/);
+});
+
+test('名前がぶつかったら上書きせず番号を足す', () => {
+  const a = makeKit({ title: 'A', slug: 'same' });
+  const b = makeKit({ title: 'B', slug: 'same' });
+  const out = exportPack(makePack({ title: 'p', kitIds: [a.id, b.id] }), { kits: [a, b], tasks: [] });
+  const paths = out.files.map((f) => f.path);
+  assert.equal(new Set(paths).size, paths.length, '同じ名前だと1つ消える');
+  assert.ok(paths.includes('same/SKILL.md') && paths.includes('same-2/SKILL.md'));
+});
+
+test('パックにも上限がある・壊れた値で落ちない', () => {
+  const ids = Array.from({ length: MAX_PACK_KITS + 5 }, (_, i) => `k${i}`);
+  assert.equal(makePack({ title: 'p', kitIds: ids }).kitIds.length, MAX_PACK_KITS);
+  assert.equal(normalizePacks(Array.from({ length: MAX_PACKS + 3 }, (_, i) => makePack({ title: `p${i}` }))).length, MAX_PACKS);
+  assert.equal(packLine(null), '');
+  assert.deepEqual(kitsInPack(null, []), []);
+  assert.deepEqual(exportPack(null).files, []);
+});
+
+test('パックでも0件の競合台帳を「空いている」と読ませない', () => {
+  const k = addSample(makeKit({ title: 'A' }), { id: 's', excerpt: 'x' });
+  const r = packReady(makePack({ title: 'p', outcome: 'x', kitIds: [k.id] }), { kits: [k], tasks: [], rivalCount: 0 });
+  assert.ok(r.notes.some((n) => n.includes('まだ見ていない')));
+});
+
+test('パックの保存キーが登録されている', () => {
+  assert.equal(KEYS.packs, 'ouro:packs');
 });
