@@ -108,6 +108,18 @@ export interface MonkRecord {
   soloMinutes: number;
 }
 
+/** 起きて最初のルーティンの記録 */
+export interface RoutineRecord {
+  /** 終えたステップのid */
+  doneSteps: string[];
+  /** ルーティンを始めた時刻 'HH:MM' */
+  startedAt: string | null;
+  /** 起きた時刻 'HH:MM'（「朝◯時」ではなく起きてから何分で始めたかを見るため） */
+  wakeAt: string | null;
+  /** 起きてすぐ水を1杯飲んだか */
+  waterOnWaking: boolean;
+}
+
 export interface DayRecord {
   /** 'YYYY-MM-DD' */
   date: string;
@@ -129,6 +141,7 @@ export interface DayRecord {
   sleepQuality?: SleepQualityRecord;
   meal?: MealRecord;
   monk?: MonkRecord;
+  routine?: RoutineRecord;
   updatedAt: number;
 }
 
@@ -210,6 +223,17 @@ export interface Settings {
   monkSnsRule: string | null;
   /** 塩・血圧まわりの事前確認で当てはまった項目 */
   monkPrechecks: string[];
+
+  // ── 起きて最初のルーティン ──
+  routinePreset: 'full' | 'short' | 'custom';
+  /** custom の時の各ステップの分数 */
+  routineCustomMinutes: Record<string, number>;
+  /** 実行する順番（ステップのid）。空なら既定の並び */
+  routineOrder: string[];
+  /** アファメーション（数字と期限を入れた目標） */
+  affirmations: string[];
+  /** 起床の目標時刻。寝る前に「◯時間も眠れる」と言い換えるのに使う */
+  wakeTargetAt: string | null;
 }
 
 export interface AppState {
