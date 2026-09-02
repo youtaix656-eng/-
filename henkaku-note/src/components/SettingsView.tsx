@@ -5,6 +5,7 @@ import { backupFileName, downloadText, parseJson, pickTextFile, toJson } from '.
 import { DEFAULT_AUDIO_URL } from '../lib/audioLink';
 import { bedtimeTarget } from '../lib/shift';
 import { LENGTH_OPTIONS } from '../lib/meditation';
+import { PLANS, PRECHECKS, PRECHECK_NOTICE } from '../lib/fasting';
 import { initialState } from '../lib/useStore';
 import type { AppState } from '../types';
 
@@ -44,6 +45,66 @@ export default function SettingsView({ state }: { state: AppState }) {
           <input type="time" value={state.settings.offDayBedtime} onChange={(e) => actions.setSettings({ offDayBedtime: e.target.value })} />
         </label>
         {example && <p className="note-line warm" style={{ margin: 0 }}>いまの設定だと、勤務日の目標は <strong className="num">{example.label}</strong>（{example.reason}）です。</p>}
+      </div>
+
+      <div className="card">
+        <h2>食事の時間と量</h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          出典は「前の食事から◯時間以上空ける」としていますが、<strong>受け取った文字起こしでその数字が
+          欠けていた</strong>ため、出典の値としては持たず、ここで自分で決めてもらう形にしています。
+        </p>
+        <div>
+          <p className="section-title">前の食事から空ける目標（時間）</p>
+          <div className="chips">
+            {[10, 12, 14, 16].map((h) => (
+              <button key={h} type="button" className="chip" aria-pressed={state.settings.fastingTargetHours === h}
+                onClick={() => actions.setSettings({ fastingTargetHours: h })}>
+                {h}時間
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="section-title">勤務日だけ短くする（夜勤で長く空けると負担になりやすいため）</p>
+          <div className="chips">
+            {[0, 8, 10, 12].map((h) => (
+              <button key={h} type="button" className="chip" aria-pressed={state.settings.fastingWorkdayHours === h}
+                onClick={() => actions.setSettings({ fastingWorkdayHours: h })}>
+                {h === 0 ? '同じにする' : `${h}時間`}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="section-title">いまの段階</p>
+          <div className="chips">
+            {PLANS.map((p) => (
+              <button key={p.id} type="button" className="chip" aria-pressed={state.settings.fastingPlan === p.id}
+                onClick={() => actions.setFastingPlan(p.id, new Date().toISOString().slice(0, 10))}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <details className="acc">
+          <summary>始める前の確認（{state.settings.fastingPrechecks.length}件 該当）</summary>
+          <div className="chips">
+            {PRECHECKS.map((c) => {
+              const on = state.settings.fastingPrechecks.includes(c.id);
+              return (
+                <button key={c.id} type="button" className="chip" aria-pressed={on}
+                  onClick={() => actions.setSettings({
+                    fastingPrechecks: on
+                      ? state.settings.fastingPrechecks.filter((x) => x !== c.id)
+                      : [...state.settings.fastingPrechecks, c.id],
+                  })}>
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="note-line" style={{ margin: '8px 0 0', borderLeftColor: 'var(--ember)' }}>{PRECHECK_NOTICE}</p>
+        </details>
       </div>
 
       <div className="card">

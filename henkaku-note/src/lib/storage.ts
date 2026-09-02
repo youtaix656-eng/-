@@ -117,6 +117,7 @@ export async function loadState(fallback: AppState): Promise<AppState> {
     days: stored.days && typeof stored.days === 'object' ? stored.days : {},
     weeks: stored.weeks && typeof stored.weeks === 'object' ? stored.weeks : {},
     cycles: Array.isArray(stored.cycles) ? stored.cycles : [],
+    threeRules: stored.threeRules && typeof stored.threeRules === 'object' ? stored.threeRules : {},
     settings: { ...fallback.settings, ...(stored.settings || {}) },
   };
 }
