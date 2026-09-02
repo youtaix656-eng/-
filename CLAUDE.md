@@ -174,6 +174,61 @@ React + Vite（JSX・TypeScript なし・外部ランタイム依存なし）。
 - **Analytics.jsx（InsightsSection.jsx）**：要注意の科目別内訳・未解消の復習対象の
   科目別平均滞留日数を追加。
 
+## 一問一答（Quiz.jsx）とSession.jsxの機能統一（2026-09-02追加）
+ユーザーから「今強化すべき機能ベスト3」を聞かれて答えた3位（Quiz.jsxとSession.jsxの機能差）を
+ユーザー指定で30案→全実装したもの。「連携させたほうがいいものは連携させて」の指示どおり、
+新規ロジックはSession.jsx/Quiz.jsxの両方から使う共有フック・共有コンポーネントとして切り出した
+（単一の正）。新しいファイルが増えたので、置き場をここにまとめる。
+- **根本バグの修正**：Quiz.jsxの自己採点（○/△/✕）は`recordAnswer`に`selfKind`/`objectiveCorrect`を
+  渡していなかった（3引数のみ）。このため**Quiz.jsxでの自己採点は`maruPool.js`はじめselfKind依存の
+  機能から一切見えていなかった**（○の見直し等が使えなかった直接の原因）。`recordAnswer(q, correct,
+  grade, source, selfKind, objectiveCorrect)`の全引数を渡すよう修正。
+- **`src/lib/useMaruReview.js`**：`maruPool.js`の`maruStatusList`/`excludeMastered`/
+  `orderMaruStatus`をラップするフック。Session.jsx・Quiz.jsxの両方の「✅ ○の見直し・高速回転」で共用。
+- **`src/lib/useMissTypeHandling.js`**：`missTypes.js`の`loadMissTypes`/`recordMissType`/
+  `missTypeTrend`/`missTypeAnomaly`をラップするフック。`setNextDue`を渡すと誤答理由別の
+  間隔調整も自動で行う（**以前はReview.jsxだけがこの調整をしており、Session.jsxは持っていなかった
+  不整合を今回あわせて解消**）。
+- **`src/components/ManagerReview.jsx`**・**`src/components/FastCard.jsx`**：Session.jsx内に
+  ローカル定義だった「予定通り完了したか」振り返り／高速回転カードを、ロジックを変えずに
+  そのまま共有コンポーネントへ切り出したもの。
+- **`src/components/MaruReviewCard.jsx`**：「✅ ○にした問題をふりかえる」カード。
+  `useMaruReview`の状態一式を受け取るprops駆動で、Session.jsx（グローバルな`store.session`）と
+  Quiz.jsx（ローカルstateの`maruSessionKind`）という**セッション状態の持ち方が違う2画面**からでも
+  同じ見た目・同じ絞り込みロジックで使えるようにしてある。
+- **`src/components/BufferPlanCard.jsx`**：「⏱ 時間で計画する（3分の2バッファ術）」カード。
+  `bufferSession.js`の`planStudySession`呼び出しと分数入力のUIをここに集約。開始後の処理
+  （`onStart(bufferPlan)`）は呼び出し側に委ねる設計（Session.jsxの`begin()`とQuiz.jsxの
+  開始方法が異なるため）。
+- **Session.jsxのリファクタ内容**：上記のフック・コンポーネントを使うよう置き換え。見た目・文言は
+  維持しつつ、ついでに2点改善した——①弱点タグの集計を自前のカウントから`weakClusters.js`の
+  `weakTagClusters`（表記ゆれ統合・汎用語除外つき）に統一、②誤答理由記録時に`setNextDue`を
+  呼ぶよう修正（Quiz.jsxと同じ挙動にそろえた）。
+- **Quiz.jsxの追加内容**（根本バグ修正に加えて）：`useMaruReview`＋`MaruReviewCard`による
+  ○の見直し・高速回転（ローカルstate`maruSessionKind`で管理、Session.jsxの`store.session`とは
+  独立）／`useMissTypeHandling`による誤答理由フィルタ・傾向表示／`BufferPlanCard`による
+  3分の2バッファ術（ローカルstate`buffer`、`ManagerReview`分岐→バッファ用途カード）／
+  弱点タグチップ・COMPARISONS連動の弱点サマリー／「🎯今日のおすすめ」ボタン
+  （`recommendNewPct`に`reviewStalledDays`を渡す）／「🔗関連をたどって続ける」
+  （`chainNext`）。新たに`onToast` propを追加（App.jsxから`showToast`を渡す）。
+  **Quiz.jsxのbuffer/maruSessionKindは`quizProgress`（続きから復元）には含めない**——
+  再開時は常に通常モードに戻る仕様（バッファ計画・○の見直しは毎回明示的に開始する前提のため、
+  意図的なスコープ限定）。
+- 検証済みで変更不要だった項目：ストレージキーの衝突なし
+  （`shinkyu:session`と`shinkyu:quizProgress`は別キー）、Mascot.jsxの「今日の目標」集計は
+  `source`を問わずhistory全件を数えるため元からQuiz.jsxの解答も正しく含まれていた。
+- Quiz.jsxは下部ナビの即時import画面のため、共有コンポーネント化で起動時バンドルが
+  やや増えた（起動時JS 929KB/予算1024KB、引き上げた予算内に収まっている）。
+- **Playwright QAで発見・修正したバグ**：`buildIdsForTarget(target)`は元々「何問ずつ区切って
+  出すか」のbatchチップ機能専用で、`newPct===null`（新規/復習比率を指定していない既定状態）かつ
+  `batch===0`（バッチも既定の「すべて」）の時は`target`を無視してfilteredPool全体を返す作りに
+  なっていた（batchチップの既存呼び出し元はその時`target===filteredPool.length`を渡すので実害が
+  無かった）。この関数を`startBuffer`から再利用した際、バッファ計画のtarget（例：15問）が既定設定の
+  ままだと無視され、基礎タスクが母集団全体になり`ManagerReview`が実質出現しない状態になっていた。
+  `buildOrder(filteredPool, target)`を常に呼ぶよう修正（batch===0の元の呼び出し元では
+  target===filteredPool.lengthなので結果は変わらない）。**同じ関数を新しい用途に再利用する時は、
+  既存呼び出し元の暗黙の前提（この場合「targetは常にpool全体と一致する」）を洗い出してから使うこと。**
+
 ## このリポジトリに同梱されている他アプリ（鍼灸アプリ本体とは独立）
 main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物にまとめて配置する。
 それぞれ独立した package.json / ビルドを持つので、**鍼灸アプリ側の作業では触らない**。

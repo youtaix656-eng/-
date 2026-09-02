@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
+import ManagerReview from './ManagerReview.jsx';
+import FastCard from './FastCard.jsx';
 import { GRADES, LEECH_THRESHOLD, isLeech as isLeechState } from '../lib/srs.js';
 import { getSubjects } from '../lib/stats.js';
 import { subjectMatches, SUBJECT_TAG_NAMES, scopeCoverage } from '../data/examScope.js';
@@ -9,16 +11,20 @@ import { COMPARISONS } from '../data/mindmapData.js';
 import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/reviewPool.js';
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
-import { DEFAULT_BASE_RATIO, planStudySession, resolveBufferUsage, bufferUsageLabel, managerReviewMessage } from '../lib/bufferSession.js';
-import { loadTodayMood, moodToConditionScore, MOODS } from '../lib/mood.js';
+import { resolveBufferUsage, bufferUsageLabel } from '../lib/bufferSession.js';
+import BufferPlanCard from './BufferPlanCard.jsx';
+import { loadTodayMood } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import { loadRoundLog, appendRoundLog, previousForTarget, countForTarget, formatDuration, speedupPct } from '../lib/roundLog.js';
-import { loadMissTypes, recordMissType, latestMissType } from '../lib/missTypes.js';
+import { latestMissType } from '../lib/missTypes.js';
+import { useMissTypeHandling } from '../lib/useMissTypeHandling.js';
 import { loadSelfKindCounts, recordSelfKindCount } from '../lib/starWeak.js';
 import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { daysUntil } from '../lib/gamify.js';
-import { maruStatusList, excludeMastered, orderMaruStatus } from '../lib/maruPool.js';
+import { useMaruReview } from '../lib/useMaruReview.js';
+import MaruReviewCard from './MaruReviewCard.jsx';
+import { weakTagClusters } from '../lib/weakClusters.js';
 import { loadReviewZeroLog, daysSinceLastZero } from '../lib/reviewZeroLog.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
@@ -38,7 +44,7 @@ function poolFor(questions, subject) {
 // 出題順の組み立ては src/lib/sessionOrder.js に集約（Quiz.jsxと共用）。
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio, onGoAnalytics }) {
-  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded } = store;
+  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded, setNextDue } = store;
   // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
   const subjects = useMemo(() => {
     const present = getSubjects(questions);
@@ -84,24 +90,10 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     setNewPct(Math.round((settings.sessionNewRatio ?? 1) * 100));
   }, [loaded, settings.sessionNewRatio]);
 
-  // 3分の2バッファ術：学習予定時間（分）→ 基礎タスク/バッファの自動計算（#A・#B）。
-  //   シフト連携（勤務シフト）は未実装だが、体調連携は「今日の調子」（Home/Mascotで記録、
-  //   音声学習・復習のノルマ調整と同じ値）をconditionScoreとしてそのまま渡している。
-  const [planMinutes, setPlanMinutes] = useState(60);
+  // 3分の2バッファ術：学習予定時間（分）→ 基礎タスク/バッファの自動計算はBufferPlanCardに委ねる。
+  //   体調連携は「今日の調子」（Home/Mascotで記録、音声学習・復習のノルマ調整と同じ値）を使う。
   const [mood, setMood] = useState(null);
   useEffect(() => { loadTodayMood().then(setMood); }, []);
-  const standardBaseRatio = (settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100)) / 100;
-  const bufferPlan = useMemo(
-    () =>
-      planStudySession({
-        totalMinutes: planMinutes,
-        subject,
-        history,
-        standardRatio: standardBaseRatio,
-        conditionScore: moodToConditionScore(mood),
-      }),
-    [planMinutes, subject, history, standardBaseRatio, mood]
-  );
 
   // 検索（科目→ジャンル→キーワード の段階しぼり＋フリーワード）
   const afterSubject = useMemo(() => (subject === 'all' ? questions : poolFor(questions, subject)), [questions, subject]);
@@ -130,48 +122,28 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // ○にした問題の見直し・高速回転用プール（上の絞り込み条件を引き継ぐ）。
   //   自己採点で最後に○（完璧）を選んだ問題だけを対象にし、
   //   ①問題演習で見直す（適当に○にしていないかの確認）②高速回転でインプット強化、の2通りに使う。
-  const [maruExcludeMastered, setMaruExcludeMastered] = useState(false); // #5：マスター済み（5連続○）を除くか
-  const maruStatusAll = useMemo(() => maruStatusList(filteredPool, history, srs), [filteredPool, history, srs]);
-  const maruUncertainCount = useMemo(() => maruStatusAll.filter((s) => s.uncertain).length, [maruStatusAll]);
-  const maruStatusFiltered = useMemo(
-    () => (maruExcludeMastered ? excludeMastered(maruStatusAll) : maruStatusAll),
-    [maruStatusAll, maruExcludeMastered]
-  );
-  // #1・#4：うっかり○→古い順に並べる。begin()にはこの順のままidsを渡す（シャッフルさせない）。
-  const maruOrdered = useMemo(() => orderMaruStatus(maruStatusFiltered), [maruStatusFiltered]);
-  const maruPool = useMemo(() => maruOrdered.map((s) => s.question), [maruOrdered]);
+  //   （useMaruReview.jsが単一の正。Quiz.jsxも同じフックを使う）
+  const {
+    maruExcludeMastered, setMaruExcludeMastered,
+    maruStatusAll, maruUncertainCount, maruStatusFiltered, maruPool,
+  } = useMaruReview(filteredPool, history, srs);
 
   // 弱点タグ（#8）：直近の誤答が多いタグを上位に。タップでキーワードしぼり。
-  const weakTags = useMemo(() => {
-    const wrong = {}, total = {};
-    for (const h of history) {
-      const q = byId[h.questionId];
-      if (!q) continue;
-      for (const tg of effectiveTags(q, links)) {
-        total[tg] = (total[tg] || 0) + 1;
-        if (!h.correct) wrong[tg] = (wrong[tg] || 0) + 1;
-      }
-    }
-    return Object.keys(wrong)
-      .filter((tg) => wrong[tg] >= 2)
-      .map((tg) => ({ tag: tg, wrong: wrong[tg], rate: wrong[tg] / total[tg] }))
-      .sort((a, b) => b.wrong - a.wrong || b.rate - a.rate)
-      .slice(0, 8);
-  }, [history, byId, links]);
+  //   weakClusters.jsのweakTagClustersが単一の正（表記ゆれの正規化・汎用タグの除外込み）。
+  const weakTags = useMemo(
+    () => weakTagClusters(history, questions, links, { minWrong: 2, limit: 8 }),
+    [history, questions, links]
+  );
 
-  // 誤答理由の記録・△✕の累計回数（Review.jsxと同じデータを、学習セッション側でも参照する。
-  //   #6のリーチtoast・#8の間違いの型・#9の★弱点タグ記録に使う）。
-  const [missTypes, setMissTypes] = useState({});
+  // 誤答理由の記録・次回間隔調整（useMissTypeHandling.jsが単一の正。Review.jsxと同じくsetNextDueで
+  //   型別に間隔を調整する＝以前はSession.jsxだけ記録のみで間隔調整が効いていなかった不整合を解消）。
+  const { missTypes, onMissType } = useMissTypeHandling(setNextDue);
   const [selfKindCounts, setSelfKindCounts] = useState({});
-  useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
   useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
   // #17：復習が何日ゼロに戻せていないか（「今日のおすすめ」の比率を復習側へさらに寄せる材料）
   const [reviewZeroLog, setReviewZeroLog] = useState({});
   useEffect(() => { loadReviewZeroLog().then(setReviewZeroLog); }, []);
   const reviewStalledDays = useMemo(() => daysSinceLastZero(reviewZeroLog) || 0, [reviewZeroLog]);
-  const onMissType = (id, type) => {
-    recordMissType(id, type).then(setMissTypes);
-  };
 
   // #7：要注意（リーチ、LEECH_THRESHOLD回以上の誤答）件数。開始前の画面で見えるようにし、
   //   復習画面への導線を出す（Review.jsxの一覧バッジと同じ定義）。
@@ -520,111 +492,30 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           )}
         </div>
 
-        {/* ○にした問題の見直し・高速回転（上の絞り込みを引き継ぐ） */}
-        <div className="card">
-          <div className="section-label" style={{ marginTop: 0 }}>✅ ○にした問題をふりかえる</div>
-          <p className="inline-note" style={{ marginTop: 0 }}>
-            自己採点で最後に「○ 完璧」にした問題（現在の絞り込みで<strong>{maruStatusAll.length}問</strong>）だけを対象にします。
-            あとで△・✕に変わった問題は自動で対象から外れます。
-          </p>
-          {maruUncertainCount > 0 && (
-            <p className="inline-note" style={{ marginTop: 0, color: 'var(--warn, #e0a800)' }}>
-              ⚠️ うち<strong>{maruUncertainCount}問</strong>は、選んだ答えが不正解なのに○のままにした「うっかり○」の可能性があります（見直しで先頭に出します）。
-            </p>
-          )}
-          <label className="autokw-row" style={{ marginTop: 6 }}>
-            <input type="checkbox" checked={maruExcludeMastered} onChange={(e) => setMaruExcludeMastered(e.target.checked)} />
-            <span>
-              マスター済み（5連続○）は除く（残り{maruStatusFiltered.length}問）。
-              直前期の総ざらいなど全部確認したい時はチェックを外してください
-            </span>
-          </label>
-          <div className="btn-row" style={{ marginTop: 8 }}>
-            <button
-              className="btn"
-              disabled={maruPool.length === 0}
-              onClick={() => begin(maruPool.length, { pool: maruPool, ids: maruPool.map((q) => q.id), subject, allowSeen: true, newRatio: 1, fast: false, label: '○の見直し' })}
-            >
-              📝 問題演習で見直す（適当に○にしていないか確認）
-            </button>
-            <button
-              className="btn"
-              disabled={maruPool.length === 0}
-              onClick={() => begin(maruPool.length, { pool: maruPool, ids: maruPool.map((q) => q.id), subject, allowSeen: true, newRatio: 1, fast: true, label: '○の高速回転' })}
-            >
-              ⚡ 高速回転でインプット強化
-            </button>
-          </div>
-          {maruPool.length === 0 && (
-            <p className="inline-note" style={{ marginTop: 8 }}>
-              この条件で○にした問題はまだありません。学習を進めると、ここに対象が増えていきます。
-            </p>
-          )}
-          {onGoAnalytics && (
-            <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onGoAnalytics()}>
-              🏅 得意科目の分析を見る
-            </button>
-          )}
-        </div>
+        {/* ○にした問題の見直し・高速回転（上の絞り込みを引き継ぐ。MaruReviewCard.jsxが単一の正） */}
+        <MaruReviewCard
+          maruStatusAll={maruStatusAll}
+          maruUncertainCount={maruUncertainCount}
+          maruExcludeMastered={maruExcludeMastered}
+          setMaruExcludeMastered={setMaruExcludeMastered}
+          maruStatusFiltered={maruStatusFiltered}
+          maruPool={maruPool}
+          onStartReview={(pool) => begin(pool.length, { pool, ids: pool.map((q) => q.id), subject, allowSeen: true, newRatio: 1, fast: false, label: '○の見直し' })}
+          onStartFast={(pool) => begin(pool.length, { pool, ids: pool.map((q) => q.id), subject, allowSeen: true, newRatio: 1, fast: true, label: '○の高速回転' })}
+          onGoAnalytics={onGoAnalytics}
+        />
 
-        {/* 3分の2バッファ術：学習時間から基礎タスク/バッファを自動計算する */}
-        <div className="card">
-          <div className="section-label" style={{ marginTop: 0 }}>⏱ 時間で計画する（3分の2バッファ術）</div>
-          <p className="inline-note" style={{ marginTop: 0 }}>
-            学習予定時間を入力すると、基礎タスク（必須の演習）とバッファ（復習・積み残し消化用）に自動で分けます。
-            「やる気が出たら」ではなく「始まる形」にして、あとからやる気がついてくる仕組みです。
-          </p>
-          <div className="chip-row">
-            {[15, 30, 45, 60, 90, 120].map((m) => (
-              <button key={m} className={`chip ${planMinutes === m ? 'active' : ''}`} onClick={() => setPlanMinutes(m)}>
-                {m}分
-              </button>
-            ))}
-          </div>
-          <div className="range-row" style={{ marginTop: 8 }}>
-            <input type="range" min="10" max="180" step="5" value={planMinutes} onChange={(e) => setPlanMinutes(Number(e.target.value))} />
-            <span className="range-val">{planMinutes}分</span>
-          </div>
-          <div className="tiles" style={{ marginTop: 10 }}>
-            <div className="tile">
-              <div className="num">{bufferPlan.baseTaskQuestionCount}</div>
-              <div className="lbl">基礎タスク（約{bufferPlan.baseTaskMinutes}分）</div>
-            </div>
-            <div className="tile">
-              <div className="num">{bufferPlan.bufferQuestionCount}</div>
-              <div className="lbl">バッファ（約{bufferPlan.bufferMinutes}分）</div>
-            </div>
-          </div>
-          <p className="hint" style={{ marginTop: 8 }}>
-            基礎タスク:バッファ = {Math.round(bufferPlan.ratio * 100)}:{100 - Math.round(bufferPlan.ratio * 100)}
-            （設定画面で調整できます）。問題数は、あなたの過去の平均解答時間（1問あたり約{bufferPlan.secPerQuestion}秒）から概算しています。
-            {/* #19：体調による比率の微調整を、既に効いていることが分かるよう明示する */}
-            {mood && (
-              <>
-                <br />
-                今日の調子「{MOODS.find((m) => m.id === mood)?.label || mood}」に合わせて±5%の範囲で調整済みです。
-              </>
-            )}
-          </p>
-          <button
-            className="btn primary block lg"
-            style={{ marginTop: 10 }}
-            onClick={() => begin(bufferPlan.baseTaskQuestionCount, { buffer: bufferPlan })}
-            disabled={startDisabled}
-          >
-            この計画で基礎タスクを始める（{bufferPlan.baseTaskQuestionCount}問）
-          </button>
-          <button
-            className="btn ghost sm block"
-            style={{ marginTop: 6 }}
-            onClick={() => {
-              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: true, study: bufferPlan.baseTaskMinutes, updatedAt: Date.now() } });
-              onToast?.(`🍅 ポモドーロの勉強時間を${bufferPlan.baseTaskMinutes}分に合わせました`);
-            }}
-          >
-            🍅 ポモドーロの勉強時間もこの分数（{bufferPlan.baseTaskMinutes}分）に合わせる
-          </button>
-        </div>
+        {/* 3分の2バッファ術：学習時間から基礎タスク/バッファを自動計算する（BufferPlanCard.jsxが単一の正） */}
+        <BufferPlanCard
+          subject={subject}
+          history={history}
+          settings={settings}
+          updateSettings={updateSettings}
+          mood={mood}
+          onStart={(bufferPlan) => begin(bufferPlan.baseTaskQuestionCount, { buffer: bufferPlan })}
+          startDisabled={startDisabled}
+          onToast={onToast}
+        />
       </div>
     );
   }
@@ -986,49 +877,6 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   );
 }
 
-// 3分の2バッファ術：マネージャービュー（基礎タスク完了直後の振り返り）。
-//   「悪いのは実行役ではなく、無理な計画を立てたマネージャー」という前提で、
-//   集中が切れた・進まなかった場合もユーザーを責めるトーンの文言は一切使わない。
-function ManagerReview({ buffer, onDecide }) {
-  const [showNote, setShowNote] = useState(false);
-  const [note, setNote] = useState('');
-  return (
-    <div className="view">
-      <div className="card sess-done">
-        <div className="sess-done-ico">🧑‍💼</div>
-        <h2>マネージャービュー：振り返り</h2>
-        <p className="view-desc" style={{ textAlign: 'center' }}>
-          基礎タスク、おつかれさまでした。予定（約{buffer.baseTaskMinutes}分・{buffer.baseTaskQuestionCount}問）通りに進みましたか？
-        </p>
-        {!showNote ? (
-          <div className="btn-row" style={{ marginTop: 8 }}>
-            <button className="btn primary" onClick={() => onDecide(true)}>✅ 予定通り完了した</button>
-            <button className="btn" onClick={() => setShowNote(true)}>⏳ 予定通りには終わらなかった</button>
-          </div>
-        ) : (
-          <>
-            <p className="inline-note" style={{ textAlign: 'center' }}>
-              大丈夫です。悪いのは実行役ではなく、無理な計画を立てたマネージャー（＝設定した時間や問題数）の方です。
-              よければ理由をひとことだけ（任意・あとで見返す用）。
-            </p>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="例：思ったより1問に時間がかかった／急な予定が入った　など（空欄でもOK）"
-              rows={3}
-              style={{ width: '100%', marginTop: 6 }}
-            />
-            <div className="btn-row" style={{ marginTop: 8 }}>
-              <button className="btn primary" onClick={() => onDecide(false, note.trim() || undefined)}>この内容で続ける</button>
-              <button className="btn ghost" onClick={() => setShowNote(false)}>戻る</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // 学習リセットボタン ＋ 確認（はい/いいえ）
 //   ①「学習◯◯をリセットする」をタップ → ②「本当にリセットしますか？」はい/いいえ
 function ResetControl({ target, confirming, onAsk, onConfirm, onCancel }) {
@@ -1048,56 +896,6 @@ function ResetControl({ target, confirming, onAsk, onConfirm, onCancel }) {
     <button className="btn ghost sm block sess-reset-btn" style={{ marginTop: 10 }} onClick={onAsk}>
       🗑 {label}
     </button>
-  );
-}
-
-// 高速回転カード（3秒想起）。問題→3秒→答え→○△✕。選択肢は選ばず頭の中で想起。
-function FastCard({ question, onGraded, GRADES }) {
-  const [revealed, setRevealed] = useState(false);
-  const [count, setCount] = useState(3);
-  useEffect(() => { setRevealed(false); setCount(3); }, [question.id]);
-  useEffect(() => {
-    if (revealed) return undefined;
-    if (count <= 0) { setRevealed(true); return undefined; }
-    const t = setTimeout(() => setCount((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [count, revealed]);
-  const answer = question.choices[question.answer];
-  const pick = (kind) => onGraded(kind === 'maru', kind === 'maru' ? (GRADES ? GRADES.easy : 5) : (GRADES ? GRADES.again : 0), kind);
-  return (
-    <div className="card fast-card">
-      <div className="q-meta">
-        <span className={`badge ${question.type === 'ox' ? 'ox' : 'choice'}`}>{question.type === 'ox' ? '○×' : '四択'}</span>
-        <span className="q-subject">{question.subject}</span>
-        <span className="fast-tag">⚡ 高速</span>
-      </div>
-      {question.image && <img className="q-image" src={question.image} alt="問題の図" loading="lazy" />}
-      {question.question && <div className="q-text">{question.question}</div>}
-      {!revealed ? (
-        <div className="fast-recall">
-          <div className="fast-count">{count > 0 ? count : '…'}</div>
-          <div className="fast-hint">答えを思い出そう</div>
-          <button className="btn ghost sm" onClick={() => setRevealed(true)}>答えを見る →</button>
-        </div>
-      ) : (
-        <>
-          <div className="fast-answer">
-            <strong>正解：{question.type === 'ox' ? answer : `${question.answer + 1}. ${answer}`}</strong>
-            {question.explanation && <div style={{ marginTop: 6 }}>{question.explanation}</div>}
-          </div>
-          {question.explanation && (
-            <div className="recheck-prompt">
-              📖 解説を読んでから選びましょう。読まずに進めると、次に同じ問題が出た時も同じ所で間違えます。
-            </div>
-          )}
-          <div className="selfgrade-row" style={{ marginTop: 14 }}>
-            <button className="btn self-maru" onClick={() => pick('maru')}><span className="sg-mark">○</span>完璧</button>
-            <button className="btn self-sankaku" onClick={() => pick('sankaku')}><span className="sg-mark">△</span>あいまい</button>
-            <button className="btn self-batsu" onClick={() => pick('batsu')}><span className="sg-mark">✕</span>わからない</button>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 

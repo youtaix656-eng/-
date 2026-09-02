@@ -504,6 +504,7 @@ export default function App() {
               setQuizQuestions(null);
             }}
             onOpenKeyword={openKeyword}
+            onToast={showToast}
           />
         );
       case 'session':
