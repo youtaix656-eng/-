@@ -12,6 +12,7 @@ import { MEDITATION_HABIT_ID } from '../data/presets.js';
 import { emptyCondition, conditionOf } from './condition.js';
 import { emptySleepQuality } from './sleepQuality.js';
 import { keyFor, normalizeThree, type Scope } from './threeRules.js';
+import { emptyTocData, type TocUserData } from './tocStore.js';
 import type { AppState, DayRecord, Habit, Settings, WeeklyReview, Cycle } from '../types/index.js';
 
 export const STATE_VERSION = 1;
@@ -53,6 +54,7 @@ export function initialState(at: number): AppState {
     cycles: [],
     settings: defaultSettings(),
     threeRules: {},
+    toc: emptyTocData(),
   };
 }
 
@@ -97,6 +99,11 @@ export const actions = {
     state = loaded;
     hydrated = true;
     emit(false);
+  },
+
+  // ── 目次（索引）──────────────────────────
+  setTocData(next: TocUserData) {
+    set((s) => ({ ...s, toc: next }));
   },
 
   // ── 日次記録 ──────────────────────────────

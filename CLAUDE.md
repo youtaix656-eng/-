@@ -304,6 +304,25 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 ランナー**で、終えたステップは既存の記録へ書き込む（瞑想→meditation、運動・読書→monk、
 ジャーナル→今日の3つ）。**`sleepPhrase` は「しか」を含む文を返さない**（「◯時間しか眠れない」を
 「◯時間も眠れる」に言い換えるのが出典の要点。テストが機械チェック）。
+目次・索引（`src/data/toc.ts`＋`src/lib/yomi.ts`＋`src/lib/focus.ts`）は**目次専用の手書きデータを持たない**
+——`buildTocEntries()` が各 lib の元データから毎回導出する。並びは あ〜ん→A〜Z→その他で、
+**数字は読みに変換してから行を決め**（「3のルール」→さ行）、**漢字の読みは推定しない**
+（`reading` が無ければ「その他」に落として入れ忘れを見せる。`warnOtherRow` が目安24件で知らせる）。
+英数字混じり（ＷＨＯ／Ⅰ型／①）は `normalizeAlnum` で正規化してからA〜Zを判定。
+**タイトルの重複は禁止**で、ぶつかったら `disambiguate` がまとまり名を添える（元の名前は別名に残す）。
+**`descriptionStatus` の既定は `needs_review`＝「※要確認」**——出典由来の主張は一次資料未確認なので必ず印を出し、
+`verified` にできるのはアプリ自身の仕組みと **本人が `markVerified` を押した時だけ**
+（会話から来たものが確認済みになる道を作らない）。説明が空なら「※説明未登録」、飛び先が無ければ
+「関連する飛び先はありません」と**必ず出す**（黙らない）。飛び先の id は `src/data/anchors.ts` の
+`ANCHORS` が単一の正で、画面に文字列を直書きしない。飛び方は `flashTo`＋`useFocusJump` を再利用し、
+**画面の切り替えは `useLayoutEffect`**（`useEffect` だと飛ぶ時にまだ前の画面が描かれていて着かない）、
+**印は className ではなく `data-flash` 属性**（開閉で className が書き直されると印だけ消える。鏡で実際に踏んだ）、
+**「先頭へ戻す」を副作用にしない**（`App.tsx` は view の変化で `scrollTo` せず、ナビのタップの中で行う）。
+会話由来の追加・削除の候補は `src/data/tocCandidates.ts` に留め、**本体データへ一切書き込まない**。
+候補を作ってよいのは3つのきっかけだけ（`■用語追加：`の合図／教材のタグ／本人の「目次に追加して」）で、
+**それ以外では作らない**（`makeCandidate` が null を返す）。「追加する」を押した時に初めて
+読み・重複・分類・正規化の4つを見て本体へ入れ、「しない」は痕跡を残さない。確定は履歴に残り
+`undoLastTocAdditions(n)` で直近の追加だけ取り消せる。
 テストは `henkaku-note/tests/*.spec.ts`（TypeScript）。テスト用の Settings は
 `tests/fixtures.ts` の `testSettings()` に集約する（各テストに書き写すと項目追加のたびに全部壊れる）。CIがNode 20のため `tsc` で
 `.test-build/` へ出してから `node --test` する（`npm test` はアプリ側で実行。ルートの再帰探索には

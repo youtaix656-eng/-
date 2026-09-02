@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "skipLibCheck": true,
@@ -9,8 +12,15 @@
     "noEmit": false,
     "outDir": ".test-build",
     "rootDir": ".",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/lib", "src/types", "tests"],
+  "include": [
+    "src/lib",
+    "src/data",
+    "src/types",
+    "tests"
+  ],
   "exclude": []
 }

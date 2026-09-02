@@ -2,6 +2,7 @@
 // 将来のクラウド同期も、この形（種類ごとに分かれたJSON）をそのまま運べる設計にしてある。
 
 import type { AppState } from '../types/index.js';
+import { normalizeTocData } from './tocStore.js';
 
 export const BACKUP_KIND = 'henkaku-note-backup';
 export const BACKUP_VERSION = 1;
@@ -42,6 +43,7 @@ export function parseJson(text: string, fallback: AppState): ParseResult {
       weeks: s.weeks && typeof s.weeks === 'object' ? s.weeks : {},
       cycles: Array.isArray(s.cycles) ? s.cycles : [],
       threeRules: s.threeRules && typeof s.threeRules === 'object' ? s.threeRules : {},
+      toc: normalizeTocData(s.toc),
       settings: { ...fallback.settings, ...(s.settings || {}) },
     },
   };

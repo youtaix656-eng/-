@@ -14,6 +14,8 @@ import type { SleepQualityRecord } from '../types/index.js';
 export interface SleepCriterion {
   id: string;
   label: string;
+  /** 目次の読み（漢字を含むなら必須。**自動推定しない**） */
+  reading: string;
   /** 満たしているか。判断できない時は null */
   test: (q: SleepQualityRecord) => boolean | null;
   hint: string;
@@ -32,24 +34,28 @@ export const SLEEP_CRITERIA: SleepCriterion[] = [
   {
     id: 'fall_asleep',
     label: `眠りに落ちるまで${FALL_ASLEEP_LIMIT}分以内`,
+    reading: 'ねむりにおちるまで',
     test: (q) => (q.fallAsleepMinutes === null ? null : q.fallAsleepMinutes <= FALL_ASLEEP_LIMIT),
     hint: 'ベッドで寝る以外のことをしていると、寝つきが悪くなるとされます。',
   },
   {
     id: 'awakenings',
     label: `夜中に起きるのは${AWAKENING_LIMIT}回まで`,
+    reading: 'よなかにおきるのは',
     test: (q) => (q.awakenings === null ? null : q.awakenings <= AWAKENING_LIMIT),
     hint: '夜は室内の照明を限界まで暗くすると、メラトニンが出やすくなるとされます。',
   },
   {
     id: 'back_to_sleep',
     label: `目が覚めても${BACK_TO_SLEEP_LIMIT}分以内に再び眠れる`,
+    reading: 'めがさめてもふたたびねむれる',
     test: (q) => (q.awakenings === 0 ? true : q.backToSleepWithin20),
     hint: '日中に太陽光を浴びると体内時計が整いやすいとされます。',
   },
   {
     id: 'efficiency',
     label: `寝床にいた時間の${EFFICIENCY_LIMIT}%以上を眠っている`,
+    reading: 'ねどこにいたじかんの',
     test: (q) => {
       const e = efficiencyOf(q);
       return e === null ? null : e >= EFFICIENCY_LIMIT;
