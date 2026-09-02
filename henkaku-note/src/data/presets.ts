@@ -26,6 +26,16 @@ export const MEDITATION_SOURCE: KnowledgeSource = {
     + '保証ではありません。体調に関わる判断は専門家に相談してください。',
 };
 
+export const CONDITION_SOURCE: KnowledgeSource = {
+  id: 'saikou-no-taichou-2026-08',
+  label: '最高の体調（鈴木祐）の解説',
+  origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
+  receivedAt: '2026-08-30',
+  caution:
+    '書籍・原論文には当たっていません。ここに出てくる効果や数字は「そう紹介されている」水準の話で、'
+    + '保証ではありません。体調に不安があるときは医療機関に相談してください。',
+};
+
 export interface HabitPreset {
   id: string;
   title: string;

@@ -5,6 +5,10 @@ import {
   buildWeekSummary, compareWeeks, emptyReview, isReviewWritten, isWeekReviewable, managerHint,
   MANAGER_ALLOCATION_OPTIONS, MANAGER_PLAN_OPTIONS, DOER_FEEL_OPTIONS, REVIEW_TEXT_MAX,
 } from '../lib/weekly';
+import ThreeRules from './ThreeRules';
+import { splitFocusText, writtenDays } from '../lib/threeRules';
+import { weeklyCondition, weakestDomain } from '../lib/condition';
+import { summarizeSleepQuality } from '../lib/sleepQuality';
 import type { AppState } from '../types';
 
 interface Props {
@@ -35,6 +39,16 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
   const review = state.weeks[weekStart] ?? emptyReview(weekStart, 0);
   const comparison = compareWeeks(summary, prev);
   const hint = managerHint(summary, state.weeks[weekStart]);
+  const threeDone = useMemo(() => writtenDays(state.threeRules, summary.days), [state.threeRules, summary.days]);
+  const condition = useMemo(
+    () => weeklyCondition(state.days, summary.days, threeDone),
+    [state.days, summary.days, threeDone],
+  );
+  const weakest = useMemo(() => weakestDomain(condition), [condition]);
+  const sleepQuality = useMemo(
+    () => summarizeSleepQuality(summary.days.map((d) => state.days[d]?.sleepQuality)),
+    [state.days, summary.days],
+  );
   const reviewable = isWeekReviewable(weekStart, today);
   const written = isReviewWritten(state.weeks[weekStart]);
 
@@ -62,6 +76,16 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
           <span className="small muted">記録した日 {summary.recordedDays}／7</span>
         </div>
       </div>
+
+      <ThreeRules
+        state={state}
+        scope="week"
+        date={weekStart}
+        title="今週の3つ"
+        lead="週の頭に3つ。先週の「来週集中すべきこと」から降ろせます。"
+        upper={splitFocusText(state.weeks[addDays(weekStart, -7)]?.focus ?? '')}
+        upperLabel="先週の振り返り"
+      />
 
       {/* 1. 事実 */}
       <div className="card">
@@ -105,6 +129,35 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
             </div>
           </div>
         )}
+
+        <div>
+          <p className="section-title">最高の体調：行動を置けた日数</p>
+          <div className="stack" style={{ gap: 6 }}>
+            {condition.perDomain.map(({ domain, days: n, possible }) => (
+              <div className="row" key={domain.id} style={{ flexWrap: 'nowrap', gap: 8 }}>
+                <span className="small" style={{ flex: 1, minWidth: 0 }}>{domain.icon} {domain.title}</span>
+                <div className="rate-bar" style={{ flex: 1, maxWidth: 120 }}>
+                  <span style={{ width: `${possible ? (n / possible) * 100 : 0}%` }} />
+                </div>
+                <span className="num small">{n}/{possible}</span>
+              </div>
+            ))}
+          </div>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>
+            これは<strong>行動を置けた日数</strong>で、体の炎症を測ったものではありません。
+            {condition.fermentKinds.length > 0 && ` 発酵食品は今週${condition.fermentKinds.length}種類（数より種類が大事とされます）。`}
+          </p>
+          {weakest && (
+            <p className="note-line warm" style={{ margin: '6px 0 0' }}>
+              来週いちばん手を付けやすいのは「{weakest.icon} {weakest.title}」です。
+            </p>
+          )}
+          {sleepQuality.weakest && (
+            <p className="small muted" style={{ margin: '6px 0 0' }}>
+              眠りの質でよく外れていたのは「{sleepQuality.weakest.label}」（{sleepQuality.weakestCount}日）。{sleepQuality.weakest.hint}
+            </p>
+          )}
+        </div>
 
         <div className="chips">
           {summary.days.map((d) => (

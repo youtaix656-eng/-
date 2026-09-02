@@ -41,6 +41,7 @@ export function parseJson(text: string, fallback: AppState): ParseResult {
       days: s.days && typeof s.days === 'object' ? s.days : {},
       weeks: s.weeks && typeof s.weeks === 'object' ? s.weeks : {},
       cycles: Array.isArray(s.cycles) ? s.cycles : [],
+      threeRules: s.threeRules && typeof s.threeRules === 'object' ? s.threeRules : {},
       settings: { ...fallback.settings, ...(s.settings || {}) },
     },
   };

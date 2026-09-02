@@ -9,6 +9,9 @@ import { startOfWeek, toKey } from './date.js';
 import { emptyReview, isReviewWritten, reviewCheckDate } from './weekly.js';
 import { WEEKLY_REVIEW_HABIT_ID } from './habits.js';
 import { MEDITATION_HABIT_ID } from '../data/presets.js';
+import { emptyCondition, conditionOf } from './condition.js';
+import { emptySleepQuality } from './sleepQuality.js';
+import { keyFor, normalizeThree, type Scope } from './threeRules.js';
 import type { AppState, DayRecord, Habit, Settings, WeeklyReview, Cycle } from '../types/index.js';
 
 export const STATE_VERSION = 1;
@@ -34,6 +37,7 @@ export function initialState(at: number): AppState {
     weeks: {},
     cycles: [],
     settings: defaultSettings(),
+    threeRules: {},
   };
 }
 
@@ -124,6 +128,45 @@ export const actions = {
         meditations: (d.meditations ?? []).filter((_, i) => i !== index),
       })),
     );
+  },
+  /** 『最高の体調』の記録。人間関係を書いたら①仲間にもチェックを入れる（同じことを2回聞かない） */
+  setCondition(date: string, patch: Partial<ReturnType<typeof emptyCondition>>) {
+    const socialTouched = patch.social === 'deep' || patch.social === 'light';
+    set((s) => {
+      const hasPeers = s.habits.some((h) => h.id === 'step1-peers' && h.archivedAt === null);
+      return withDay(s, date, (d) => ({
+        ...d,
+        condition: { ...conditionOf(d), ...patch },
+        checked:
+          socialTouched && hasPeers && !d.checked.includes('step1-peers')
+            ? [...d.checked, 'step1-peers']
+            : d.checked,
+      }));
+    });
+  },
+  setSleepQuality(date: string, patch: Partial<ReturnType<typeof emptySleepQuality>>) {
+    set((s) => withDay(s, date, (d) => ({ ...d, sleepQuality: { ...emptySleepQuality(), ...(d.sleepQuality ?? {}), ...patch } })));
+  },
+
+  /** 3のルール。日・週・月を同じ表で持つ */
+  setThreeRule(scope: Scope, date: string, index: number, text: string) {
+    const key = keyFor(scope, date);
+    set((s) => {
+      const list = normalizeThree(s.threeRules?.[key]);
+      list[index] = text.slice(0, 60);
+      return { ...s, threeRules: { ...(s.threeRules ?? {}), [key]: list } };
+    });
+  },
+  /** 上の階層から降ろす（空いている枠に入れる） */
+  fillThreeRule(scope: Scope, date: string, text: string) {
+    const key = keyFor(scope, date);
+    set((s) => {
+      const list = normalizeThree(s.threeRules?.[key]);
+      const slot = list.findIndex((t) => t.trim().length === 0);
+      if (slot < 0) return s;
+      list[slot] = text.slice(0, 60);
+      return { ...s, threeRules: { ...(s.threeRules ?? {}), [key]: list } };
+    });
   },
   clearDay(date: string) {
     set((s) => {

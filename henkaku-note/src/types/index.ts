@@ -41,6 +41,44 @@ export interface MeditationSession {
   recordedAt: number;
 }
 
+/** 人との接点の濃さ。氏名は持たない（誰かを記録する機能にしない） */
+export type SocialContact = 'deep' | 'light' | 'none';
+
+/**
+ * 『最高の体調』由来の1日の記録。
+ * どれも「やったかどうか」の記録で、体内の炎症そのものを測るものではない。
+ */
+export interface ConditionRecord {
+  /** その日に食べた発酵食品の種類（数より種類） */
+  ferments: string[];
+  /** 食物繊維を取れた食品 */
+  fibers: string[];
+  /** 外で自然に触れた分数 */
+  natureMinutes: number;
+  /** 室内に取り入れた自然（観葉植物・写真・音） */
+  indoorNature: string[];
+  social: SocialContact | null;
+  anxietyFelt: boolean | null;
+  /** 不安への対処（宇宙・大自然・アート・瞑想） */
+  anxietyActions: string[];
+  /** 睡眠まわりの習慣（ベッドは寝る場所・日中の太陽光・夜は暗く） */
+  sleepHygiene: string[];
+}
+
+/** 本書の「良質な睡眠の最低条件」を測るための記録 */
+export interface SleepQualityRecord {
+  /** 眠りに落ちるまでの時間（分） */
+  fallAsleepMinutes: number | null;
+  /** 夜中に目が覚めた回数 */
+  awakenings: number | null;
+  /** 目が覚めたあと20分以内に再び眠れたか */
+  backToSleepWithin20: boolean | null;
+  /** 寝床にいた時間（分） */
+  inBedMinutes: number | null;
+  /** 実際に眠っていた時間（分） */
+  sleptMinutes: number | null;
+}
+
 export interface DayRecord {
   /** 'YYYY-MM-DD' */
   date: string;
@@ -57,6 +95,9 @@ export interface DayRecord {
   sleep: SleepEntry | null;
   /** その日の瞑想（1日に複数回できる）。古いデータには無いので、読む側は空配列を既定にする */
   meditations?: MeditationSession[];
+  /** 『最高の体調』の記録。古いデータには無いので、読む側は既定値を用意する */
+  condition?: ConditionRecord;
+  sleepQuality?: SleepQualityRecord;
   updatedAt: number;
 }
 
@@ -122,4 +163,10 @@ export interface AppState {
   weeks: Record<string, WeeklyReview>;
   cycles: Cycle[];
   settings: Settings;
+  /**
+   * 3のルール（今日／今週／今月に3つずつ）。
+   * キーは threeRules.ts の keyFor が作る（'2026-08-30' / 'w:2026-08-24' / 'm:2026-08'）。
+   * 日・週・月で同じ仕組みを使い、3か所に別の実装を持たない。
+   */
+  threeRules?: Record<string, string[]>;
 }
