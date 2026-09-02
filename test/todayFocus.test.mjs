@@ -64,3 +64,32 @@ test('todayFocusSubjects: questionsを渡さなければ従来どおり（後方
   const out = todayFocusSubjects(scope, 60, { limit: 2 });
   assert.equal(out[0].subject.name, '苦手');
 });
+
+test('todayFocusSubjects: examResultsを渡すと模試の伸びしろ分析（失点貢献度）も加味される', () => {
+  // 正答率・収録数は同じだが、直近の模試（午前）では「関係法規」を全問落とし、
+  // 「解剖学」は全問正解している → 出題数の重み込みの失点貢献度は「関係法規」の方が高い。
+  const scope = [mk('解剖学', 50, 50, 0.9), mk('関係法規', 50, 50, 0.9)];
+  const examResults = [
+    {
+      mode: 'am',
+      perSubject: {
+        解剖学: { total: 9, correct: 9 },
+        関係法規: { total: 4, correct: 0 },
+      },
+    },
+  ];
+  const withoutExam = todayFocusSubjects(scope, 60, { limit: 2 });
+  const withExam = todayFocusSubjects(scope, 60, { limit: 2, examResults });
+  // examResultsを渡さない場合はスコアが同点（先着順）
+  assert.equal(withoutExam[0].score, withoutExam[1].score);
+  // examResultsを渡すと「関係法規」の失点貢献度が押し上げられて優先される
+  assert.equal(withExam[0].subject.name, '関係法規');
+  assert.equal(withExam[0].reason, '模試で伸ばすと効く科目');
+});
+
+test('todayFocusSubjects: examResultsに得意/苦手モード等（正式でない）しか無ければ加味しない', () => {
+  const scope = [mk('解剖学', 50, 50, 0.9), mk('関係法規', 50, 50, 0.9)];
+  const examResults = [{ mode: 'weak', perSubject: { 関係法規: { total: 4, correct: 0 } } }];
+  const out = todayFocusSubjects(scope, 60, { limit: 2, examResults });
+  assert.equal(out[0].score, out[1].score);
+});

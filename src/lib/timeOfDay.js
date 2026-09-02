@@ -8,7 +8,7 @@ export const TIME_BUCKETS = [
   { id: 'night', label: '深夜（23-5時）', from: 23, to: 5 }, // 日をまたぐ
 ];
 
-function bucketOf(hour) {
+export function bucketOf(hour) {
   for (const b of TIME_BUCKETS) {
     if (b.from < b.to) {
       if (hour >= b.from && hour < b.to) return b.id;
@@ -44,4 +44,12 @@ export function hourlyPerformance(history = [], { minSample = 10 } = {}) {
   const qualified = buckets.filter((b) => b.total >= minSample && b.accuracy != null);
   const best = qualified.length > 0 ? qualified.reduce((a, b) => (b.accuracy > a.accuracy ? b : a)) : null;
   return { buckets, best };
+}
+
+// 「今」が自分の最も正答率が高い時間帯に当たっているか（Home.jsxの学習導線に使う）。
+//   単一の正：時間帯の判定はbucketOfだけを経由する（Home.jsx側で境界時刻を再実装しない）。
+export function isNowBestTime(history = [], { minSample = 10, now = new Date() } = {}) {
+  const { best } = hourlyPerformance(history, { minSample });
+  if (!best) return null;
+  return bucketOf(now.getHours()) === best.id ? best : null;
 }

@@ -12,7 +12,7 @@ import PhotoSource from './PhotoSource.jsx';
 // 問題になるため、この画面で追加した写真は「この端末のIndexedDBにのみ」保存し、
 // バックアップ・QR・クラウド自動同期にも含めない（storage.js参照）。他の端末や
 // 他の人には一切共有されない、あなただけの写真帳。
-export default function KeizetsuPageImages({ onToast, onNavigate }) {
+export default function KeizetsuPageImages({ onToast, onNavigate, onSendToOcr }) {
   const [entries, setEntries] = useState([]);
   const [pageNumber, setPageNumber] = useState('');
   const [label, setLabel] = useState('');
@@ -132,6 +132,16 @@ export default function KeizetsuPageImages({ onToast, onNavigate }) {
                   {e.label ? `・${e.label}` : ''}
                   {section ? `（${section.title}）` : ''}
                 </div>
+                {onSendToOcr && (
+                  <button
+                    type="button"
+                    className="btn sm ghost block"
+                    style={{ marginTop: 4 }}
+                    onClick={() => onSendToOcr(e.dataUrl)}
+                  >
+                    🔤 OCRへ送る
+                  </button>
+                )}
               </div>
             );
           })}
