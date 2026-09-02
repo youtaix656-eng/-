@@ -11,6 +11,7 @@ import { weeklyCondition, weakestDomain } from '../lib/condition';
 import { summarizeSleepQuality } from '../lib/sleepQuality';
 import { summarizeMeals, pauseAdvice } from '../lib/fasting';
 import { weeklyMonk, bodyReminder, isolationWarning } from '../lib/monkMode';
+import { summarizeRoutine } from '../lib/morningRoutine';
 import type { AppState } from '../types';
 
 interface Props {
@@ -53,6 +54,10 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
   );
   const mealPause = useMemo(
     () => pauseAdvice(summary.days.map((d) => state.days[d])),
+    [state.days, summary.days],
+  );
+  const routine = useMemo(
+    () => summarizeRoutine(summary.days.map((d) => state.days[d])),
     [state.days, summary.days],
   );
   const monk = useMemo(() => weeklyMonk(state.days, summary.days, state.settings), [state.days, summary.days, state.settings]);
@@ -110,6 +115,17 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
         <div className="rate-bar" aria-hidden="true"><span style={{ width: `${Math.round(summary.averageRate * 100)}%` }} /></div>
         {comparison && <p className="small muted" style={{ margin: 0 }}>{comparison.text}</p>}
 
+        {routine.days > 0 && (
+          <p className="small" style={{ margin: 0 }}>
+            起きて最初のルーティン：{routine.days}日／7
+            {routine.quickDays > 0 && `　起きて20分以内に始められた日 ${routine.quickDays}日`}
+            {routine.weakest && routine.weakest.days === 0 && (
+              <span className="muted" style={{ display: 'block' }}>
+                {routine.weakest.step.icon} {routine.weakest.step.title}は今週1日もできていません。短くしてでも入れるか、外すかを決めると続きます。
+              </span>
+            )}
+          </p>
+        )}
         {(monk.workouts > 0 || monk.readingMinutes > 0 || monk.snsKeptDays > 0) && (
           <p className="small" style={{ margin: 0 }}>
             モンクモード：運動 {monk.workouts}回／目安 週{state.settings.monkWorkoutPerWeek}回

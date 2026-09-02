@@ -57,6 +57,16 @@ export const MONK_SOURCE: KnowledgeSource = {
     + '塩の量・運動量・特定の食品を毎日決まった数、といった話は、持病がある場合は自己判断で始めないでください。',
 };
 
+export const ROUTINE_SOURCE: KnowledgeSource = {
+  id: 'morning-routine-2026-09',
+  label: '人生を変えるモーニングメソッド（解説）',
+  origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
+  receivedAt: '2026-09-02',
+  caution:
+    '書籍・原典には当たっていません。効果は「そう紹介されている」水準の話です。'
+    + '「必ずしも朝でなくてよい。起きて最初にやる」という出典自身の言葉に沿って、朝の時刻は前提にしていません。',
+};
+
 export interface HabitPreset {
   id: string;
   title: string;
