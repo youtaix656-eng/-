@@ -92,7 +92,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     if (!settings.googleDriveAutoSync) return;
     loadSyncMeta().then((m) => setLastSuccessfulSyncAt(m?.updatedAt || null));
   }, [settings.googleDriveAutoSync, cloudSyncStatus]);
-  const overall = overallStats(history);
+  const overall = useMemo(() => overallStats(history), [history]);
   const level = estimateLevel({ srs, history });
   const focusSubjects = useMemo(() => {
     const scope = scopeCoverage(questions, history);
@@ -186,7 +186,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   const forgettingPick = useMemo(() => dailyForgettingPick(questions, srs), [questions, srs]);
 
   const sessionActive = session && session.pos < session.target;
-  const { streak, longestStreak, studiedToday } = studyStreak(history);
+  const { streak, longestStreak, studiedToday } = useMemo(() => studyStreak(history), [history]);
   const examLeft = daysUntil(settings.examDate);
 
   // 一問一答の途中経過（1問ごと自動保存）を「続きから」に出す

@@ -14,8 +14,10 @@ import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
 import ScrollArrows from './components/ScrollArrows.jsx';
-import AuthGate from './components/AuthGate.jsx';
-import Pomodoro from './components/Pomodoro.jsx';
+// AuthGate（ロック未設定なら使わない）・Pomodoro（オプトイン機能）は、必要な人にだけ
+// 起動時バンドルの負担が乗るようlazy化（他の30以上の画面と同じ扱い）。
+const AuthGate = lazy(() => import('./components/AuthGate.jsx'));
+const Pomodoro = lazy(() => import('./components/Pomodoro.jsx'));
 import HistoryPanel from './components/HistoryPanel.jsx';
 // それ以外の画面は初回訪問時だけ読み込む（コード分割）。1.6MBの単一バンドルを分割し、
 // ホーム/カレンダー/一問一答/復習/音声/模試だけで開いた時の初期表示を軽くする。
@@ -445,17 +447,23 @@ export default function App() {
   // ---- ログイン（端末内ロック）----
   // 鍵が設定済みで未解錠ならログイン画面。未設定なら初回のみ設定画面（スキップ可）。
   if (store.auth && !unlocked) {
-    return <AuthGate mode="login" auth={store.auth} onSetAuth={store.setAuth} onUnlock={unlock} />;
+    return (
+      <Suspense fallback={<ViewLoading />}>
+        <AuthGate mode="login" auth={store.auth} onSetAuth={store.setAuth} onUnlock={unlock} />
+      </Suspense>
+    );
   }
   if (!store.auth && !store.settings.authSkipped) {
     return (
-      <AuthGate
-        mode="setup"
-        auth={null}
-        onSetAuth={store.setAuth}
-        onUnlock={unlock}
-        onSkip={() => store.updateSettings({ authSkipped: true })}
-      />
+      <Suspense fallback={<ViewLoading />}>
+        <AuthGate
+          mode="setup"
+          auth={null}
+          onSetAuth={store.setAuth}
+          onUnlock={unlock}
+          onSkip={() => store.updateSettings({ authSkipped: true })}
+        />
+      </Suspense>
     );
   }
 
@@ -693,7 +701,9 @@ export default function App() {
 
   return (
     <div className={`app${pomoOn ? ' has-pomo' : ''}`}>
-      <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
+      <Suspense fallback={null}>
+        <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
+      </Suspense>
       <header className="app-header">
         <h1>
           {view === 'home' ? (

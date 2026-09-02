@@ -1395,10 +1395,11 @@ APIキー無しで今日から使えること・端末内保存を崩さない�
   クラッシュする（このセクションの実装中に一度混入し、Playwrightのconsoleエラー監視で発見・修正した）。
 
 ## パフォーマンス方針（2026-08-17 追加）
-- **コード分割**：`App.jsx`はホーム/カレンダー/一問一答/復習/音声/模試（下部ナビの6画面）と常時マウントの
-  コンポーネント（`MiniPlayer`/`AuthGate`/`Pomodoro`/`HistoryPanel`）だけ即時import。
-  それ以外の画面は`lazy(() => import(...))`＋`<Suspense>`。**新しい画面を追加する時も
-  基本はlazy importにする**（頻繁に使う下部ナビ相当のみ例外）。
+- **コード分割**：`App.jsx`はホーム/カレンダー/一問一答/復習/音声/模試（下部ナビの6画面）と
+  `MiniPlayer`/`HistoryPanel`だけ即時import。それ以外の画面は`lazy(() => import(...))`＋
+  `<Suspense>`。**新しい画面を追加する時も基本はlazy importにする**（頻繁に使う下部ナビ相当のみ例外）。
+  **`AuthGate`/`Pomodoro`は2026-09-02にlazy化済み**（下記「軽量化（2026-09-02追加）」参照。
+  ロック未設定・ポモドーロ未使用のユーザーには不要なコードだったため）。
 - **科目データの動的import**：`useStore.js`の`subjectDataModules()`が全科目データを
   `Promise.all([import(...)])`でまとめて動的読み込みする。**新しい科目データファイルを
   追加したら、ここにもimportを追加する**（トップレベルの`import X from '../data/...'`に
@@ -1407,6 +1408,58 @@ APIキー無しで今日から使えること・端末内保存を崩さない�
   検索フィルタ＋先頭80件キャップ方式（`CENTER_CHIP_CAP`）。新しく数百件以上になり得る
   一覧を作る時は、同じパターン（検索欄＋件数キャップ、または開閉アコーディオン）を使う。
   外部の仮想化ライブラリは導入しない方針（外部ランタイム依存なしのため）。
+  **ただし目次・索引（`KeizetsuIndex.jsx`等）は対象外**——完全な一覧を見せることが目的なので、
+  検索欄はあってもキャップはしない（2026-09-02の棚卸しで確認・区別済み）。
+
+## 軽量化（2026-09-02追加）
+ユーザーから「コードを軽くしサクサク動くようにする10案」を依頼され、実測に基づいて特定した
+ボトルネックを全て直したもの。
+- **`src/lib/mindmapDataLoader.js`が単一の入口**：`src/data/mindmapData.js`
+  （COMPARISONS 352件＋NUMBER_FACTS 167件、合計約14万字）が、QuestionCard.jsx・AudioMode.jsx・
+  Quiz.jsx・Review.jsx・Session.jsxから**トップレベルで直接import**されていたため、
+  下部ナビの即時import画面（Quiz.jsx等）経由で丸ごと起動時バンドルに含まれていた
+  （実測：929KB中の約150KB）。`useMindmapData(trigger)`フックに統一し、答えを開示した時・
+  完了画面に来た時など実際に必要になる瞬間まで動的importで遅延読み込みするよう変更。
+  **`mindmapData.js`を新しく使う画面を増やす時は、必ずこのローダー経由にする**——
+  1箇所でも直接importが残っていると、Viteが「動的importが効かず結局eagerバンドルに戻る」
+  という警告を出し、効果が丸ごと無効化される（実際にQuiz.jsx等の直import残りで一度踏んだ）。
+- **`Pomodoro.jsx`（986行）・`AuthGate.jsx`（179行）をlazy化**：App.jsxが設定のON/OFFに関わらず
+  常時eager importしていたため、ポモドーロ・ロックを使わない人にも常駐していた。
+  他の30以上の画面と同じ`lazy()`+`<Suspense>`に統一。
+  この2点（mindmapData動的化＋lazy化）で**起動時JS 929KB→591KB**（約36%削減）。
+- **`src/lib/storage.js`：IndexedDB書き込みのデバウンス＋重複排除＋離脱時フラッシュ**。
+  以前は`useStore.js`の状態保存（約20系統、各自の`useEffect`）が状態変化のたびに個別へ
+  即時`idbSet`していたため、1問答えるたびに複数のIndexedDBトランザクションが同時発火していた
+  （高速回転モード等の連打でもたつきの原因になり得る）。同リポジトリのOuroアプリ
+  （`ouro/lib/storage.js`）で実証済みの400msデバウンス＋同一キーの重複排除パターンを移植。
+  `db.js`に`idbSetMany()`（複数キーを1トランザクションでまとめて書く）を追加し、保留中の
+  書き込みは`visibilitychange`(hidden)・`pagehide`で必ず即時flushする（データを失わないため）。
+  **`read()`は保留中の値（pending）を先にチェックする**ため、`saveXxx()`直後に`loadXxx()`で
+  読み直す既存コードは変更不要（`exportAll()`のバックアップ書き出し含め、全て`read()`/`loadXxx()`
+  経由なので自動的に最新値を返す）。Playwright QAで「答えた直後はIndexedDB未反映→400ms後に
+  反映→リロード後も正しく残る」「visibilitychangeで即flushされる」の両方を実機確認済み。
+  この仕組みは`storage.js`の`saveXxx`/`loadXxx`経由のキーだけが対象で、他の多数のlib
+  （missTypes.js・snoozeLog.js等）が独自に直接`idbGet`/`idbSet`する別キー群は対象外
+  （元から個別の即時書き込みのままで影響なし）。
+- **`src/lib/genreBreakdown.js`が単一の正**：Quiz.jsx・Session.jsx・Review.jsx・Exam.jsxの
+  完了画面がそれぞれ独自に「ジャンル別正答率を集計して正答率の低い順に並べる」ロジックを
+  重複実装していたため`buildGenreBreakdown(pairs)`に統一（呼び出し側は自分の解答データを
+  `{genre, correct}`の配列に変換して渡すだけでよい設計。4画面でデータの持ち方が違う
+  ——answerLog配列／idキー付きMap／order配列＋missIdSet／order配列＋答えの配列——ため、
+  集計＋並び替えの共通部分だけを切り出した）。
+- **`Home.jsx`の`overallStats(history)`/`studyStreak(history)`にuseMemoを追加**：
+  同ファイル内の他21箇所は既にuseMemo化済みだったのに、この2つだけ毎レンダー計算していた。
+- **CSS未使用セレクタの棚卸し**：`.cluster`/`.cluster-head`/`.cluster-kw`/`.cluster-count`/
+  `.cluster-q`/`.cluster.focused`/`.pair-item`/`.pair-q`/`.pair-link`/`.related-cand`
+  （ConnectedLearning.jsxが後に`cluster-dot`/`cluster-q-card`等へ作り直した際の残骸）を削除。
+  **`lv-${x}`・`kz-freq-${x}`・`cat-${x}`・`k-${x}`のようなテンプレートリテラルで動的に
+  組み立てるクラス名は、素朴な文字列検索では「未使用」と誤検出される**——実際に約半数が
+  この誤検出だったため、削除前に必ず該当コンポーネントで動的構築されていないか確認すること。
+  残りの低確信度な候補（kw-picker・kwd-image・rel-reason・review-streak・sess-resume-head等）
+  は実害が小さく誤検出リスクの方が高いため見送った。
+- **`npm run build:analyze`**（`ANALYZE=1 vite build`）でバンドル構成のtreemapを
+  `dist/stats.html`に出力できるようにした（`rollup-plugin-visualizer`、devDependency）。
+  通常の`npm run build`では生成しない。次に太った箇所を疑う時は、これで数字を見てから直す。
 
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、

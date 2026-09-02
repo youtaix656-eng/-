@@ -1675,53 +1675,6 @@ code.block {
 .kw-add input {
   flex: 1;
 }
-.related-cand {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text);
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  line-height: 1.5;
-  cursor: pointer;
-}
-.related-cand input {
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-  flex: 0 0 auto;
-  accent-color: var(--navy);
-}
-
-.cluster .cluster-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.cluster-kw {
-  font-size: 15px;
-  font-weight: 800;
-  color: #ffffff;
-}
-.cluster-count {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--surface-2);
-  border-radius: 999px;
-  padding: 2px 10px;
-}
-.cluster-q {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-sub);
-  line-height: 1.6;
-  padding: 4px 0;
-}
 .cluster-dot {
   flex: 0 0 auto;
   width: 7px;
@@ -1730,29 +1683,6 @@ code.block {
   background: var(--accent);
   margin-top: 7px;
 }
-.pair-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  box-shadow: var(--shadow);
-}
-.pair-q {
-  flex: 1;
-  font-size: 12.5px;
-  color: var(--text);
-  line-height: 1.5;
-}
-.pair-link {
-  flex: 0 0 auto;
-  color: var(--accent);
-  font-weight: 800;
-}
-
 @media (prefers-color-scheme: dark) {
   .streak-banner {
     background: linear-gradient(135deg, #2a2410, #33280f);
@@ -1798,16 +1728,6 @@ code.block {
 }
 .kw-chip-x:active {
   color: var(--wrong);
-}
-
-.cluster.focused {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(47, 125, 143, 0.35), var(--shadow);
-  animation: pulse 1.2s ease;
-}
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 6px rgba(47, 125, 143, 0.28), var(--shadow); }
-  100% { box-shadow: 0 0 0 2px rgba(47, 125, 143, 0.35), var(--shadow); }
 }
 
 /* ==== 出題ビルダー ==== */

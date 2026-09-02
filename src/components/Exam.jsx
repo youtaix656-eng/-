@@ -3,6 +3,7 @@ import ResetInline from './ResetInline.jsx';
 import * as storage from '../lib/storage.js';
 import { effectiveTags } from '../lib/query.js';
 import { genreAccuracy, keywordAccuracy, topByAccuracy, relatedKeywordMap } from '../lib/audioplan.js';
+import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { buildBlueprintExam, blueprintAvailability, preferUnused, shuffle } from '../lib/examBuilder.js';
 import { EXAM_BLUEPRINT_AM, EXAM_BLUEPRINT_PM } from '../data/examBlueprint.js';
 import { buildKanaIndex } from '../lib/yomi.js';
@@ -896,15 +897,10 @@ export default function Exam({ store, onNavigate }) {
     // #22：合格ライン到達が2回連続しているか（午前・午後のみが対象。CLAUDE.mdのゴール判定と同じ定義）
     const passLineHistory = examResultsSnapshotRef.current.filter((r) => !r.mode || r.mode === 'am' || r.mode === 'pm' || r.mode === 'full');
     const streakOk = showPassLine && passed && passLineHistory.length >= 1 && passLineHistory[0]?.passed;
-    // ジャンル別の内訳（科目よりさらに細かい）
-    const perGenre = {};
-    combinedOrder.forEach((q, i) => {
-      const g = q.genre || q.subject || 'その他';
-      if (!perGenre[g]) perGenre[g] = { total: 0, correct: 0 };
-      perGenre[g].total += 1;
-      if (combinedAnswers[i] === q.answer) perGenre[g].correct += 1;
-    });
-    const genreRows = Object.entries(perGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
+    // ジャンル別の内訳（科目よりさらに細かい。genreBreakdown.jsが単一の正）
+    const genreRows = buildGenreBreakdown(
+      combinedOrder.map((q, i) => ({ genre: q.genre || q.subject, correct: combinedAnswers[i] === q.answer }))
+    );
     // 誤答・未解答の一覧
     const wrongEntries = combinedOrder
       .map((q, i) => ({ q, chosen: combinedAnswers[i] }))

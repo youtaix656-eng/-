@@ -17,7 +17,8 @@ import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import {
   shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder,
 } from '../lib/sessionOrder.js';
-import { COMPARISONS } from '../data/mindmapData.js';
+import { useMindmapData } from '../lib/mindmapDataLoader.js';
+import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { recommendNewPct } from '../lib/reviewPool.js';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { loadReviewZeroLog, daysSinceLastZero } from '../lib/reviewZeroLog.js';
@@ -74,6 +75,9 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   const [started, setStarted] = useState(false);
   const [order, setOrder] = useState([]);
   const [idx, setIdx] = useState(0);
+  // 完了画面の弱点分析（まぎらわしい対比）用データ。完了画面に到達した時だけ遅延読み込みする
+  // （起動時バンドルから約14万字ぶんを外すため。mindmapDataLoader.jsが単一の正）。
+  const mindmapData = useMindmapData(order.length > 0 && idx >= order.length);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
   const [answerLog, setAnswerLog] = useState([]); // [{ q, correct }] 今回の解答（誤答一覧・ジャンル別集計用）
   // このセッションの母集団（「もう一度」で同じ条件を再現するため保持）
@@ -636,16 +640,9 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
         ? Math.round((sessionStats.correct / sessionStats.total) * 100)
         : 0;
     const wrongQs = answerLog.filter((a) => !a.correct).map((a) => a.q);
-    // ジャンル別の正答率（#6）
-    const byGenre = {};
-    for (const a of answerLog) {
-      const g = a.q.genre || a.q.subject || 'その他';
-      if (!byGenre[g]) byGenre[g] = { total: 0, correct: 0 };
-      byGenre[g].total += 1;
-      if (a.correct) byGenre[g].correct += 1;
-    }
-    const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
-    const weakness = wrongQs.length > 0 ? buildWeaknessSummary(wrongQs, links, COMPARISONS) : null;
+    // ジャンル別の正答率（#6。genreBreakdown.jsが単一の正）
+    const genreRows = buildGenreBreakdown(answerLog.map((a) => ({ genre: a.q.genre || a.q.subject, correct: a.correct })));
+    const weakness = wrongQs.length > 0 && mindmapData ? buildWeaknessSummary(wrongQs, links, mindmapData.COMPARISONS) : null;
     // 関連をたどって続ける：この回の問題と概念を共有する“つながり”を辿る（Review.jsxと同じ考え方）
     const chainPool = [];
     const chainExcl = new Set(order.map((q) => q.id));
