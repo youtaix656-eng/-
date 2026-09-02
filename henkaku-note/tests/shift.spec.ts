@@ -15,6 +15,11 @@ const settings: Settings = {
   showStreakProminently: false,
   meditationBell: true,
   meditationDefaultMinutes: 10,
+  fastingTargetHours: 12,
+  fastingWorkdayHours: 0,
+  fastingPlan: 'three',
+  fastingPlanSince: null,
+  fastingPrechecks: [],
 };
 
 function day(over: Partial<DayRecord> = {}): DayRecord {

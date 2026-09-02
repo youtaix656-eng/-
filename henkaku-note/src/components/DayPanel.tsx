@@ -7,6 +7,7 @@ import { suggestionsFor } from '../lib/audioLink';
 import { MEDITATION_HABIT_ID } from '../data/presets';
 import MeditationCard from './MeditationCard';
 import ConditionCard from './ConditionCard';
+import MealCard from './MealCard';
 import ThreeRules from './ThreeRules';
 import { getThree } from '../lib/threeRules';
 import { SLEEP_CRITERIA, durationVerdict, judgeSleepQuality, emptySleepQuality } from '../lib/sleepQuality';
@@ -279,6 +280,8 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
       </div>
 
       <ConditionCard state={state} date={date} />
+
+      <MealCard state={state} date={date} today={today} />
 
       {suggestions.length > 0 && (
         <div className="card">

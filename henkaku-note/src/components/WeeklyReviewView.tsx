@@ -9,6 +9,7 @@ import ThreeRules from './ThreeRules';
 import { splitFocusText, writtenDays } from '../lib/threeRules';
 import { weeklyCondition, weakestDomain } from '../lib/condition';
 import { summarizeSleepQuality } from '../lib/sleepQuality';
+import { summarizeMeals, pauseAdvice } from '../lib/fasting';
 import type { AppState } from '../types';
 
 interface Props {
@@ -45,6 +46,14 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
     [state.days, summary.days, threeDone],
   );
   const weakest = useMemo(() => weakestDomain(condition), [condition]);
+  const meals = useMemo(
+    () => summarizeMeals(summary.days.map((d) => state.days[d]), state.settings),
+    [state.days, summary.days, state.settings],
+  );
+  const mealPause = useMemo(
+    () => pauseAdvice(summary.days.map((d) => state.days[d])),
+    [state.days, summary.days],
+  );
   const sleepQuality = useMemo(
     () => summarizeSleepQuality(summary.days.map((d) => state.days[d]?.sleepQuality)),
     [state.days, summary.days],
@@ -97,6 +106,18 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
         <div className="rate-bar" aria-hidden="true"><span style={{ width: `${Math.round(summary.averageRate * 100)}%` }} /></div>
         {comparison && <p className="small muted" style={{ margin: 0 }}>{comparison.text}</p>}
 
+        {meals.recorded > 0 && (
+          <p className="small" style={{ margin: 0 }}>
+            食事：記録した日 {meals.recorded}／7
+            {meals.eightDays > 0 && `　腹八分目で止められた日 ${meals.eightDays}日`}
+            {meals.medianFastingHours !== null && `　空腹時間の中央値 ${meals.medianFastingHours}時間`}
+            {mealPause.shouldPause && (
+              <span className="note-line" style={{ display: 'block', marginTop: 6, borderLeftColor: 'var(--ember)' }}>
+                体からのサインが出ています。来週は段階を戻すか、いったん普通に食べてください。
+              </span>
+            )}
+          </p>
+        )}
         {summary.meditation.days > 0 && (
           <p className="small" style={{ margin: 0 }}>
             瞑想 <strong className="num">{summary.meditation.days}</strong>日／7

@@ -26,6 +26,11 @@ export function defaultSettings(): Settings {
     showStreakProminently: false,
     meditationBell: true,
     meditationDefaultMinutes: 10,
+    fastingTargetHours: 12,
+    fastingWorkdayHours: 0,
+    fastingPlan: 'three',
+    fastingPlanSince: null,
+    fastingPrechecks: [],
   };
 }
 
@@ -146,6 +151,24 @@ export const actions = {
   },
   setSleepQuality(date: string, patch: Partial<ReturnType<typeof emptySleepQuality>>) {
     set((s) => withDay(s, date, (d) => ({ ...d, sleepQuality: { ...emptySleepQuality(), ...(d.sleepQuality ?? {}), ...patch } })));
+  },
+
+  /** 食事の記録（時間と量だけ） */
+  setMeal(date: string, patch: Partial<import('../types/index.js').MealRecord>) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        meal: {
+          firstMealAt: null, lastMealAt: null, lastMealCrossesMidnight: false, fullness: null, signs: [],
+          ...(d.meal ?? {}),
+          ...patch,
+        },
+      })),
+    );
+  },
+  /** 段階を変える。変えた日を覚えておき、次の段階へ進める判断に使う */
+  setFastingPlan(planId: string, date: string) {
+    set((s) => ({ ...s, settings: { ...s.settings, fastingPlan: planId, fastingPlanSince: date } }));
   },
 
   /** 3のルール。日・週・月を同じ表で持つ */

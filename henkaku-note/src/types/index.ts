@@ -79,6 +79,20 @@ export interface SleepQualityRecord {
   sleptMinutes: number | null;
 }
 
+/** その日の食事の記録（時間と量だけ。何をどれだけ食べたかの栄養計算はしない） */
+export interface MealRecord {
+  /** その日の最初の食事 'HH:MM' */
+  firstMealAt: string | null;
+  /** その日の最後の食事 'HH:MM' */
+  lastMealAt: string | null;
+  /** 最後の食事が日付をまたいだか（夜勤明けの深夜の食事） */
+  lastMealCrossesMidnight: boolean;
+  /** 満腹度。腹八分目で止められたか */
+  fullness: 'eight' | 'full' | 'over' | null;
+  /** 止めどきのサイン（ふらつき等）。責めるためではなく、休む判断のために持つ */
+  signs: string[];
+}
+
 export interface DayRecord {
   /** 'YYYY-MM-DD' */
   date: string;
@@ -98,6 +112,7 @@ export interface DayRecord {
   /** 『最高の体調』の記録。古いデータには無いので、読む側は既定値を用意する */
   condition?: ConditionRecord;
   sleepQuality?: SleepQualityRecord;
+  meal?: MealRecord;
   updatedAt: number;
 }
 
@@ -154,6 +169,22 @@ export interface Settings {
   meditationBell: boolean;
   /** タイマーの既定の長さ（分） */
   meditationDefaultMinutes: number;
+
+  // ── 食事の時間と量 ──
+  /**
+   * 前の食事から次の食事まで空ける目標（時間）。
+   * 出典は「◯時間以上」としているが、受け取った文字起こしでその数字が欠けていたため、
+   * 出典の値としては持たず、アプリの初期値として持つ（利用者が変えられる）。
+   */
+  fastingTargetHours: number;
+  /** 勤務日だけ短くする目標（0で「勤務日も同じ」） */
+  fastingWorkdayHours: number;
+  /** いま取り組んでいる段階（PLANS の id） */
+  fastingPlan: string;
+  /** その段階を始めた日 'YYYY-MM-DD' */
+  fastingPlanSince: string | null;
+  /** 始める前の確認で当てはまった項目 */
+  fastingPrechecks: string[];
 }
 
 export interface AppState {

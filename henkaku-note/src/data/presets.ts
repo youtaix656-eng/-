@@ -36,6 +36,17 @@ export const CONDITION_SOURCE: KnowledgeSource = {
     + '保証ではありません。体調に不安があるときは医療機関に相談してください。',
 };
 
+export const MEAL_SOURCE: KnowledgeSource = {
+  id: 'chou-shoushoku-2026-09',
+  label: 'できる男は超小食（解説）',
+  origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
+  receivedAt: '2026-09-02',
+  caution:
+    '書籍・原論文には当たっていません。この題材は、裏が取れていない主張や争いのある主張が混ざっています。'
+    + '欠食や長い絶食が体に合わない人がいます。持病・服薬・妊娠授乳・成長期・摂食障害の経験がある場合は、'
+    + '自己判断せず医師に相談してください。このアプリは医療の判断をしません。',
+};
+
 export interface HabitPreset {
   id: string;
   title: string;
@@ -72,6 +83,17 @@ export const HABIT_PRESETS: HabitPreset[] = [
     sourceId: MEDITATION_SOURCE.id,
   },
 ];
+
+HABIT_PRESETS.push({
+  id: 'preset-hara-hachibu',
+  title: '腹八分目',
+  reading: 'はらはちぶんめ',
+  criterion: 'その日の食事を、満腹まで行かずに止められた',
+  note:
+    '出典（できる男は超小食）がいちばん強く言っているのは、食事の回数を減らすことより'
+    + '「1食にしてもドカ食いをしない」ことです。回数より先に、こちらを習慣にできます。',
+  sourceId: MEAL_SOURCE.id,
+});
 
 export function presetToHabit(preset: HabitPreset, at: number): Habit {
   return {

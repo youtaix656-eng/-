@@ -12,6 +12,11 @@ const habits = buildDefaultHabits(AT);
 const settings: Settings = {
   shiftEndDefault: '00:00', bedWithinMinutes: 90, offDayBedtime: '23:00',
   audioLinkEnabled: false, audioLinkUrl: '', showStreakProminently: false, meditationBell: true, meditationDefaultMinutes: 10,
+  fastingTargetHours: 12,
+  fastingWorkdayHours: 0,
+  fastingPlan: 'three',
+  fastingPlanSince: null,
+  fastingPrechecks: [],
 };
 
 function day(date: string, over: Partial<DayRecord> = {}): DayRecord {
