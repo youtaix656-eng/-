@@ -1580,6 +1580,52 @@ APIキー無しで今日から使えること・端末内保存を崩さない�
     アーキテクチャ変更が大きすぎるため見送った（将来、容量が再び問題になった時に
     改めて検討する）。
 
+## 機能間の連携強化（2026-09-02追加）
+容量削減バッチの完了後、ユーザーから「実装後このアプリ内で連携させたほうがいい機能あれば
+最大で30こまで教えて」と依頼され、既存の連携状況を調査したうえで6件の未連携（本当に
+連携が欠けている箇所のみ・水増ししない）を報告し、ユーザー指定で全6件を実装したもの。
+いずれも既存のCLAUDE.md方針（単一の正・`focusKeyword`/`onConsumeKeyword`型の
+「一度だけ消費する中継state」パターン）をそのまま踏襲し、新しい仕組みは作っていない。
+- **時間帯別パフォーマンス分析（Analytics.jsx）→ホームの学習導線**：`src/lib/timeOfDay.js`に
+  `isNowBestTime(history, {minSample, now})`を追加（`bucketOf`も外部公開）。「今」が
+  自分の最も正答率が高い時間帯に当たっていれば、Home.jsxに「🕐 今は集中しやすい時間帯です」
+  カードを出す。
+- **模試の伸びしろ分析→今日集中すべき科目**：`src/lib/todayFocus.js`の`todayFocusSubjects()`に
+  `examResults`（省略可・後方互換）を追加。直近の本番同形式の模試（午前/午後/通し）1回ぶんの
+  `examScoreContribution.js`の失点貢献度（出題数の重み×間違えた割合）をスコアに加味し、
+  該当科目が最有力の理由なら「模試で伸ばすと効く科目」と表示する。Home.jsx・Session.jsxの
+  両方の呼び出し元に配線（`store.examResults`をそのまま渡すだけ）。
+- **語呂合わせノート⇄フラッシュカード**：Flashcards.jsx（全科目対応モード）の裏面に、
+  その問題のキーワードに登録済みの語呂合わせ（`kwMeta`）があれば表示し、「📔 語呂合わせ
+  ノートで見る」ボタンを出す。逆にMnemonicNotebook.jsxの各エントリから「🃏 カードで見る」で
+  Flashcardsへ飛び、該当科目へ自動切り替え＋該当カードへ自動ジャンプする
+  （App.jsxの`focusFlashcardKeyword`/`openFlashcardKeyword`、`effectiveTags`で
+  キーワード→問題の対応づけはquery.jsを共用）。
+- **教科書ページ写真→OCR画面**：KeizetsuPageImages.jsxの各サムネイルに「🔤 OCRへ送る」を
+  追加。Ocr.jsxは`initialImage`（dataURL文字列）を受け取ると自動でOCRを開始するよう
+  `runOcr`を拡張（Fileだけでなくdata URL文字列も受け付ける。プレビュー表示の分岐が必要な
+  だけで判定ロジック自体は変えていない）。App.jsxの`ocrInitialImage`/`sendPhotoToOcr`で中継。
+- **連結学習⇄知識グラフ**：連想トレーニング（AssocTrainer）・連想クイズ（AssocQuiz）・
+  関係オーサリング（RelationAuthor）は既にKnowledgeGraph.jsx内部のセクションとして
+  統合済み（独立画面ではない。featureRegistryの`view:'kgraph', sub:true`参照）。
+  知識グラフ→連結学習の方向（`onOpenKeyword`）は既存済みだったが、逆方向が無かったため
+  ConnectedLearning.jsxの深掘り（KeywordDetail）に「🕸️ 知識グラフで見る」を追加。
+  KnowledgeGraph.jsxは`focusConcept`/`onConsumeFocusConcept`を受け取ると、その概念が
+  `conceptList`（解いた問題から実際に生成されたグラフのノード）に存在する時だけ
+  「つながりを探す（AとBの経路）」の概念Aへ自動セットし、該当セクションへスクロールする
+  （Roadmap.jsxの`focusLevel`と同じ`ref`＋`scrollIntoView`＋`setTimeout`パターンを流用）。
+  **`conceptList`に無い概念（未解答の問題にしか出てこないキーワード等）を渡した場合は
+  何も起きない**——これは意図した仕様で、知識グラフは「実際に解いた問題」からしか
+  概念を生成しないため（`solved.length===0`なら画面自体が空状態表示になる）。
+- **科目バランス警告→ホーム**：`stats.js`の`subjectBalanceWarning(history, questions)`
+  （Analytics.jsxが既に使っている判定をそのまま再利用）をHome.jsxからも呼び、
+  警告があれば同じ内容をホームにもカード表示する（弱点科目チップから一問一答へ直行、
+  「📊 分析で詳しく見る」からAnalytics.jsxへ）。判定ロジックの複製はしていない。
+- 上記6件のうち5件（模試の伸びしろ分析以外）はPlaywright QAで実機確認済み
+  （IndexedDBへ直接`srs`/`history`を注入して解答済み状態を再現し、ボタン押下→画面遷移→
+  自動選択・自動スクロール・自動OCR開始までを確認）。`node --test`（2249件）・
+  `npx vite build`・`npm run validate`はすべて通過。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

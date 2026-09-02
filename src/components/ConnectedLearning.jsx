@@ -32,7 +32,7 @@ const TABS = [
   { id: 'quiz', label: 'クイズ' },
 ];
 
-export default function ConnectedLearning({ store, onToast, focusKeyword, onConsumeKeyword }) {
+export default function ConnectedLearning({ store, onToast, focusKeyword, onConsumeKeyword, onOpenGraph }) {
   const [tab, setTab] = useState(focusKeyword ? 'depth' : 'daily');
   const [selectedKw, setSelectedKw] = useState(focusKeyword || null);
 
@@ -68,7 +68,7 @@ export default function ConnectedLearning({ store, onToast, focusKeyword, onCons
 
       {tab === 'daily' && <Daily store={store} onToast={onToast} />}
       {tab === 'depth' && (
-        <Depth store={store} onToast={onToast} selectedKw={selectedKw} setSelectedKw={setSelectedKw} />
+        <Depth store={store} onToast={onToast} selectedKw={selectedKw} setSelectedKw={setSelectedKw} onOpenGraph={onOpenGraph} />
       )}
       {tab === 'inspect' && <Inspect store={store} onToast={onToast} onOpenKeyword={openKeyword} />}
       {tab === 'quiz' && <ConnectQuiz store={store} onToast={onToast} />}
@@ -211,7 +211,7 @@ function Daily({ store, onToast }) {
 }
 
 // ===== 深掘り（一覧＝ヒートマップ ＋ 整理 ＋ 1語まとめ） =====
-function Depth({ store, onToast, selectedKw, setSelectedKw }) {
+function Depth({ store, onToast, selectedKw, setSelectedKw, onOpenGraph }) {
   const { questions, links, history, renameKeyword } = store;
   const heat = useMemo(() => keywordHeat(questions, links, history), [questions, links, history]);
   const allKw = useMemo(() => heat.map((h) => h.keyword), [heat]);
@@ -227,6 +227,7 @@ function Depth({ store, onToast, selectedKw, setSelectedKw }) {
         allKw={allKw}
         onBack={() => setSelectedKw(null)}
         onGoKeyword={(k) => setSelectedKw(k)}
+        onOpenGraph={onOpenGraph}
       />
     );
   }
@@ -291,7 +292,7 @@ function Depth({ store, onToast, selectedKw, setSelectedKw }) {
 }
 
 // 1語まとめ ＋ 語呂合わせ ＋ 連想リコール(復習連動) ＋ 改名/統合
-function KeywordDetail({ store, onToast, keyword, allKw, onBack, onGoKeyword }) {
+function KeywordDetail({ store, onToast, keyword, allKw, onBack, onGoKeyword, onOpenGraph }) {
   const { questions, links, history, kwMeta, setKeywordMeta, renameKeyword, recordAnswer } = store;
   const meta = kwMeta[keyword] || { mnemonic: '' };
   const [mnemonic, setMnemonic] = useState(meta.mnemonic || '');
@@ -364,6 +365,11 @@ function KeywordDetail({ store, onToast, keyword, allKw, onBack, onGoKeyword }) 
               <button key={k} className="chip" style={{ marginRight: 6, marginBottom: 6 }} onClick={() => onGoKeyword(k)}>{k}</button>
             ))}
           </div>
+        )}
+        {onOpenGraph && (
+          <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onOpenGraph(keyword)}>
+            🕸️ 知識グラフで見る
+          </button>
         )}
       </div>
 

@@ -7,7 +7,7 @@ import { buildMnemonicEntries } from '../lib/mnemonicEntries.js';
 //   ふりがな：kwMetaのreading（手入力で確定した読みのみ表示。自動推定は誤読の恐れがあるため行わない）に、
 //   lib/yomi.js の TERM_READINGS（既知の専門用語の読み）をフォールバックとして使う。
 //   一覧の組み立ては lib/mnemonicEntries.js（MnemonicQuiz.jsxと共用）。
-export default function MnemonicNotebook({ store, onToast, onNavigate }) {
+export default function MnemonicNotebook({ store, onToast, onNavigate, onOpenFlashcard }) {
   const { kwMeta, setKeywordMeta, questions, links } = store;
 
   const entries = useMemo(() => buildMnemonicEntries(kwMeta, questions, links), [kwMeta, questions, links]);
@@ -177,6 +177,9 @@ export default function MnemonicNotebook({ store, onToast, onNavigate }) {
                     <div className="btn-row" style={{ marginTop: 8 }}>
                       <button className="btn sm" onClick={() => startEdit(e.keyword, e.mnemonic, e.reading)}>編集</button>
                       <button className="btn sm ghost" onClick={() => removeMnemonic(e.keyword)}>削除</button>
+                      {e.count > 0 && onOpenFlashcard && (
+                        <button className="btn sm ghost" onClick={() => onOpenFlashcard(e.keyword)}>🃏 カードで見る</button>
+                      )}
                     </div>
                   </>
                 )}

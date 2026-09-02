@@ -154,6 +154,9 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
+  const [focusFlashcardKeyword, setFocusFlashcardKeyword] = useState(null);
+  const [ocrInitialImage, setOcrInitialImage] = useState(null);
+  const [focusGraphConcept, setFocusGraphConcept] = useState(null);
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
@@ -377,6 +380,16 @@ export default function App() {
     setFocusKeyword(kw);
     setView('connect');
   };
+  // 語呂合わせノート→フラッシュカードへの連携（openKeywordと同じ「一度だけ消費」の型）。
+  const openFlashcardKeyword = (kw) => {
+    setFocusFlashcardKeyword(kw);
+    setView('flashcards');
+  };
+  // 連結学習→知識グラフへの連携（同じく「一度だけ消費」の型）。
+  const openGraphConcept = (concept) => {
+    setFocusGraphConcept(concept);
+    setView('kgraph');
+  };
   const jumpToRoadmapLevel = (levelId) => {
     setFocusRoadmapLevel(levelId);
     setView('roadmap');
@@ -392,6 +405,11 @@ export default function App() {
   const sendOcrToImport = (csv) => {
     setImportText(csv);
     setView('settings');
+  };
+  // 教科書ページ写真（KeizetsuPageImages.jsx）→OCR画面への連携。
+  const sendPhotoToOcr = (dataUrl) => {
+    setOcrInitialImage(dataUrl);
+    setView('ocr');
   };
 
   // 履歴に残す情報（タイトル・ジャンル）を今の文脈から組み立てる
@@ -578,11 +596,17 @@ export default function App() {
       case 'migrationguide':
         return <MigrationGuide store={store} onToast={showToast} />;
       case 'kgraph':
-        return <KnowledgeGraph store={store} onOpenKeyword={openKeyword} onStudyConcepts={(concepts) => {
-          const set = new Set(concepts);
-          const qs = store.questions.filter((q) => (q.tags || []).some((t) => set.has(t)));
-          if (qs.length) startCustomQuiz(qs);
-        }} />;
+        return <KnowledgeGraph
+          store={store}
+          onOpenKeyword={openKeyword}
+          onStudyConcepts={(concepts) => {
+            const set = new Set(concepts);
+            const qs = store.questions.filter((q) => (q.tags || []).some((t) => set.has(t)));
+            if (qs.length) startCustomQuiz(qs);
+          }}
+          focusConcept={focusGraphConcept}
+          onConsumeFocusConcept={() => setFocusGraphConcept(null)}
+        />;
       case 'roadmap':
         return (
           <Roadmap
@@ -595,7 +619,14 @@ export default function App() {
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
-        return <Ocr onToast={showToast} onSendToImport={sendOcrToImport} />;
+        return (
+          <Ocr
+            onToast={showToast}
+            onSendToImport={sendOcrToImport}
+            initialImage={ocrInitialImage}
+            onConsumeInitialImage={() => setOcrInitialImage(null)}
+          />
+        )
       case 'tools':
         return <QuestionTools store={store} onToast={showToast} />;
       case 'scope':
@@ -636,7 +667,14 @@ export default function App() {
       case 'mindmap':
         return <MindMap store={store} onOpenKeyword={openKeyword} />;
       case 'flashcards':
-        return <Flashcards store={store} onNavigate={setView} />;
+        return (
+          <Flashcards
+            store={store}
+            onNavigate={setView}
+            focusKeyword={focusFlashcardKeyword}
+            onConsumeKeyword={() => setFocusFlashcardKeyword(null)}
+          />
+        );
       case 'acupointtap':
         return <AcupointTap onNavigate={setView} />;
       case 'keiketsureverse':
@@ -648,9 +686,11 @@ export default function App() {
       case 'keizetsutextbook':
         return <KeizetsuTextbook store={store} onNavigate={setView} />;
       case 'keizetsupageimages':
-        return <KeizetsuPageImages onToast={showToast} onNavigate={setView} />;
+        return <KeizetsuPageImages onToast={showToast} onNavigate={setView} onSendToOcr={sendPhotoToOcr} />;
       case 'mnemonics':
-        return <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} />;
+        return (
+          <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} onOpenFlashcard={openFlashcardKeyword} />
+        );
       case 'mnemonicquiz':
         return <MnemonicQuiz store={store} onNavigate={setView} />;
       case 'features':
@@ -677,6 +717,7 @@ export default function App() {
             onToast={showToast}
             focusKeyword={focusKeyword}
             onConsumeKeyword={() => setFocusKeyword(null)}
+            onOpenGraph={openGraphConcept}
           />
         );
       case 'settings':
