@@ -293,6 +293,7 @@ CSV まわり（`lib/ledgerCsv.js`・`lib/csv.js`）と台帳の画面は分け�
 | **競合台帳・需要の観測**（`rivals.js`／`demand.js`＋事業画面の2カード） | +0.4KB（`useStore` の操作と保存キー2つ、`roles.js` の `readsMarket` で roster 12.2→12.3KB。lib 本体は事業画面が lazy なので入らない） | — （目安110KB の内側なので相殺なし） | **109.6KB** |
 | **型パック**（`kit.js`＋`Kits.jsx`＋出す前チェックの3項目） | +0.9KB（`useStore` の操作7つと保存キー、`workflow.createTask` の `kitId`。lib と画面は lazy なので入らない） | 収益導線の形を `lib/funnelShape.js` へ分け、案件を作る `revenue.js` を押した時に読むようにした（−1.5KB） | **109.0KB** |
 | **SKILL.md 形式の書き出し・パック** | +0.2KB（`useStore` の操作4つと保存キー1つ。書き出しの処理は `kit.js` の中で、画面は lazy） | — （目安110KB の内側なので相殺なし） | **109.2KB** |
+| **目次・索引と用語**（`terms.js`／`focus.js`／`tocCandidates.js`＋詳細パネル・候補タブ） | +1.1KB（`useStore` の操作4つと保存キー2つ、`App` の目印、`FocusJumper`。用語と候補の本体は目次の画面が lazy なので入らない） | 判断（`decisions.js`）と会社の決まり（`rules.js`）を押した時に読むようにした（−1.2KB） | **109.3KB** |
 
 **目安は 111 → 110 へ下げた。** 役職を足すと `roster` チャンクが必ず増えるので、
 足す時は同時に「起動時に読まなくてよいもの」を1つ探して外すこと。

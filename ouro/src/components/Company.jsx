@@ -263,7 +263,7 @@ export default function Company({ store, go }) {
       </Card>
 
       <SectionTitle>任せたら、月いくら浮くか</SectionTitle>
-      <OffloadCard store={store} />
+      <div id="company-offload"><OffloadCard store={store} /></div>
 
       {decisions.length > 0 && (
         <>

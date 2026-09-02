@@ -10,16 +10,19 @@
 //   あ〜ん → A〜Z の順／数字は読みで振り分け／読みは明示（推定しない）／
 //   タイトルは重複させない／文字は大きめ・タップで飛ぶ。
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Card, Empty } from './ui.jsx';
-import { buildToc, filterToc, tocSections, kindCounts, TOC_KINDS } from '../data/toc.js';
-import { BUCKETS, UNKNOWN_BUCKET } from '../lib/yomi.js';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Card, Empty, Sheet } from './ui.jsx';
+import { buildTocEntries, filterToc, tocSections, kindCounts, TOC_KINDS } from '../data/toc.js';
+import { BUCKETS, UNKNOWN_BUCKET, buildKanaIndex } from '../lib/yomi.js';
+import { DESTINATION_TYPES, DESCRIPTION_STATUS, resolveDestination } from '../data/terms.js';
+import { OTHER_ROW_WARN_AT, pendingCandidates, CANDIDATE_TRIGGERS } from '../lib/tocCandidates.js';
+import { flashTo } from '../lib/focus.js';
 import { ROLES, ROLE_GROUPS, rolesOfGroup } from '../data/roles.js';
 import { allGenres, DEFAULT_GENRE_ID } from '../data/genres.js';
 import { seatsOf } from '../lib/seats.js';
 import Portrait from './Portrait.jsx';
 
-export default function Toc({ store, go }) {
+export default function Toc({ store, go, preset = {} }) {
   const [query, setQuery] = useState('');
   // 項目15：1文字ごとに全件を絞り込むと入力が引っかかる（実測80ms）。
   // 入力そのものは即座に反映し、絞り込みは1拍遅らせる。
@@ -29,12 +32,25 @@ export default function Toc({ store, go }) {
   // 押した瞬間にボタンの見た目だけ変わり、一覧の作り直しは後ろで進む。
   const [pending, startTransition] = useTransition();
   const [limit, setLimit] = useState(120); // 項目19：多い時は段階的に出す
-  const [view, setView] = useState('org'); // 'org' = 役職×ジャンルの一覧 / 'kana' = 読み引き
+  // 'org' = 役職×ジャンルの一覧 / 'kana' = 読み引き / 'cand' = 目次への候補
+  // **飛び先が指定されている時は、描く前に「あ〜ん」へ切り替える**（下の useLayoutEffect）。
+  const [view, setView] = useState(preset.termId ? 'kana' : 'org');
   const sectionRefs = useRef({});
+  // タップで開く詳細（説明・別名・飛び先）
+  const [picked, setPicked] = useState(null);
 
+  const cand = store.tocCandidates || { candidates: [], history: [] };
+  const waiting = useMemo(() => pendingCandidates(cand.candidates), [cand.candidates]);
+
+  // **目次は元データから毎回導出する**（目次専用の手書きデータを持たない）。
+  // 画面を離れるたびに作り直されるので、必ず useMemo で包む。
   const entries = useMemo(
-    () => buildToc({ employees: store.employees, customGenres: store.genres }),
-    [store.employees, store.genres]
+    () => buildTocEntries({
+      employees: store.employees,
+      customGenres: store.genres,
+      customTerms: store.terms,
+    }),
+    [store.employees, store.genres, store.terms]
   );
   const filtered = useMemo(
     () => filterToc(entries, { query: deferredQuery, kind }),
@@ -55,6 +71,41 @@ export default function Toc({ store, go }) {
   useEffect(() => {
     setLimit(120);
   }, [deferredQuery, kind]);
+
+  // **枠の切り替えは useLayoutEffect**（描く前に直す）。
+  // useEffect にすると、切り替えの描き直しが flashTo（次のフレーム）より後になり、
+  // 運んだ先が作り直された拍子に印だけが消える。
+  useLayoutEffect(() => {
+    if (preset.termId && view !== 'kana') setView('kana');
+  }, [preset.termId, view]);
+
+  // 目次の中の飛び先（用語そのもの）へ運ぶ
+  useEffect(() => {
+    if (!preset.termId || view !== 'kana') return undefined;
+    let tries = 0;
+    let raf = 0;
+    const tick = () => {
+      if (flashTo(`term-${preset.termId}`)) return;
+      tries += 1;
+      if (tries < 40) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [preset.termId, view, shown]);
+
+  // **「その他」行は読みの入れ忘れが見える場所。** 増えたら開発時に気づけるようにする。
+  const kanaIndex = useMemo(() => buildKanaIndex(entries), [entries]);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (kanaIndex.otherCount > OTHER_ROW_WARN_AT) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[toc]「その他」行が ${kanaIndex.otherCount} 件あります（目安 ${OTHER_ROW_WARN_AT} 件）。`
+        + '読みの入れ忘れの可能性があります：'
+        + kanaIndex.missing.slice(0, 10).map((m) => m.title).join('・')
+      );
+    }
+  }, [kanaIndex]);
 
   const jump = (bucket) => {
     // まだ描いていない枠へ飛ぶときは、先に全部出してから移動する
@@ -81,6 +132,9 @@ export default function Toc({ store, go }) {
         <button type="button" className={`chip ${view === 'kana' ? 'on' : ''}`} onClick={() => startTransition(() => setView('kana'))}>
           あ〜ん で引く
         </button>
+        <button type="button" className={`chip ${view === 'cand' ? 'on' : ''}`} onClick={() => startTransition(() => setView('cand'))}>
+          目次への候補{waiting.length ? ` ${waiting.length}` : ''}
+        </button>
       </div>
 
       {/* 探す場所が2つあることを先に伝える。
@@ -102,7 +156,9 @@ export default function Toc({ store, go }) {
       </Card>
 
       {/* 新項目13：作り直しの最中は薄く見せる（固まったように見せない） */}
-      {view === 'org' ? (
+      {view === 'cand' ? (
+        <Candidates store={store} />
+      ) : view === 'org' ? (
         <OrgIndex store={store} go={go} />
       ) : (
         <>
@@ -167,9 +223,10 @@ export default function Toc({ store, go }) {
                 {sec.items.map((it) => (
                   <button
                     key={it.id}
+                    id={it.anchor || undefined}
                     type="button"
                     className="toc-row"
-                    onClick={() => go(it.view, it.arg)}
+                    onClick={() => setPicked(it)}
                   >
                     {it.kind === 'employee' && it.employee ? (
                       <Portrait employee={it.employee} size={40} frame={false} />
@@ -202,7 +259,175 @@ export default function Toc({ store, go }) {
           )}
         </>
       )}
+
+      {picked && (
+        <TermPanel entry={picked} store={store} go={go} onClose={() => setPicked(null)} />
+      )}
     </div>
+  );
+}
+
+/**
+ * 項目をタップした時に開く詳細。
+ *
+ * **説明が無ければ「※説明未登録」、飛び先が無ければ「関連する飛び先はありません」**と
+ * 正直に出す（空欄を埋めるために作り話を書かない）。
+ * **確かめていない説明には必ず「※要確認」を出す**（`descriptionStatus`）。
+ */
+function TermPanel({ entry, store, go, onClose }) {
+  // 用語以外（役職・社員など）は元から飛び先を1つ持っている。
+  // それを飛び先の一覧として見せる——**新しい飛び方を作らない。**
+  const dests = entry.destinations && entry.destinations.length
+    ? entry.destinations
+    : entry.view
+      ? [{ type: 'page', label: 'この項目をひらく', view: entry.view, arg: entry.arg, anchor: entry.anchor }]
+      : [];
+  const status = DESCRIPTION_STATUS[entry.descriptionStatus] || null;
+  const aliases = (entry.aliases || []).filter(Boolean);
+
+  return (
+    <Sheet title={entry.title} onClose={onClose}>
+      <p className="muted" style={{ marginTop: -6 }}>
+        {entry.reading || '読み未設定'}
+        {status && status.badge && (
+          <span className="badge" style={{ marginLeft: 8 }}>{status.badge}</span>
+        )}
+      </p>
+
+      {entry.description ? (
+        <p style={{ fontSize: 14, lineHeight: 1.8 }}>{entry.description}</p>
+      ) : (
+        <p className="muted">※説明未登録</p>
+      )}
+
+      {aliases.length > 0 && (
+        <p className="muted" style={{ fontSize: 12 }}>別名：{aliases.join('・')}</p>
+      )}
+
+      {dests.length ? (
+        dests.map((d, i) => (
+          <button
+            key={`${d.type}:${d.label}:${i}`}
+            type="button"
+            className="btn block"
+            style={{ marginTop: 6 }}
+            onClick={() => {
+              onClose();
+              // 事業の中の目印は「いま実行中の事業」へ読み替える（無ければ目印を外す）
+              const r = resolveDestination(d, { ventures: store.ventures || [] });
+              if (r.view) {
+                // **飛び先の仕組みは既存の flashTo をそのまま使う**（新設しない）
+                go(r.view, r.arg ?? null, r.anchor || null);
+              } else if (r.anchor) {
+                flashTo(r.anchor);
+              }
+            }}
+          >
+            {DESTINATION_TYPES[d.type]?.glyph || '▸'} {d.label}
+            <span className="muted" style={{ marginLeft: 6, fontSize: 11 }}>
+              {DESTINATION_TYPES[d.type]?.name || d.type}
+            </span>
+          </button>
+        ))
+      ) : (
+        <p className="muted">関連する飛び先はありません。</p>
+      )}
+
+      {entry.descriptionStatus === 'needs_review' && (
+        <button
+          type="button"
+          className="btn ghost block"
+          style={{ marginTop: 10 }}
+          onClick={() => { store.verifyTerm(String(entry.id).replace(/^term:/, '')); onClose(); }}
+        >
+          読んで確かめた（※要確認を外す）
+        </button>
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * 目次への追加・削除の候補。
+ *
+ * **押すまで本体データには1文字も入らない。** 「追加する」を押した時にだけ
+ * 読み・重複・分類・正規化の4つを確かめ、通らなければ書かずに理由を出す。
+ */
+function Candidates({ store }) {
+  const [note, setNote] = useState('');
+  const data = store.tocCandidates || { candidates: [], history: [] };
+  const list = (data.candidates || []).filter((c) => c.status === 'pending');
+  const history = (data.history || []).slice(0, 12);
+
+  const decide = async (id, accept) => {
+    const r = await store.decideTocCandidate(id, accept);
+    setNote(!accept ? '見送りました（本体データは変わっていません）。' : r.ok ? '目次に反映しました。' : `入れられませんでした：${r.reason}`);
+  };
+
+  return (
+    <>
+      <Card glyph="＊" title="目次への候補">
+        <p className="muted" style={{ marginTop: -6 }}>
+          {store.hydrated ? `未確認の候補が ${list.length} 件です。` : '読み込み中です…'}
+          <br />
+          候補が生まれるのは
+          <strong style={{ color: '#fff' }}>{Object.values(CANDIDATE_TRIGGERS).join('・')}</strong>
+          の3つのときだけで、<strong style={{ color: '#fff' }}>押すまで目次には入りません</strong>。
+        </p>
+        {note && <p className="muted" style={{ fontSize: 12.5 }}>{note}</p>}
+      </Card>
+
+      {list.length === 0 && <Empty>いまは候補がありません。</Empty>}
+
+      {list.map((c) => (
+        <Card key={c.id} className="tight">
+          <strong>{c.title}</strong>
+          <span className="badge" style={{ marginLeft: 8 }}>
+            {c.action === 'delete' ? '削除の候補' : '追加の候補'}
+          </span>
+          <span className="badge" style={{ marginLeft: 6 }}>※要確認</span>
+          <p className="muted" style={{ fontSize: 12.5, margin: '6px 0' }}>
+            {c.description || '※説明未登録'}
+          </p>
+          <p className="muted" style={{ fontSize: 11.5, margin: '0 0 6px' }}>
+            読み：{c.reading || '未設定'} ／ 出どころ：{CANDIDATE_TRIGGERS[c.addedFrom?.trigger] || '不明'}
+          </p>
+          <div className="btn-row">
+            <button type="button" className="btn primary" onClick={() => decide(c.id, true)}>
+              {c.action === 'delete' ? '削除する' : '追加する'}
+            </button>
+            <button type="button" className="btn" onClick={() => decide(c.id, false)}>
+              {c.action === 'delete' ? '削除しない' : '追加しない'}
+            </button>
+          </div>
+        </Card>
+      ))}
+
+      {history.length > 0 && (
+        <>
+          <div className="toc-head">これまでの確定</div>
+          <Card className="tight">
+            {history.map((h) => (
+              <p key={h.id} className="muted" style={{ fontSize: 12, margin: '2px 0' }}>
+                {h.result === 'added' ? '追加' : h.result === 'removed' ? '削除' : h.result === 'undone' ? '取り消し' : h.result === 'blocked' ? '止めた' : '見送り'}
+                ：{h.title}
+              </p>
+            ))}
+            <button
+              type="button"
+              className="btn ghost block"
+              style={{ marginTop: 8 }}
+              onClick={async () => {
+                const undone = await store.undoTocAdditions(1);
+                setNote(undone.length ? '直近の追加を1件取り消しました。' : '取り消せる追加がありません。');
+              }}
+            >
+              直近の追加を1件取り消す
+            </button>
+          </Card>
+        </>
+      )}
+    </>
   );
 }
 

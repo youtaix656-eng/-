@@ -16,6 +16,7 @@ import KnowledgeView from './components/Knowledge.jsx';
 // 肖像の額縁は全員で1つを使い回すので、その定義だけ即時に読む
 import { PortraitSprite } from './components/Portrait.jsx';
 import ScrollArrows from './components/ScrollArrows.jsx';
+import FocusJumper from './components/FocusJumper.jsx';
 
 const TaskDetail = lazy(LOADERS.task);
 const EmployeeDetail = lazy(LOADERS.employee);
@@ -101,14 +102,20 @@ export default function App() {
   // 離れている間に終わった仕事の知らせ（「開きますか？ はい／いいえ」）
   const [done, setDone] = useState(null);
 
+  // 目次から飛ぶときの「画面の中の目印」。**画面遷移の一部として持つ**——
+  // 飛んだあとに useEffect で先頭へ戻すような副作用を置くと、運んだ画面が引き戻される。
+  const [flash, setFlash] = useState(null);
+
   const go = useCallback(
-    (next, nextArg = null) => {
+    (next, nextArg = null, anchor = null) => {
       perf.mark(`view:${next}`);
       preloadView(next);
       setStack((s) => [...s, { view, arg }].slice(-20));
       setView(next);
       setArg(nextArg);
       window.scrollTo(0, 0);
+      // 先頭へ戻したあとに目印を立てる（順番が逆だと、飛び先が先頭へ引き戻される）
+      setFlash(anchor || null);
     },
     [view, arg]
   );
@@ -270,7 +277,7 @@ export default function App() {
         {view === 'employees' && <Employees store={store} go={go} preset={arg || {}} key={JSON.stringify(arg)} />}
         {view === 'compose' && <Compose store={store} preset={arg || {}} go={go} key={JSON.stringify(arg)} />}
         {view === 'knowledge' && <KnowledgeView store={store} go={go} />}
-        {view === 'toc' && <Toc store={store} go={go} />}
+        {view === 'toc' && <Toc preset={arg || {}} key={JSON.stringify(arg)} store={store} go={go} />}
         {view === 'calendar' && <Calendar store={store} go={go} toast={toast} />}
         {view === 'genre' && <GenreEditor store={store} go={go} toast={toast} />}
         {view === 'characters' && (
@@ -312,6 +319,10 @@ export default function App() {
           ▦ 会社（ダッシュボード・道具・承認・設定）
         </button>
       )}
+
+      {/* 目次の飛び先へ運んで光らせる（`lib/focus.js`）。lazy な画面は遅れて入るので、
+          描かれるまで数フレーム待つ。見つからなければ何もしない（勝手に動かさない）。 */}
+      <FocusJumper anchor={flash} onDone={() => setFlash(null)} />
 
       {/* 長い画面を指ではらわずに動かせるように。動かない画面では出ない。 */}
       <ScrollArrows view={view} />

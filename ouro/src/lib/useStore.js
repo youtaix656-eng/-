@@ -40,9 +40,9 @@ const loadNotify = () => import('./notify.js');
 import { distill, extractUrls } from './distill.js';
 import { createKnowledge, makeSource, markUsed, markVerified, orphanSourceIds } from './knowledge.js';
 import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
-import { decisionsFrom, decideDecision } from './decisions.js';
 import { addNote, removeNote, notesOf } from './notes.js';
-import { normalizeRules, addRule, removeRule } from './rules.js';
+// **判断（decisions.js）と会社の決まり（rules.js）は押した時に読む。**
+// どちらの画面も lazy なのに、静的に読むと起動時の束へ入っていた。
 // **入れ物の形だけ**を読む（funnel.js は4段の定義と週の集計まで持っていて、
 // 収益導線の画面は lazy なのに起動時の束へ入っていた）。
 import { makeFunnel, normalizeFunnel } from './funnelShape.js';
@@ -148,10 +148,23 @@ const REST_KEYS = [
   // 型パック。型の画面と、依頼するときにしか要らない。
   KEYS.kits,
   KEYS.packs,
+  // 用語と、目次への候補。目次の画面でしか要らない。
+  // **読み込みが済むまで「候補は0件」と言い切らないこと**（項目138）。
+  KEYS.terms,
+  KEYS.tocCandidates,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
-const REST_FALLBACKS = Object.fromEntries(REST_KEYS.map((k) => [k, k === KEYS.funnel ? makeFunnel() : []]));
+// 収益導線・用語・目次の候補は配列ではなくオブジェクト。
+// **ここで配列を既定にすると、毎回空で上書きされて過去のぶんが消える**（項目50）。
+const OBJECT_FALLBACKS = {
+  [KEYS.funnel]: () => makeFunnel(),
+  [KEYS.terms]: () => ({ added: [], removed: [] }),
+  [KEYS.tocCandidates]: () => ({ candidates: [], history: [] }),
+};
+const REST_FALLBACKS = Object.fromEntries(
+  REST_KEYS.map((k) => [k, OBJECT_FALLBACKS[k] ? OBJECT_FALLBACKS[k]() : []])
+);
 
 const EMPTY = {
   company: null,
@@ -177,6 +190,10 @@ const EMPTY = {
   voices: [],
   kits: [],
   packs: [],
+  // 用語は配列ではなくオブジェクト（足したもの・消したもの）。
+  // **REST の受け皿を配列にしないこと**（項目50で `ouro:funnel` が空になった失敗と同じ形）。
+  terms: { added: [], removed: [] },
+  tocCandidates: { candidates: [], history: [] },
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -332,6 +349,14 @@ export function useStore() {
         // 次に数字を1件入れた時点で、これまでの週が全部消える。
         if (key === KEYS.funnel) {
           merged.funnel = normalizeFunnel(rest[key]);
+          continue;
+        }
+        // 用語と目次の候補も配列ではなくオブジェクト。**同じ理由で asArray に通さない。**
+        if (OBJECT_FALLBACKS[key]) {
+          const v = rest[key];
+          merged[keyName(key)] = v && typeof v === 'object' && !Array.isArray(v)
+            ? v
+            : OBJECT_FALLBACKS[key]();
           continue;
         }
         merged[keyName(key)] = asArray(rest[key]);
@@ -733,9 +758,10 @@ export function useStore() {
 
   /** 会社のルール（CLAUDE.md にあたるもの）。消せない決まりは触らない。 */
   const updateRules = useCallback(
-    (patch) => {
+    async (patch) => {
       const co = stateRef.current.company;
       if (!co) return null;
+      const { normalizeRules } = await import('./rules.js');
       const rules = { ...normalizeRules(co.rules), ...patch, updatedAt: Date.now() };
       put(KEYS.company, { ...co, rules });
       return rules;
@@ -743,10 +769,12 @@ export function useStore() {
     [put]
   );
 
+  // rules.js を押した時に読むので**非同期**（戻り値を使う側は await する）
   const addCompanyRule = useCallback(
-    (text) => {
+    async (text) => {
       const co = stateRef.current.company;
       if (!co) return null;
+      const { addRule } = await import('./rules.js');
       const rules = addRule(co.rules, text);
       put(KEYS.company, { ...co, rules });
       log({ actor: 'user', action: 'ruleAdded', target: String(text).slice(0, 120) });
@@ -756,9 +784,10 @@ export function useStore() {
   );
 
   const removeCompanyRule = useCallback(
-    (text) => {
+    async (text) => {
       const co = stateRef.current.company;
       if (!co) return null;
+      const { removeRule } = await import('./rules.js');
       const rules = removeRule(co.rules, text);
       put(KEYS.company, { ...co, rules });
       return rules;
@@ -1249,6 +1278,73 @@ export function useStore() {
   );
 
   /** パックに型を入れる／外す。**順番に意味がある**ので末尾に足す。 */
+  // ── 目次への追加・削除の候補 ──
+  // **「追加する／削除する」を押した時に初めて本体データへ書く。**
+  // 押していない候補は `ouro:tocCandidates` にだけ在り、目次には出ない。
+
+  const addTocCandidate = useCallback(
+    async (input) => {
+      const { makeCandidate, MAX_CANDIDATES } = await import('./tocCandidates.js');
+      // 白名簿にない合図では null が返る＝候補は生まれない
+      const made = makeCandidate(input || {});
+      if (!made) return null;
+      const cur = stateRef.current.tocCandidates || { candidates: [], history: [] };
+      const next = { ...cur, candidates: [made, ...(cur.candidates || [])].slice(0, MAX_CANDIDATES) };
+      put(KEYS.tocCandidates, next);
+      return made;
+    },
+    [put]
+  );
+
+  /** @returns {{ok:boolean, reason:string, checks:object[]}} 通らなかった時は本体を触らない */
+  const decideTocCandidate = useCallback(
+    async (candidateId, accept) => {
+      const mod = await import('./tocCandidates.js');
+      const cur = stateRef.current.tocCandidates || { candidates: [], history: [] };
+      const cand = (cur.candidates || []).find((c) => c.id === candidateId);
+      if (!cand) return { ok: false, reason: '候補が見つかりません', checks: [] };
+      const ctx = {
+        customTerms: stateRef.current.terms,
+        candidates: cur.candidates || [],
+        history: cur.history || [],
+      };
+      const r = !accept
+        ? mod.rejectCandidate(cand, ctx)
+        : cand.action === 'delete'
+          ? mod.acceptDelete(cand, ctx)
+          : mod.acceptAdd(cand, ctx);
+      // **通らなかった時も候補と履歴は進める**（黙って消さない・黙って入れない）
+      put(KEYS.tocCandidates, { candidates: r.candidates || cur.candidates, history: r.history || cur.history });
+      if (r.ok) put(KEYS.terms, r.terms);
+      log({ actor: 'user', action: 'tocDecided', target: cand.title, detail: accept ? (r.ok ? '反映' : '確認で止めた') : '見送り' });
+      return { ok: !!r.ok, reason: r.reason || '', checks: r.checks || [] };
+    },
+    [put, log]
+  );
+
+  /** 直近の「追加」を n 件だけ取り消す（削除は巻き戻さない）。 */
+  const undoTocAdditions = useCallback(
+    async (n = 1) => {
+      const { undoLastTocAdditions } = await import('./tocCandidates.js');
+      const cur = stateRef.current.tocCandidates || { candidates: [], history: [] };
+      const r = undoLastTocAdditions(n, { customTerms: stateRef.current.terms, history: cur.history || [] });
+      if (!r.undone.length) return [];
+      put(KEYS.terms, r.terms);
+      put(KEYS.tocCandidates, { ...cur, history: r.history });
+      return r.undone;
+    },
+    [put]
+  );
+
+  /** 説明を「確認済み」にする。**人が画面で押した時だけ。** */
+  const verifyTerm = useCallback(
+    async (termId) => {
+      const { markTermVerified } = await import('./tocCandidates.js');
+      put(KEYS.terms, markTermVerified(termId, { customTerms: stateRef.current.terms }));
+    },
+    [put]
+  );
+
   const togglePackKit = useCallback(
     (packId, kitId) => {
       put(
@@ -1482,10 +1578,12 @@ export function useStore() {
   );
 
   /** 「あなたの判断が要ること」を1件決める（新規）。 */
+  // decisions.js を押した時に読むので**非同期**
   const decideTask = useCallback(
-    (taskId, decisionId, state, note = '') => {
+    async (taskId, decisionId, state, note = '') => {
       const task = stateRef.current.tasks.find((t) => t.id === taskId);
       if (!task) return null;
+      const { decideDecision } = await import('./decisions.js');
       const next = decideDecision(task, decisionId, state, note);
       const item = (next.decisions || []).find((d) => d.id === decisionId);
       log({
@@ -1714,6 +1812,7 @@ export function useStore() {
       if (updated.status === 'done' && !(updated.decisions || []).length) {
         // **assembleResult から拾わない。** 全手順を連ねた文なので、
         // 途中の手順の見出しや担当者名を「判断が要ること」として拾ってしまう。
+        const { decisionsFrom } = await import('./decisions.js');
         const found = decisionsFrom(finalOutput(updated));
         if (found.length) updated = { ...updated, decisions: found };
       }
@@ -2756,6 +2855,10 @@ export function useStore() {
     updatePack,
     removePack,
     togglePackKit,
+    addTocCandidate,
+    decideTocCandidate,
+    undoTocAdditions,
+    verifyTerm,
     updatePattern: updatePatternAction,
     removePattern: removePatternAction,
     // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）
