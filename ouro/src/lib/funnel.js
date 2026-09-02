@@ -10,6 +10,8 @@
 // 数字はユーザーが手で入れる（端末内保存のみ・外へ送らない）。
 // 自動で取れない数字を取れるふりはしない。
 
+import { makeFunnel, normalizeFunnel } from './funnelShape.js';
+
 /**
  * 4段。名前は商売の形で変わるので、表示名は変えられる。
  * ただし**段の数と順番は固定**（増やすと「どこが詰まっているか」が見えにくくなる）。
@@ -57,26 +59,9 @@ export function stageById(id) {
   return FUNNEL_STAGES.find((s) => s.id === id) || null;
 }
 
-export function makeFunnel() {
-  return {
-    // 段の表示名だけ上書きできる（数と順番は変えない）
-    labels: {},
-    // 週ごとの数字
-    entries: [],
-    updatedAt: 0,
-  };
-}
-
-export function normalizeFunnel(funnel) {
-  const base = makeFunnel();
-  if (!funnel || typeof funnel !== 'object') return base;
-  return {
-    ...base,
-    ...funnel,
-    labels: funnel.labels && typeof funnel.labels === 'object' ? funnel.labels : {},
-    entries: Array.isArray(funnel.entries) ? funnel.entries.filter((e) => e && e.id) : [],
-  };
-}
+// 入れ物の形は funnelShape.js にある（起動時に読む量を増やさないための切り出し）。
+// ここからも再輸出するので、画面側の import は今までどおりでよい。
+export { makeFunnel, normalizeFunnel } from './funnelShape.js';
 
 export function labelOf(funnel, stageId) {
   const f = normalizeFunnel(funnel);

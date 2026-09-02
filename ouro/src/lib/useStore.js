@@ -43,7 +43,9 @@ import { makeEntry, appendAudit, foldAudit, totalCost } from './audit.js';
 import { decisionsFrom, decideDecision } from './decisions.js';
 import { addNote, removeNote, notesOf } from './notes.js';
 import { normalizeRules, addRule, removeRule } from './rules.js';
-import { makeFunnel, normalizeFunnel } from './funnel.js';
+// **入れ物の形だけ**を読む（funnel.js は4段の定義と週の集計まで持っていて、
+// 収益導線の画面は lazy なのに起動時の束へ入っていた）。
+import { makeFunnel, normalizeFunnel } from './funnelShape.js';
 
 // 朝会・会議の材料・相談・関係する仕事は、**押した時にだけ**要る。
 // 起動時に読む量を増やさないよう、使う場所で読み込む（項目01と同じ考え方）。
@@ -66,7 +68,6 @@ const loadTeamwork = () =>
     ...pitfalls,
   }));
 import { checkAction, addCost, spentThisMonthOf, spentTodayOf } from './permissions.js';
-import { createDeal } from './revenue.js';
 import { newId } from './id.js';
 import { workflowById } from '../data/workflows.js';
 import { makeGenre, DEFAULT_GENRE_ID } from '../data/genres.js';
@@ -144,6 +145,9 @@ const REST_KEYS = [
   // **読み込みが済むまで「まだ1件も見ていません」と言い切らないこと**（項目138）。
   KEYS.rivals,
   KEYS.voices,
+  // 型パック。型の画面と、依頼するときにしか要らない。
+  KEYS.kits,
+  KEYS.packs,
 ];
 const FIRST_FALLBACKS = Object.fromEntries(FIRST_KEYS.map((k) => [k, k === KEYS.company ? null : k === KEYS.settings || k === KEYS.secrets ? {} : []]));
 // 収益導線だけは配列ではなくオブジェクト（週の数字をまとめて持つ）
@@ -171,6 +175,8 @@ const EMPTY = {
   chores: [],
   rivals: [],
   voices: [],
+  kits: [],
+  packs: [],
   funnel: makeFunnel(),
   pitfalls: [],
   board: [],
@@ -1105,6 +1111,162 @@ export function useStore() {
     [put]
   );
 
+  // ── 型パック（売り物にする型）──
+  // **結びつきは `task.kitId` の片方向だけ。** 型の側に taskIds を持たない。
+
+  const addKit = useCallback(
+    async (data) => {
+      const { makeKit, MAX_KITS } = await import('./kit.js');
+      const made = makeKit(data || {});
+      if (!made) return null;
+      const list = stateRef.current.kits || [];
+      if (list.length >= MAX_KITS) return null;
+      put(KEYS.kits, [made, ...list]);
+      log({ actor: 'user', action: 'kitAdded', target: made.title });
+      return made;
+    },
+    [put, log]
+  );
+
+  /** 終わった仕事から型をつくる。**動いた実績のある形だけを型にする。** */
+  const kitFromTaskAction = useCallback(
+    async (taskId, extra = {}) => {
+      const { kitFromTask, MAX_KITS } = await import('./kit.js');
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
+      const made = kitFromTask(task, extra);
+      if (!made) return null;
+      const list = stateRef.current.kits || [];
+      if (list.length >= MAX_KITS) return null;
+      put(KEYS.kits, [made, ...list]);
+      // **元になった仕事は「その型が実際に動いた1回」**なので、その場で結びつける。
+      // 付けないと回数が0のままで、その仕事の成果物も見本にできない（実際に踏んだ）。
+      // 既にどれかの型に属している仕事は動かさない（1つの仕事は1つの型まで）。
+      if (!task.kitId) {
+        put(
+          KEYS.tasks,
+          stateRef.current.tasks.map((t) => (t.id === task.id ? { ...t, kitId: made.id } : t))
+        );
+      }
+      log({ actor: 'user', action: 'kitAdded', target: made.title });
+      return made;
+    },
+    [put, log]
+  );
+
+  // 形の整えは読む側（normalizeKit）が必ず通すので、ここではしない。
+  const updateKit = useCallback(
+    (id, patch) => {
+      put(
+        KEYS.kits,
+        (stateRef.current.kits || []).map((k) =>
+          k.id === id ? { ...k, ...patch, id: k.id, updatedAt: Date.now() } : k
+        )
+      );
+    },
+    [put]
+  );
+
+  const removeKit = useCallback(
+    (id) => {
+      put(KEYS.kits, (stateRef.current.kits || []).filter((k) => k.id !== id));
+    },
+    [put]
+  );
+
+  /** 版を上げる。**直した中身を1行残す**（残さないと買った人に説明できない）。 */
+  const bumpKitVersion = useCallback(
+    async (id, note) => {
+      const { bumpVersion } = await import('./kit.js');
+      const kit = (stateRef.current.kits || []).find((k) => k.id === id);
+      if (!kit) return;
+      put(KEYS.kits, stateRef.current.kits.map((k) => (k.id === id ? bumpVersion(k, note) : k)));
+    },
+    [put]
+  );
+
+  /** 仕事の成果物を、その型の「結果の見本」として同梱する。 */
+  const addKitSample = useCallback(
+    async (kitId, taskId) => {
+      const [{ sampleFromTask, addSample }, { assembleResult }] = await Promise.all([
+        import('./kit.js'),
+        import('./workflow.js'),
+      ]);
+      const kit = (stateRef.current.kits || []).find((k) => k.id === kitId);
+      const task = stateRef.current.tasks.find((t) => t.id === taskId);
+      if (!kit || !task) return null;
+      const sample = sampleFromTask(task, assembleResult(task));
+      if (!sample) return null;
+      put(KEYS.kits, stateRef.current.kits.map((k) => (k.id === kitId ? addSample(k, sample) : k)));
+      return sample;
+    },
+    [put]
+  );
+
+  const removeKitSample = useCallback(
+    async (kitId, sampleId) => {
+      const { removeSample } = await import('./kit.js');
+      put(KEYS.kits, (stateRef.current.kits || []).map((k) => (k.id === kitId ? removeSample(k, sampleId) : k)));
+    },
+    [put]
+  );
+
+  // ── パック（複数の型を1つの商品にまとめる）──
+  // パックは型の一覧（kitIds）を持つが、これは**商品の目次**であって同期する列ではない
+  // （型の側にパックの id を持たせない＝結びつきは片方向のまま）。
+
+  const addPack = useCallback(
+    async (data) => {
+      const { makePack, MAX_PACKS } = await import('./kit.js');
+      const made = makePack(data || {});
+      if (!made) return null;
+      const list = stateRef.current.packs || [];
+      if (list.length >= MAX_PACKS) return null;
+      put(KEYS.packs, [made, ...list]);
+      log({ actor: 'user', action: 'packAdded', target: made.title });
+      return made;
+    },
+    [put, log]
+  );
+
+  const updatePack = useCallback(
+    (id, patch) => {
+      put(
+        KEYS.packs,
+        (stateRef.current.packs || []).map((p) =>
+          p.id === id ? { ...p, ...patch, id: p.id, updatedAt: Date.now() } : p
+        )
+      );
+    },
+    [put]
+  );
+
+  const removePack = useCallback(
+    (id) => {
+      put(KEYS.packs, (stateRef.current.packs || []).filter((p) => p.id !== id));
+    },
+    [put]
+  );
+
+  /** パックに型を入れる／外す。**順番に意味がある**ので末尾に足す。 */
+  const togglePackKit = useCallback(
+    (packId, kitId) => {
+      put(
+        KEYS.packs,
+        (stateRef.current.packs || []).map((p) => {
+          if (p.id !== packId) return p;
+          const ids = Array.isArray(p.kitIds) ? p.kitIds : [];
+          return {
+            ...p,
+            kitIds: ids.includes(kitId) ? ids.filter((x) => x !== kitId) : [...ids, kitId],
+            updatedAt: Date.now(),
+          };
+        })
+      );
+    },
+    [put]
+  );
+
   /**
    * 出した投稿に、あとから反応の数字を入れる。
    * **これが無いと「型 → 出す → 数字を見る → 伸びた型を次の種に」が閉じない。**
@@ -1167,6 +1329,9 @@ export function useStore() {
       employeeId = null,
       dealId = null,
       ventureId = null,
+      // 型パックから依頼したときに、その型の id を仕事に残す（片方向）。
+      // これが無いと「その型で何回回したか」が数えられない。
+      kitId = null,
       context = '',
       genreId = null,
       dueAt = null,
@@ -1182,6 +1347,10 @@ export function useStore() {
       } else if (workflowId) {
         const wf = workflowById(workflowId);
         if (wf && wf.steps.length) forceRoles = wf.steps;
+      } else if (kitId) {
+        // 型が持っている担当の並びを、そのまま手順にする。
+        const kit = (stateRef.current.kits || []).find((k) => k.id === kitId);
+        if (kit && kit.steps && kit.steps.length) forceRoles = kit.steps;
       }
 
       const task = createTask({
@@ -1189,6 +1358,7 @@ export function useStore() {
         forceRoles,
         dealId,
         ventureId,
+        kitId,
         context,
         dueAt,
         deliverableSpec,
@@ -1886,8 +2056,11 @@ export function useStore() {
   );
 
   // ---- 案件 ----
+  // 案件を作るのは押した時だけなので、revenue.js もその時に読む
+  // （静的に読むと、案件の画面が lazy なのに起動時の束へ入る）。
   const addDeal = useCallback(
-    (data) => {
+    async (data) => {
+      const { createDeal } = await import('./revenue.js');
       const deal = createDeal(data);
       put(KEYS.deals, [deal, ...stateRef.current.deals]);
       log({ actor: 'user', action: 'dealChanged', target: deal.title, detail: '新規' });
@@ -2572,6 +2745,17 @@ export function useStore() {
     removeRival,
     addVoice,
     removeVoice,
+    addKit,
+    kitFromTask: kitFromTaskAction,
+    updateKit,
+    removeKit,
+    bumpKitVersion,
+    addKitSample,
+    removeKitSample,
+    addPack,
+    updatePack,
+    removePack,
+    togglePackKit,
     updatePattern: updatePatternAction,
     removePattern: removePatternAction,
     // 読み込みが済んだか（発信ログなど REST を「無い」と言い切ってよいか）

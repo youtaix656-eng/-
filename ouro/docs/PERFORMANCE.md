@@ -291,6 +291,8 @@ CSV まわり（`lib/ledgerCsv.js`・`lib/csv.js`）と台帳の画面は分け�
 | **右端のスクロール矢印**（全画面に出るので即時） | +0.4KB（JS＋CSS） | 知らせの文を `lib/announce.js` へ分け、`resume.js` を起動時の束から外した（−0.3KB） | **109.8KB** |
 | **任せたら月いくら浮くか**（`lib/offload.js`＋会社画面のカード） | +0.3KB（`useStore` の操作と保存キー。offload.js 自体は会社画面が lazy なので入らない） | 予定1件を作る `makeEvent` を `lib/eventItem.js` へ分け、**lazy なカレンダーの `schedule.js` を起動時の束から外した**（−0.9KB） | **109.2KB** |
 | **競合台帳・需要の観測**（`rivals.js`／`demand.js`＋事業画面の2カード） | +0.4KB（`useStore` の操作と保存キー2つ、`roles.js` の `readsMarket` で roster 12.2→12.3KB。lib 本体は事業画面が lazy なので入らない） | — （目安110KB の内側なので相殺なし） | **109.6KB** |
+| **型パック**（`kit.js`＋`Kits.jsx`＋出す前チェックの3項目） | +0.9KB（`useStore` の操作7つと保存キー、`workflow.createTask` の `kitId`。lib と画面は lazy なので入らない） | 収益導線の形を `lib/funnelShape.js` へ分け、案件を作る `revenue.js` を押した時に読むようにした（−1.5KB） | **109.0KB** |
+| **SKILL.md 形式の書き出し・パック** | +0.2KB（`useStore` の操作4つと保存キー1つ。書き出しの処理は `kit.js` の中で、画面は lazy） | — （目安110KB の内側なので相殺なし） | **109.2KB** |
 
 **目安は 111 → 110 へ下げた。** 役職を足すと `roster` チャンクが必ず増えるので、
 足す時は同時に「起動時に読まなくてよいもの」を1つ探して外すこと。
