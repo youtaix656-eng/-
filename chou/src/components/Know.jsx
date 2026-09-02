@@ -39,6 +39,22 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('probiotics')}>
+            <strong>整腸剤</strong>
+            <span className="muted small">
+              飲んでいるものを登録して、試している期間を見ます。どれかを勧めることはしません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('seasonings')}>
+            <strong>調味料の選び方</strong>
+            <span className="muted small">
+              さしすせそ＋みりん・甘酒の7つ。買うときに表示のどこを見るか。
+            </span>
+          </button>
+        </li>
+        <li>
           <a className="menu-link" href={MAP_SEARCH} target="_blank" rel="noreferrer noopener">
             <strong>近くのトイレをさがす</strong>
             <span className="muted small">

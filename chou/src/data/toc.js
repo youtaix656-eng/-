@@ -9,6 +9,8 @@ import { BRISTOL } from './scales.js';
 import { RED_FLAGS, RED_FLAG_SOURCE } from './redFlags.js';
 import { FODMAP_FOODS, FODMAP_LEVELS, FODMAP_SOURCE } from './fodmap.js';
 import { SPEED_NAMED, SPEED_BY_ID, BAD_PAIRS, ADAMSKI_UNVERIFIED } from './adamski.js';
+import { BACTERIA, PRODUCTS, PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from './probiotics.js';
+import { SEASONINGS, SEASONING_AVOID } from './seasonings.js';
 import { readingKey, normalizeAlnum } from '../lib/yomi.js';
 
 /** 飛び先の種類。**この4つだけ**（画面／記録の設問／機能／仕組み・決まり） */
@@ -28,6 +30,7 @@ export const TOC_GROUPS = [
   { id: 'flag', label: '受診の目安' },
   { id: 'food', label: '食材' },
   { id: 'combine', label: '食べ合わせ' },
+  { id: 'care', label: '整腸剤・調味料' },
   { id: 'screen', label: '画面' },
   { id: 'user', label: '自分で追加' },
 ];
@@ -150,6 +153,82 @@ function fromAdamski() {
   return [...foods, ...pairs, ...claims];
 }
 
+/**
+ * 整腸剤と調味料から。
+ * **調味料は「◯◯の選び方」という題にする**——「塩」「酢」は低FODMAP の一覧にもあり、
+ * 同じ題にすると重複で落ちて、選び方の画面へ行けなくなる（実際にぶつかった）。
+ */
+function fromCare() {
+  const bacteria = BACTERIA.map((b) => ({
+    id: `toc-bacteria-${b.id}`,
+    title: b.name,
+    reading: b.reading,
+    group: 'care',
+    aliases: [],
+    description: `出典では${b.where}に住み着きやすいとされています。${b.note}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'probiotics', targetId: `bacteria-${b.id}`, label: '一覧で見る' }],
+  }));
+  const products = PRODUCTS.map((p) => ({
+    id: `toc-product-${p.id}`,
+    title: p.name,
+    reading: p.reading,
+    group: 'care',
+    aliases: [],
+    description: `出典が挙げている整腸剤のひとつ。${p.note} このアプリはどれかを勧めません。`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'probiotics', targetId: `product-${p.id}`, label: '並べて見る' },
+      { type: 'function', view: 'probiotics', targetId: 'probiotic-mine', label: '飲んでいるものを登録する' },
+    ],
+  }));
+  const claims = PROBIOTIC_UNVERIFIED.map((item) => ({
+    id: `toc-punverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'care',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'probiotics', targetId: `punverified-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  const fixes = PROBIOTIC_CORRECTIONS.map((item) => ({
+    id: `toc-correction-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'care',
+    aliases: [],
+    description: item.correction.replace(/\*\*/g, ''),
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'probiotics', targetId: `correction-${item.id}`, label: '読む' },
+    ],
+  }));
+  const seasonings = SEASONINGS.map((item) => ({
+    id: `toc-seasoning-${item.id}`,
+    title: `${item.title}の選び方`,
+    reading: `${item.reading}のえらびかた`,
+    group: 'care',
+    aliases: [{ name: item.title, reading: item.reading }],
+    description: `選ぶなら：${item.choose}。見るところ：${item.look} ${item.note}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'seasonings', targetId: `seasoning-${item.id}`, label: '見分け方を読む' }],
+  }));
+  const avoid = {
+    id: 'toc-seasoning-avoid',
+    title: SEASONING_AVOID.title,
+    reading: SEASONING_AVOID.reading,
+    group: 'care',
+    aliases: [{ name: 'めんつゆ', reading: 'めんつゆ' }],
+    description: `${SEASONING_AVOID.body} ${SEASONING_AVOID.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'seasonings', targetId: 'seasoning-avoid', label: '読む' }],
+  };
+  return [...bacteria, ...products, ...claims, ...fixes, ...seasonings, avoid];
+}
+
 function withGroup(list, group) {
   return list.map((entry) => ({ aliases: [], destinations: [], ...entry, group }));
 }
@@ -171,6 +250,7 @@ export function buildTocEntries(state = {}) {
     ...fromRedFlags(),
     ...fromFoods(),
     ...fromAdamski(),
+    ...fromCare(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

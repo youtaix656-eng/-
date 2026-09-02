@@ -165,6 +165,19 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         />
       </div>
 
+      {store.probiotic && store.probiotic.name && (
+        <section className="block" id="rec-probiotic">
+          <label className="mark">
+            <input
+              type="checkbox"
+              checked={day.probiotic}
+              onChange={() => store.updateDay(date, { probiotic: !day.probiotic })}
+            />
+            <span>整腸剤を飲んだ（{store.probiotic.name}）</span>
+          </label>
+        </section>
+      )}
+
       <section className="block" id="rec-meal">
         <div className="block-head">
           <h2>たべたもの</h2>

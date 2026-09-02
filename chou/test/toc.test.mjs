@@ -29,6 +29,8 @@ import { BRISTOL } from '../src/data/scales.js';
 import { RED_FLAGS } from '../src/data/redFlags.js';
 import { FODMAP_FOODS } from '../src/data/fodmap.js';
 import { SPEED_NAMED, BAD_PAIRS, ADAMSKI_UNVERIFIED } from '../src/data/adamski.js';
+import { BACTERIA, PRODUCTS, PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from '../src/data/probiotics.js';
+import { SEASONINGS } from '../src/data/seasonings.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -190,9 +192,20 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     BAD_PAIRS.length +
     ADAMSKI_UNVERIFIED.length;
   for (const claim of ADAMSKI_UNVERIFIED) assert.ok(entries.some((e) => e.title === claim.title), claim.title);
+  // 整腸剤・調味料から来るぶん
+  const fromCareCount =
+    BACTERIA.length + PRODUCTS.length + PROBIOTIC_UNVERIFIED.length + PROBIOTIC_CORRECTIONS.length + SEASONINGS.length + 1;
+  for (const b of BACTERIA) assert.ok(entries.some((e) => e.title === b.name), b.name);
+  for (const s of SEASONINGS) assert.ok(entries.some((e) => e.title === `${s.title}の選び方`), s.title);
   assert.equal(
     entries.length,
-    TERMS.length + SCREENS.length + BRISTOL.length + RED_FLAGS.length + FODMAP_FOODS.length + fromAdamskiCount,
+    TERMS.length +
+      SCREENS.length +
+      BRISTOL.length +
+      RED_FLAGS.length +
+      FODMAP_FOODS.length +
+      fromAdamskiCount +
+      fromCareCount,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

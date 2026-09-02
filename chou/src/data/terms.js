@@ -428,6 +428,105 @@ export const TERMS = [
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'combine', targetId: 'combine-check', label: '食べ合わせをひらく' }],
   },
+  {
+    id: 'term-probiotic',
+    title: '整腸剤',
+    reading: 'せいちょうざい',
+    aliases: [{ name: 'プロバイオティクス', reading: 'ぷろばいおてぃくす' }],
+    description:
+      '腸内の菌のバランスを整えることを目的に飲むもの。市販の多くは「指定医薬部外品」で、食品ではありません（区分は製品によって違うので箱の表示を見てください）。このアプリは商品を勧めず、飲み合わせも調べません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'function', view: 'probiotics', targetId: 'probiotic-mine', label: '飲んでいるものを登録する' },
+      { type: 'system', view: 'probiotics', targetId: 'probiotic-unverified', label: '裏が取れていない主張を読む' },
+    ],
+  },
+  {
+    id: 'term-butyrate',
+    title: '酪酸菌',
+    reading: 'らくさんきん',
+    aliases: [{ name: '宮入菌', reading: 'みやいりきん' }],
+    description:
+      '出典では、ぬか漬けなどに入っている菌で、日本人の腸に合うと紹介されています。作り出す酪酸は「短鎖脂肪酸」の仲間として注目されていますが、健康効果の中身は確かめきれていません。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'probiotics', targetId: 'bacteria-miyairi', label: '菌の一覧で見る' }],
+  },
+  {
+    id: 'term-spore',
+    title: '芽胞（がほう）',
+    reading: 'がほう',
+    aliases: [],
+    description:
+      '菌を包む殻のようなもの。出典では「胃酸や熱、抗生物質に強く、生きたまま腸へ届きやすい」と紹介されています。※要確認',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'probiotics', targetId: 'bacteria-miyairi', label: '菌の一覧で見る' }],
+  },
+  {
+    id: 'term-trial-month',
+    title: 'まず1か月ためす',
+    reading: 'まずいっかげつためす',
+    aliases: [{ name: 'お試し期間', reading: 'おためしきかん' }],
+    description:
+      '出典は「同じものを1か月ほど続けて、変わらなければ別の菌が入ったものへ」と勧めています。このアプリは日数を並べるだけで、効いたかどうかは判定しません。連続日数も数えません。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'function', view: 'probiotics', targetId: 'probiotic-mine', label: '試している期間を見る' }],
+  },
+  {
+    id: 'term-sashisuseso',
+    title: 'さしすせそ',
+    reading: 'さしすせそ',
+    aliases: [{ name: '基本の調味料', reading: 'きほんのちょうみりょう' }],
+    description:
+      '砂糖・塩・酢・醤油・味噌の5つ。出典はこれにみりんと甘酒を足した7つを挙げています。全部いっぺんに替えなくてよく、よく使うものから1つずつで十分です。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'seasonings', targetId: 'seasoning-list', label: '7つの見分け方を見る' }],
+  },
+  {
+    id: 'term-refined',
+    title: '精製（していない）',
+    reading: 'せいせい',
+    aliases: [{ name: '未精製', reading: 'みせいせい' }],
+    description:
+      '砂糖と塩の選び方に出てくる言い方です。精製していないものはミネラルが残り、色が付いていて、味に幅があるとされます。砂糖は白いものより甘さが2〜3割ひかえめとされます。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'seasonings', targetId: 'seasoning-sugar', label: '砂糖の見分け方' },
+      { type: 'page', view: 'seasonings', targetId: 'seasoning-salt', label: '塩の見分け方' },
+    ],
+  },
+  {
+    id: 'term-brew',
+    title: '天然醸造・静置発酵',
+    reading: 'てんねんじょうぞうせいちはっこう',
+    aliases: [{ name: '木桶仕込み', reading: 'きおけじこみ' }],
+    description:
+      '時間をかけて発酵させる作り方のこと。出典は酢・醤油・味噌でこれを勧めています。蔵に住む菌によって味が変わるとされます。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'seasonings', targetId: 'seasoning-vinegar', label: '酢の見分け方' },
+      { type: 'page', view: 'seasonings', targetId: 'seasoning-miso', label: '味噌の見分け方' },
+    ],
+  },
+  {
+    id: 'term-honmirin',
+    title: '本みりん',
+    reading: 'ほんみりん',
+    aliases: [{ name: 'みりん風調味料', reading: 'みりんふうちょうみりょう' }],
+    description:
+      '「本みりん」はアルコールを含む酒類調味料で、「みりん風調味料」とは別のものです。品名の表示で見分けられます。アルコールを避けている人は注意してください。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'seasonings', targetId: 'seasoning-mirin', label: 'みりんの見分け方' }],
+  },
+  {
+    id: 'term-marudaizu',
+    title: '丸大豆',
+    reading: 'まるだいず',
+    aliases: [{ name: '脱脂加工大豆', reading: 'だっしかこうだいず' }],
+    description:
+      '醤油の原材料の表示に出てくる言い方です。出典は丸大豆のものを勧めています。原材料が大豆・小麦・塩・水だけかどうかも、あわせて見るところです。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'seasonings', targetId: 'seasoning-soy', label: '醤油の見分け方' }],
+  },
 ];
 
 /** 目次に出す画面（飛び先の入口）。**画面を足したらここにも足す** */
@@ -485,5 +584,23 @@ export const SCREENS = [
     description: '消化の速い・遅いで組み合わせを見る画面です。低FODMAP と反対になる所も並べます。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'combine', targetId: 'combine-check', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-probiotics',
+    title: '整腸剤の画面',
+    reading: 'せいちょうざいのがめん',
+    aliases: [],
+    description: '飲んでいる整腸剤を登録し、試している期間を見る画面です。商品を勧めることはしません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'probiotics', targetId: 'probiotic-mine', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-seasonings',
+    title: '調味料の画面',
+    reading: 'ちょうみりょうのがめん',
+    aliases: [],
+    description: 'さしすせそ＋みりん・甘酒の見分け方と、いまの自分の棚おろしの画面です。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'seasonings', targetId: 'seasoning-list', label: 'ひらく' }],
   },
 ];

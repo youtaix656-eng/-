@@ -16,6 +16,7 @@ import {
   undoLastTocAdditions,
   setVerified,
 } from './tocCandidates.js';
+import { emptyProbiotic, normalizeProbiotic } from './probiotic.js';
 import { emptyDay, normalizeDays, normalizeDay, newId } from './days.js';
 import { todayKey } from './dates.js';
 
@@ -25,6 +26,9 @@ const EMPTY = {
   settings: { theme: 'auto' },
   // 目次まわり。**候補は本体（userTerms）とは別に持つ**——「追加する」を押すまで目次に出さない
   ...emptyTocState(),
+  // 整腸剤（飲んでいるもの1つ）と、調味料の棚おろし
+  probiotic: emptyProbiotic(),
+  seasonings: {},
 };
 
 /** 消したものを戻せる時間 */
@@ -39,6 +43,8 @@ function hydrate(raw) {
     userTerms: Array.isArray(raw.userTerms) ? raw.userTerms.filter((t) => t && t.id && t.title) : [],
     removedIds: Array.isArray(raw.removedIds) ? raw.removedIds.filter((id) => typeof id === 'string') : [],
     tocHistory: Array.isArray(raw.tocHistory) ? raw.tocHistory.filter((h) => h && h.id) : [],
+    probiotic: normalizeProbiotic(raw.probiotic),
+    seasonings: raw.seasonings && typeof raw.seasonings === 'object' ? { ...raw.seasonings } : {},
   };
 }
 
@@ -172,6 +178,21 @@ export function useStore() {
     });
   }, []);
 
+  /** 飲んでいる整腸剤（1つだけ）。**効いたかは記録しない**——残すのは何をいつから、まで */
+  const setProbiotic = useCallback((patch) => {
+    setState((prev) => ({ ...prev, probiotic: normalizeProbiotic({ ...prev.probiotic, ...patch }) }));
+  }, []);
+
+  /** 調味料の棚おろし。**採点しない**——押した本人の答えを残すだけ */
+  const setSeasoning = useCallback((id, choice) => {
+    setState((prev) => {
+      const next = { ...prev.seasonings };
+      if (!choice || next[id] === choice) delete next[id];
+      else next[id] = choice;
+      return { ...prev, seasonings: next };
+    });
+  }, []);
+
   const setSettings = useCallback((patch) => {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
   }, []);
@@ -241,6 +262,8 @@ export function useStore() {
       settings: state.settings,
       userTerms: state.userTerms,
       removedIds: state.removedIds,
+      probiotic: state.probiotic,
+      seasonings: state.seasonings,
     }),
     [state],
   );
@@ -294,6 +317,8 @@ export function useStore() {
     removeDay,
     setFoodResult,
     setSettings,
+    setProbiotic,
+    setSeasoning,
     addTocCandidate,
     acceptTocCandidate,
     rejectTocCandidate,
