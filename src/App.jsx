@@ -43,6 +43,7 @@ const Experiences = lazy(() => import('./components/Experiences.jsx'));
 const MindMap = lazy(() => import('./components/MindMap.jsx'));
 const PastExamTrends = lazy(() => import('./components/PastExamTrends.jsx'));
 const TableOfContents = lazy(() => import('./components/TableOfContents.jsx'));
+const Toc = lazy(() => import('./components/Toc.jsx'));
 const UnreadPages = lazy(() => import('./components/UnreadPages.jsx'));
 const MistakeNote = lazy(() => import('./components/MistakeNote.jsx'));
 const Roadmap = lazy(() => import('./components/Roadmap.jsx'));
@@ -131,6 +132,7 @@ const VIEW_TITLES = {
   cognitivetraining: '認知特性トレーニング',
   g100guide: 'G-100 1〜100周ガイド',
   toc: '目次',
+  glossary: '用語集（目次・索引）',
   settings: '設定',
 };
 
@@ -709,7 +711,19 @@ export default function App() {
       case 'g100guide':
         return <G100Guide store={store} onNavigate={setView} />;
       case 'toc':
-        return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
+        return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} onNavigate={setView} />;
+      case 'glossary':
+        return (
+          <Toc
+            store={store}
+            onToast={showToast}
+            onNavigate={setView}
+            onOpenKeyword={openKeyword}
+            onOpenGraphConcept={openGraphConcept}
+            onOpenFlashcardKeyword={openFlashcardKeyword}
+            onStartCustomQuiz={startCustomQuiz}
+          />
+        );
       case 'connect':
         return (
           <ConnectedLearning
