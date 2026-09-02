@@ -893,3 +893,55 @@ exportPack(pack) → { files: [{path, text}], warnings }
 | 名前の衝突に番号を足す | 上書きすると型が1つ消える |
 | `pack.kitIds` は目次であって同期列ではない | 型の側にパック id を持たせない（片方向のまま） |
 | 消された型は静かに落とす | 無いものを商品の目次に出さない |
+
+### 6-22. 目次・索引と用語（`data/terms.js` / `lib/focus.js` / `lib/tocCandidates.js`）
+
+目次は**元データから毎回導出する**。用語そのものが元データで、目次専用の手書き一覧は持たない。
+
+```
+data/terms.js（24件）  title / reading / description / descriptionStatus
+                       aliases[] / destinations[{type,label,view,anchor}]
+        ＋ roles・genres・workflows・jobTemplates・tools・employees
+        ↓
+data/toc.js  buildTocEntries({ employees, customGenres, customTerms })
+        ↓
+lib/yomi.js  foldKana / kanaRow / numberToReading / normalizeAlnum / buildKanaIndex
+        ↓
+あ〜ん → A〜Z → その他 の順（「その他」は読みの入れ忘れが見える場所）
+```
+
+**飛び先（レベル2）**
+
+```
+Toc の項目をタップ → TermPanel（説明・別名・飛び先ボタン）
+  → resolveDestination(d, { ventures })   … 見つからない目印を渡さない
+  → go(view, arg, anchor)                 … 先頭へ戻してから目印を立てる
+  → App の <FocusJumper> → useFocusJump → flashTo(id)
+  → 要素に data-flash を付け、1.6秒で setTimeout で外す
+```
+
+| 決まり | なぜ |
+|---|---|
+| 印は `data-flash` 属性（class を使わない） | 開閉で className が変わると、印だけが消える |
+| 先頭へ戻すのは `go()` の中、目印はそのあと | 逆にすると運んだ画面が引き戻される |
+| 枠の切り替えは `useLayoutEffect` | `useEffect` だと描き直しが flashTo より後になる |
+| 見つからない目印を渡さない | 飛んだのに何も光らないと「壊れている」に見える |
+| 読みは推定しない | 誤読がそのまま索引に残る。無ければ「その他」に出す |
+| `normalizeAlnum` は中黒（・）も落とす | かなの文字範囲に入っていて、記号だけの題名が通る |
+| `markVerified` という名前にしない | `knowledge.js` に同名の別物がある（層が違う） |
+
+**候補フロー（会話から目次を増やす／減らす）**
+
+```
+makeCandidate({ trigger })      … marker / tags / user の3つ以外は null
+  → ouro:tocCandidates（別置き場。本体には1文字も書かない）
+  → 画面で二択：「追加する／追加しない」「削除する／削除しない」
+      追加 → checkCandidate の4つ（読み・重複・分類・正規化）を通ってから ouro:terms へ
+             通らなければ書かずに理由を返す（履歴に「止めた」）
+      削除 → 対象の1件だけを removed へ
+      しない → 本体に一切影響しない（履歴には「見送り」）
+  → undoLastTocAdditions(n) … 直近の「追加」だけを取り消す（削除は巻き戻さない）
+```
+
+`ouro:terms` と `ouro:tocCandidates` は**配列ではなくオブジェクト**なので、
+起動時の読み込みで `asArray` に通さない（`OBJECT_FALLBACKS`。項目50と同じ形の事故を防ぐ）。

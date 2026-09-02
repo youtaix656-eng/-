@@ -886,7 +886,47 @@ YAML の1行に入れるので**改行を畳み引用符を escape する**（�
 （束にすると個々の印が埋もれる）。**名前がぶつかったら番号を足す**（上書きすると1つ消える）。
 **パックの `kitIds` は商品の目次であって同期する列ではない**——型の側にパックの id を
 持たせない（片方向のまま。`deal.taskIds` の失敗を繰り返さない）。消された型は静かに落とす。
-テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
+**目次・索引と用語（2026-09-02 追加。ユーザー指定の25ルール）**：
+179. **目次は `data/toc.js` の `buildTocEntries()` が元データから毎回導出する**
+（`buildToc` は同じもの。目次専用の手書きデータを作らない）。呼び出し側は必ず `useMemo` で包む。
+用語そのものは `data/terms.js`（24件）で、**これは目次専用ではなく用語という元データ**。
+180. **`lib/yomi.js` の呼び名は共通ルールにそろえる**：`foldKana`（読みを畳む）／
+`kanaRow`（行の判定）／`numberToReading`（数字→読み）／`buildKanaIndex`（索引の組み立て・
+「その他」の件数つき）／`normalizeAlnum`（ＷＨＯ・Ⅰ型を A〜Z の枠へ）。
+既存の `normalizeReading`／`bucketOf`／`numberToKana` は同じものへの別名として残す。
+**`normalizeAlnum` は記号を落としきること**——中黒（・）はかなの文字範囲に入っているので
+別に落とさないと「・」だけの題名が「字としてそろっている」ことになる（実際に踏んだ）。
+181. **飛び先は `lib/focus.js` の `flashTo` が単一の正**（画面をまたぐレベル2）。
+**印は `className` ではなく属性**（`FLASH_ATTR`＝`data-flash`。CSS も `[data-flash]` で受ける）
+——飛び先のカードは開閉で className が変わるため、class で印を付けると次の描き直しで消える。
+外すのは `setTimeout`。`components/useFocusJump.js` が lazy な画面を数フレーム待ち、
+`components/FocusJumper.jsx` が `App` に常駐する。`go(view, arg, anchor)` の第3引数で運ぶ。
+182. **飛んだあとに画面を先頭へ戻さない。** 先頭へ戻すのは `go()` の中＝操作の一部で、
+**目印を立てるのはそのあと**（順番を逆にすると運んだ画面が引き戻される）。
+183. **枠（タブ）の切り替えは `useLayoutEffect`。** `useEffect` にすると切り替えの描き直しが
+`flashTo`（次のフレーム）より後になり、作り直された拍子に印だけが消える。
+184. **見つからない目印を渡さない**（`terms.resolveDestination`）。事業の中の目印
+（`venture-…`）は事業の**詳細**にあり一覧には無いので、押した時に「いま実行中の事業」へ
+読み替える。事業が1つも無ければ目印を外して一覧へ送る（飛んだのに何も光らないと壊れて見える）。
+185. **説明が空なら「※説明未登録」、飛び先が無ければ「関連する飛び先はありません」**と正直に出す
+（空欄を埋めるために作り話を書かない）。**`descriptionStatus: 'needs_review'` には必ず「※要確認」**を出し、
+**`verified` にできるのは人が画面で押した時だけ**（`markTermVerified`。**`markVerified` という名前にしない**
+——`knowledge.js` に同名の別物があり、層が違う。項目162と同じ線）。
+186. **候補は3つの合図でしか生まれない**（`lib/tocCandidates.js` の `CANDIDATE_TRIGGERS`＝
+marker／tags／user）。それ以外では `makeCandidate` が null を返す。
+**会話から来たものの `descriptionStatus` は必ず `needs_review`**（渡された値で上書きしない）。
+187. **候補は `ouro:tocCandidates` にだけ溜まり、押すまで本体データ（`ouro:terms`）に1文字も書かない。**
+「追加する」を押した時に初めて**読み・重複・分類・正規化の4つ**を確かめ、通らなければ**書かずに理由を返す**
+（履歴には「止めた」を残す）。「削除する」は対象の1件だけを外し、「しない」は本体に一切影響しない。
+確定はすべて履歴に残り、`undoLastTocAdditions(n)` は**直近の「追加」だけ**を取り消す（削除は巻き戻さない）。
+188. **`ouro:terms`／`ouro:tocCandidates` は配列ではなくオブジェクト。**
+REST の読み込みで `asArray` に通すと毎回空で上書きされる（項目50の `ouro:funnel` と同じ形）。
+`OBJECT_FALLBACKS` に登録して、オブジェクトのまま受けること。
+189. 起動時に読む量の相殺：**判断（`decisions.js`）と会社の決まり（`rules.js`）は押した時に読む**
+（どちらの画面も lazy なのに静的に読んでいた）。`updateRules`／`addCompanyRule`／
+`removeCompanyRule`／`decideTask` が**非同期**になった。110.4KB → **109.3KB**。
+テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される。
+目次・索引の25ルールは `ouro/test/tocIndex.test.mjs` が26件で機械チェックする）。
 
 鏡（かがみ）の要点だけ再掲：**心理的な操作の「型」カタログ `src/data/tactics.js` が単一の正**
 （54件×8まとまり。1件足せば一覧・目次・判定が自動で追従する。**画面にも判定にも if を足さない**）。
