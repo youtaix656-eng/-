@@ -306,6 +306,25 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 ランナー**で、終えたステップは既存の記録へ書き込む（瞑想→meditation、運動・読書→monk、
 ジャーナル→今日の3つ）。**`sleepPhrase` は「しか」を含む文を返さない**（「◯時間しか眠れない」を
 「◯時間も眠れる」に言い換えるのが出典の要点。テストが機械チェック）。
+目次・索引（`src/data/toc.ts`＋`src/lib/yomi.ts`＋`src/lib/focus.ts`）は**目次専用の手書きデータを持たない**
+——`buildTocEntries()` が各 lib の元データから毎回導出する。並びは あ〜ん→A〜Z→その他で、
+**数字は読みに変換してから行を決め**（「3のルール」→さ行）、**漢字の読みは推定しない**
+（`reading` が無ければ「その他」に落として入れ忘れを見せる。`warnOtherRow` が目安24件で知らせる）。
+英数字混じり（ＷＨＯ／Ⅰ型／①）は `normalizeAlnum` で正規化してからA〜Zを判定。
+**タイトルの重複は禁止**で、ぶつかったら `disambiguate` がまとまり名を添える（元の名前は別名に残す）。
+**`descriptionStatus` の既定は `needs_review`＝「※要確認」**——出典由来の主張は一次資料未確認なので必ず印を出し、
+`verified` にできるのはアプリ自身の仕組みと **本人が `markVerified` を押した時だけ**
+（会話から来たものが確認済みになる道を作らない）。説明が空なら「※説明未登録」、飛び先が無ければ
+「関連する飛び先はありません」と**必ず出す**（黙らない）。飛び先の id は `src/data/anchors.ts` の
+`ANCHORS` が単一の正で、画面に文字列を直書きしない。飛び方は `flashTo`＋`useFocusJump` を再利用し、
+**画面の切り替えは `useLayoutEffect`**（`useEffect` だと飛ぶ時にまだ前の画面が描かれていて着かない）、
+**印は className ではなく `data-flash` 属性**（開閉で className が書き直されると印だけ消える。鏡で実際に踏んだ）、
+**「先頭へ戻す」を副作用にしない**（`App.tsx` は view の変化で `scrollTo` せず、ナビのタップの中で行う）。
+会話由来の追加・削除の候補は `src/data/tocCandidates.ts` に留め、**本体データへ一切書き込まない**。
+候補を作ってよいのは3つのきっかけだけ（`■用語追加：`の合図／教材のタグ／本人の「目次に追加して」）で、
+**それ以外では作らない**（`makeCandidate` が null を返す）。「追加する」を押した時に初めて
+読み・重複・分類・正規化の4つを見て本体へ入れ、「しない」は痕跡を残さない。確定は履歴に残り
+`undoLastTocAdditions(n)` で直近の追加だけ取り消せる。
 テストは `henkaku-note/tests/*.spec.ts`（TypeScript）。テスト用の Settings は
 `tests/fixtures.ts` の `testSettings()` に集約する（各テストに書き写すと項目追加のたびに全部壊れる）。CIがNode 20のため `tsc` で
 `.test-build/` へ出してから `node --test` する（`npm test` はアプリ側で実行。ルートの再帰探索には
@@ -917,7 +936,47 @@ YAML の1行に入れるので**改行を畳み引用符を escape する**（�
 （束にすると個々の印が埋もれる）。**名前がぶつかったら番号を足す**（上書きすると1つ消える）。
 **パックの `kitIds` は商品の目次であって同期する列ではない**——型の側にパックの id を
 持たせない（片方向のまま。`deal.taskIds` の失敗を繰り返さない）。消された型は静かに落とす。
-テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
+**目次・索引と用語（2026-09-02 追加。ユーザー指定の25ルール）**：
+179. **目次は `data/toc.js` の `buildTocEntries()` が元データから毎回導出する**
+（`buildToc` は同じもの。目次専用の手書きデータを作らない）。呼び出し側は必ず `useMemo` で包む。
+用語そのものは `data/terms.js`（24件）で、**これは目次専用ではなく用語という元データ**。
+180. **`lib/yomi.js` の呼び名は共通ルールにそろえる**：`foldKana`（読みを畳む）／
+`kanaRow`（行の判定）／`numberToReading`（数字→読み）／`buildKanaIndex`（索引の組み立て・
+「その他」の件数つき）／`normalizeAlnum`（ＷＨＯ・Ⅰ型を A〜Z の枠へ）。
+既存の `normalizeReading`／`bucketOf`／`numberToKana` は同じものへの別名として残す。
+**`normalizeAlnum` は記号を落としきること**——中黒（・）はかなの文字範囲に入っているので
+別に落とさないと「・」だけの題名が「字としてそろっている」ことになる（実際に踏んだ）。
+181. **飛び先は `lib/focus.js` の `flashTo` が単一の正**（画面をまたぐレベル2）。
+**印は `className` ではなく属性**（`FLASH_ATTR`＝`data-flash`。CSS も `[data-flash]` で受ける）
+——飛び先のカードは開閉で className が変わるため、class で印を付けると次の描き直しで消える。
+外すのは `setTimeout`。`components/useFocusJump.js` が lazy な画面を数フレーム待ち、
+`components/FocusJumper.jsx` が `App` に常駐する。`go(view, arg, anchor)` の第3引数で運ぶ。
+182. **飛んだあとに画面を先頭へ戻さない。** 先頭へ戻すのは `go()` の中＝操作の一部で、
+**目印を立てるのはそのあと**（順番を逆にすると運んだ画面が引き戻される）。
+183. **枠（タブ）の切り替えは `useLayoutEffect`。** `useEffect` にすると切り替えの描き直しが
+`flashTo`（次のフレーム）より後になり、作り直された拍子に印だけが消える。
+184. **見つからない目印を渡さない**（`terms.resolveDestination`）。事業の中の目印
+（`venture-…`）は事業の**詳細**にあり一覧には無いので、押した時に「いま実行中の事業」へ
+読み替える。事業が1つも無ければ目印を外して一覧へ送る（飛んだのに何も光らないと壊れて見える）。
+185. **説明が空なら「※説明未登録」、飛び先が無ければ「関連する飛び先はありません」**と正直に出す
+（空欄を埋めるために作り話を書かない）。**`descriptionStatus: 'needs_review'` には必ず「※要確認」**を出し、
+**`verified` にできるのは人が画面で押した時だけ**（`markTermVerified`。**`markVerified` という名前にしない**
+——`knowledge.js` に同名の別物があり、層が違う。項目162と同じ線）。
+186. **候補は3つの合図でしか生まれない**（`lib/tocCandidates.js` の `CANDIDATE_TRIGGERS`＝
+marker／tags／user）。それ以外では `makeCandidate` が null を返す。
+**会話から来たものの `descriptionStatus` は必ず `needs_review`**（渡された値で上書きしない）。
+187. **候補は `ouro:tocCandidates` にだけ溜まり、押すまで本体データ（`ouro:terms`）に1文字も書かない。**
+「追加する」を押した時に初めて**読み・重複・分類・正規化の4つ**を確かめ、通らなければ**書かずに理由を返す**
+（履歴には「止めた」を残す）。「削除する」は対象の1件だけを外し、「しない」は本体に一切影響しない。
+確定はすべて履歴に残り、`undoLastTocAdditions(n)` は**直近の「追加」だけ**を取り消す（削除は巻き戻さない）。
+188. **`ouro:terms`／`ouro:tocCandidates` は配列ではなくオブジェクト。**
+REST の読み込みで `asArray` に通すと毎回空で上書きされる（項目50の `ouro:funnel` と同じ形）。
+`OBJECT_FALLBACKS` に登録して、オブジェクトのまま受けること。
+189. 起動時に読む量の相殺：**判断（`decisions.js`）と会社の決まり（`rules.js`）は押した時に読む**
+（どちらの画面も lazy なのに静的に読んでいた）。`updateRules`／`addCompanyRule`／
+`removeCompanyRule`／`decideTask` が**非同期**になった。110.4KB → **109.3KB**。
+テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される。
+目次・索引の25ルールは `ouro/test/tocIndex.test.mjs` が26件で機械チェックする）。
 
 鏡（かがみ）の要点だけ再掲：**心理的な操作の「型」カタログ `src/data/tactics.js` が単一の正**
 （54件×8まとまり。1件足せば一覧・目次・判定が自動で追従する。**画面にも判定にも if を足さない**）。
@@ -1213,7 +1272,28 @@ APIキー無しで今日から使えること・端末内保存を崩さない�
    テストが**実際に画面へ出る文字列**を見る）。
 10. **便を汚いものとして扱う言い回しを置かない**（テストが機械チェック）。ここを崩すと、
     いちばん記録してほしい人が記録しなくなる。
-テストは `chou/test/*.test.mjs`（71件。ルートの `npm test` の再帰探索からも実行される）。
+11. **目次・索引は元データから毎回導く**（`data/toc.js` の `buildTocEntries()`。
+    **目次専用の手書きの一覧を作らない**）。読みは `data/terms.js`・`scales.js`・`redFlags.js`・
+    `fodmap.js` に**手で持たせる**——漢字の読みを機械が当てない。入れ忘れは「その他」行に
+    落として見えるようにする（`lib/yomi.js` の `buildKanaIndex`。閾値を超えたら開発中に警告）。
+    数字は `numberToReading` で読みに直してから行を決め（「7段階」→な行）、英数字は
+    `normalizeAlnum` で正規化してから A〜Z に入れる。**タイトルの重複はテストが機械チェック**。
+12. **飛び先の印は `data-flash` 属性**（`lib/focus.js`。`className` に足すと、飛び先が
+    描き直された拍子に印だけ消える＝鏡で踏んだ事故）。**飛び先を指定した移動では画面の先頭へ
+    戻さない**（`shouldScrollTop` が単一の正）。**タブ・絞り込みの切り替えは `useLayoutEffect`**
+    ——`useEffect` にすると、掴みに行く時にまだ古い絞り込みで描かれていて着かない。
+    飛ぶ仕組みは `components/useFocusJump.js` を**どの画面からも同じものを使う**。
+13. **会話から拾った言葉を目次へ勝手に入れない。** 候補を作ってよいのは
+    `data/tocCandidates.js` の3つの合図だけ（`marker`＝「■用語追加：」／`tags`／`user_request`）。
+    候補のあいだは**本体（`userTerms`）に一切書かない**。「追加する」を押した時に初めて
+    **読み・重複・分類・表記**の4つを確かめてから入れ、「しない」は本体に痕跡を残さない
+    （履歴にだけ見送りとして残る）。直近の追加は `undoLastTocAdditions(n)` で**対象だけ**戻せる。
+    会話由来の説明は必ず `needs_review`（画面に「※要確認」）で、**`verified` にできるのは
+    `setVerified(..., { byUser: true })` ＝人が明示的に押した時だけ**。
+14. 用語をタップすると出るパネルは `panelDataFor` の1か所から受け取る（画面ごとに条件を書かない）。
+    説明が空なら「※説明未登録」、飛び先が無ければボタンを出さず「関連する飛び先はありません」。
+    飛び先の type は **page／question／function／system の4つだけ**。
+テストは `chou/test/*.test.mjs`（96件。ルートの `npm test` の再帰探索からも実行される）。
 
 ## 目次・索引の共通ルール（ユーザー指定・全アプリ共通、2026-08-21）
 一覧／目次／索引を作る時は、どのアプリでも次を守る。

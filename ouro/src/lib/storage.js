@@ -50,6 +50,8 @@ export const KEYS = {
   voices: 'ouro:voices',     // 需要の観測（実際に見た困りごとの声）
   kits: 'ouro:kits',         // 型パック（売り物にする型。結びつきは task.kitId の片方向）
   packs: 'ouro:packs',       // パック（複数の型を1つの商品にまとめたもの）
+  terms: 'ouro:terms',       // 用語（同梱ぶんへの足し引き。目次はここから導出する）
+  tocCandidates: 'ouro:tocCandidates', // 目次への追加・削除の候補と、その確定履歴
   funnel: 'ouro:funnel', // 収益導線（週ごとの数字）
   board: 'ouro:board',   // 社内掲示板（社員どうしの共通記憶・30日で消える）
   pitfalls: 'ouro:pitfalls', // つまずき集（役職別の失敗・消えない）

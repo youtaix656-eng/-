@@ -12,11 +12,13 @@ import {
   formatKey,
 } from '../lib/dates.js';
 import { foodSuggestions } from '../lib/stats.js';
+import { useFocusJump } from './useFocusJump.js';
 
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 const pad = (n) => String(n).padStart(2, '0');
 
-export default function Calendar({ store, onGo }) {
+export default function Calendar({ store, onGo, focus, onFocusDone }) {
+  useFocusJump(focus, onFocusDone);
   const today = todayKey();
   const [month, setMonth] = useState(() => monthStart(today));
   const [selected, setSelected] = useState(today);
@@ -53,7 +55,7 @@ export default function Calendar({ store, onGo }) {
         </button>
       </div>
 
-      <div className="cal">
+      <div className="cal" id="cal-grid">
         {WEEK.map((w) => (
           <div key={w} className="cal-w">
             {w}

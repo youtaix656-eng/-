@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useState } from 'react';
 import {
   FODMAP_FOODS,
   FODMAP_LEVELS,
@@ -7,13 +7,28 @@ import {
   FODMAP_SOURCE,
   FOOD_RESULTS,
 } from '../data/fodmap.js';
+import { foodTargetId, tabForTarget } from '../data/toc.js';
+import { useFocusJump } from './useFocusJump.js';
 
 // 低FODMAP の食材一覧。
 // **合う／合わないを機械が決めない**——結果を押すのは本人（fodmap.js の決めごと4）。
 
-export default function Fodmap({ store }) {
+export default function Fodmap({ store, focus, onFocusDone }) {
   const [q, setQ] = useState('');
   const [level, setLevel] = useState('all');
+
+  // **飛ぶ前に絞り込みを解く。** 絞り込みが掛かったままだと飛び先が画面に無くて掴めない。
+  // `useEffect` にすると、掴みに行く時（次のフレーム）にはまだ古い絞り込みで描かれている。
+  useLayoutEffect(() => {
+    if (!focus) return;
+    const want = tabForTarget(focus);
+    if (want.level && want.level !== level) setLevel(want.level);
+    if (want.query !== undefined && want.query !== q) setQ(want.query);
+    // level/q は「合わせにいく先」なので、focus が変わった時だけ走らせる
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
+
+  useFocusJump(focus, onFocusDone);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -43,7 +58,7 @@ export default function Fodmap({ store }) {
         <h1>低FODMAP の食材</h1>
       </header>
 
-      <div className="notice">
+      <div className="notice" id="fodmap-notes">
         {FODMAP_NOTES.map((note) => (
           <p key={note}>{note}</p>
         ))}
@@ -95,7 +110,7 @@ export default function Fodmap({ store }) {
             {foods.map((food) => {
               const result = store.foodResults[food.name] || null;
               return (
-                <li key={food.name}>
+                <li key={food.name} id={foodTargetId(food)}>
                   <div className="food-head">
                     <span className="food-name">{food.name}</span>
                     <span className={`tag lv-${food.level}`}>
@@ -124,7 +139,7 @@ export default function Fodmap({ store }) {
         </section>
       ))}
 
-      <p className="muted small">
+      <p className="muted small" id="fodmap-source">
         出典：{FODMAP_SOURCE.text}
         {FODMAP_SOURCE.check && ' ※要確認'}
         <br />

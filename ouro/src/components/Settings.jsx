@@ -195,7 +195,7 @@ export default function Settings({ store, toast }) {
           </select>
         </Field>
         <Field
-          label="1日のAI費用の上限（ドル）"
+          label={<span id="settings-cap">1日のAI費用の上限（ドル）</span>}
           hint="0 で上限なし。月の上限だけだと、1日で使い切っても気づくのが翌日以降になります。"
         >
           <input

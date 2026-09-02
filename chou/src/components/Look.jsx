@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { BELLY_STEPS, BRISTOL, BRISTOL_GROUPS, STOOL_MARKS } from '../data/scales.js';
 import { lastKeys, todayKey, formatShort } from '../lib/dates.js';
 import { perDayText } from '../lib/visitNote.js';
+import { useFocusJump } from './useFocusJump.js';
 import {
   fillOf,
   series,
@@ -70,7 +71,8 @@ function StoolChart({ rows }) {
   );
 }
 
-export default function Look({ store, onGo }) {
+export default function Look({ store, onGo, focus, onFocusDone }) {
+  useFocusJump(focus, onFocusDone);
   const [days, setDays] = useState(14);
   const today = todayKey();
   const keys = useMemo(() => lastKeys(days, today), [days, today]);
@@ -117,7 +119,7 @@ export default function Look({ store, onGo }) {
         </section>
       ) : (
         <>
-          <section className="block">
+          <section className="block" id="look-belly">
             <div className="block-head">
               <h2>お腹の調子</h2>
             </div>
@@ -133,7 +135,7 @@ export default function Look({ store, onGo }) {
             </p>
           </section>
 
-          <section className="block">
+          <section className="block" id="look-stool">
             <div className="block-head">
               <h2>お通じ</h2>
             </div>
@@ -174,7 +176,7 @@ export default function Look({ store, onGo }) {
             </p>
           </section>
 
-          <section className="block">
+          <section className="block" id="look-marks">
             <div className="block-head">
               <h2>気になった項目</h2>
             </div>
@@ -191,7 +193,7 @@ export default function Look({ store, onGo }) {
             )}
           </section>
 
-          <section className="block">
+          <section className="block" id="look-foods">
             <div className="block-head">
               <h2>よく食べていたもの</h2>
             </div>

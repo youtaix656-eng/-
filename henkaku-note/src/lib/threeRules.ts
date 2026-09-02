@@ -12,10 +12,10 @@
 import { startOfWeek } from './date.js';
 
 export type Scope = 'day' | 'week' | 'month';
-export const SCOPES: { id: Scope; label: string; lead: string }[] = [
-  { id: 'day', label: '今日', lead: '毎朝3つ書き出して、目の前に置いておく' },
-  { id: 'week', label: '今週', lead: '週の頭に3つ' },
-  { id: 'month', label: '今月', lead: '月初めに3つ' },
+export const SCOPES: { id: Scope; label: string; reading: string; lead: string }[] = [
+  { id: 'day', label: '今日', reading: 'きょうのみっつ', lead: '毎朝3つ書き出して、目の前に置いておく' },
+  { id: 'week', label: '今週', reading: 'こんしゅうのみっつ', lead: '週の頭に3つ' },
+  { id: 'month', label: '今月', reading: 'こんげつのみっつ', lead: '月初めに3つ' },
 ];
 
 export const SLOTS = 3;

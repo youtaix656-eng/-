@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { shouldScrollTop } from './lib/focus.js';
 import { useStore } from './lib/useStore.js';
 import Home from './components/Home.jsx';
 import Calendar from './components/Calendar.jsx';
@@ -8,6 +9,7 @@ import VisitNote from './components/VisitNote.jsx';
 import RedFlags from './components/RedFlags.jsx';
 import Fodmap from './components/Fodmap.jsx';
 import Settings from './components/Settings.jsx';
+import TableOfContents from './components/TableOfContents.jsx';
 
 // 下部ナビは4つ。そのすぐ上に「受診メモをつくる」の常設バーを置く。
 // 受診メモはこのアプリを持つ理由なので、思い立った時にどの画面からでも開けること。
@@ -20,6 +22,7 @@ const NAV = [
   { id: 'calendar', label: 'カレンダー' },
   { id: 'look', label: 'ふりかえり' },
   { id: 'know', label: 'しらべる' },
+  { id: 'toc', label: '目次' },
 ];
 
 function NavIcon({ id }) {
@@ -40,6 +43,7 @@ function NavIcon({ id }) {
           <path d="M15.5 15.5L21 21" {...s} />
         </>
       )}
+      {id === 'toc' && <path d="M4 6h16M4 12h16M4 18h10" {...s} />}
     </svg>
   );
 }
@@ -47,6 +51,7 @@ function NavIcon({ id }) {
 export default function App() {
   const store = useStore();
   const [view, setView] = useState('home');
+  const [focus, setFocus] = useState('');
 
   useEffect(() => {
     const theme = store.settings.theme;
@@ -54,10 +59,15 @@ export default function App() {
     else document.documentElement.setAttribute('data-theme', theme);
   }, [store.settings.theme]);
 
-  const go = useCallback((next) => {
+  // **飛び先を指定した移動では画面の先頭へ戻さない**（戻すと、運んだ画面が直後に引き戻される。
+  // 鏡で実際に踏んだ事故）。判定は `lib/focus.js` の `shouldScrollTop` が単一の正。
+  const go = useCallback((next, targetId) => {
     setView(next);
-    window.scrollTo(0, 0);
+    setFocus(targetId || '');
+    if (shouldScrollTop(targetId)) window.scrollTo(0, 0);
   }, []);
+
+  const clearFocus = useCallback(() => setFocus(''), []);
 
   return (
     <div className="app">
@@ -69,14 +79,17 @@ export default function App() {
       )}
 
       <main>
-        {view === 'home' && <Home store={store} onGo={go} />}
-        {view === 'calendar' && <Calendar store={store} onGo={go} />}
-        {view === 'look' && <Look store={store} onGo={go} />}
-        {view === 'know' && <Know onGo={go} />}
-        {view === 'visitnote' && <VisitNote store={store} />}
-        {view === 'redflags' && <RedFlags />}
-        {view === 'fodmap' && <Fodmap store={store} />}
-        {view === 'settings' && <Settings store={store} />}
+        {view === 'home' && <Home store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'calendar' && <Calendar store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'look' && <Look store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'know' && <Know onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'visitnote' && <VisitNote store={store} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'redflags' && <RedFlags focus={focus} onFocusDone={clearFocus} />}
+        {view === 'fodmap' && <Fodmap store={store} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'settings' && <Settings store={store} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'toc' && (
+          <TableOfContents store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
       </main>
 
       {store.undo && (

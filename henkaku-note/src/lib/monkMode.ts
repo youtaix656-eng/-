@@ -38,6 +38,8 @@ export interface MonkArea {
   reading: string;
   icon: string;
   why: string;
+  /** 別の呼び名。目次で別名からも引けるようにする（data/toc.ts） */
+  aliases?: string[];
 }
 
 export const MONK_AREAS: MonkArea[] = [
@@ -46,6 +48,7 @@ export const MONK_AREAS: MonkArea[] = [
     title: 'マインドを整える',
     reading: 'まいんどをととのえる',
     icon: '🧠',
+    aliases: ['マインド', '情報の質'],
     why:
       '入れるもので質が決まる、という考え方。粗悪な情報を止めて、質の高いものを入れる。'
       + '毎日「目標のこと」を考えている人と「週末のこと」を考えている人では、1年後に差が出る、という話。',
@@ -55,6 +58,7 @@ export const MONK_AREAS: MonkArea[] = [
     title: '肉体を整える',
     reading: 'にくたいをととのえる',
     icon: '🏃',
+    aliases: ['肉体', '筋トレ', '歩数'],
     why:
       '体は「乗り物」。運転手（脳）が同じでも、乗り物の性能で行ける距離が変わる。'
       + 'モンクモード中は人にも会わず刺激も減るので、**運動が事実上ただ一つのストレス発散**になる。'
@@ -65,6 +69,7 @@ export const MONK_AREAS: MonkArea[] = [
     title: '心を整える',
     reading: 'こころをととのえる',
     icon: '🕯',
+    aliases: ['スピリット', '心'],
     why:
       '海外式のモンクモードで特徴的な部分。物質的な成功だけを追っても、心が満たされていなければ続かない、という考え方。'
       + '具体的にやることは1日10分の瞑想。',
@@ -75,9 +80,9 @@ export const MONK_AREAS: MonkArea[] = [
 
 /** SNSの制限の仕方。出典が挙げていた順に、ゆるい→きつい */
 export const SNS_RULES = [
-  { id: 'morning_off', label: '午前中はスマホの電源を切る', detail: '別の部屋かカバンに入れる。出典が最初に挙げているやり方。' },
-  { id: 'pc_only', label: '見るのは夜・PCからだけ', detail: 'アプリを消してブラウザから入るだけでも同じ効果。面倒さが上がって自然に減る。' },
-  { id: 'uninstalled', label: 'アプリをアンインストール', detail: '出典が基本としているやり方。' },
+  { id: 'morning_off', label: '午前中はスマホの電源を切る', reading: 'ごぜんちゅうはすまほのでんげんをきる', detail: '別の部屋かカバンに入れる。出典が最初に挙げているやり方。' },
+  { id: 'pc_only', label: '見るのは夜・PCからだけ', reading: 'みるのはよるぴーしーからだけ', detail: 'アプリを消してブラウザから入るだけでも同じ効果。面倒さが上がって自然に減る。' },
+  { id: 'uninstalled', label: 'アプリをアンインストール', reading: '', detail: '出典が基本としているやり方。' },
 ] as const;
 
 export const SNS_RULE_MAP = Object.fromEntries(SNS_RULES.map((r) => [r.id, r]));
@@ -207,6 +212,8 @@ export function bodyReminder(weekly: ReturnType<typeof weeklyMonk>, settings: Se
 export interface Conflict {
   id: string;
   topic: string;
+  /** 目次の読み（漢字を含むなら必須。**自動推定しない**） */
+  reading: string;
   a: { source: string; says: string };
   b: { source: string; says: string };
   handling: string;
@@ -220,6 +227,7 @@ export const CONFLICTS: Conflict[] = [
   {
     id: 'social',
     topic: '人との距離',
+    reading: 'ひととのきょり',
     a: {
       source: 'モンクモード',
       says: '友人と距離を置き、一人になる時間を取る。付き合う人間で生きる世界が変わるので、いまの場所から抜け出すには一度離れる必要がある。',
@@ -259,6 +267,8 @@ export function isolationWarning(days: Record<string, DayRecord>, dateKeys: stri
 export const MONK_UNVERIFIED = [
   {
     id: 'salt',
+    short: '朝に塩を3〜4g',
+    reading: 'あさにしお',
     claim: '朝、白湯にヒマラヤピンクソルトかシーソルトを3〜4g入れて飲む',
     note:
       '**この項目だけは特に注意してください。** 日本の食事はもともと食塩が多めです。'
@@ -268,32 +278,44 @@ export const MONK_UNVERIFIED = [
   },
   {
     id: 'walking_bp',
+    short: 'ウォーキングは薬より効く',
+    reading: 'うぉーきんぐはくすりよりきく',
     claim: 'ウォーキングの降圧作用は薬よりも効果的',
     note: '裏は取れていません。**服薬をやめる・減らすの判断は必ず医師と**行ってください。運動を足すこと自体は問題ありません。',
     hard: true,
   },
   {
     id: 'eggs',
+    short: '卵は完全栄養食',
+    reading: 'たまごはかんぜんえいようしょく',
     claim: '卵は完全栄養食で、どんなサプリメントよりも効果がある。1日3個食べるとよい',
     note: '裏は取れていません。持病や検査値によっては合わない場合があります。特定の食品を毎日決まった数、というのは自己判断で始めない方が無難です。',
   },
   {
     id: 'books_top5',
+    short: '専門書でトップ5%',
+    reading: 'せんもんしょでとっぷ',
     claim: '専門書を毎月1冊読めば、5年以内に確実にトップ5%に入れる',
     note: '「確実に」と言い切れる根拠はありません。読書そのものは勧められますが、この数字は目安として受け取らないでください。',
   },
   {
     id: 'income',
+    short: '読書で年収が上がる',
+    reading: 'どくしょでねんしゅうがあがる',
     claim: '読書をする人は年収が上がるとデータで明確に出ている',
     note: '裏は取れていません。関係があったとしても、読書が原因だとは限りません。',
   },
   {
     id: 'brain66',
+    short: '66日で脳の配線が変わる',
+    reading: '',
     claim: '66日続けると脳の配線ごと変わる',
     note: '習慣が身につくまでの日数（18〜254日、平均66日）の紹介が元ですが、「脳の配線が変わる」は言い過ぎです。区切りの目安として使ってください。',
   },
   {
     id: 'golden',
+    short: '運動後3時間のゴールデンタイム',
+    reading: 'うんどうごさんじかんのごーるでんたいむ',
     claim: '運動後3時間は集中のゴールデンタイム',
     note: '裏は取れていません。ただ、運動のあとに手を付けやすいと感じる人はいます。自分に当てはまるかどうかを試す枠として使ってください。',
   },
@@ -301,9 +323,9 @@ export const MONK_UNVERIFIED = [
 
 /** 塩・血圧まわりの事前確認（fasting.ts の PRECHECKS と同じ考え方） */
 export const MONK_PRECHECKS = [
-  { id: 'blood_pressure', label: '血圧が高い、または塩分を制限している' },
-  { id: 'kidney', label: '腎臓に不安がある' },
-  { id: 'heart', label: '心臓の持病がある、運動を止められている' },
+  { id: 'blood_pressure', label: '血圧が高い、または塩分を制限している', reading: 'けつあつがたかい' },
+  { id: 'kidney', label: '腎臓に不安がある', reading: 'じんぞうにふあんがある' },
+  { id: 'heart', label: '心臓の持病がある、運動を止められている', reading: 'しんぞうのじびょうがある' },
 ];
 
 export const MONK_PRECHECK_NOTICE =

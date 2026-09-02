@@ -182,9 +182,22 @@ test('目次の項目IDが重複しない', () => {
 
 test('目次の飛び先はすべて実在する画面', () => {
   // App.jsx が扱う画面名
-  const VIEWS = new Set(['home', 'employees', 'employee', 'compose', 'knowledge', 'company', 'deals', 'connect', 'toc', 'calendar', 'genre']);
+  const VIEWS = new Set([
+    'home', 'employees', 'employee', 'compose', 'knowledge', 'company', 'deals', 'connect',
+    'toc', 'calendar', 'genre', 'ventures', 'kits', 'funnel', 'rules', 'settings',
+    'approvals', 'audit', 'team', 'studio', 'ledger', 'ingest', 'hire',
+  ]);
   const { employees } = seedAll();
   for (const e of buildToc({ employees })) {
+    // 用語は専用の画面を持たず、**詳細パネルの中の飛び先**から飛ぶ。
+    // その場合も「行き止まりを作らない」ので、飛び先が1つ以上あることを見る。
+    if (e.view === null) {
+      assert.ok((e.destinations || []).length > 0, `${e.title} に飛び先が1つも無い`);
+      for (const d of e.destinations) {
+        assert.ok(VIEWS.has(d.view), `${e.title} の飛び先 ${d.view} が存在しない`);
+      }
+      continue;
+    }
     assert.ok(VIEWS.has(e.view), `${e.title} の飛び先 ${e.view} が存在しない`);
   }
 });

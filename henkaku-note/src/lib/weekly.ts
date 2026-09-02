@@ -26,9 +26,9 @@ export const MANAGER_PLAN_OPTIONS = [
 ] as const;
 
 export const MANAGER_ALLOCATION_OPTIONS = [
-  { id: 'too_much', label: '詰め込みすぎだった', advice: '来週は基礎タスクを2割減らして、空いた分をバッファにしてみてください。' },
-  { id: 'about_right', label: 'ちょうどよかった', advice: '同じ配分で続けられます。うまくいった週の組み方をメモに残しておくと再現できます。' },
-  { id: 'too_little', label: '余裕がありすぎた', advice: '来週は基礎タスクを少しだけ増やせます。増やすのは1段階だけにしてください。' },
+  { id: 'too_much', label: '詰め込みすぎだった', reading: 'つめこみすぎだった', advice: '来週は基礎タスクを2割減らして、空いた分をバッファにしてみてください。' },
+  { id: 'about_right', label: 'ちょうどよかった', reading: '', advice: '同じ配分で続けられます。うまくいった週の組み方をメモに残しておくと再現できます。' },
+  { id: 'too_little', label: '余裕がありすぎた', reading: 'よゆうがありすぎた', advice: '来週は基礎タスクを少しだけ増やせます。増やすのは1段階だけにしてください。' },
 ] as const;
 
 export const DOER_FEEL_OPTIONS = [

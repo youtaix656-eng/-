@@ -8,6 +8,7 @@ import { LENGTH_OPTIONS } from '../lib/meditation';
 import { PLANS, PRECHECKS, PRECHECK_NOTICE } from '../lib/fasting';
 import { initialState } from '../lib/useStore';
 import type { AppState } from '../types';
+import { ANCHORS } from '../data/anchors';
 
 const WITHIN_OPTIONS = [45, 60, 90, 120, 180];
 
@@ -21,7 +22,7 @@ export default function SettingsView({ state }: { state: AppState }) {
 
   return (
     <div className="stack">
-      <div className="card">
+      <div className="card" id={ANCHORS.settings}>
         <h2>就寝ルール（ステップ⑤）</h2>
         <p className="small muted" style={{ margin: 0 }}>
           原典の「夜11時就寝」は夜勤と両立しないため、<strong>終業時刻を基準に目標を計算</strong>します。
@@ -189,7 +190,7 @@ export default function SettingsView({ state }: { state: AppState }) {
         )}
       </div>
 
-      <div className="card">
+      <div className="card" id={ANCHORS.backup}>
         <h2>データ</h2>
         <p className="small muted" style={{ margin: 0 }}>
           記録はこの端末の中にだけ保存されます（外部へ送りません）。保存量の目安：約 {approximateSize(state).toLocaleString()} バイト。

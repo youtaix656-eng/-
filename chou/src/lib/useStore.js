@@ -8,6 +8,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { load, save, clear, storageSize } from './storage.js';
+import {
+  emptyTocState,
+  normalizeCandidates,
+  acceptCandidate,
+  rejectCandidate,
+  undoLastTocAdditions,
+  setVerified,
+} from './tocCandidates.js';
 import { emptyDay, normalizeDays, normalizeDay, newId } from './days.js';
 import { todayKey } from './dates.js';
 
@@ -15,6 +23,8 @@ const EMPTY = {
   days: {},
   foodResults: {},
   settings: { theme: 'auto' },
+  // 目次まわり。**候補は本体（userTerms）とは別に持つ**——「追加する」を押すまで目次に出さない
+  ...emptyTocState(),
 };
 
 /** 消したものを戻せる時間 */
@@ -25,6 +35,10 @@ function hydrate(raw) {
     days: normalizeDays(raw.days),
     foodResults: raw.foodResults && typeof raw.foodResults === 'object' ? { ...raw.foodResults } : {},
     settings: { ...EMPTY.settings, ...(raw.settings || {}) },
+    tocCandidates: normalizeCandidates(raw.tocCandidates),
+    userTerms: Array.isArray(raw.userTerms) ? raw.userTerms.filter((t) => t && t.id && t.title) : [],
+    removedIds: Array.isArray(raw.removedIds) ? raw.removedIds.filter((id) => typeof id === 'string') : [],
+    tocHistory: Array.isArray(raw.tocHistory) ? raw.tocHistory.filter((h) => h && h.id) : [],
   };
 }
 
@@ -162,6 +176,54 @@ export function useStore() {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
   }, []);
 
+  /** 候補を足す。**合図が3つのどれかでなければ `makeCandidate` が null を返すので、ここへは来ない** */
+  const addTocCandidate = useCallback((candidate) => {
+    if (!candidate) return false;
+    setState((prev) => ({ ...prev, tocCandidates: [...prev.tocCandidates, candidate] }));
+    return true;
+  }, []);
+
+  /** 「追加する／削除する」。**押した時に初めて**4つの確かめを通して本体へ入れる */
+  // **`setState` の更新関数の中で結果を組み立てない**——更新関数は次の描き直しの時に走るので、
+  // 返り値（入れられたか・理由）が呼び出し側へ届かない。いま描かれている state から作る。
+  const acceptTocCandidate = useCallback(
+    (id) => {
+      const result = acceptCandidate(state, id);
+      if (result.ok) setState(result.state);
+      return result;
+    },
+    [state],
+  );
+
+  /** 「しない」。**本体には何も残さない**（履歴にだけ見送りとして残る） */
+  const rejectTocCandidate = useCallback(
+    (id) => {
+      const result = rejectCandidate(state, id);
+      if (result.ok) setState(result.state);
+      return result;
+    },
+    [state],
+  );
+
+  const undoTocAdditions = useCallback(
+    (n = 1) => {
+      const result = undoLastTocAdditions(state, n);
+      if (result.ok) setState(result.state);
+      return result;
+    },
+    [state],
+  );
+
+  /** 説明を「確かめた」にする。**人が押した時だけ**（byUser が無ければ何も変わらない） */
+  const markTermVerified = useCallback(
+    (entryId) => {
+      const result = setVerified(state, entryId, { byUser: true });
+      if (result.ok) setState(result.state);
+      return result;
+    },
+    [state],
+  );
+
   const clearAll = useCallback(() => {
     clear();
     setState(hydrate(EMPTY));
@@ -177,6 +239,8 @@ export function useStore() {
       days: state.days,
       foodResults: state.foodResults,
       settings: state.settings,
+      userTerms: state.userTerms,
+      removedIds: state.removedIds,
     }),
     [state],
   );
@@ -203,6 +267,13 @@ export function useStore() {
         ...prev,
         days,
         foodResults: { ...prev.foodResults, ...(raw.foodResults || {}) },
+        userTerms: [
+          ...prev.userTerms,
+          ...(Array.isArray(raw.userTerms) ? raw.userTerms : []).filter(
+            (t) => t && t.id && !prev.userTerms.some((mine) => mine.id === t.id),
+          ),
+        ],
+        removedIds: [...new Set([...prev.removedIds, ...(Array.isArray(raw.removedIds) ? raw.removedIds : [])])],
       };
     });
     return { ok: true, added, updated };
@@ -223,6 +294,11 @@ export function useStore() {
     removeDay,
     setFoodResult,
     setSettings,
+    addTocCandidate,
+    acceptTocCandidate,
+    rejectTocCandidate,
+    undoTocAdditions,
+    markTermVerified,
     clearAll,
     exportAll,
     importAll,
