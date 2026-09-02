@@ -113,6 +113,10 @@ AI社員に仕事を依頼すると、社員どうしで引き継ぎながら仕
 | 94 | 型を1ファイルで書き出す（キー・個人情報・社内の記憶は入らない） | `kit.exportKit` |
 | 95 | SKILL.md の形で書き出す（name / description つき・そのまま使える形） | `kit.exportSkillMd` |
 | 96 | パック（複数の型を1商品に。目次＋型ごとの SKILL.md） | `kit.exportPack` / `Kits.jsx` |
+| 97 | 用語集（説明・別名・飛び先つき。目次から引ける） | `data/terms.js` / `Toc.jsx` |
+| 98 | 用語をタップして詳細パネル（※要確認バッジ・飛び先ボタン） | `Toc.jsx` の `TermPanel` |
+| 99 | 飛び先へ運んで光らせる（画面をまたぐ） | `lib/focus.js` / `useFocusJump.js` |
+| 100 | 目次への追加・削除の候補（押すまで本体に書かない・取り消せる） | `lib/tocCandidates.js` |
 
 設計の全体像（アーキテクチャ・DBスキーマ・API・拡張時の注意点）は
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。

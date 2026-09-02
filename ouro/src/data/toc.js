@@ -13,6 +13,7 @@ import { allGenres } from './genres.js';
 import { TOOLS } from './tools.js';
 import { WORKFLOWS } from './workflows.js';
 import { JOB_TEMPLATES } from './jobTemplates.js';
+import { TERMS } from './terms.js';
 import { readingInfo, groupByBucket } from '../lib/yomi.js';
 
 // 目次の分類。view は飛び先の画面、anchor は画面内で光らせる目印。
@@ -23,9 +24,17 @@ export const TOC_KINDS = [
   { id: 'workflow', name: '仕事の流れ', glyph: '⟳', order: 4 },
   { id: 'job', name: '案件の型', glyph: '¥', order: 5 },
   { id: 'tool', name: '道具', glyph: '⚒', order: 6 },
+  // 用語（`data/terms.js`）。**目次専用の手書きデータではない**——
+  // 用語そのものが元データで、目次はそこから導出しているだけ。
+  { id: 'term', name: '用語', glyph: '＊', order: 7 },
 ];
 
-function entry({ id, kind, title, reading, sub, view, arg, anchor, employee = null, alias = '' }) {
+function entry({
+  id, kind, title, reading, sub, view, arg, anchor, employee = null, alias = '',
+  // 用語の詳細（`data/terms.js`）。持たない項目は空のまま——
+  // **画面は空を「未登録」と出す**ので、ここで作り話を入れない。
+  description = '', descriptionStatus = '', aliases = null, destinations = null,
+}) {
   const info = readingInfo(title, reading);
   return {
     id,
@@ -33,6 +42,10 @@ function entry({ id, kind, title, reading, sub, view, arg, anchor, employee = nu
     title,
     sub: sub || '',
     alias, // カタカナ表記など、検索でも当たってほしい別表記
+    aliases: aliases || (alias ? [alias] : []),
+    description,
+    descriptionStatus,
+    destinations: destinations || [],
     employee, // 社員のとき、肖像を描くために本体を持つ
     reading: info.reading,
     bucket: info.bucket,
@@ -51,11 +64,16 @@ function entry({ id, kind, title, reading, sub, view, arg, anchor, employee = nu
  */
 let lastBuild = null;
 
-export function buildToc({ employees = [], customGenres = [] } = {}) {
+export function buildToc({ employees = [], customGenres = [], customTerms = null } = {}) {
   // 新項目15：同じ社員・同じジャンルなら作り直さない。
   // 目次は画面を離れるたびに捨てられるので、ここで覚えておかないと
   // 戻るたびに86件ぶんの読み解析をやり直すことになる。
-  if (lastBuild && lastBuild.employees === employees && lastBuild.customGenres === customGenres) {
+  if (
+    lastBuild &&
+    lastBuild.employees === employees &&
+    lastBuild.customGenres === customGenres &&
+    lastBuild.customTerms === customTerms
+  ) {
     return lastBuild.result;
   }
   const out = [];
@@ -156,8 +174,48 @@ export function buildToc({ employees = [], customGenres = [] } = {}) {
     );
   }
 
-  lastBuild = { employees, customGenres, result: out };
+  // 用語（`data/terms.js` ＋ ユーザーが足したもの）
+  for (const t of allTerms(customTerms)) {
+    out.push(
+      entry({
+        id: `term:${t.id}`,
+        kind: 'term',
+        title: t.title,
+        reading: t.reading,
+        sub: t.description ? String(t.description).slice(0, 40) : '',
+        description: t.description || '',
+        descriptionStatus: t.descriptionStatus || '',
+        aliases: t.aliases || [],
+        destinations: t.destinations || [],
+        // 用語そのものに専用の画面は無いので、飛び先は詳細パネルの中から選ぶ
+        view: null,
+        anchor: `term-${t.id}`,
+      })
+    );
+  }
+
+  lastBuild = { employees, customGenres, customTerms, result: out };
   return out;
+}
+
+/**
+ * 目次の全項目（共通ルールの呼び名）。**元データから毎回導出する。**
+ * 呼び出し側は `useMemo` で包むこと（画面を離れるたびに読み解析をやり直さないため）。
+ */
+export function buildTocEntries(opts = {}) {
+  return buildToc(opts);
+}
+
+/** 同梱の用語と、ユーザーが足した用語を合わせる（削除された id は落とす）。 */
+export function allTerms(custom = null) {
+  if (!custom) return TERMS;
+  const removed = new Set(custom.removed || []);
+  const added = Array.isArray(custom.added) ? custom.added : [];
+  const base = TERMS.filter((t) => !removed.has(t.id));
+  // 同じ id があとから足された時は、あとのほうを採る
+  const map = new Map(base.map((t) => [t.id, t]));
+  for (const t of added) if (t && t.id && !removed.has(t.id)) map.set(t.id, t);
+  return [...map.values()];
 }
 
 // 新項目15：直前の絞り込みを1組だけ覚えておく。
@@ -181,7 +239,7 @@ export function filterToc(entries, { query = '', kind = null } = {}) {
   const result = entries.filter((e) => {
     if (kind && e.kind !== kind) return false;
     if (!q) return true;
-    const hay = `${e.title} ${e.reading} ${e.alias || ''} ${e.sub}`.toLowerCase();
+    const hay = `${e.title} ${e.reading} ${e.alias || ''} ${(e.aliases || []).join(' ')} ${e.sub}`.toLowerCase();
     return hay.includes(q);
   });
   lastFilter = { entries, q, kind, result };

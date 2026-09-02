@@ -54,10 +54,18 @@ export function kataToHira(text = '') {
   );
 }
 
-/** 読みとして扱える形に整える（カタカナ→ひらがな、記号・空白を落とす）。 */
-export function normalizeReading(reading = '') {
-  const hira = kataToHira(String(reading));
+/**
+ * 読みとして比べられる形に畳む（カタカナ→ひらがな、記号・空白・英数字を落とす）。
+ * **これは読みの推定ではない**——与えられた読みを機械的に正規化するだけ。
+ */
+export function foldKana(text = '') {
+  const hira = kataToHira(String(text));
   return hira.replace(/[^ぁ-んー]/g, '');
+}
+
+/** 読みとして扱える形に整える（`foldKana` の別名。呼び出し元が多いので残す）。 */
+export function normalizeReading(reading = '') {
+  return foldKana(reading);
 }
 
 const DIGIT = ['', 'いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう'];
@@ -94,7 +102,35 @@ export function numberToKana(value) {
   return out;
 }
 
-/** この読みがどの枠（行）に入るか。 */
+// 全角の英数字・ローマ数字を、半角の英数字にそろえるための対応表。
+// **ここでも読みは推定しない**——字の形をそろえるだけ。
+const ROMAN = {
+  '\u2160': 'I', '\u2161': 'II', '\u2162': 'III', '\u2163': 'IV', '\u2164': 'V',
+  '\u2165': 'VI', '\u2166': 'VII', '\u2167': 'VIII', '\u2168': 'IX', '\u2169': 'X',
+  '\u216A': 'XI', '\u216B': 'XII',
+  '\u2170': 'I', '\u2171': 'II', '\u2172': 'III', '\u2173': 'IV', '\u2174': 'V',
+  '\u2175': 'VI', '\u2176': 'VII', '\u2177': 'VIII', '\u2178': 'IX', '\u2179': 'X',
+};
+
+/**
+ * 英数字混じりの項目（ＷＨＯ・Ⅰ型 など）を、A〜Z の枠を判定できる形にそろえる。
+ * 全角→半角、ローマ数字→英字、記号・空白を落として大文字にする。
+ * **かな・漢字はそのまま残す**（落とすと「Ⅰ型」が「I」になり、別の項目と衝突する）。
+ */
+export function normalizeAlnum(text = '') {
+  return String(text)
+    .replace(/[\u2160-\u2169\u2170-\u2179]/g, (c) => ROMAN[c] || c)
+    // 全角の英数字を半角へ
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    // 記号・空白は落とす（英数字・かな・漢字・長音だけ残す）。
+    // **かなの枠に混ざっている記号（・゠、濁点だけ、句読点）も落とす**——
+    // 残すと「・」だけの題名が「字としてそろっている」ことになってしまう。
+    .replace(/[\u3000-\u303f\u309b\u309c\u30a0\u30fb]/g, '')
+    .replace(/[^0-9A-Za-z\u3040-\u30ff\u3400-\u9fff\uf900-\ufaffー]/g, '')
+    .replace(/[a-z]+/g, (m) => m.toUpperCase());
+}
+
+/** この読みがどの枠（行）に入るか（`kanaRow` の実体）。 */
 export function bucketOf(reading = '') {
   const r = normalizeReading(reading);
   for (const ch of r) {
@@ -103,6 +139,16 @@ export function bucketOf(reading = '') {
     if (row) return row;
   }
   return UNKNOWN_BUCKET;
+}
+
+/** 読みの行（あ〜わ）。`bucketOf` の別名——共通ルールの呼び名にそろえたもの。 */
+export function kanaRow(reading = '') {
+  return bucketOf(reading);
+}
+
+/** 数字を読みに直す（`numberToKana` の別名。共通ルールの呼び名）。 */
+export function numberToReading(value) {
+  return numberToKana(value);
 }
 
 function charRank(ch) {
@@ -114,6 +160,13 @@ function charRank(ch) {
 export function compareReading(a = '', b = '') {
   const x = normalizeReading(a);
   const y = normalizeReading(b);
+  // どちらもかなを持たない（A〜Z の枠など）時は、そのまま字の順で比べる。
+  // ここを空文字どうしの比較にすると、英字の項目が全部「同じ」になって並ばない。
+  if (!x && !y) {
+    const ax = normalizeAlnum(a);
+    const ay = normalizeAlnum(b);
+    return ax < ay ? -1 : ax > ay ? 1 : 0;
+  }
   const len = Math.max(x.length, y.length);
   for (let i = 0; i < len; i += 1) {
     if (i >= x.length) return -1;
@@ -146,9 +199,10 @@ export function readingInfo(title = '', reading = '') {
     return { reading: r, bucket: bucketOf(r), source: 'number' };
   }
 
-  // 英字で始まるものは A〜Z の枠
-  if (/^[A-Za-z]/.test(text)) {
-    return { reading: text.toLowerCase(), bucket: LATIN_BUCKET, source: 'latin' };
+  // 英数字混じり（ＷＨＯ・Ⅰ型 など）は、そろえてから A〜Z の枠を判定する（共通ルール4）
+  const alnum = normalizeAlnum(text);
+  if (/^[A-Za-z]/.test(alnum)) {
+    return { reading: alnum.toLowerCase(), bucket: LATIN_BUCKET, source: 'latin' };
   }
 
   // かな・カタカナだけなら機械変換で足りる（漢字が混じらないので誤読しない）
@@ -174,4 +228,24 @@ export function groupByBucket(items = []) {
       (a, b) => compareReading(a.reading, b.reading) || String(a.title).localeCompare(String(b.title))
     ),
   })).filter((g) => g.items.length > 0);
+}
+
+/**
+ * 索引を組み立てる。枠ごとの並び・件数・「その他」の件数をまとめて返す。
+ *
+ * **「その他」は読みの入れ忘れが見える場所**なので、件数を必ず一緒に返す
+ * （画面と開発時の警告が同じ数を見るため。共通ルール3・11）。
+ */
+export function buildKanaIndex(items = []) {
+  const rows = groupByBucket(items);
+  const counts = {};
+  for (const r of rows) counts[r.bucket] = r.items.length;
+  return {
+    rows,
+    counts,
+    total: items.length,
+    otherCount: counts[UNKNOWN_BUCKET] || 0,
+    // 読みが無くて落ちた項目（データの入れ忘れを名指しできるように）
+    missing: items.filter((i) => i.bucket === UNKNOWN_BUCKET),
+  };
 }

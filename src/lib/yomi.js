@@ -75,47 +75,86 @@ const FOLD = {
   ぱ: 'は', ぴ: 'ひ', ぷ: 'ふ', ぺ: 'へ', ぽ: 'ほ', ぁ: 'あ', ぃ: 'い', ぅ: 'う', ぇ: 'え', ぉ: 'お',
   っ: 'つ', ゃ: 'や', ゅ: 'ゆ', ょ: 'よ', ゎ: 'わ', ゐ: 'い', ゑ: 'え',
 };
+// 濁点・小書きを清音・大書きに寄せる（行判定用に外部公開。目次・索引パターンの単一の正）。
+export function foldKana(ch) {
+  return FOLD[ch] || ch;
+}
 const ROWS = [
   ['あ', 'あいうえお'], ['か', 'かきくけこ'], ['さ', 'さしすせそ'], ['た', 'たちつてと'],
   ['な', 'なにぬねの'], ['は', 'はひふへほ'], ['ま', 'まみむめも'], ['や', 'やゆよ'],
   ['ら', 'らりるれろ'], ['わ', 'わをん'],
 ];
-function rowOf(ch) {
-  const c = FOLD[ch] || ch;
+// かな1文字 → 行ラベル（あ〜わ）。かな以外はnull。
+export function kanaRow(ch) {
+  const c = foldKana(ch);
   for (const [label, set] of ROWS) if (set.includes(c)) return label;
   return null;
 }
 
+// 全角英字→半角、ローマ数字（Ⅰ〜Ⅻ・ⅰ〜ⅻ）→ラテン文字列に正規化する。
+//   目次・索引で「WHO」「Ⅰ型」のような英数字混じりの項目をA〜Z枠へ正しく振り分けるために使う
+//   （見た目の全角・ローマ数字のままだと英字判定の正規表現に一致せず、誤って「その他」に落ちる）。
+const ROMAN_UPPER = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+const ROMAN_LOWER = ROMAN_UPPER.map((r) => r.toLowerCase());
+export function normalizeAlnum(s) {
+  let out = String(s || '');
+  out = zenNum(out); // 全角数字→半角
+  out = out.replace(/[Ａ-Ｚａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)); // 全角英字→半角
+  out = out.replace(/[Ⅰ-Ⅻ]/g, (c) => ROMAN_UPPER[c.charCodeAt(0) - 0x2160]); // Ⅰ〜Ⅻ
+  out = out.replace(/[ⅰ-ⅻ]/g, (c) => ROMAN_LOWER[c.charCodeAt(0) - 0x2170]); // ⅰ〜ⅻ
+  return out.trim();
+}
+
 // 用語 → { group, reading, key, type }
-export function readingInfo(term, readings = TERM_READINGS) {
+//   opts.strict: true の時は「読みが無い項目は必ずその他へ落とす」を厳密に適用する
+//   （数字・英数字混じりだけは機械的に読めるので例外）。false（既定）では従来どおり、
+//   readingsに登録が無くても先頭が仮名の項目はその仮名をそのまま読み扱いにする
+//   （音声学習・一問一答などのキーワード一覧は個別readingを持たないため、この緩さが必要）。
+export function readingInfo(term, readings = TERM_READINGS, opts = {}) {
+  const { strict = false } = opts;
   const raw = String(term || '');
   if (readings[raw]) {
     const r = readings[raw];
-    return { group: rowOf(r[0]) || '漢字', reading: r, key: r, type: 'kana' };
+    return { group: kanaRow(r[0]) || '漢字', reading: r, key: r, type: 'kana' };
   }
-  if (/^[A-Za-z]/.test(raw)) {
-    return { group: '英字', reading: raw.toLowerCase(), key: raw.toLowerCase(), type: 'latin' };
+  const alnum = normalizeAlnum(raw);
+  if (/^[A-Za-z]/.test(alnum)) {
+    return { group: '英字', reading: alnum.toLowerCase(), key: alnum.toLowerCase(), type: 'latin' };
   }
-  const half = zenNum(raw);
-  if (/^[0-9]/.test(half)) {
-    const num = parseInt(half.match(/^[0-9]+/)[0], 10);
+  if (/^[0-9]/.test(alnum)) {
+    const num = parseInt(alnum.match(/^[0-9]+/)[0], 10);
     const r = numberToKana(num);
-    return { group: rowOf(r[0]) || 'あ', reading: r, key: r, type: 'number' };
+    return { group: kanaRow(r[0]) || 'あ', reading: r, key: r, type: 'number' };
+  }
+  if (strict) {
+    return { group: '漢字', reading: '', key: raw, type: 'other' };
   }
   const hira = kataToHira(raw);
-  if (rowOf(hira[0])) {
-    return { group: rowOf(hira[0]), reading: hira, key: hira, type: 'kana' };
+  if (kanaRow(hira[0])) {
+    return { group: kanaRow(hira[0]), reading: hira, key: hira, type: 'kana' };
   }
   return { group: '漢字', reading: raw, key: raw, type: 'other' };
 }
 
 // キーワード配列 → 索引（あ〜ん → 英字 → 漢字/その他）
-export function buildKanaIndex(keywords, readings = TERM_READINGS) {
+//   opts.strict はreadingInfoへそのまま渡す。opts.warnOtherThresholdを指定すると、
+//   「その他」（漢字グループ）の件数がしきい値を超えた時に開発モードでのみ警告する
+//   （読みの入れ忘れが増えていないかに早く気づくためのガードレール。本番ビルドでは出さない）。
+export function buildKanaIndex(keywords, readings = TERM_READINGS, opts = {}) {
+  const { strict = false, warnOtherThreshold } = opts;
   const buckets = new Map();
   for (const kw of keywords) {
-    const info = readingInfo(kw, readings);
+    const info = readingInfo(kw, readings, { strict });
     if (!buckets.has(info.group)) buckets.set(info.group, []);
     buckets.get(info.group).push({ keyword: kw, key: info.key });
+  }
+  if (warnOtherThreshold != null) {
+    const otherCount = (buckets.get('漢字') || []).length;
+    if (otherCount > warnOtherThreshold && typeof console !== 'undefined' && import.meta.env?.DEV) {
+      console.warn(
+        `[yomi] 「その他」行が${otherCount}件（しきい値${warnOtherThreshold}件）を超えています。readingの入れ忘れが無いか確認してください。`
+      );
+    }
   }
   const order = [...ROWS.map((r) => r[0]), '英字', '漢字'];
   const sections = [];
@@ -126,4 +165,9 @@ export function buildKanaIndex(keywords, readings = TERM_READINGS) {
     sections.push({ label: label === '漢字' ? '漢字・その他' : label === '英字' ? 'A〜Z' : label, items: items.map((x) => x.keyword) });
   }
   return sections;
+}
+
+// 数字→読み（buildTocEntries等、目次系コードから呼ぶ時の名前をnumberToKanaと揃える別名）。
+export function numberToReading(num) {
+  return numberToKana(num);
 }

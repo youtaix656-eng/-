@@ -306,6 +306,25 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 ランナー**で、終えたステップは既存の記録へ書き込む（瞑想→meditation、運動・読書→monk、
 ジャーナル→今日の3つ）。**`sleepPhrase` は「しか」を含む文を返さない**（「◯時間しか眠れない」を
 「◯時間も眠れる」に言い換えるのが出典の要点。テストが機械チェック）。
+目次・索引（`src/data/toc.ts`＋`src/lib/yomi.ts`＋`src/lib/focus.ts`）は**目次専用の手書きデータを持たない**
+——`buildTocEntries()` が各 lib の元データから毎回導出する。並びは あ〜ん→A〜Z→その他で、
+**数字は読みに変換してから行を決め**（「3のルール」→さ行）、**漢字の読みは推定しない**
+（`reading` が無ければ「その他」に落として入れ忘れを見せる。`warnOtherRow` が目安24件で知らせる）。
+英数字混じり（ＷＨＯ／Ⅰ型／①）は `normalizeAlnum` で正規化してからA〜Zを判定。
+**タイトルの重複は禁止**で、ぶつかったら `disambiguate` がまとまり名を添える（元の名前は別名に残す）。
+**`descriptionStatus` の既定は `needs_review`＝「※要確認」**——出典由来の主張は一次資料未確認なので必ず印を出し、
+`verified` にできるのはアプリ自身の仕組みと **本人が `markVerified` を押した時だけ**
+（会話から来たものが確認済みになる道を作らない）。説明が空なら「※説明未登録」、飛び先が無ければ
+「関連する飛び先はありません」と**必ず出す**（黙らない）。飛び先の id は `src/data/anchors.ts` の
+`ANCHORS` が単一の正で、画面に文字列を直書きしない。飛び方は `flashTo`＋`useFocusJump` を再利用し、
+**画面の切り替えは `useLayoutEffect`**（`useEffect` だと飛ぶ時にまだ前の画面が描かれていて着かない）、
+**印は className ではなく `data-flash` 属性**（開閉で className が書き直されると印だけ消える。鏡で実際に踏んだ）、
+**「先頭へ戻す」を副作用にしない**（`App.tsx` は view の変化で `scrollTo` せず、ナビのタップの中で行う）。
+会話由来の追加・削除の候補は `src/data/tocCandidates.ts` に留め、**本体データへ一切書き込まない**。
+候補を作ってよいのは3つのきっかけだけ（`■用語追加：`の合図／教材のタグ／本人の「目次に追加して」）で、
+**それ以外では作らない**（`makeCandidate` が null を返す）。「追加する」を押した時に初めて
+読み・重複・分類・正規化の4つを見て本体へ入れ、「しない」は痕跡を残さない。確定は履歴に残り
+`undoLastTocAdditions(n)` で直近の追加だけ取り消せる。
 テストは `henkaku-note/tests/*.spec.ts`（TypeScript）。テスト用の Settings は
 `tests/fixtures.ts` の `testSettings()` に集約する（各テストに書き写すと項目追加のたびに全部壊れる）。CIがNode 20のため `tsc` で
 `.test-build/` へ出してから `node --test` する（`npm test` はアプリ側で実行。ルートの再帰探索には
@@ -917,7 +936,47 @@ YAML の1行に入れるので**改行を畳み引用符を escape する**（�
 （束にすると個々の印が埋もれる）。**名前がぶつかったら番号を足す**（上書きすると1つ消える）。
 **パックの `kitIds` は商品の目次であって同期する列ではない**——型の側にパックの id を
 持たせない（片方向のまま。`deal.taskIds` の失敗を繰り返さない）。消された型は静かに落とす。
-テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される）。
+**目次・索引と用語（2026-09-02 追加。ユーザー指定の25ルール）**：
+179. **目次は `data/toc.js` の `buildTocEntries()` が元データから毎回導出する**
+（`buildToc` は同じもの。目次専用の手書きデータを作らない）。呼び出し側は必ず `useMemo` で包む。
+用語そのものは `data/terms.js`（24件）で、**これは目次専用ではなく用語という元データ**。
+180. **`lib/yomi.js` の呼び名は共通ルールにそろえる**：`foldKana`（読みを畳む）／
+`kanaRow`（行の判定）／`numberToReading`（数字→読み）／`buildKanaIndex`（索引の組み立て・
+「その他」の件数つき）／`normalizeAlnum`（ＷＨＯ・Ⅰ型を A〜Z の枠へ）。
+既存の `normalizeReading`／`bucketOf`／`numberToKana` は同じものへの別名として残す。
+**`normalizeAlnum` は記号を落としきること**——中黒（・）はかなの文字範囲に入っているので
+別に落とさないと「・」だけの題名が「字としてそろっている」ことになる（実際に踏んだ）。
+181. **飛び先は `lib/focus.js` の `flashTo` が単一の正**（画面をまたぐレベル2）。
+**印は `className` ではなく属性**（`FLASH_ATTR`＝`data-flash`。CSS も `[data-flash]` で受ける）
+——飛び先のカードは開閉で className が変わるため、class で印を付けると次の描き直しで消える。
+外すのは `setTimeout`。`components/useFocusJump.js` が lazy な画面を数フレーム待ち、
+`components/FocusJumper.jsx` が `App` に常駐する。`go(view, arg, anchor)` の第3引数で運ぶ。
+182. **飛んだあとに画面を先頭へ戻さない。** 先頭へ戻すのは `go()` の中＝操作の一部で、
+**目印を立てるのはそのあと**（順番を逆にすると運んだ画面が引き戻される）。
+183. **枠（タブ）の切り替えは `useLayoutEffect`。** `useEffect` にすると切り替えの描き直しが
+`flashTo`（次のフレーム）より後になり、作り直された拍子に印だけが消える。
+184. **見つからない目印を渡さない**（`terms.resolveDestination`）。事業の中の目印
+（`venture-…`）は事業の**詳細**にあり一覧には無いので、押した時に「いま実行中の事業」へ
+読み替える。事業が1つも無ければ目印を外して一覧へ送る（飛んだのに何も光らないと壊れて見える）。
+185. **説明が空なら「※説明未登録」、飛び先が無ければ「関連する飛び先はありません」**と正直に出す
+（空欄を埋めるために作り話を書かない）。**`descriptionStatus: 'needs_review'` には必ず「※要確認」**を出し、
+**`verified` にできるのは人が画面で押した時だけ**（`markTermVerified`。**`markVerified` という名前にしない**
+——`knowledge.js` に同名の別物があり、層が違う。項目162と同じ線）。
+186. **候補は3つの合図でしか生まれない**（`lib/tocCandidates.js` の `CANDIDATE_TRIGGERS`＝
+marker／tags／user）。それ以外では `makeCandidate` が null を返す。
+**会話から来たものの `descriptionStatus` は必ず `needs_review`**（渡された値で上書きしない）。
+187. **候補は `ouro:tocCandidates` にだけ溜まり、押すまで本体データ（`ouro:terms`）に1文字も書かない。**
+「追加する」を押した時に初めて**読み・重複・分類・正規化の4つ**を確かめ、通らなければ**書かずに理由を返す**
+（履歴には「止めた」を残す）。「削除する」は対象の1件だけを外し、「しない」は本体に一切影響しない。
+確定はすべて履歴に残り、`undoLastTocAdditions(n)` は**直近の「追加」だけ**を取り消す（削除は巻き戻さない）。
+188. **`ouro:terms`／`ouro:tocCandidates` は配列ではなくオブジェクト。**
+REST の読み込みで `asArray` に通すと毎回空で上書きされる（項目50の `ouro:funnel` と同じ形）。
+`OBJECT_FALLBACKS` に登録して、オブジェクトのまま受けること。
+189. 起動時に読む量の相殺：**判断（`decisions.js`）と会社の決まり（`rules.js`）は押した時に読む**
+（どちらの画面も lazy なのに静的に読んでいた）。`updateRules`／`addCompanyRule`／
+`removeCompanyRule`／`decideTask` が**非同期**になった。110.4KB → **109.3KB**。
+テストは `ouro/test/*.test.mjs`（ルートの `npm test` の再帰探索からも実行される。
+目次・索引の25ルールは `ouro/test/tocIndex.test.mjs` が26件で機械チェックする）。
 
 鏡（かがみ）の要点だけ再掲：**心理的な操作の「型」カタログ `src/data/tactics.js` が単一の正**
 （54件×8まとまり。1件足せば一覧・目次・判定が自動で追従する。**画面にも判定にも if を足さない**）。
@@ -1496,6 +1555,7 @@ APIキー無しで今日から使えること・端末内保存を崩さない�
 | 鍼灸過去問題の傾向と対策 | `lib/pastExamTrends.js`／`PastExamTrends.jsx`（Home内） | 収録済み過去問（round付き＝原問のみ）を実際に集計し、複数回にまたがる頻出ジャンル・頻出キーワードをデータドリブンに可視化。科目別の対策優先度、学習法・音声学習での活かし方、やるべきこと／やってはいけないことも提示。頻出テーマ・キーワードから一問一答へワンタップで絞り込める |
 | 機種変更・端末移行（2026-08-19拡張） | `MigrationGuide.jsx`（Home/Settings内導線）／`Settings.jsx`内 `SyncQR.jsx`・`SyncScan.jsx`・`FileBackupCard.jsx`・`CloudBackup.jsx`・`P2PTransfer.jsx` | QR受け渡し（`lib/transferCodec.js`で圧縮＋`lib/chunk.js`で自動分割・アニメーション連続表示、テキストのコピー＆ペーストでも可、`lib/sync.js`の`summarizeHistoryForTransfer`で古い履歴を要約し軽量化）／バックアップファイルの保存・復元・共有（Web Share API、非対応端末はダウンロードにフォールバック）／Googleドライブ連携（`lib/googleDrive.js`、任意・要OAuthクライアントID自己発行、appDataFolderのみ・プライバシー方針の明示的な例外）／WebRTC直接転送（`lib/webrtcTransfer.js`、公開STUNのみ・TURN無し、シグナリングはQR/テキストで手動交換）。`MigrationGuide.jsx`は`lib/migrationAdvice.js`の`recommendMigrationMethod`で現在のデータ量から最適な方法を自動提案 |
 | クラウド自動同期（2026-08-19追加・2026-08-25拡張） | `CloudBackup.jsx`の「自動同期」トグル／`useStore.js`（`runCloudSync`＋同期エフェクト）／`lib/progressMerge.js`／`lib/googleDrive.js` | Googleドライブ連携で`settings.googleDriveAutoSync`をONにすると、アプリを開いた時・**このタブに戻ってきた時**（`visibilitychange`/`focus`、60秒スロットル）・進捗（srs/history/memos/links/examResults/bookmarks/**quizProgress/examProgress/reviewProgress/audioProgress/session**）が変わった数秒後に、サイレント認証（同意画面を出さない`requestAccessToken(clientId, {silent:true})`）でappDataFolderの軽量ペイロード（`googleDrive.SYNC_FILENAME`、問題データは含まない）を確認・アップロードする。単純な新しい方で上書きだと片方の端末の進捗が消えるため、`lib/progressMerge.js`の`mergeProgress`で種類ごとにマージ（srsは問題ID単位でlastAnswered/dueが新しい方、historyはUNION+重複除去、examResultsはid単位UNION、memos/links/settings/bookmarksはキー単位UNION＋競合時は全体updatedAtが新しい側を優先、**quizProgress/examProgress/reviewProgress/audioProgress/sessionは`mergeResumeState`が各自身の時刻（at、sessionだけstartedAt）でより新しい方を丸ごと採用**）。実際に反映すべき変化があったかは`progressChanged`が中身まで比較して判定する（**件数だけの比較は既存キーの値だけが更新されたケースを見逃すバグがあったため2026-08-25に修正**）。`storage.js`の`syncMeta`（`updatedAt`）がマージ判定の基準時刻。サイレント認証・通信失敗は静かに諦める（初回だけ手動の「保存」または「復元」でGoogleログインの同意を済ませる必要がある）。他端末の進捗を取り込んだ時は`cloudAutoSyncToast`でトースト通知（画面遷移はしない）。デバウンス（最大5秒）を待たずに試したい時は`syncCloudNow`（設定画面・機種変更ガイドの「🔄 今すぐ同期」ボタン）。手動の全体バックアップ（`BACKUP_FILENAME`）とは別ファイルなので競合しない。**quizProgress等（一問一答・模試等の「続きから」）は当初「別端末で今まさに進行中のセッションを裏で無言で上書きしかねない」という理由であえて対象外にしていたが、2026-08-25にユーザーの明示指示で対象に含めた**（自身のタイムスタンプで新しい方を丸ごと採用するため、両端末で同時に別の活動を始めた場合は片方が後勝ちで置き換わる。QR／バックアップファイル／WebRTCでも同じ値が引き継がれる、`storage.js`の`exportAll`/`importAll`・`sync.js`の`buildSyncPayload`参照）。**「URLを開いたら常に最新化する」ための同期トリガーは全部で10系統**（2026-08-25追加、`useStore.js`）：①起動直後（300ms後、5秒デバウンスを待たない専用の初回同期）②タブ復帰時（`visibilitychange`/`focus`）③オフライン→オンライン復帰時（`online`イベント）④開いたままの端末向けの定期同期（5分間隔）⑤バックグラウンドへ退避する直前のプッシュ同期（`visibilitychange`→hidden／`pagehide`、これだけは共通スロットル対象外＝取りこぼし防止優先）⑥起動時同期が失敗した場合の1回だけの自動リトライ（15秒後、無限リトライはしない）⑦データ変更から5秒後のデバウンス同期（従来からある本線）⑧手動「🔄 今すぐ同期」ボタン（`syncCloudNow`）⑨Service Workerの自動更新チェック（`main.jsx`、起動時・1時間毎、`sw.js`はnetwork-firstでアプリコード自体も常に最新を取りに行く）⑩QRコード／URL（`#sync=`）での明示的な取り込み（`sync.js`）。②③④は共通の間引き（`lastBgSyncRef`、1分）を通し、①の初回同期もこの間引きに登録することで起動直後の重複発火を防いでいる（起動直後にfocusイベントが偶発的に発生するブラウザがあるため）。 |
+| 用語集（目次・索引） | `Toc.jsx`（`view:'glossary'`）＋`data/toc.js`＋`data/glossaryTerms.js` | アプリ内用語をあ〜ん順で索引化。タップで説明・関連画面/問題へのリンク。会話や「これを目次に追加して」からの候補は承認するまで反映されない（詳細は「用語集（目次・索引）」セクション） |
 | 全機能一覧 | `src/data/featureRegistry.js`＋`FeatureIndex.jsx` | 上表と同じ内容の単一の正。検索・カテゴリ絞り込み付き |
 
 上表は概要用のスナップショット。**正確な最新の全機能リストは `src/data/featureRegistry.js`**
@@ -1713,6 +1773,117 @@ APIキー無しで今日から使えること・端末内保存を崩さない�
   （IndexedDBへ直接`srs`/`history`を注入して解答済み状態を再現し、ボタン押下→画面遷移→
   自動選択・自動スクロール・自動OCR開始までを確認）。`node --test`（2249件）・
   `npx vite build`・`npm run validate`はすべて通過。
+
+## 用語集（目次・索引）（2026-09-02追加）
+ユーザー指定で「目次・索引パターン」（既存の`KeizetsuIndex.jsx`・Ouro/鏡/間合い等の
+`data/toc.js`＋`lib/focus.js`パターン）をこのアプリ本体にも実装したもの。
+**既存の`view:'toc'`（`TableOfContents.jsx`＝取り込んだ問題を「科目→キーワード」で
+一覧・演習する画面）とは別物**——新しい画面は`view:'glossary'`（`Toc.jsx`）で、
+あ〜ん索引・用語の説明パネル・候補承認フローを持つ。両画面は互いにボタンでリンクしている。
+- **`src/lib/yomi.js`を拡張**（既存の`numberToKana`/`readingInfo`/`buildKanaIndex`は
+  7画面（Exam/AudioMode/KeizetsuIndex/Quiz/Review/MindMap/Session）が使っており、
+  シグネチャ・挙動を変えると壊れるため**非破壊で追加**した）：
+  - `foldKana`/`kanaRow`：既存の内部関数（`FOLD`/`rowOf`）を外部公開しただけ（実装は共通）。
+  - `numberToReading`：`numberToKana`の別名（実装は共通、目次系コードからの呼び名を統一）。
+  - `normalizeAlnum`：全角英字・ローマ数字（Ⅰ〜Ⅻ・ⅰ〜ⅻ）を半角ラテン文字へ正規化する。
+    `readingInfo`のA〜Z判定はこれを経由するよう変更した（「ＷＨＯ」「Ⅰ型」等がA〜Z枠へ
+    正しく入るようになる）。数字が全角の場合の判定にも同じ正規化を使うよう統一した。
+  - `readingInfo`/`buildKanaIndex`に`opts.strict`を追加：**既定（false）は今までどおり**
+    （readingが無くても先頭が仮名ならその仮名を読み扱いにする、既存7画面向けの緩い挙動）。
+    `strict:true`の時だけ「readingが無い項目は数字・英数字混じり以外、必ず『その他』へ
+    落とす」を厳密に適用する（用語集はreadingを人が明示するデータのため、こちらを使う）。
+  - `buildKanaIndex`に`opts.warnOtherThreshold`を追加：「その他」（漢字グループ）の件数が
+    しきい値を超えたら`import.meta.env.DEV`の時だけ`console.warn`する（読みの入れ忘れの
+    早期発見用ガードレール。本番ビルドでは出さない）。
+- **`src/data/glossaryTerms.js`が用語集の本体データ（単一の正）**。各項目は
+  `{id, title, reading, category, description, descriptionStatus, aliases, destinations}`。
+  `descriptionStatus`は`'verified'`（既存アプリのデータと突き合わせ済み）と
+  `'needs_review'`（未確認）の2値。**`'verified'`を付けてよいのは、この静的ファイルへ
+  人が直接書いた項目だけ**——候補フロー（下記）経由の追加は`proposeAddCandidate`が
+  無条件で`needs_review`に上書きする（渡した値を無視する。テスト
+  `test/tocCandidates.test.mjs`の「会話由来の候補は常にneeds_reviewになる」参照）。
+  初期シードは14件（経絡経穴概論の基礎＋陰陽五行・臓腑）。既存の`knowledgeBase.js`
+  （十二経・原穴等）・`src/lib/yomi.js`の`TERM_READINGS`と矛盾しないことを確認済み。
+  `effectiveGlossary(extra, removedIds)`が「本体データ＋候補承認で増えた分（extra）−
+  候補承認で消えた分（removedIds）」を合成する関数——**`glossaryTerms.js`自体は
+  静的ファイルで実行時に書き換えられない**ため、承認された追加・削除は必ずこの合成を
+  経由する（`data/toc.js`・`lib/tocCandidates.js`が共用）。
+- **`src/data/toc.js`が目次専用データを持たず、用語集から毎回導出する**
+  （`buildTocEntries(glossary)`）。別名（aliases）はcanonicalとは別の1行として展開し、
+  タップすると`type:'system'`のdestinationでcanonicalの項目IDへジャンプする
+  （本文はcanonical側にしか持たせない＝二重管理にしない）。`tocSections()`は
+  `buildKanaIndex(..., {strict:true, warnOtherThreshold})`を使う。`duplicateTitles()`は
+  canonical＋別名を合わせた統合後のtoc全体でチェックする。`resolveDestination(dest)`が
+  4種類のdestination（page/function/question/system）を実行可能な「意図」
+  （navigate/relay/startQuestion/jumpTerm）に正規化し、`openTermAction(targetId)`が
+  「用語を開く」時の状態（常にタブは索引固定・アンカーIDの組み立て）を、
+  `termPanelViewModel(entry)`が詳細パネルの表示用データ（説明未登録時のプレースホルダー・
+  needs_reviewバッジの要否・destinations空時のメッセージ）を、それぞれReact非依存の
+  純関数として切り出してある——**このアプリには元々コンポーネントのレンダリングを
+  試験する仕組み（jsdom等）が無い**ため、UIの振る舞いはこれらの純関数をnode:testで
+  検証し、実際の見た目・操作はPlaywright QAで確認する方針にした（外部テストライブラリを
+  新規導入しない、という既存方針を維持するため）。
+- **`src/lib/focus.js`＋`src/components/useFocusJump.js`を新規実装**（Ouro/鏡/間合いの
+  `flashTo`/`FLASH_ATTR`/`useFocusJump`と同じ設計をそのまま移植）。ハイライトの印は
+  **`className`ではなく`data-flash`属性**に付ける——飛び先のカードは開閉操作で
+  `className`が変わることがあり、印をclassで付けると次の描き直しでReactがclassNameを
+  丸ごと書き直し、印だけが消える（鏡アプリで実際に踏んだバグと同じ形なので、
+  最初から属性方式で実装した）。CSSは`src/styles/index.css`の`[data-flash]`。
+- **destinationsは4種類**（`type`）：
+  - `'page'`：`onNavigate(target)`で画面遷移するだけ（画面内の特定箇所へは飛ばない。
+    既存の画面の多くは用語単位の細かいアンカーを持たないため、正直に「遷移するだけ」とし、
+    無いアンカーを捏造しない）。
+  - `'function'`：App.jsxの既存の中継関数（`openKeyword`→連結学習・`openGraphConcept`→
+    知識グラフ・`openFlashcardKeyword`→フラッシュカード）を`target`名で呼ぶ。
+    **新しいジャンプの仕組みは作らず、既存の`focusKeyword`型の中継をそのまま再利用した**。
+  - `'question'`：`target`を問題IDとして`questions`から検索し、見つかれば
+    `startCustomQuiz([q])`でその1問だけの演習を開始する（複数画面をまたいで
+    「特定の1問をハイライトする」汎用の仕組みは無いため、代わりに「その問題だけの
+    演習を始める」という実質的に同じ体験を既存機能の組み合わせで実現した）。
+  - `'system'`：用語集内の別の項目IDへ`lib/focus.js`のflashTo相当（`useFocusJump`）で
+    ジャンプ・ハイライトする。別名→canonical、要穴→原穴/絡穴/募穴、のような
+    用語集内リンクはこの形。
+  - **`page`/`function`/`question`は他画面の詳細アンカーまでは作り込んでいない**
+    （既存の数十画面すべてに用語単位のアンカーを追加するのはこの回のスコープを大きく
+    超えるため）。同一画面内で完結する`system`だけが、真の意味での
+    「運んでハイライトする」を実装している。この区別は正直に上記のとおり。
+- **候補フロー（会話内容からの追加・削除提案）は`src/lib/tocCandidates.js`**：
+  - 候補の生成トリガーは3つだけ——a)「■用語追加：〜」という会話中の明示的な合図
+    （Claudeが`proposeAddCandidate`を手動で呼ぶ）、b) 教材生成時に付与された
+    `tags`フィールド（`suggestCandidatesFromTags`を**明示的に**呼んだ時だけ）、
+    c) ユーザーが「これを目次に追加して」と指示した場合（`Toc.jsx`の
+    「これを目次に追加して」フォーム）。**`suggestCandidatesFromTags`はどのコンポーネント・
+    どのuseStore.jsの自動処理からも呼んでいない**（`test/tocCandidates.test.mjs`の
+    「suggestCandidatesFromTagsはどこからも自動で呼ばれていない」がsrc/components・
+    src/lib全体をソースレベルで機械チェックする）。b)を実際に使う時は、標準変換
+    プロンプトで新しい科目データを追加した後、このセッション内でこの関数を手動で
+    呼び出す（または将来`scripts/`に手動実行スクリプトを足す）運用とし、**自動実行の
+    仕組みは今回あえて配線していない**（ユーザー指定の「絶対に発火させない」を
+    もっとも安全に満たす形）。
+  - 候補は`glossaryExtra`/`removedIds`（本体データ相当）とは別の
+    `storage.js`の`tocCandidates`キーに保持し、**承認（`acceptCandidate`）するまで
+    本体データには一切書き込まない**。承認時に初めてreading・重複・分類・正規化の
+    4チェック（`runTocChecks`）を実行し、1つでも落ちれば反映せず候補はpendingのまま
+    エラーを表示する。「しない」（`rejectCandidate`）は候補を`rejected`にして
+    履歴へ「見送り」として残すだけで、`glossaryExtra`/`removedIds`には一切触れない。
+  - 確定結果（追加/削除/見送り/取り消し）は`storage.js`の`tocHistory`キーへ積む。
+    `undoLastTocAdditions(n)`は**履歴上の直近n件の「承認された追加」だけ**を
+    `glossaryExtra`から取り消す（手で書いた本体データ`GLOSSARY_TERMS`は対象外——
+    履歴の`add`レコードは`glossaryExtra`への追加時にしか作られないため自然にそうなる）。
+- **スコープ判断（意図的に対応していない項目）**：
+  - `glossaryExtra`/`removedIds`/`tocCandidates`/`tocHistory`の4キーは、
+    **バックアップ・QR・クラウド自動同期には含めていない**（`exportAll`/`importAll`へは
+    配線していない）。ユーザー指定の25ルールにこの要件は無く、今回はスコープを
+    絞った。端末を変えると候補フローで積み上げた分は引き継がれない——将来
+    「機種変更・端末移行」の対象に含めるかはユーザー確認のうえで判断する。
+  - `suggestCandidatesFromTags`を呼び出す実際のUIボタン・npm scriptは**今回は作らず**、
+    関数として実装のみ（トリガーbは前述のとおり手動運用）。
+- テストは`test/yomi.test.mjs`（既存3件＋新規9件）・`test/focus.test.mjs`（6件）・
+  `test/toc.test.mjs`（16件）・`test/tocCandidates.test.mjs`（12件）に分けて配置。
+  `node --test`（2363件）・`npx vite build`・`npm run validate`はすべて通過。
+  UIの実際の見た目・操作（索引タップ→詳細パネル→destinationsボタン→画面遷移/
+  ジャンプ、候補の追加する/しない、クイック追加フォーム）はPlaywright QAで確認する
+  （このアプリにコンポーネントレンダリングのテスト基盤（jsdom等）が無いため）。
 
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、

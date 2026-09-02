@@ -220,7 +220,7 @@ export function VentureDetail({ store, ventureId, go, toast }) {
 
       <StateCard venture={venture} store={store} toast={toast} />
       {venture.state === 'running' && today && <TodayCard plan={today} go={go} venture={venture} />}
-      <LoopCard
+      <div id="venture-loop"><LoopCard
         venture={venture}
         loop={loop}
         store={store}
@@ -229,11 +229,13 @@ export function VentureDetail({ store, ventureId, go, toast }) {
         unit={unit}
         go={go}
         toast={toast}
-      />
-      <VerdictCard venture={venture} status={status} store={store} funnel={funnel} toast={toast} />
-      <RivalsCard venture={venture} store={store} />
-      <DemandCard venture={venture} store={store} />
-      <RiskCard venture={venture} store={store} toast={toast} />
+      /></div>
+      <div id="venture-verdict">
+        <VerdictCard venture={venture} status={status} store={store} funnel={funnel} toast={toast} />
+      </div>
+      <div id="venture-rivals"><RivalsCard venture={venture} store={store} /></div>
+      <div id="venture-demand"><DemandCard venture={venture} store={store} /></div>
+      <div id="venture-risk"><RiskCard venture={venture} store={store} toast={toast} /></div>
       <TargetCard venture={venture} plan={plan} store={store} go={go} funnel={funnel} toast={toast} />
       <MoneyCard venture={venture} unit={unit} store={store} go={go} toast={toast} />
       <SellCard venture={venture} sold={unit ? unit.sales : 0} store={store} go={go} toast={toast} />

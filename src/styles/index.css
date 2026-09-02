@@ -3672,3 +3672,22 @@ code.block {
 .kz-freq-cool { background: #fef9c3; color: #854d0e; }
 .kz-freq-none { background: #f1f5f9; color: #64748b; }
 .kz-tb-section .kz-page-body { padding: 0 16px 16px; }
+
+/* ── 用語集（目次・索引） ─────────────────────────── */
+[data-flash] { animation: toc-flash 1.9s ease-out; }
+@keyframes toc-flash {
+  from { background: rgba(55, 182, 204, 0.22); }
+  to { background: transparent; }
+}
+.toc-section-label { font-size: 13px; font-weight: 700; opacity: 0.7; margin: 14px 0 6px; }
+.toc-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.toc-chip { display: inline-flex; align-items: center; gap: 6px; }
+.toc-chip .toc-chip-sub { font-size: 11px; opacity: 0.65; }
+.toc-panel { margin-top: 10px; }
+.toc-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.toc-panel-title { font-size: 17px; font-weight: 700; }
+.toc-panel-reading { font-size: 12px; opacity: 0.6; margin-left: 6px; }
+.toc-dest-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.toc-candidate-row { display: flex; flex-direction: column; gap: 6px; }
+.toc-candidate-errors { color: var(--wrong); font-size: 12px; }
+.toc-history-row { font-size: 12px; opacity: 0.75; padding: 4px 0; border-bottom: 1px solid rgba(128,128,128,0.15); }

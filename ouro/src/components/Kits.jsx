@@ -137,7 +137,7 @@ function KitCard({ kit, store, go, toast, open, onToggle }) {
       action={<span className="chip">{ready.ready ? '出せる' : `あと${ready.reasons.length}`}</span>}
     >
       <p className="muted" style={{ marginTop: -6 }}>{kitLine(kit, tasks)}</p>
-      <div className="stats">
+      <div className="stats" id="kit-runs">
         <Stat value={`${runs.length}／${MIN_RUNS}`} label="回した回数" />
         <Stat value={(kit.samples || []).length} label="結果の見本" />
         <Stat value={effort.minutesPerRun === null ? '—' : `${effort.minutesPerRun}分`} label="1回の目安" />
@@ -253,7 +253,7 @@ function KitCard({ kit, store, go, toast, open, onToggle }) {
             />
           </Field>
 
-          <SectionTitle>書き出し（このまま売り物になります）</SectionTitle>
+          <SectionTitle><span id="kit-export">書き出し（このまま売り物になります）</span></SectionTitle>
           <div className="btn-row">
             <button type="button" className={`btn${asSkill ? ' primary' : ''}`} onClick={() => setAsSkill(true)}>
               SKILL.md の形

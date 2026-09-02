@@ -1710,3 +1710,24 @@ select {
   font-size: 13px;
   letter-spacing: 0.04em;
 }
+
+/* 目次の飛び先を一時的に光らせる。
+   **印は class ではなく属性で受ける**（`lib/focus.js` の FLASH_ATTR）——
+   飛び先のカードは開閉で className が変わるので、class で受けると
+   次の描き直しで React が書き直し、運べているのに印だけ消える。 */
+[data-flash] {
+  animation: toc-flash-in 1.6s ease-out;
+  border-radius: 12px;
+  /* 固定ヘッダーの下に出るようにずらす（飛び先が隠れない） */
+  scroll-margin-top: 4.5rem;
+}
+
+@keyframes toc-flash-in {
+  0% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.09); }
+  70% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.04); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-flash] { animation: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6); }
+}

@@ -30,6 +30,8 @@ export interface RoutineStep {
   shortMinutes: number;
   /** 終わった時に、どの既存機能へ記録するか */
   writesTo?: 'meditation' | 'workout' | 'reading' | 'threeRules';
+  /** 別の呼び名。目次で別名からも引けるようにする（data/toc.ts） */
+  aliases?: string[];
 }
 
 /** 出典の6つ。並び順は変えられる（解説者自身も順番を入れ替えている） */
@@ -39,6 +41,7 @@ export const ROUTINE_STEPS: RoutineStep[] = [
     title: '瞑想',
     reading: 'めいそう',
     icon: '🧘',
+    aliases: ['サイレンス', '静寂'],
     how: '静かな場所に座り、目を閉じるか一点を見つめて呼吸に意識を向けます。逸れたら呼吸に戻す。それだけで構いません。',
     fullMinutes: 5,
     shortMinutes: 1,
@@ -49,6 +52,7 @@ export const ROUTINE_STEPS: RoutineStep[] = [
     title: 'アファメーション',
     reading: 'あふぁめーしょん',
     icon: '🗣',
+    aliases: ['アファーメーション', '宣言'],
     how: '決めておいた目標を声に出す（心の中で唱えるのでも構いません）。数字と期限が入っているものほど、目指す先がはっきりします。',
     fullMinutes: 5,
     shortMinutes: 1,
@@ -58,6 +62,7 @@ export const ROUTINE_STEPS: RoutineStep[] = [
     title: 'イメージング',
     reading: 'いめーじんぐ',
     icon: '🌄',
+    aliases: ['ビジュアライゼーション', 'イメージトレーニング'],
     how: '深呼吸して、今日この後の1日を思い浮かべます。仕事を楽にこなしている自分、問題が起きても解決している自分、終わって良い気分でいる自分。',
     fullMinutes: 5,
     shortMinutes: 1,
@@ -67,6 +72,7 @@ export const ROUTINE_STEPS: RoutineStep[] = [
     title: 'エクササイズ',
     reading: 'えくささいず',
     icon: '🏃',
+    aliases: ['運動', 'エクササイズ'],
     how: '激しい運動でなくて構いません。少し脈が上がればよい、という程度。散歩・ヨガ・スクワットなど、続けやすいもので。',
     fullMinutes: 20,
     shortMinutes: 1,
@@ -77,6 +83,7 @@ export const ROUTINE_STEPS: RoutineStep[] = [
     title: '読書',
     reading: 'どくしょ',
     icon: '📖',
+    aliases: ['リーディング'],
     how: '「今日この後で使えるところはないか」という目で読みます。10ページでも、1ページでも構いません。',
     fullMinutes: 20,
     shortMinutes: 1,
@@ -87,6 +94,7 @@ export const ROUTINE_STEPS: RoutineStep[] = [
     title: 'ジャーナル',
     reading: 'じゃーなる',
     icon: '✍️',
+    aliases: ['スクライビング', '日記', '書き出し'],
     how: '今日終わらせることを書き出します。感謝したこと・できたこと・直したいことを足しても構いません。',
     fullMinutes: 5,
     shortMinutes: 1,
@@ -97,9 +105,9 @@ export const ROUTINE_STEPS: RoutineStep[] = [
 export const STEP_MAP = Object.fromEntries(ROUTINE_STEPS.map((s) => [s.id, s]));
 
 export const PRESETS = [
-  { id: 'full', label: '60分版', note: '出典の配分（瞑想5・アファメーション5・イメージング5・運動20・読書20・ジャーナル5）。' },
-  { id: 'short', label: '6分版', note: '時間が取れない日のための短縮版。出典も「これでもやらないより差が出る」としています。' },
-  { id: 'custom', label: '自分で決める', note: '順番も長さも変えて構いません。出典も「好きにカスタマイズしてよい」と言っています。' },
+  { id: 'full', label: '60分版', reading: '', note: '出典の配分（瞑想5・アファメーション5・イメージング5・運動20・読書20・ジャーナル5）。' },
+  { id: 'short', label: '6分版', reading: '', note: '時間が取れない日のための短縮版。出典も「これでもやらないより差が出る」としています。' },
+  { id: 'custom', label: '自分で決める', reading: 'じぶんできめる', note: '順番も長さも変えて構いません。出典も「好きにカスタマイズしてよい」と言っています。' },
 ] as const;
 
 export type PresetId = (typeof PRESETS)[number]['id'];
@@ -265,36 +273,50 @@ export function summarizeRoutine(records: ({ routine?: RoutineRecord } | undefin
 export const ROUTINE_UNVERIFIED = [
   {
     id: 'weeks',
+    short: '数週間で人生が変わる',
+    reading: 'すうしゅうかんでじんせいがかわる',
     claim: 'これをやった人は軒並み数週間で人生が変わっている',
     note: '出典の紹介する言い方です。数週間で変わると期待して始めると、変わらなかった時に続かなくなります。まず「起きた最初にやる形を作る」だけを目標にしてください。',
   },
   {
     id: 'early_success',
+    short: '早起きと成功',
+    reading: 'はやおきとせいこう',
     claim: '成功している人は早起きしている（だから早起きすると成功する）',
     note: '早起きの人に成功者が多いとしても、早起きが原因だとは限りません。出典自身も「早起きしただけで成功するとは言わない」と言っています。',
   },
   {
     id: 'affirm_rate',
+    short: '数字を入れるほど実現する',
+    reading: 'すうじをいれるほどじつげんする',
     claim: '明確な数字を入れれば入れるほど実現する確率は跳ね上がる',
     note: '裏は取れていません。ただ、目標をはっきりさせること自体は、何をするか決めやすくなります。',
   },
   {
     id: 'hippocampus',
+    short: '海馬の灰白質',
+    reading: 'かいばのかいはくしつ',
     claim: '瞑想している人は海馬の灰白質が大きくなっているという報告がある',
     note: '報告がある、という水準の話です（🧘瞑想の「効果の見通し」でも同じ扱いにしています）。',
   },
   {
     id: 'recording_diet',
+    short: '記録するだけで痩せる',
+    reading: 'きろくするだけでやせる',
     claim: '体重を記録するだけで痩せる（記録の効果）',
     note: '記録すると意識が向きやすくなるのは確かですが、記録だけで結果が出ると考えないでください。',
   },
   {
     id: 'sleep_experiment',
+    short: '寝る前の思い込みの実験',
+    reading: 'ねるまえのおもいこみのじっけん',
     claim: '寝る前に「足りない」と思うと、9時間寝ても疲れて起きる',
     note: '出典の著者が自分1人で試した話で、研究ではありません。言い方を変えてみる価値はありますが、睡眠時間そのものの代わりにはなりません。',
   },
   {
     id: 'no_breakfast',
+    short: '朝食を抜くと集中力が上がる',
+    reading: 'ちょうしょくをぬくとしゅうちゅうりょくがあがる',
     claim: '朝食を抜くと集中力が上がる。最強クラスのライフハック',
     note: '人によります。血糖に関わる持病・服薬・妊娠授乳・成長期・摂食障害の経験がある場合は、自己判断で始めないでください。🍚食事の時間と量の「始める前の確認」も見てください。',
     hard: true,

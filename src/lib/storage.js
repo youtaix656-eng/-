@@ -46,6 +46,10 @@ export const KEYS = {
   migrated: 'shinkyu:migrated',
   syncMeta: 'shinkyu:syncMeta', // クラウド自動同期用：進捗（srs/history/memos/links/examResults/settings）の最終更新時刻
   visitedViews: 'shinkyu:visitedViews', // 一度でも開いたことのある画面（view id）の集合。「まだ使ったことのない機能」の判定用（activityは直近ログで古い訪問が消えるため別管理）
+  glossaryExtra: 'shinkyu:glossaryExtra', // 用語集：候補フローで承認され追加された項目（本体データ glossaryTerms.js は静的なので、実行時に増える分だけここに持つ）
+  glossaryRemovedIds: 'shinkyu:glossaryRemovedIds', // 用語集：削除候補が承認され非表示になった項目ID（本体データは書き換えられないため、隠すIDだけ持つ）
+  tocCandidates: 'shinkyu:tocCandidates', // 用語集：レビュー待ち・却下済みの追加/削除候補
+  tocHistory: 'shinkyu:tocHistory', // 用語集：候補の採否履歴（undoLastTocAdditionsの参照元）
 };
 
 const useIdb = isIdbSupported();
@@ -220,6 +224,20 @@ export const saveKwMeta = (m) => write(KEYS.kwMeta, m);
 // ---- ユーザー辞書（自動提案に足す自作用語） ----
 export const loadUserDict = () => read(KEYS.userDict, []);
 export const saveUserDict = (d) => write(KEYS.userDict, d);
+
+// ---- 用語集（目次・索引）の実行時追加分・削除・候補・履歴 ----
+// glossaryExtra = 承認され本体データ（glossaryTerms.js）に相当するものとして扱う項目の配列
+export const loadGlossaryExtra = () => read(KEYS.glossaryExtra, []);
+export const saveGlossaryExtra = (v) => write(KEYS.glossaryExtra, v);
+// glossaryRemovedIds = 削除が承認され、以後は表示しない項目IDの配列
+export const loadGlossaryRemovedIds = () => read(KEYS.glossaryRemovedIds, []);
+export const saveGlossaryRemovedIds = (v) => write(KEYS.glossaryRemovedIds, v);
+// tocCandidates = レビュー待ち・却下済みの追加/削除候補
+export const loadTocCandidates = () => read(KEYS.tocCandidates, []);
+export const saveTocCandidates = (v) => write(KEYS.tocCandidates, v);
+// tocHistory = 候補の採否履歴（新しい順に積む想定はしない。時刻でソートして使う）
+export const loadTocHistory = () => read(KEYS.tocHistory, []);
+export const saveTocHistory = (v) => write(KEYS.tocHistory, v);
 
 // ---- 読み取れなかったページ・問題の控え ----
 // unread = [{ id, source, page, detail, at }]
