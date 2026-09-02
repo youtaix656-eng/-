@@ -104,14 +104,59 @@ jobs:
         run: npm run build
         working-directory: ouro
 
+      # 鏡（かがみ / Vite + React JSX）を /kagami サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (鏡)
+        run: npm ci
+        working-directory: kagami
+
+      - name: Test (鏡)
+        run: npm test
+        working-directory: kagami
+
+      - name: Build (鏡 / /kagami)
+        run: npm run build
+        working-directory: kagami
+
+      # 資格ラボ（過去問→AI変換 / Vite + React JSX）を /shikaku-lab サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (資格ラボ)
+        run: npm ci
+        working-directory: shikaku-lab
+
+      - name: Test (資格ラボ)
+        run: npm test
+        working-directory: shikaku-lab
+
+      - name: Build (資格ラボ / /shikaku-lab)
+        run: npm run build
+        working-directory: shikaku-lab
+
+      # 間合い（まあい / Vite + React JSX）を /maai サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (間合い)
+        run: npm ci
+        working-directory: maai
+
+      - name: Test (間合い)
+        run: npm test
+        working-directory: maai
+
+      - name: Build (間合い / /maai)
+        run: npm run build
+        working-directory: maai
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
           cp -r henkaku-note/dist dist/henkaku-note
           cp -r ouro/dist dist/ouro
+          cp -r kagami/dist dist/kagami
+          cp -r shikaku-lab/dist dist/shikaku-lab
+          cp -r maai/dist dist/maai
           touch dist/.nojekyll
 
       - name: Upload artifact

@@ -7,10 +7,15 @@ import {
   isInReview,
   isMastered,
   isDue,
+  isLeech,
+  justBecameLeech,
+  justResolvedLeech,
+  resetDueForReview,
   sortByPriority,
   normalize,
   GRADES,
   MASTER_STREAK,
+  LEECH_THRESHOLD,
 } from '../src/lib/srs.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -29,7 +34,11 @@ test('誤答(△✕)すると復習対象になり、約20分後に再出題・�
   assert.equal(s.due, now + 20 * 60 * 1000); // 忘却曲線の初回＝約20分後
 });
 
-test('○(完璧)を重ねると忘却曲線に沿って間隔が延びる（1→3→7→16日）', () => {
+test('○(完璧)を重ねると忘却曲線に沿って間隔が延びる（1→3→7日、以降はefの伸びで16日よりやや長くなる）', () => {
+  // efは正解のたびに+0.05され、間隔計算にもその比率（ef/2.5）を掛けるようにした（#14）。
+  // 1〜3回目はefの伸びがまだ小さく丸めで吸収されるため原典どおりの1・3・7日のまま、
+  // 4回目でわずかに17日（16日ではない）へずれる——これは意図した変化であり、
+  // 「efが計算されるだけで使われていない」という以前の状態を修正した結果。
   const now = 1_000_000_000_000;
   let s = applyGrade(emptyState(), GRADES.again, now); // まず誤答で復習対象へ
   s = applyGrade(s, GRADES.easy, now); // 1回目完璧
@@ -39,7 +48,25 @@ test('○(完璧)を重ねると忘却曲線に沿って間隔が延びる（1�
   s = applyGrade(s, GRADES.easy, now); // 3回目
   assert.equal(s.interval, 7);
   s = applyGrade(s, GRADES.easy, now); // 4回目
-  assert.equal(s.interval, 16);
+  assert.equal(s.interval, 17);
+});
+
+test('paceMultiplierで正解時の間隔だけを調整できる（誤答の約20分後リセットは変わらない）', () => {
+  const now = 1_000_000_000_000;
+  let s = applyGrade(emptyState(), GRADES.again, now, { paceMultiplier: 2 });
+  assert.equal(s.due, now + 20 * 60 * 1000); // 誤答側はpaceMultiplierの影響を受けない
+  s = applyGrade(s, GRADES.easy, now, { paceMultiplier: 2 });
+  assert.equal(s.interval, 2); // 1日 × 2倍
+});
+
+test('efは上限3.5を超えない（間隔が際限なく伸びないための上限）', () => {
+  const now = 1_000_000_000_000;
+  let s = applyGrade(emptyState(), GRADES.again, now);
+  for (let i = 0; i < 100; i++) {
+    s = applyGrade(s, GRADES.easy, now);
+    if (isMastered(s)) s = applyGrade(s, GRADES.again, now); // マスターしたら再び誤答で戻す
+  }
+  assert.ok(s.ef <= 3.5);
 });
 
 test('△・✕で連続完璧がリセットされる', () => {
@@ -111,4 +138,61 @@ test('applyAnswer(正解) は grade=good として扱われる', () => {
   const b = applyGrade(emptyState(), GRADES.good, now);
   assert.equal(a.interval, b.interval);
   assert.equal(a.ef, b.ef);
+});
+
+test('justBecameLeech: LEECH_THRESHOLD回目の誤答でだけtrueになる', () => {
+  const now = 1_000_000_000_000;
+  let s = emptyState();
+  for (let i = 0; i < LEECH_THRESHOLD - 1; i++) s = applyGrade(s, GRADES.again, now);
+  assert.equal(isLeech(s), false);
+  const prev = s;
+  s = applyGrade(s, GRADES.again, now); // ちょうどLEECH_THRESHOLD回目
+  assert.equal(isLeech(s), true);
+  assert.equal(justBecameLeech(prev, s), true);
+});
+
+test('justBecameLeech: 既にリーチだった問題が更に間違えてもfalse（一度きりの通知にするため）', () => {
+  const now = 1_000_000_000_000;
+  let s = emptyState();
+  for (let i = 0; i < LEECH_THRESHOLD; i++) s = applyGrade(s, GRADES.again, now);
+  const prev = s;
+  s = applyGrade(s, GRADES.again, now);
+  assert.equal(justBecameLeech(prev, s), false);
+});
+
+test('justResolvedLeech: リーチだった問題がマスターに達した回だけtrue', () => {
+  const now = 1_000_000_000_000;
+  let s = emptyState();
+  for (let i = 0; i < LEECH_THRESHOLD; i++) s = applyGrade(s, GRADES.again, now);
+  assert.equal(isLeech(s), true);
+  for (let i = 0; i < MASTER_STREAK - 1; i++) s = applyGrade(s, GRADES.easy, now);
+  assert.equal(isMastered(s), false);
+  const prev = s;
+  s = applyGrade(s, GRADES.easy, now); // ちょうどマスター達成
+  assert.equal(isMastered(s), true);
+  assert.equal(justResolvedLeech(prev, s), true);
+});
+
+test('justResolvedLeech: リーチでなかった問題がマスターしてもfalse', () => {
+  const now = 1_000_000_000_000;
+  let s = applyGrade(emptyState(), GRADES.again, now); // 1回だけ誤答（リーチには遠い）
+  for (let i = 0; i < MASTER_STREAK - 1; i++) s = applyGrade(s, GRADES.easy, now);
+  const prev = s;
+  s = applyGrade(s, GRADES.easy, now);
+  assert.equal(isMastered(s), true);
+  assert.equal(justResolvedLeech(prev, s), false);
+});
+
+test('resetDueForReview: 復習対象だけ期限を今に揃え、マスター済み・未着手には触れない', () => {
+  const now = 1_000_000_000_000;
+  const later = 5_000_000_000_000;
+  const srsMap = {
+    inReview: { ...emptyState(), wrongCount: 1, correctStreak: 0, due: later },
+    mastered: { ...emptyState(), wrongCount: 1, correctStreak: MASTER_STREAK, due: later },
+    untouched: emptyState(),
+  };
+  const reset = resetDueForReview(srsMap, now);
+  assert.equal(reset.inReview.due, now);
+  assert.equal(reset.mastered.due, later); // マスター済みは変えない
+  assert.equal(reset.untouched.due, 0); // 元々0のまま（触れない）
 });

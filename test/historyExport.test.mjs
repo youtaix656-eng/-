@@ -35,3 +35,20 @@ test('exportHistoryCsv: 空履歴でもヘッダーだけ出力される', () =>
   const csv = exportHistoryCsv([], []);
   assert.equal(csv.split('\n').length, 1);
 });
+
+test('exportHistoryCsv: missTypes/selfKindCountsを渡すと誤答理由の型・★段階の列が入る', () => {
+  const questions = [{ id: 'q1', subject: '医療概論', question: 'テスト問題' }];
+  const history = [{ questionId: 'q1', correct: false, at: 1, source: 'review' }];
+  const missTypes = { q1: [{ type: 'careless', at: 1 }] };
+  const selfKindCounts = { q1: { batsu: 2 } }; // ★3相当
+  const csv = exportHistoryCsv(history, questions, { missTypes, selfKindCounts });
+  const lines = csv.split('\n');
+  assert.match(lines[0], /誤答理由の型,★段階/);
+  assert.match(lines[1], /ケアレス/);
+  assert.match(lines[1], /★★★/);
+});
+
+test('exportHistoryCsv: missTypes/selfKindCountsを渡さなくても壊れない（後方互換）', () => {
+  const csv = exportHistoryCsv([{ questionId: 'q1', correct: true, at: 1 }], []);
+  assert.equal(csv.split('\n').length, 2);
+});

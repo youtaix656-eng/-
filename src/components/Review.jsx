@@ -4,12 +4,16 @@ import ResetInline from './ResetInline.jsx';
 import { normalize, MASTER_STREAK, LEECH_THRESHOLD, isLeech as isLeechState } from '../lib/srs.js';
 import * as storage from '../lib/storage.js';
 import { effectiveTags } from '../lib/query.js';
-import { weakTagClusters } from '../lib/weakClusters.js';
+import { weakTagClusters, tagTrend } from '../lib/weakClusters.js';
 import { relatedQuestions } from '../lib/related.js';
 import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
 import { comparisonsForKeyword, COMPARISONS } from '../data/mindmapData.js';
-import { loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS, MISS_TYPES } from '../lib/missTypes.js';
+import {
+  loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS, MISS_TYPES,
+  latestMissType, missTypeTrend, missTypeAnomaly,
+} from '../lib/missTypes.js';
+import { loadSelfKindCounts, recordSelfKindCount, starLevelOf, starLabel } from '../lib/starWeak.js';
 import { buildGraphFromSolved } from '../lib/kgService.js';
 import { conceptsOf } from '../lib/concepts.js';
 import { elaborationSuggestions, chainNext } from '../lib/kgRecall.js';
@@ -20,6 +24,11 @@ import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { roundKey, formatRound } from '../lib/round.js';
+import { reviewDailyGoal } from '../lib/reviewGoal.js';
+import { leechDwellDays } from '../lib/reviewDwell.js';
+import { daysSinceLastZero, zeroDaysSummary } from '../lib/reviewZeroLog.js';
+import { loadSnoozeLog, recordSnooze, isSnoozeHabit, SNOOZE_HABIT_THRESHOLD } from '../lib/snoozeLog.js';
+import { estimatedAnswerSeconds } from '../lib/bufferSession.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -103,11 +112,12 @@ function spaceByOrigin(qs) {
   return out;
 }
 
-export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
+export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quickStartCount, onConsumeQuickStart }) {
   const {
     questions, dueReviewQuestions, reviewQuestions, history,
     memos, links, recordAnswer, setMemo, setLink, srs, GRADES,
     bookmarks, toggleBookmark, removeFromReview, setNextDue, session,
+    resetAllReviewDue, reviewZeroLog,
   } = store;
 
   const [started, setStarted] = useState(false);
@@ -144,10 +154,17 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const [fast, setFast] = useState(false); // 高速回転モード
   const [simple, setSimple] = useState(true); // 段階表示：シンプル/じっくり
   const [missTypes, setMissTypes] = useState({}); // 間違いの型
+  const [selfKindCounts, setSelfKindCounts] = useState({}); // △✕の累計回数（★弱点タグの元）
   const [mood, setMood] = useState(null); // 今日の調子（Homeで記録したもの）
   const [weeklyExpanded, setWeeklyExpanded] = useState(false); // 週間バー→月間ヒートマップ
 
+  const [snoozeLog, setSnoozeLog] = useState({}); // #27：先送り（スヌーズ）の記録
+  useEffect(() => { loadSnoozeLog().then(setSnoozeLog); }, []);
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  // 誤答理由の型の傾向（直近で増えた型）・急増検知（今日だけ明らかに多い）
+  const missTrend = useMemo(() => missTypeTrend(missTypes), [missTypes]);
+  const missAnomaly = useMemo(() => missTypeAnomaly(missTypes), [missTypes]);
+  useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
   useEffect(() => { loadTodayMood().then(setMood); }, []);
   const onMissType = (id, type) => {
     recordMissType(id, type).then(setMissTypes);
@@ -206,38 +223,11 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     [history, extendedReviewPool, links]
   );
 
-  // 弱点テーマの改善トレンド（今週の誤答率 vs 先週の誤答率）
-  const qById = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions]);
-  const weakTagsWithTrend = useMemo(() => {
-    const now = Date.now();
-    const WEEK = 7 * 24 * 60 * 60 * 1000;
-    const thisWeek = {};
-    const lastWeek = {};
-    for (const h of history) {
-      const q = qById.get(h.questionId);
-      if (!q) continue;
-      const age = now - h.at;
-      const bucket = age <= WEEK ? thisWeek : age <= 2 * WEEK ? lastWeek : null;
-      if (!bucket) continue;
-      for (const tg of effectiveTags(q, links)) {
-        if (!bucket[tg]) bucket[tg] = { wrong: 0, total: 0 };
-        bucket[tg].total += 1;
-        if (!h.correct) bucket[tg].wrong += 1;
-      }
-    }
-    return weakTags.map((w) => {
-      const cur = thisWeek[w.tag];
-      const prev = lastWeek[w.tag];
-      const curRate = cur && cur.total >= 2 ? cur.wrong / cur.total : null;
-      const prevRate = prev && prev.total >= 2 ? prev.wrong / prev.total : null;
-      let trend = null;
-      if (curRate != null && prevRate != null) {
-        const diff = curRate - prevRate;
-        trend = diff <= -0.15 ? 'better' : diff >= 0.15 ? 'worse' : 'flat';
-      }
-      return { ...w, trend };
-    });
-  }, [weakTags, history, qById, links]);
+  // 弱点テーマの改善トレンド（今週の誤答率 vs 先週の誤答率。weakClusters.jsのtagTrendが単一の正）
+  const weakTagsWithTrend = useMemo(
+    () => tagTrend(history, questions, links, weakTags),
+    [weakTags, history, questions, links]
+  );
 
   // 直近（今日／今週）に誤答した問題だけに絞る補助フィルタ
   const recentWrongIds = useMemo(() => {
@@ -275,6 +265,13 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   // 実際に出題される問数（バッチ上限と在庫の小さい方）
   const effectiveCount = batch > 0 ? Math.min(batch, startPool.length) : startPool.length;
 
+  // #2：過去の解答間隔（bufferSession.jsと同じ推定ロジック）から、今から始めた場合のおおよその所要時間
+  const estMinutes = useMemo(() => {
+    if (effectiveCount === 0) return 0;
+    const secPerQ = estimatedAnswerSeconds(history, 'all');
+    return Math.max(1, Math.round((secPerQ * effectiveCount) / 60));
+  }, [history, effectiveCount]);
+
   // pool を出題開始（続けるループ用に任意の配列でも開始できる）。原問と派生は離して出題。
   const startWith = (pool) => {
     if (!pool || pool.length === 0) return;
@@ -297,6 +294,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     startWith(batch > 0 ? pool.slice(0, batch) : pool);
   };
 
+  // ★3（✕2回以上の要注意問題）だけを集めたプール。G-100の「★3｜毎日」に相当。
+  const star3Questions = useMemo(
+    () => extendedReviewPool.filter((q) => starLevelOf(selfKindCounts[q.id]) === 3),
+    [extendedReviewPool, selfKindCounts]
+  );
+
   // 直近の学習セッション（10・60・300・900）で間違えた問題を、その場ですぐ復習できるように
   const lastSessionMisses = useMemo(() => {
     if (!session || !session.startedAt || !Array.isArray(session.ids)) return [];
@@ -315,16 +318,13 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
 
   // 今日の到達・連続日数（改善2）：復習由来の解答だけを数える
   const { streak } = useMemo(() => studyStreak(history), [history]);
-  const todayReviewDone = useMemo(() => {
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    const start0 = d.getTime();
-    return history.filter((h) => h.source === 'review' && h.at >= start0).length;
-  }, [history]);
-  // 日次目標＝今日こなした復習＋まだ期限が来ている数（今日中に片づけたい総量）。
-  //   「今日の調子＝しんどい」の日はノルマを半分に緩める（Homeの今日の調子と連動）。
-  const goalDueBase = mood === 'tired' ? Math.ceil(dueReviewQuestions.length * 0.5) : dueReviewQuestions.length;
-  const dailyGoal = Math.max(1, todayReviewDone + goalDueBase);
-  const goalPct = Math.min(100, Math.round((todayReviewDone / dailyGoal) * 100));
+  // 日次目標＝今日こなした復習＋まだ期限が来ている数（今日中に片づけたい総量。reviewGoal.jsが単一の正＝#15）。
+  const { todayReviewDone, dailyGoal, goalPct } = useMemo(
+    () => reviewDailyGoal(history, dueReviewQuestions.length, mood),
+    [history, dueReviewQuestions.length, mood]
+  );
+  // #3：復習が何日ゼロに戻せていないか（Homeの停滞警告と同じ定義）
+  const stalledDays = useMemo(() => daysSinceLastZero(reviewZeroLog), [reviewZeroLog]);
 
   // 前進感（改善5）：あと1問でマスター／マスターまで延べ何回／週間の復習量
   const DAY = 24 * 60 * 60 * 1000;
@@ -391,6 +391,22 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     [questions, srs, links]
   );
 
+  // #7・#8・#18：Home「復習だけ◯問」「要注意だけ今すぐ」からのワンタップ開始
+  //   （続きからより後に判定し、続きからを優先しない）。数値＝件数指定、{ids}＝問題idを直接指定。
+  useEffect(() => {
+    if (started || !quickStartCount || !questions || !questions.length) return;
+    if (typeof quickStartCount === 'object' && quickStartCount.ids) {
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      const pool = quickStartCount.ids.map((id) => byId.get(id)).filter(Boolean);
+      if (pool.length > 0) startWith(pool);
+    } else {
+      const pool = dueReviewQuestions.length > 0 ? dueReviewQuestions : extendedReviewPool;
+      if (pool.length > 0) startWith(pool.slice(0, quickStartCount));
+    }
+    onConsumeQuickStart?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started, quickStartCount, questions, dueReviewQuestions, extendedReviewPool]);
+
   // 保存済みの途中経過を読み込む（続きから）
   useEffect(() => {
     if (started || !questions || !questions.length) return;
@@ -433,9 +449,18 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
   const handleAnswered = (correct, grade, selfKind) => {
     const q = order[idx];
     const priorStreak = normalize(srs[q?.id]).correctStreak || 0;
-    recordAnswer(q, correct, grade, 'review', selfKind); // 復習由来として記録（到達集計用）
+    const leechEvent = recordAnswer(q, correct, grade, 'review', selfKind); // 復習由来として記録（到達集計用）
+    if (q && leechEvent === 'became') {
+      onToast?.(`⚠️ 要注意（${LEECH_THRESHOLD}回以上の誤答）：「${(q.question || '（図の問題）').slice(0, 20)}」。解説の読み方を変えてみましょう`);
+    } else if (q && leechEvent === 'resolved') {
+      onToast?.(`✅ 要注意を脱出！「${(q.question || '（図の問題）').slice(0, 20)}」がマスターになりました`);
+    }
     // ○（完璧）以外＝不正解・△・✕ は「まだ定着していない」として記憶
     if (!correct && q) missRef.current.push({ q, selfKind });
+    // △✕の累計回数を記録（★弱点タグの判定材料。ここでの選択が起点）
+    if (q && (selfKind === 'sankaku' || selfKind === 'batsu')) {
+      recordSelfKindCount(q.id, selfKind).then(setSelfKindCounts);
+    }
     // ちょうど5回連続の○に到達＝マスターの瞬間。その場でお祝いする
     if (correct && q && priorStreak === MASTER_STREAK - 1) {
       masteredRef.current.push(q);
@@ -514,6 +539,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
           </button>
         )}
 
+        {star3Questions.length > 0 && (
+          <button className="btn danger block lg" style={{ marginBottom: 10 }} onClick={() => startWith(star3Questions)}>
+            {starLabel(3)} 今日つぶす（✕2回以上の問題・{star3Questions.length}問）
+          </button>
+        )}
+
         {/* 前進感：あと1問でマスター／延べ回数／マスター累計／週間の復習量（タップで月間に拡大） */}
         {reviewQuestions.length > 0 && (
           <div className="progress-hint">
@@ -533,6 +564,21 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
               <span className="weekbar-label">{weeklyExpanded ? '35日（タップで戻す）' : '7日（タップで月間）'}</span>
             </button>
           </div>
+        )}
+
+        {reviewQuestions.length > 0 && (
+          <button
+            className="btn ghost sm"
+            style={{ marginBottom: 10 }}
+            onClick={() => {
+              if (window.confirm('復習リストの全問題（マスター済みを除く）の次回期限を「今」にリセットします。誤答回数・連続記録は消えません。よろしいですか？')) {
+                resetAllReviewDue?.();
+                onToast?.('🔄 復習の間隔をすべてリセットしました');
+              }
+            }}
+          >
+            🔄 復習の間隔をすべてリセット（{reviewQuestions.length}問が対象）
+          </button>
         )}
 
         {masterySubjectStats.length > 0 && (
@@ -676,6 +722,12 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
             </button>
           ))}
         </div>
+        {(missTrend || missAnomaly?.isAnomaly) && (
+          <p className="inline-note" style={{ marginTop: 6 }}>
+            {missAnomaly?.isAnomaly && <>今日は誤答が{missAnomaly.todayTotal}件と、直近の1日平均（約{missAnomaly.avgPerDay}件）よりかなり多めです。無理せず休憩も挟みましょう。<br /></>}
+            {missTrend && <>最近は「{missTypeLabel(missTrend.type)}」が増えています（直近7日で{missTrend.count}件）。{missTrend.type === 'careless' ? '落ち着いて設問を最後まで読みましょう。' : missTrend.type === 'chishiki' ? '解説を読み込む時間を作りましょう。' : '対比で整理してみましょう。'}</>}
+          </p>
+        )}
 
         <div className="review-count">
           この条件で <strong>{startPool.length}</strong> 問
@@ -704,11 +756,26 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
           <span>📖 じっくりモード（メモ・連結キーワードも最初から表示。オフ＝シンプル：問題→答え→○△✕）</span>
         </label>
 
+        {estMinutes > 0 && (
+          <p className="inline-note" style={{ marginTop: 4, marginBottom: 0 }}>
+            ⏱ 今から始めると、約{estMinutes}分でこの{effectiveCount}問を片づけられます（過去の解答ペースからの目安・#2）。
+          </p>
+        )}
         <button className="btn primary block lg" style={{ marginTop: 6 }} onClick={start} disabled={startPool.length === 0}>
           {startPool.length > 0
             ? `📝 一問一答で復習（${effectiveCount}問・${ORDER_MODES.find((m) => m.id === orderMode)?.label}）`
             : (filtering ? '条件に合う問題がありません' : '今日の復習は完了しました')}
         </button>
+        {/* #16：今日の期限は無いが「念のため確認」枠だけはある日でも、何かやることがある状態にする */}
+        {!filtering && dueReviewQuestions.length === 0 && nagameQuestions.length > 0 && (
+          <button
+            className="btn block lg"
+            style={{ marginTop: 10 }}
+            onClick={() => startWith(sortReview(nagameQuestions, orderMode, { srs, history, links }))}
+          >
+            🔎 念のため確認だけ（{nagameQuestions.length}問・保持率が下がってきたマスター済み）
+          </button>
+        )}
         <button
           className="btn block lg"
           style={{ marginTop: 10 }}
@@ -743,18 +810,35 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
           const risk = Math.round(riskOf(q, srs, now) * 100);
           const rlvl = risk >= 70 ? 'hot' : risk >= 40 ? 'warm' : 'mild';
           const nagame = !reviewIdSet.has(q.id);
+          const starLv = starLevelOf(selfKindCounts[q.id]);
           return (
             <div className="list-item" key={q.id}>
               <div className="li-top">
                 <span className="li-subject">{q.subject}</span>
+                {starLv > 0 && (
+                  <span
+                    className="risk-badge lv-hot"
+                    title={starLv >= 3 ? '復習中に✕（わからない）が2回以上ありました。今日つぶしたい問題です' : '復習中に△（あいまい）が3回以上ありました'}
+                  >
+                    {starLabel(starLv)}
+                  </span>
+                )}
                 {nagame && <span className="risk-badge lv-mild" title="マスター済みだが保持率が下がってきたので念のため確認">念のため</span>}
-                {isLeech(q) && <span className="risk-badge lv-hot" title={`${LEECH_THRESHOLD}回以上間違えています。解説の読み方を変えてみましょう`}>⚠️ 要注意</span>}
+                {isLeech(q) && (
+                  <span className="risk-badge lv-hot" title={`${LEECH_THRESHOLD}回以上間違えています。解説の読み方を変えてみましょう`}>
+                    ⚠️ 要注意
+                    {(() => { const d = leechDwellDays(q.id, history); return d != null ? `（${d}日滞留）` : ''; })()}
+                  </span>
+                )}
+                {isSnoozeHabit(snoozeLog, q.id) && (
+                  <span className="risk-badge lv-warm" title={`${SNOOZE_HABIT_THRESHOLD}回以上先送りしています。今日は少しだけでも解いてみましょう`}>😴 先送りグセ</span>
+                )}
                 <span className={`risk-badge lv-${rlvl}`} title="忘却リスク（高いほど早く復習を）">忘却{risk}%</span>
               </div>
               <div className="li-q">{q.question || '（図の問題）'}</div>
               <div className="li-stat">
                 完璧 {cs}/{MASTER_STREAK} ・ 誤答 {st.wrongCount || 0}回 ・ {dueLabel}
-                {missTypes[q.id] && <span className="misstype-tag">型: {missTypeLabel(missTypes[q.id].type)}</span>}
+                {latestMissType(missTypes[q.id]) && <span className="misstype-tag">型: {missTypeLabel(latestMissType(missTypes[q.id]).type)}</span>}
               </div>
               <div className="streak-dots" aria-label={`完璧 ${cs}/${MASTER_STREAK}`}>
                 {Array.from({ length: MASTER_STREAK }).map((_, i) => (
@@ -767,7 +851,15 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
                 <button className="btn ghost sm" onClick={() => toggleBookmark(q.id)}>
                   {bookmarks[q.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
                 </button>
-                <button className="btn ghost sm" onClick={() => setNextDue(q.id, 24 * 60 * 60 * 1000)}>😴 明日まで先送り</button>
+                <button
+                  className="btn ghost sm"
+                  onClick={() => {
+                    setNextDue(q.id, 24 * 60 * 60 * 1000);
+                    recordSnooze(q.id).then(setSnoozeLog); // #27：ボタン操作だけを記録（型別の自動間隔調整とは区別）
+                  }}
+                >
+                  😴 明日まで先送り
+                </button>
                 <button className="btn ghost sm" onClick={() => removeFromReview(q.id)}>🗑 リストから外す</button>
               </div>
             </div>
@@ -823,9 +915,22 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
     }
     const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
     const weakness = misses.length > 0 ? buildWeaknessSummary(misses, links, COMPARISONS) : null;
+    // #26：このセッションで復習（期限が来ているもの）を完全にゼロへ戻せたか
+    const justReachedZero = dueReviewQuestions.length === 0 && reviewQuestions.length > 0;
     return (
       <div className="view">
         <h2 className="view-title">復習完了</h2>
+        {justReachedZero && (() => {
+          const zs = zeroDaysSummary(reviewZeroLog);
+          return (
+            <div className="card" style={{ textAlign: 'center', background: 'var(--correct-soft, #eafaf0)', marginBottom: 10 }}>
+              <div style={{ fontSize: 22 }}>✨ 今日の復習をゼロにしました！</div>
+              <p className="inline-note" style={{ marginTop: 4 }}>
+                直近{zs.total}日中 {zs.achieved}日でゼロ達成
+              </p>
+            </div>
+          );
+        })()}
         <div className="card complete-pop" style={{ textAlign: 'center' }}>
           <div className="complete-emoji">{rate >= 80 ? '🎉' : rate >= 50 ? '👍' : '💪'}</div>
           <div className="num" style={{ fontSize: 32, color: 'var(--text)', fontWeight: 800 }}>
@@ -1001,7 +1106,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio }) {
         fast={fast}
         onMissType={onMissType}
         simple={simple}
-        missType={missTypes[current.id]?.type || ''}
+        missType={latestMissType(missTypes[current.id])?.type || ''}
       />
       <ResetInline label="復習をリセット" onReset={resetReview} />
     </div>

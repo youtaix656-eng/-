@@ -1,0 +1,589 @@
+/* 鏡（かがみ） — 黒地に白い線、銅版画の図版のような見た目。
+ *
+ * 決めていること:
+ *   1. **色を持たない。** 使ってよいのは黒・白・その間の灰だけ。
+ *      色を1つ入れた瞬間に「版画の図版」ではなくなる。
+ *      test/mono.test.mjs が「すべての色の R=G=B」を機械チェックする。
+ *   2. **飾りより読みやすさを優先する。** 飾りの線は薄く（opacity .10 前後）、
+ *      文字の下に濃く敷かない。本文は必ず地とはっきり差がつく明るさにする。
+ *   3. 当たった語は**白地に黒**（反転）で示す。モノクロで最も強い強調がこれ。
+ */
+:root {
+  --ink: #ebebeb;        /* 版画の線・本文（黒地に乗るインクの白） */
+  --ink-dim: #a4a4a4;    /* 補足。地との差は十分に取る */
+  --ink-faint: #6e6e6e;  /* 罫・飾り */
+  --plate: #080808;      /* 版（地） */
+  --plate-soft: #101010; /* すこし浮かせた面 */
+  --line: rgba(235, 235, 235, 0.22);
+  --line-strong: rgba(235, 235, 235, 0.44);
+  --max-w: 720px;
+  --nav-h: 62px;
+  --serif: 'Hiragino Mincho ProN', 'Yu Mincho', YuMincho, 'Noto Serif JP', 'Times New Roman', serif;
+  --sans: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  background: var(--plate);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.85;
+  letter-spacing: 0.02em;
+}
+
+#root { min-height: 100vh; }
+
+/* ── 地の質感（炭で擦ったような粒とにじみ） ──────────
+ * **画像ファイルを持たない。** 粒は SVG の feTurbulence をその場で描いて敷く
+ * （feColorMatrix の saturate 0 で灰色にするので、色は入らない）。
+ * 文字の読みやすさを壊さないよう、粒はごく薄く・動かさない。 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.055;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* にじみ（中心が明るく、縁へ落ちる）。参考にした図版の暗さの付き方 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 22%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(ellipse 100% 80% at 50% 45%, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55) 78%);
+}
+
+#root { position: relative; z-index: 1; }
+
+
+/* ── 版の縁（参考画像の二重の枠） ───────────────── */
+.app {
+  position: relative;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 20px calc(var(--nav-h) + 32px);
+}
+.app::before {
+  content: '';
+  position: fixed;
+  inset: 6px 6px calc(var(--nav-h) + 6px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+.app::after {
+  content: '';
+  position: fixed;
+  inset: 11px 11px calc(var(--nav-h) + 11px);
+  border: 1px solid rgba(235, 235, 235, 0.10);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 1;
+}
+.app > * { position: relative; z-index: 2; }
+
+/* ── 見出し ────────────────────────────────── */
+.head { padding: 30px 0 4px; text-align: center; }
+.head h1 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.6rem;
+  letter-spacing: 0.22em;
+  margin: 0 0 8px;
+  text-indent: 0.22em; /* 字間ぶんの片寄りを戻す */
+}
+.head p { margin: 0 auto; max-width: 26em; color: var(--ink-dim); font-size: .9rem; text-wrap: balance; }
+.head .sigil { display: block; margin: 0 auto 10px; color: var(--ink-faint); }
+
+h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.12rem;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  margin: 34px 0 12px;
+  text-align: center;
+}
+h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  margin: 20px 0 6px;
+}
+
+/* 面の中の小見出しは、細い罫で段を分ける（版画の図版の割り付け） */
+.card h3 {
+  color: var(--ink-dim);
+  font-size: .9rem;
+  letter-spacing: 0.2em;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 18px;
+}
+.card h3:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+
+/* 見出しの下に引く罫（Rule） */
+.rule { display: flex; align-items: center; gap: 10px; margin: -6px 0 16px; color: var(--ink-faint); }
+.rule-line { flex: 1; height: 1px; background: var(--line); }
+.rule-mark { font-size: .8rem; line-height: 1; }
+
+/* ── 面（カード） ──────────────────────────── */
+.card {
+  background: var(--plate-soft);
+  border: 1px solid var(--line);
+  border-radius: 3px; /* 版画の枠は角を丸めない */
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.card.quiet { background: transparent; border-style: dashed; }
+.card h3 { margin-top: 0; }
+.card p { margin: 8px 0; }
+.card ul { padding-left: 1.2em; margin: 8px 0; }
+.card li { margin: 4px 0; }
+
+.muted { color: var(--ink-dim); font-size: .88rem; }
+.tiny { font-size: .82rem; color: var(--ink-dim); line-height: 1.75; }
+
+/* ── ボタン ────────────────────────────────── */
+button {
+  font: inherit;
+  font-family: var(--sans);
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 2px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  padding: 11px 16px;
+  letter-spacing: 0.06em;
+  transition: background .15s, border-color .15s;
+}
+button:hover { border-color: var(--ink); background: rgba(235, 235, 235, 0.06); }
+button.primary { border-color: var(--ink); background: rgba(235, 235, 235, 0.10); }
+button.primary:hover { background: var(--ink); color: var(--plate); }
+button.ghost { border-color: var(--line); }
+button.danger { border-style: dashed; color: var(--ink-dim); }
+button.danger:hover { color: var(--ink); border-color: var(--ink); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button:disabled:hover { background: transparent; border-color: var(--line-strong); }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* 面の見出し行：題が長くてもボタンを下へ落とさない */
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: nowrap; }
+.card-head > div { min-width: 0; }
+.card-head button { flex: none; white-space: nowrap; }
+.row.end { justify-content: flex-end; }
+
+/* ── 入力 ──────────────────────────────────── */
+textarea, input[type='text'], input[type='date'], select {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--plate-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  padding: 13px 14px;
+}
+textarea { min-height: 150px; resize: vertical; line-height: 1.9; }
+textarea::placeholder { color: var(--ink-faint); }
+textarea:focus, input:focus, select:focus { outline: 1px solid var(--ink); outline-offset: 2px; }
+label.check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin: 12px 0; }
+label.check input { margin-top: 6px; flex: none; accent-color: #ebebeb; }
+
+
+/* ── 開いた型は「図版の札」として見せる（参考にした画像の組み方） ──
+ * 題は中央・明朝で大きく、その下に一行の要約。**本文は左寄せのまま**——
+ * 長い日本語を中央寄せにすると急に読みにくくなる。 */
+.card.opened .card-head { flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.card.opened .card-head > div { text-align: center; }
+.card.opened .plate-title {
+  font-size: 1.35rem;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  margin: 6px 0 2px;
+}
+.card.opened .plate-glyph {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+.card.opened .plate-summary {
+  text-align: center;
+  max-width: 30em;
+  margin: 10px auto 4px;
+}
+.card.opened {
+  background:
+    radial-gradient(ellipse 90% 50% at 50% 0%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 70%),
+    var(--plate-soft);
+  border-color: var(--line-strong);
+}
+.card .aka { display: block; margin-top: 2px; }
+.behavior-note {
+  border: 1px dashed var(--line);
+  border-radius: 2px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+
+/* ── 印つきの小さな札 ──────────────────────── */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.chip {
+  font-size: .85rem;
+  padding: 6px 13px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-dim);
+  letter-spacing: 0.06em;
+}
+.chip.on { border-color: var(--ink); color: var(--ink); background: rgba(235, 235, 235, 0.10); }
+.chip.cue {
+  border-style: dashed;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* ── 当たった箇所（白地に黒＝反転が、モノクロで最も強い） ── */
+.excerpt {
+  background: var(--plate-soft);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: .95rem;
+  line-height: 2;
+  max-height: 260px;
+  overflow: auto;
+}
+.excerpt mark {
+  background: var(--ink);
+  color: var(--plate);
+  padding: 1px 3px;
+  font-weight: 600;
+}
+
+/* ── 一覧 ──────────────────────────────────── */
+.list { list-style: none; padding: 0; margin: 0; }
+.list li { border-top: 1px solid var(--line); }
+.list li:first-child { border-top: 0; }
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 14px 4px;
+}
+.item:hover { background: rgba(235, 235, 235, 0.05); border: 0; }
+.item .t { display: block; letter-spacing: 0.04em; }
+.item .s { display: block; color: var(--ink-dim); font-size: .82rem; line-height: 1.7; margin-top: 2px; }
+
+/* 目次の行 */
+.kana-bar { display: flex; gap: 7px; flex-wrap: wrap; margin: 14px 0 4px; }
+.kana-bar button { padding: 5px 12px; font-size: .88rem; font-family: var(--serif); }
+.section-label {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--plate);
+  padding: 10px 0 6px;
+  font-family: var(--serif);
+  font-size: .95rem;
+  letter-spacing: 0.3em;
+  color: var(--ink-dim);
+  border-bottom: 1px solid var(--line);
+}
+
+/* 目次から飛んだ先を一瞬だけ光らせる */
+[data-flash] { animation: flash 1.9s ease-out; }
+@keyframes flash {
+  from { background: rgba(235, 235, 235, 0.16); }
+  to { background: transparent; }
+}
+
+/* ── 下部ナビ ──────────────────────────────── */
+.nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  background: var(--plate);
+  border-top: 1px solid var(--line-strong);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.nav button {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 8px 2px;
+  height: var(--nav-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: .7rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+.nav button:hover { background: rgba(235, 235, 235, 0.05); }
+.nav button .ic { font-size: 1.15rem; line-height: 1; font-family: var(--serif); }
+.nav button.on { color: var(--ink); }
+.nav button.on .ic { text-shadow: 0 0 10px rgba(235, 235, 235, 0.5); }
+
+/* ── 注意書き ──────────────────────────────── */
+.note {
+  border: 1px solid var(--line);
+  border-left-width: 2px;
+  border-left-color: var(--ink-faint);
+  background: rgba(235, 235, 235, 0.035);
+  border-radius: 2px;
+  padding: 13px 16px;
+  margin: 16px 0;
+  font-size: .89rem;
+  line-height: 1.85;
+}
+.note.warn { border-style: dashed; border-left-style: solid; border-left-color: var(--ink); }
+.note strong { font-weight: 600; }
+
+.back {
+  background: none;
+  border: 0;
+  color: var(--ink-dim);
+  padding: 16px 0;
+  font-size: .88rem;
+  letter-spacing: 0.08em;
+}
+.back:hover { color: var(--ink); background: none; }
+
+.badge {
+  font-size: .74rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 2px 8px;
+  color: var(--ink-dim);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* ホームの扉（ウロボロス） */
+.plate-mark { text-align: center; padding: 26px 0 6px; color: var(--ink-faint); }
+.plate-mark .corners { display: flex; justify-content: space-between; align-items: center; }
+.plate-mark .corners > svg { flex: none; opacity: .55; }
+.title-greek {
+  font-family: var(--serif);
+  font-size: .8rem;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: var(--ink-faint);
+  margin: 6px 0 0;
+}
+
+@media (max-width: 380px) {
+  body { font-size: 16px; }
+  .head h1 { font-size: 1.4rem; letter-spacing: 0.16em; }
+}
+
+/* 選択中の件数を、スクロールしても見える所に置く（人間分析） */
+.pick-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--plate);
+  border-bottom: 1px solid var(--line-strong);
+  padding: 10px 0 9px;
+  margin-top: 16px;
+  font-size: .86rem;
+}
+.pick-bar button { padding: 6px 12px; font-size: .82rem; }
+
+/* たたんだ見出し（ふるまいの型ごと） */
+.group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 6px 2px;
+  text-align: left;
+}
+.group-head:hover { background: rgba(235, 235, 235, 0.05); border: 0; }
+.group-head .t { letter-spacing: 0.04em; }
+.group-head .s { color: var(--ink-dim); font-size: .8rem; white-space: nowrap; }
+
+/* 対応策ひとつぶん（人間分析） */
+.counter {
+  border-top: 1px solid var(--line);
+  padding: 12px 0 10px;
+}
+.counter:first-of-type { border-top: 0; }
+.counter .script {
+  font-family: var(--serif);
+  font-size: .95rem;
+  border-left: 2px solid var(--ink-faint);
+  padding: 2px 0 2px 12px;
+  margin: 6px 0;
+  color: var(--ink);
+}
+
+/* 下読み用（声に出す前に言い方だけ見る） */
+.script.practice {
+  font-size: 1.25rem;
+  line-height: 1.9;
+  border-left-width: 3px;
+  padding: 10px 0 10px 16px;
+}
+
+/* ── 枠の切り替え（人間分析の3つ）──────────── */
+.tabs { margin: 16px 0 6px; }
+.tabs .chip { font-family: var(--serif); letter-spacing: 0.06em; padding: 8px 16px; }
+
+/* 横に長い表は、そこだけ横に動かす（画面ごと横に動かさない） */
+.scroll-x { overflow-x: auto; margin: 10px 0 4px; }
+
+/* 型 × 見立ての重なり。数は件数であって点数ではない */
+.matrix { border-collapse: collapse; font-size: .84rem; min-width: 100%; }
+.matrix th, .matrix td {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+.matrix thead th { font-family: var(--serif); font-weight: 500; color: var(--ink); }
+.matrix tbody th { text-align: left; font-weight: 400; color: var(--ink); }
+.matrix td:empty::after { content: '·'; color: var(--ink-faint); }
+
+/* 相談する時に渡す文（そのまま読める形で出す） */
+.quote {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  font-size: .86rem;
+  line-height: 1.9;
+  color: var(--ink-dim);
+  background: var(--plate-soft);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 14px;
+  margin: 8px 0 4px;
+}
+
+/* 相手はどうなるか（言い方の下に置く。効き目の大きさは書かない） */
+.effect {
+  border-left: 1px dashed var(--ink-faint);
+  padding: 2px 0 2px 12px;
+  margin: 6px 0;
+  font-size: .88rem;
+  color: var(--ink-dim);
+}
+.effect .tiny { letter-spacing: 0.12em; }
+
+/* おすすめの順番（番号そのものに意味がある） */
+.order-mark { font-family: var(--serif); font-size: 1.1rem; color: var(--ink); line-height: 1; }
+
+/* 飛び先が固定バーの下に隠れないようにする（目次の共通ルール） */
+/* 文字を大きくしても隠れないよう、rem で持つ（px 決め打ちだと大きい設定で隠れる） */
+[id^='toc-'], [id^='kana-'], #sec-result { scroll-margin-top: 5.5rem; }
+
+/* 消した直後の「元に戻す」。**いる場所に出す**——画面の上に置くと、
+   一覧の下のほうで消したときに見えないまま20秒で戻せなくなる */
+.undo-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  width: min(var(--max-w, 560px), calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--plate-soft);
+  border: 1px solid var(--ink-faint);
+  border-radius: 2px;
+  font-size: .86rem;
+  line-height: 1.6;
+}
+.undo-bar button { flex: none; }
+
+/* 消したものの案内（複数持てるので行で並べる） */
+.undo-bar { flex-direction: column; align-items: stretch; }
+.undo-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.undo-row + .undo-row { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+
+/* 保存できていない時の知らせ（いちばん上に出す） */
+.save-warn { margin: 12px 0 0; }
+
+/* 重なりの表：横に動かしても、左端の型名は残す */
+.matrix tbody th {
+  position: sticky;
+  left: 0;
+  background: var(--plate);
+  z-index: 1;
+}
+
+/* 相談用の文が長くても、画面が伸び続けないようにする */
+.quote { max-height: 320px; overflow: auto; }
+
+/* ── 地に敷く面（おもて。開くたびに変わる）──────────
+ * 絵は `tools/draw-figures.js` が焼いた灰色だけの画像（src/assets/figures/*.webp）。
+ * **文字の下に濃く敷かない。** 読みにくくなった時点で、雰囲気のために
+ * 中身を犠牲にしている（飾りの共通ルール）。 */
+.figure-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  color: var(--ink);
+  opacity: 0.5;
+  overflow: hidden;
+  /* 上を濃く、文字の多い下ほど薄く落とす。
+     絵の明暗を強くしたぶん、本文に掛かるあたりは前より速く落とす */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.72) 38%, rgba(0, 0, 0, 0.26) 66%, rgba(0, 0, 0, 0.1) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.72) 38%, rgba(0, 0, 0, 0.26) 66%, rgba(0, 0, 0, 0.1) 100%);
+}
+.figure-bg img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: 50% 0;
+}
+.app > .figure-bg { z-index: 0; }
+
+/* 動きを減らす設定の端末では、いっそう控えめにする */
+@media (prefers-reduced-motion: reduce) {
+  .figure-bg { opacity: 0.38; }
+}

@@ -16,6 +16,7 @@ import { isInReview, MATURE_INTERVAL } from '../lib/srs.js';
 import { computeBadges } from '../lib/gamify.js';
 import { buildProgressSummary, buildProgressReportHtml } from '../lib/progressReport.js';
 import { hourlyPerformance } from '../lib/timeOfDay.js';
+import { maruStatusList, maruSubjectBreakdown } from '../lib/maruPool.js';
 import InsightsSection from './InsightsSection.jsx';
 
 // 分析・攻略率・合格者診断（⑯⑱㉑㉒）
@@ -61,6 +62,13 @@ export default function Analytics({ store, onNavigate, onToast }) {
   );
   const balance = useMemo(() => subjectBalanceWarning(history, questions), [history, questions]);
   const timeOfDay = useMemo(() => hourlyPerformance(history), [history]);
+  // #6：得意科目分析（学習画面の「○にした問題をふりかえる」と同じデータを使う）。
+  //   科目バランス警告・攻略率が「苦手」側を見せるのに対し、こちらは「本当に得意」側を見せる
+  //   （○にしただけでなくSRSで5連続○＝マスターまで定着した割合で判定する）。
+  const maruSubjects = useMemo(
+    () => maruSubjectBreakdown(maruStatusList(questions, history, srs)).filter((s) => s.total >= 3),
+    [questions, history, srs]
+  );
 
   if (history.length === 0) {
     return (
@@ -203,6 +211,40 @@ export default function Analytics({ store, onNavigate, onToast }) {
             </div>
           ))}
           <div className="inline-note">濃い部分＝攻略率（定着）、薄い線＝カバー率（着手）。</div>
+        </>
+      )}
+
+      {/* ===== 得意科目分析（○にした問題の定着度） ===== */}
+      {maruSubjects.length > 0 && (
+        <>
+          <div className="section-label" style={{ fontSize: 13 }}>💪 得意科目（○にした問題の定着度）</div>
+          <div className="card">
+            <p className="inline-note" style={{ marginTop: 0 }}>
+              自己採点で○にした問題のうち、SRSで5連続○（マスター）まで定着した割合です。高い科目ほど「本当に得意」と言えます。
+            </p>
+            {maruSubjects.slice(0, 5).map((s) => (
+              <div className="stat-row" key={s.subject}>
+                <div className="stat-head">
+                  <span className="stat-subject">{s.subject}</span>
+                  <span className="stat-pct">
+                    {formatPercent(s.masteredPct)}
+                    <span className="stat-sub"> （定着{s.mastered}/{s.total}）</span>
+                  </span>
+                </div>
+                <div className="bar ana-bar-mastery">
+                  <span style={{ width: `${s.masteredPct * 100}%` }} />
+                </div>
+                {s.uncertain > 0 && (
+                  <div className="inline-note" style={{ color: 'var(--warn, #e0a800)' }}>
+                    ⚠️ うっかり○の可能性が{s.uncertain}問あります。
+                  </div>
+                )}
+              </div>
+            ))}
+            <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onNavigate && onNavigate('session')}>
+              学習画面の「○にした問題をふりかえる」へ →
+            </button>
+          </div>
         </>
       )}
 

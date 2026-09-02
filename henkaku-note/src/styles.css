@@ -271,3 +271,8 @@ input[type='time'] { font-family: var(--mono); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* 箇条書き（効果の見通しなど） */
+.list { margin: 0; padding-left: 1.2em; }
+.list li { margin-bottom: 4px; }
+.list li:last-child { margin-bottom: 0; }

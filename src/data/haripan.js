@@ -29,7 +29,7 @@ export function haripanMessages(ctx = {}) {
     examDate, dueCount = 0, streak = 0, historyLen = 0,
     weakTag = null, riskCount = 0, streakBreakReasonLabel = null,
     nextTaskText = null, latestExam = null, mood = null,
-    hour = new Date().getHours(),
+    hour = new Date().getHours(), contentAdded = 0,
   } = ctx;
   const left = daysUntil(examDate);
   const ph = phaseForDate(todayStr());
@@ -73,6 +73,9 @@ export function haripanMessages(ctx = {}) {
   // 弱点タグ・忘却リスク（詳しくは「分析」カードへ）
   if (weakTag) msgs.push(`最近「${weakTag}」でよく詰まってるな。……そこ、集中的にほぐすか？`);
   if (riskCount > 0) msgs.push(`忘れかけてる問題が${riskCount}問あるぞ。放っておくと消えちまう。`);
+
+  // コンテンツ拡充（#23）：問題データが増えた時に気づいて褒める
+  if (contentAdded > 0) msgs.push(`問題が${contentAdded}問増えてるな。……手薄なとこ、ちゃんと埋まってきてるぞ。`);
 
   // きのう出来なかった理由を踏まえて（責めずに、また今日から）
   if (streakBreakReasonLabel) {
@@ -139,10 +142,25 @@ export function harioBaseTaskReminder(remaining) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+// ポモドーロで1セット（長い休憩まで）やり切った時の一言。
+export function harioPomoEncourage(setCount) {
+  const list = [
+    'よし、1セット終わりだ。……肩の力、抜いとけよ。',
+    'いいペースだ。無理せずこのまま積み重ねてけ。',
+    '今日はもう十分がんばった。あとは休むのも仕事のうちだぜ。',
+  ];
+  const idx = Number.isFinite(setCount) ? setCount % list.length : 0;
+  return list[idx];
+}
+
 // リマインド通知用の一言
-export function haripanReminder(examDate, dueCount = 0) {
+// stalledDays（#6）：復習が何日ゼロに戻せていないか（reviewZeroLog.jsのdaysSinceLastZero）。
+//   既存の「毎日のリマインド通知」（settings.reminder）に相乗りさせる形で拡張した
+//   （復習専用の別リマインド設定は作らない＝同じ機能を2か所に持たない）。
+export function haripanReminder(examDate, dueCount = 0, stalledDays = null) {
   const left = daysUntil(examDate);
   const tail = left != null && left >= 0 ? `本番まであと${left}日だ。` : '';
   const due = dueCount > 0 ? `復習が${dueCount}問たまってるぞ。` : '';
-  return `よう、ハリオだ。${tail}${due}今日も一問からいくぞ。`;
+  const stalled = stalledDays != null && stalledDays >= 3 ? `復習が${stalledDays}日ゼロに戻せてないぞ。今日は復習優先だ。` : '';
+  return `よう、ハリオだ。${tail}${due}${stalled}今日も一問からいくぞ。`;
 }

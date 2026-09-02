@@ -12,6 +12,14 @@ export function shuffle(arr) {
   return a;
 }
 
+// #17：得意/苦手/選択式モードでも、直近の模試で使った問題（avoidIds）を後回しにする。
+// 足りなければ使用済みも混ぜて埋める（安定ソート相当。呼び出し前にshuffleしておくこと）。
+export function preferUnused(pool, avoidIds = new Set()) {
+  const fresh = pool.filter((q) => !avoidIds.has(q.id));
+  const usedRecently = pool.filter((q) => avoidIds.has(q.id));
+  return [...fresh, ...usedRecently];
+}
+
 export function poolForSubject(questions, subjectName, excludeTags) {
   const pool = questions.filter((q) => subjectMatches(q.subject, { name: subjectName }));
   if (!excludeTags || !excludeTags.length) return pool;
@@ -34,11 +42,18 @@ export function groupIntegratedCases(questions, examSession) {
 }
 
 // 1つのスロット（科目）から count 問を選ぶ。used に選んだ id を積む。
-function pickFromSlot(questions, slot, used) {
+//   avoidIds：直近の模試で使った問題（#11・#16。あれば後回しにして使い回しを減らす）。
+//   srs：あれば「通常学習で解いたことがある問題」を未出題の中でも優先する（#19。
+//   まったくの初見をいきなり模試で出すより、定着確認に使う方が測定として意味がある）。
+function pickFromSlot(questions, slot, used, avoidIds = new Set(), srs = null) {
   if (slot.integrated) {
     const cases = shuffle(groupIntegratedCases(questions, slot.integratedSession));
+    // 未出題のケースを優先し、足りなければ直近で使ったケースも混ぜる（#16）。
+    const freshCases = cases.filter((g) => !g.some((q) => avoidIds.has(q.id)));
+    const usedCases = cases.filter((g) => g.some((q) => avoidIds.has(q.id)));
+    const orderedCases = [...freshCases, ...usedCases];
     const picked = [];
-    for (const group of cases) {
+    for (const group of orderedCases) {
       if (picked.length >= slot.count) break;
       if (group.some((q) => used.has(q.id))) continue;
       picked.push(...group);
@@ -68,21 +83,29 @@ function pickFromSlot(questions, slot, used) {
   const pool = shuffle(poolForSubject(questions, slot.subject, slot.excludeTags)).filter(
     (q) => !used.has(q.id)
   );
-  const picked = pool.slice(0, slot.count);
+  const fresh = pool.filter((q) => !avoidIds.has(q.id));
+  const usedRecently = pool.filter((q) => avoidIds.has(q.id));
+  // #19：未出題（fresh）の中でも、通常学習（srs）で既に解いたことがある問題を先に出す
+  // （sortは安定ソートなので、シャッフルによるランダム性はグループ内で保たれる）。
+  if (srs) fresh.sort((a, b) => (srs[b.id] ? 1 : 0) - (srs[a.id] ? 1 : 0));
+  const ordered = [...fresh, ...usedRecently];
+  const picked = ordered.slice(0, slot.count);
   picked.forEach((q) => used.add(q.id));
   return { picked, requested: slot.count, got: picked.length, fromIntegrated: 0, fromFallback: 0 };
 }
 
 // ブループリント（午前 or 午後）から出題列を組み立てる。
 // 通常科目のブロックはシャッフルして先頭に、総合問題（連問）は最後にケース単位でまとめて出す。
-export function buildBlueprintExam(blueprint, questions) {
+//   opts.avoidIds：直近の模試で使った問題id（Set）。opts.srs：通常学習のSRS状態（#19用、任意）。
+export function buildBlueprintExam(blueprint, questions, opts = {}) {
+  const { avoidIds = new Set(), srs = null } = opts;
   const used = new Set();
   const regularBlocks = [];
   const integratedBlocks = [];
   const shortfalls = [];
 
   for (const slot of blueprint.slots) {
-    const result = pickFromSlot(questions, slot, used);
+    const result = pickFromSlot(questions, slot, used, avoidIds, srs);
     if (result.got < result.requested) {
       shortfalls.push({
         subject: slot.subject,
@@ -100,6 +123,7 @@ export function buildBlueprintExam(blueprint, questions) {
 }
 
 // セットアップ画面用：実際に抽選せず、各スロットの必要数に対する収録数を確認する。
+//   roundsPossible（#12）：この収録数だと理論上何回ぶんユニークな模試が組めるか（floor(available/requested)）。
 export function blueprintAvailability(blueprint, questions) {
   return blueprint.slots.map((slot) => {
     if (slot.integrated) {
@@ -116,6 +140,7 @@ export function blueprintAvailability(blueprint, questions) {
         available,
         fallbackAvailable,
         sufficient: available >= slot.count,
+        roundsPossible: slot.count > 0 ? Math.floor((available + fallbackAvailable) / slot.count) : 0,
       };
     }
     const available = poolForSubject(questions, slot.subject, slot.excludeTags).length;
@@ -126,6 +151,7 @@ export function blueprintAvailability(blueprint, questions) {
       available,
       fallbackAvailable: 0,
       sufficient: available >= slot.count,
+      roundsPossible: slot.count > 0 ? Math.floor(available / slot.count) : 0,
     };
   });
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { phaseForDate, phasesInMonth } from '../data/roadmapPhases.js';
 import { planStudySession, DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
+import { isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
 
 // カレンダー：勉強や試験などの予定を入力・管理する。
 // 予定は store.schedule = [{ id, date, time, title, memo, kind }] に保存。
@@ -59,6 +60,21 @@ export default function Calendar({ store, onToast, onNavigate }) {
       if (!due) continue;
       const key = ymd(new Date(due));
       map[key < todayK ? todayK : key] = (map[key < todayK ? todayK : key] || 0) + 1;
+    }
+    return map;
+  }, [reviewQuestions, srs]);
+
+  // #30：期限が来ている問題のうち、要注意（リーチ）である件数を日付ごとに集計
+  const leechDueByDay = useMemo(() => {
+    const map = {};
+    const todayK = todayKey();
+    for (const q of reviewQuestions) {
+      if (!isLeech(srs[q.id])) continue;
+      const due = srs[q.id]?.due || 0;
+      if (!due) continue;
+      const key = ymd(new Date(due));
+      const k = key < todayK ? todayK : key;
+      map[k] = (map[k] || 0) + 1;
     }
     return map;
   }, [reviewQuestions, srs]);
@@ -239,7 +255,15 @@ export default function Calendar({ store, onToast, onNavigate }) {
           <button className="event-row" onClick={() => onNavigate?.('review')}>
             <span className="event-kind" style={{ background: 'var(--wrong)' }}>🔁</span>
             <span className="event-main">
-              <span className="event-title">復習期限の問題が{reviewDueByDay[selected]}件</span>
+              <span className="event-title">
+                復習期限の問題が{reviewDueByDay[selected]}件
+                {/* #30：うち要注意（リーチ）が何件か重ねて表示 */}
+                {leechDueByDay[selected] > 0 && (
+                  <span className="risk-badge lv-hot" style={{ marginLeft: 6 }} title={`${LEECH_THRESHOLD}回以上間違えている問題`}>
+                    ⚠️ 要注意{leechDueByDay[selected]}件
+                  </span>
+                )}
+              </span>
             </span>
             <span className="event-chev">›</span>
           </button>

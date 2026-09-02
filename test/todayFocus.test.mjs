@@ -40,3 +40,27 @@ test('todayFocusSubjects: limitで件数を絞れる', () => {
   const out = todayFocusSubjects(scope, 60, { limit: 2 });
   assert.equal(out.length, 2);
 });
+
+test('todayFocusSubjects: questionsを渡すと過去問の頻出度も加味される', () => {
+  // 正答率だけ見ると「頻出科目」の方が得意（優先度は低いはず）だが、過去問で3回にまたがって
+  // 出題されている（頻出）ため、頻出度を加味すると逆転して優先されるべきケース。
+  const scope = [mk('頻出科目', 50, 50, 0.85), mk('レア科目', 50, 50, 0.72)];
+  const questions = [
+    { id: 'a', subject: '頻出科目', genre: 'g｜a', round: 30 },
+    { id: 'b', subject: '頻出科目', genre: 'g｜a', round: 31 },
+    { id: 'c', subject: '頻出科目', genre: 'g｜a', round: 32 },
+  ];
+  const withoutFreq = todayFocusSubjects(scope, 60, { limit: 2 });
+  const withFreq = todayFocusSubjects(scope, 60, { limit: 2, questions });
+  // questionsを渡さない場合はレア科目の方がわずかに正答率が低い分だけ優先されるはず
+  assert.equal(withoutFreq[0].subject.name, 'レア科目');
+  // questionsを渡すと頻出度の分だけ「頻出科目」が押し上げられて逆転する
+  assert.equal(withFreq[0].subject.name, '頻出科目');
+  assert.equal(withFreq[0].reason, '過去問での頻出テーマが多い');
+});
+
+test('todayFocusSubjects: questionsを渡さなければ従来どおり（後方互換）', () => {
+  const scope = [mk('得意', 50, 50, 0.95), mk('苦手', 50, 50, 0.2)];
+  const out = todayFocusSubjects(scope, 60, { limit: 2 });
+  assert.equal(out[0].subject.name, '苦手');
+});

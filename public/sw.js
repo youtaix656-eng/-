@@ -17,6 +17,59 @@ self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
+// ---- ポモドーロの「アプリを閉じても」対策のうち、唯一Web技術で試せる
+// ベストエフォート機能（Periodic Background Sync）。
+// 対応はChrome/Android系のみ・PWAインストール必須・呼ばれる間隔もブラウザの
+// 裁量（多くの場合、半日〜1日おき程度まで間引かれる）で保証が無いため、
+// 「勉強タイマーの通知」としての精度は粗い。失敗・未対応時は静かに諦める。
+const POMO_DB = 'shinkyu-db';
+const POMO_STORE = 'kv';
+const POMO_STATE_KEY = 'shinkyu:pomoState';
+
+function openPomoDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(POMO_DB, 1);
+    // 本体側（src/lib/db.js）と同じ形でストアを作る。SWがページより先に開いても、
+    // ページが開くのが先でも、どちらの順でも 'kv' ストアが必ず存在するようにする
+    // （片方だけがonupgradeneededを持たないと、ストア無しでバージョンが確定してしまい
+    // 以後ずっと作れなくなる恐れがあるため）。
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(POMO_STORE)) db.createObjectStore(POMO_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function checkPomoStateAndNotify() {
+  try {
+    const db = await openPomoDB();
+    if (!db.objectStoreNames.contains(POMO_STORE)) { db.close(); return; }
+    const state = await new Promise((resolve, reject) => {
+      const tx = db.transaction(POMO_STORE, 'readonly');
+      const req = tx.objectStore(POMO_STORE).get(POMO_STATE_KEY);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    if (state && state.running && state.phaseEndAt && Date.now() >= state.phaseEndAt) {
+      await self.registration.showNotification('ポモドーロ', {
+        body: '設定した時間が過ぎています。アプリを開いて確認してください。',
+        tag: 'pomodoro-periodic-check',
+      });
+    }
+  } catch (e) {
+    // ベストエフォート機能のため、失敗しても本体に影響させない
+  }
+}
+
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'pomodoro-periodic-check') {
+    event.waitUntil(checkPomoStateAndNotify());
+  }
+});
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {

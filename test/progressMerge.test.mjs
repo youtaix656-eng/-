@@ -5,6 +5,7 @@ import {
   mergeHistory,
   mergeExamResults,
   mergeObjectMap,
+  mergeSettings,
   mergeProgress,
   progressChanged,
   mergeResumeState,
@@ -176,6 +177,31 @@ test('mergeResumeState: 片方にしか無いフィールドはそのまま採�
 test('mergeResumeState: local/remoteが両方欠けていても例外を投げず、全フィールドnullになる', () => {
   const out = mergeResumeState(undefined, undefined);
   assert.deepEqual(out, { quizProgress: null, examProgress: null, reviewProgress: null, audioProgress: null, session: null });
+});
+
+// settings全体では「remote側が新しい」と判定されても、pomodoroだけは自分自身の
+// updatedAtで新旧を決める（無関係な設定変更でポモドーロ設定が巻き戻らないように）。
+test('mergeSettings: pomodoroはsettings全体のnewer判定に関わらず、自分のupdatedAtが新しい方を採用する', () => {
+  const local = { speechRate: 1.2, pomodoro: { study: 45, updatedAt: 200 } };
+  const remote = { speechRate: 1.0, pomodoro: { study: 25, updatedAt: 100 } };
+  // remoteNewer=true（remote側の方が全体としては新しい）でも、pomodoro自身はlocalの方が新しい
+  const out = mergeSettings(local, remote, true);
+  assert.equal(out.speechRate, 1.0); // pomodoro以外は通常どおりremote側が勝つ
+  assert.equal(out.pomodoro.study, 45); // pomodoroだけはlocal（自分のupdatedAtが新しい）が残る
+});
+
+test('mergeSettings: pomodoro.updatedAtがどちらも無ければlocalを優先する（巻き戻さない既定側）', () => {
+  const local = { pomodoro: { study: 45 } };
+  const remote = { pomodoro: { study: 25 } };
+  const out = mergeSettings(local, remote, true);
+  assert.equal(out.pomodoro.study, 45);
+});
+
+test('mergeSettings: 片方にしかpomodoroが無ければそのまま採用する', () => {
+  const out1 = mergeSettings({}, { pomodoro: { study: 30, updatedAt: 1 } }, true);
+  assert.equal(out1.pomodoro.study, 30);
+  const out2 = mergeSettings({ pomodoro: { study: 30, updatedAt: 1 } }, {}, true);
+  assert.equal(out2.pomodoro.study, 30);
 });
 
 test('mergeProgress: quizProgress等・sessionもmergeResumeStateの結果としてマージ結果に含まれる', () => {

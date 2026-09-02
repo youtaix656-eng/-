@@ -16,6 +16,7 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_EF = 1.3;
 const DEFAULT_EF = 2.5;
+const MAX_EF = 3.5; // efは正解のたびに増え続ける参考値なので、間隔計算に使う上は上限を設ける
 
 // 5回連続「○（完璧）」でマスター（復習リストから外れる）
 export const MASTER_STREAK = 5;
@@ -61,9 +62,11 @@ export function emptyState() {
 function normalize(state) {
   if (!state) return emptyState();
   if (state.ef != null && state.interval != null) {
-    // correctStreak が無い古い状態にも既定を補う
-    if (state.correctStreak == null) return { ...state, correctStreak: 0 };
-    return state;
+    // correctStreak が無い古い状態にも既定を補う。
+    // 呼び出し側（applyGrade等）がここで返した値を直接書き換えるため、
+    // 元のstateと同じ参照を返さない（同じ参照だとReact 18のStrictModeで
+    // setState更新関数が2回呼ばれた時に同じオブジェクトへ2回加点してしまう）。
+    return { ...state, correctStreak: state.correctStreak == null ? 0 : state.correctStreak };
   }
   const boxDays = [0, 1, 3, 7, 16, 35, 90];
   const box = state.box || 0;
@@ -83,7 +86,10 @@ function normalize(state) {
 
 // 解答結果を反映して新しい SRS 状態を返す
 // grade: GRADES のいずれか（0=△✕/誤答, 3/4=正解, 5=○完璧）
-export function applyGrade(state, grade, now = Date.now()) {
+// opts.paceMultiplier: 正解時の間隔だけに掛ける倍率（既定1＝原典どおり）。
+//   ユーザーが設定で調整できる「復習ペース」。誤答時の約20分後リセットは
+//   ユーザー指定の固定仕様なので、ここでは一切変えない。
+export function applyGrade(state, grade, now = Date.now(), opts = {}) {
   const s = normalize(state);
   s.seen += 1;
   s.lastAnswered = now;
@@ -107,18 +113,27 @@ export function applyGrade(state, grade, now = Date.now()) {
       s.interval = 60;
       s.due = now + 60 * DAY_MS;
     } else {
-      const days = EBBINGHAUS_DAYS[s.correctStreak] || 16;
+      // efは「この問題がどれだけ楽に正解できているか」の参考値として計算済みだが、
+      // 以前は間隔の計算に一切使われていなかった（計算されるだけの死んだ値）。
+      // ここでefの比率（既定2.5からどれだけ伸びたか）と、設定のペース倍率を掛けて
+      // 実際の間隔に反映する。efは正解でしか増えない（誤答では変えない、上の方針は
+      // ユーザー指定のため不変）ので、この係数は1.0以上にしかならない＝間隔を
+      // 縮める方向には効かない。
+      const baseDays = EBBINGHAUS_DAYS[s.correctStreak] || 16;
+      const efFactor = s.ef / DEFAULT_EF;
+      const paceMultiplier = opts.paceMultiplier || 1;
+      const days = Math.max(1, Math.round(baseDays * efFactor * paceMultiplier));
       s.interval = days;
       s.due = now + days * DAY_MS;
     }
-    s.ef = Math.max(MIN_EF, s.ef + 0.05); // 参考値
+    s.ef = Math.min(MAX_EF, Math.max(MIN_EF, s.ef + 0.05)); // 参考値（上限を設けて間隔が際限なく伸びないようにする）
   }
   return s;
 }
 
 // 正誤のみから grade を推定して適用（模試など○△✕が無い場面）
-export function applyAnswer(state, correct, now = Date.now()) {
-  return applyGrade(state, correct ? GRADES.good : GRADES.again, now);
+export function applyAnswer(state, correct, now = Date.now(), opts = {}) {
+  return applyGrade(state, correct ? GRADES.good : GRADES.again, now, opts);
 }
 
 // この問題が「復習対象」か
@@ -138,6 +153,28 @@ export function isMastered(state) {
 export function isDue(state, now = Date.now()) {
   const s = normalize(state);
   return (s.due || 0) <= now;
+}
+
+// リーチ（要注意）になった「まさにこの回答」かどうか（直前は未満・直後で到達）。
+// Review.jsx側で、回答直後にprev/nextのstateを渡して「今リーチになった」を一度だけ知らせるために使う。
+export function justBecameLeech(prevState, nextState) {
+  return !isLeech(prevState) && isLeech(nextState);
+}
+
+// リーチ状態だった問題が、その解答でマスター（5連続○）に達した＝リーチ解消の瞬間かどうか。
+export function justResolvedLeech(prevState, nextState) {
+  return isLeech(prevState) && !isMastered(prevState) && isMastered(nextState);
+}
+
+// 復習対象（isInReview）の期限をすべて「今」に揃える（#16 全体の間隔をリセット）。
+// 誤答回数・連続記録などの実績は消さず、次にいつ出るかだけをリセットする。
+// マスター済み・一度も間違えていない問題には触れない。
+export function resetDueForReview(srsMap, now = Date.now()) {
+  const out = {};
+  for (const [id, state] of Object.entries(srsMap || {})) {
+    out[id] = isInReview(state) ? { ...normalize(state), due: now } : state;
+  }
+  return out;
 }
 
 // 復習対象を優先度順（期限が過ぎている順→連続完璧が少ない順）に並べる

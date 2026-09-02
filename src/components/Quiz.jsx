@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionCard from './QuestionCard.jsx';
 import ResetInline from './ResetInline.jsx';
 import { getSubjects } from '../lib/stats.js';
@@ -12,10 +12,25 @@ import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { riskOf } from '../lib/reviewOrder.js';
+import { appendTimeAttackEntry } from '../lib/timeAttackLog.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import {
   shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder,
 } from '../lib/sessionOrder.js';
+import { COMPARISONS } from '../data/mindmapData.js';
+import { recommendNewPct } from '../lib/reviewPool.js';
+import { weakTagClusters } from '../lib/weakClusters.js';
+import { loadReviewZeroLog, daysSinceLastZero } from '../lib/reviewZeroLog.js';
+import { chainNext } from '../lib/kgRecall.js';
+import { useMaruReview } from '../lib/useMaruReview.js';
+import MaruReviewCard from './MaruReviewCard.jsx';
+import FastCard from './FastCard.jsx';
+import { useMissTypeHandling } from '../lib/useMissTypeHandling.js';
+import { latestMissType, missTypeLabel, MISS_TYPES } from '../lib/missTypes.js';
+import BufferPlanCard from './BufferPlanCard.jsx';
+import ManagerReview from './ManagerReview.jsx';
+import { resolveBufferUsage, bufferUsageLabel } from '../lib/bufferSession.js';
+import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 const BATCH_OPTIONS = [10, 30, 60, 0]; // 0=すべて
@@ -30,8 +45,8 @@ function poolForSubject(questions, subject) {
 }
 
 // 一問一答モード
-export default function Quiz({ store, initialSubject, initialQuestions, autoResume, onConsumeAutoResume, onConsumed, onOpenKeyword }) {
-  const { questions, memos, links, srs, history, recordAnswer, setMemo, setLink, bookmarks, toggleBookmark } = store;
+export default function Quiz({ store, initialSubject, initialQuestions, autoResume, onConsumeAutoResume, onConsumed, onOpenKeyword, onToast }) {
+  const { questions, memos, links, srs, history, recordAnswer, setMemo, setLink, bookmarks, toggleBookmark, settings, updateSettings, setNextDue } = store;
   // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
   const subjects = useMemo(() => {
     const present = getSubjects(questions);
@@ -68,6 +83,10 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   const [nextTaskInput, setNextTaskInput] = useState('');
   const [nextTaskSavedAt, setNextTaskSavedAt] = useState(0);
   const [streakBreakReasonLabel, setStreakBreakReasonLabel] = useState(null);
+  // ○の見直し／高速回転セッション中かどうか（null=通常、'review'|'fast'）。Session.jsxのlabelに相当。
+  const [maruSessionKind, setMaruSessionKind] = useState(null);
+  // 3分の2バッファ術：基礎タスクの計画（Session.jsxのsession.bufferに相当。Quiz.jsxはローカル状態で持つ）。
+  const [buffer, setBuffer] = useState(null);
 
   useEffect(() => { loadTodayMood().then(setMood); }, []);
   useEffect(() => { loadNextTask().then((t) => { if (t && t.text) setNextTaskInput(t.text); }); }, []);
@@ -102,17 +121,38 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     [afterKw]
   );
   const afterRound = useMemo(() => (round ? afterKw.filter((q) => isSameRound(q.round, round)) : afterKw), [afterKw, round]);
+  // 誤答理由の型で絞り込む（Review.jsxと同じ考え方）
+  const [missTypeFilter, setMissTypeFilter] = useState('');
+  const { missTypes, missTrend, missAnomaly, onMissType } = useMissTypeHandling(setNextDue);
   const filteredPool = useMemo(() => {
     let pool = afterRound;
     if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
     if (minWrong > 0) pool = pool.filter((q) => (normalize(srs[q.id]).wrongCount || 0) >= minWrong);
     if (minRisk > 0) pool = pool.filter((q) => Math.round(riskOf(q, srs) * 100) >= minRisk);
+    if (missTypeFilter) pool = pool.filter((q) => latestMissType(missTypes[q.id])?.type === missTypeFilter);
     return pool;
-  }, [afterRound, bookmarkOnly, bookmarks, minWrong, minRisk, srs]);
-  const filtering = subject !== 'all' || !!genre || !!keyword || !!round || bookmarkOnly || minWrong > 0 || minRisk > 0;
+  }, [afterRound, bookmarkOnly, bookmarks, minWrong, minRisk, srs, missTypeFilter, missTypes]);
+  const filtering = subject !== 'all' || !!genre || !!keyword || !!round || bookmarkOnly || minWrong > 0 || minRisk > 0 || !!missTypeFilter;
 
   useEffect(() => { setGenre(''); setKeyword(''); setRound(''); }, [subject]);
   useEffect(() => { setKeyword(''); setRound(''); }, [genre]);
+
+  // ○にした問題の見直し・高速回転用プール（useMaruReview.jsが単一の正。Session.jsxと同じ）
+  const {
+    maruExcludeMastered, setMaruExcludeMastered,
+    maruStatusAll, maruUncertainCount, maruStatusFiltered, maruPool,
+  } = useMaruReview(filteredPool, history, srs);
+
+  // 弱点タグ（誤答が多いタグをタップでキーワードしぼり。weakClusters.jsが単一の正）
+  const weakTags = useMemo(
+    () => weakTagClusters(history, questions, links, { minWrong: 2, limit: 8 }),
+    [history, questions, links]
+  );
+
+  // 復習が何日ゼロに戻せていないか（「今日のおすすめ」の比率提案に使う）
+  const [reviewZeroLog, setReviewZeroLog] = useState({});
+  useEffect(() => { loadReviewZeroLog().then(setReviewZeroLog); }, []);
+  const reviewStalledDays = useMemo(() => daysSinceLastZero(reviewZeroLog) || 0, [reviewZeroLog]);
 
   const newRemaining = useMemo(
     () => filteredPool.filter((q) => !srs[q.id] || (srs[q.id].seen || 0) === 0).length,
@@ -120,7 +160,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   );
   const reviewRemaining = useMemo(() => reviewPoolFor(filteredPool, srs).length, [filteredPool, srs]);
 
-  const beginWith = (pool, doShuffle = true) => {
+  const beginWith = (pool, doShuffle = true, opts = {}) => {
     if (!pool || pool.length === 0) return;
     setSessionPool(pool);
     if (doShuffle) {
@@ -132,7 +172,37 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     setIdx(0);
     setSessionStats({ total: 0, correct: 0 });
     setAnswerLog([]);
+    setMaruSessionKind(opts.maruKind || null);
+    setBuffer(opts.buffer || null);
     setStarted(true);
+  };
+
+  // ○の見直し・高速回転を開始（MaruReviewCardから呼ばれる）。
+  //   idsの並び順（うっかり○優先→古い順）はuseMaruReviewが決めているので、シャッフルしない。
+  const startMaruReview = (pool) => beginWith(pool, false, { maruKind: 'review' });
+  const startMaruFast = (pool) => beginWith(pool, false, { maruKind: 'fast' });
+
+  // 3分の2バッファ術：基礎タスクを開始（BufferPlanCardから呼ばれる）。
+  //   出題対象は現在の絞り込み・新規/復習割合の設定をそのまま流用する。
+  const buildIdsForTarget = (target) => {
+    if (newPct == null) {
+      // batchのチップ選択が「すべて」(0)の時、呼び出し元(285行目)は
+      // target=filteredPool.lengthを渡すのでbuildOrderで結果は変わらない。
+      // ただしstartBuffer()のようにtargetがfilteredPool.lengthより小さいケースもあるため、
+      // targetを無視せず必ずbuildOrderでtarget件に絞る（無視すると母集団全体が出題順になり、
+      // バッファ計画の問題数が効かなくなるバグになる）。
+      return buildOrder(filteredPool, target);
+    }
+    const ratio = newPct / 100;
+    if (ratio >= 1) return buildNewOnlyOrder(filteredPool, target, srs);
+    if (ratio <= 0) return buildReviewOnlyOrder(filteredPool, target, srs);
+    return batch > 0 ? buildMixedOrder(filteredPool, target, ratio, srs) : buildMixedNoRepeatOrder(filteredPool, target, ratio, srs);
+  };
+  const startBuffer = (bufferPlan) => {
+    const ids = buildIdsForTarget(bufferPlan.baseTaskQuestionCount);
+    if (ids.length === 0) { onToast?.('条件に合う問題がありません'); return; }
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    beginWith(ids.map((id) => byId.get(id)).filter(Boolean), false, { buffer: bufferPlan });
   };
 
   // 出題ビルダー等から「この問題群を出す」指定、または科目指定で来たら自動開始
@@ -209,6 +279,8 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     setOrder(resume.order);
     setSessionStats(resume.stats);
     setIdx(resume.idx);
+    setMaruSessionKind(null);
+    setBuffer(null);
     setStarted(true);
     setResume(null);
   };
@@ -216,34 +288,40 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
   // 科目・絞り込み条件から開始（出題数・新規/復習の割合を反映）
   const start = () => {
     const target = batch > 0 ? batch : filteredPool.length;
-    if (newPct == null) {
-      // 従来通り：新規/復習を区別せず、条件に合う問題をそのまま（batch指定時は周回して埋める）
-      const ids = batch > 0 ? buildOrder(filteredPool, target) : spaceById(shuffle(filteredPool).map((q) => q.id));
-      const byId = new Map(filteredPool.map((q) => [q.id, q]));
-      beginWith(ids.map((id) => byId.get(id)).filter(Boolean), false);
-      return;
-    }
-    const ratio = newPct / 100;
-    let ids;
-    if (ratio >= 1) ids = buildNewOnlyOrder(filteredPool, target, srs);
-    else if (ratio <= 0) ids = buildReviewOnlyOrder(filteredPool, target, srs);
-    else ids = batch > 0 ? buildMixedOrder(filteredPool, target, ratio, srs) : buildMixedNoRepeatOrder(filteredPool, target, ratio, srs);
+    const ids = buildIdsForTarget(target);
     if (ids.length === 0) return;
     const byId = new Map(questions.map((q) => [q.id, q]));
     beginWith(ids.map((id) => byId.get(id)).filter(Boolean), false);
   };
-  // 「もう一度」＝同じ母集団を再シャッフルして再演習
+  // 「もう一度」＝同じ母集団を再シャッフルして再演習（○の見直し等はlabel相当のmaruSessionKindを引き継ぐ）
   const restart = () => {
-    if (sessionPool) beginWith(sessionPool);
+    if (sessionPool) beginWith(sessionPool, true, { maruKind: maruSessionKind });
     else start();
   };
 
-  const handleAnswered = (correct, grade) => {
+  const handleAnswered = (correct, grade, selfKind, objectiveCorrect) => {
     const q = order[idx];
-    recordAnswer(q, correct, grade);
+    // ○の見直し／○の高速回転セッションはsourceに印を付ける（Session.jsxと同じ考え方。
+    //   「最後にいつふりかえったか」をhistoryだけから追跡できるように）。
+    const isMaruSession = maruSessionKind != null;
+    recordAnswer(q, correct, grade, isMaruSession ? 'maru-review' : undefined, selfKind, objectiveCorrect);
+    // 「○の見直し」中に△・✕へ崩れた＝当初の○は思い違いだった可能性が高いので、
+    //   間違いノート（MistakeNote.jsx）で見分けられるよう自動でメモに印を付ける（Session.jsxと同じ）。
+    if (maruSessionKind === 'review' && (selfKind === 'sankaku' || selfKind === 'batsu')) {
+      const tag = '⚠️見直しで判明：うろ覚えだった可能性';
+      const existing = memos[q.id] || '';
+      if (!existing.includes(tag)) setMemo(q.id, existing ? `${existing} / ${tag}` : tag);
+    }
     setSessionStats((s) => ({ total: s.total + 1, correct: s.correct + (correct ? 1 : 0) }));
     setAnswerLog((prev) => [...prev, { q, correct }]);
     setAnsweredThisQ(true);
+    // タイムアタック中だけ、実際の解答所要時間を記録する（G-100「即答5秒達成率」の実測用）。
+    // 制限時間切れでの自動「もう一度」（handleAnsweredがremain===0から呼ばれる場合）は
+    // 実質的に「間に合わなかった」なので、そのまま制限時間ぶんの経過として記録する。
+    if (timeAttack && q) {
+      const ms = Date.now() - questionShownAtRef.current;
+      appendTimeAttackEntry({ questionId: q.id, ms, correct, limitSec: taSeconds });
+    }
   };
 
   const handleNext = () => {
@@ -251,10 +329,19 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     else setIdx(order.length); // 終了画面へ
   };
 
+  // ○の高速回転（FastCard）は「次へ」の仕組みを持たないため、記録と前進を1回でまとめて行う
+  //   （Session.jsxのansweredFastと同じ考え方）。
+  const answeredFast = (correct, grade, selfKind) => {
+    handleAnswered(correct, grade, selfKind, undefined);
+    handleNext();
+  };
+
   // タイムアタック：問題が変わるたびに残り時間をリセットして1秒ごとにカウントダウン
+  const questionShownAtRef = useRef(Date.now());
   useEffect(() => {
     setAnsweredThisQ(false);
     if (!timeAttack || !started || idx >= order.length) return;
+    questionShownAtRef.current = Date.now();
     setRemain(taSeconds);
     const timer = setInterval(() => {
       setRemain((r) => (r <= 1 ? 0 : r - 1));
@@ -280,11 +367,13 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     setOrder([]);
     setIdx(0);
     setResume(null);
+    setMaruSessionKind(null);
+    setBuffer(null);
   };
 
   const clearFilters = () => {
     setSubject('all'); setGenre(''); setKeyword(''); setRound('');
-    setBookmarkOnly(false); setMinRisk(0); setMinWrong(0);
+    setBookmarkOnly(false); setMinRisk(0); setMinWrong(0); setMissTypeFilter('');
   };
 
   // ---- 開始前 ----
@@ -293,6 +382,12 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
       <div className="view">
         <h2 className="view-title">一問一答</h2>
         <p className="view-desc">科目・条件を選んで演習を始めましょう。ランダムに出題されます。</p>
+        {history.length < 100 && (
+          <p className="inline-note" style={{ marginTop: -6, marginBottom: 10 }}>
+            はじめのうちは正答率を気にしなくて大丈夫です。まずは「分からない所をあぶり出す」つもりで進めましょう。
+            間違えた問題は自動で復習リストに入ります。
+          </p>
+        )}
 
         {streakBreakReasonLabel && (
           <div className="card" style={{ marginBottom: 10 }}>
@@ -331,6 +426,25 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
               );
             })}
           </div>
+
+          {/* 弱点タグ：直近の誤答が多いタグを上位に。タップでキーワードしぼり（Session.jsxと同じ） */}
+          {weakTags.length > 0 && (
+            <div className="weak-tags">
+              <span className="weak-tags-label">弱点タグ</span>
+              <div className="chip-row">
+                {weakTags.map((w) => (
+                  <button
+                    key={w.tag}
+                    className={`chip ${keyword === w.tag ? 'active' : ''}`}
+                    onClick={() => setKeyword(keyword === w.tag ? '' : w.tag)}
+                    title={`誤答${w.wrong}回・正答率${Math.round((1 - w.rate) * 100)}%`}
+                  >
+                    {w.tag} <span className="weak-count">×{w.wrong}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="review-controls" style={{ marginTop: 10 }}>
             <label className="review-order">
@@ -374,6 +488,27 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
             <input id="quiz-min-wrong" type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => setMinWrong(Number(e.target.value))} />
           </div>
 
+          {/* 誤答理由の型で絞り込む集中特訓（Review.jsxと同じ考え方） */}
+          <div className="chip-row" style={{ marginTop: 8 }}>
+            <span className="section-hint">誤答理由の型で集中特訓：</span>
+            <button className={`chip ${missTypeFilter === '' ? 'active' : ''}`} onClick={() => setMissTypeFilter('')}>指定なし</button>
+            {MISS_TYPES.map((t) => (
+              <button
+                key={t.id}
+                className={`chip ${missTypeFilter === t.id ? 'active' : ''}`}
+                onClick={() => setMissTypeFilter(missTypeFilter === t.id ? '' : t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {(missTrend || missAnomaly?.isAnomaly) && (
+            <p className="inline-note" style={{ marginTop: 6 }}>
+              {missAnomaly?.isAnomaly && <>今日は誤答が{missAnomaly.todayTotal}件と、直近の1日平均（約{missAnomaly.avgPerDay}件）よりかなり多めです。無理せず休憩も挟みましょう。<br /></>}
+              {missTrend && <>最近は「{missTypeLabel(missTrend.type)}」が増えています（直近7日で{missTrend.count}件）。</>}
+            </p>
+          )}
+
           <div className="review-count">
             この条件で <strong>{filteredPool.length}</strong> 問
             {filtering && <button className="btn ghost sm" onClick={clearFilters}>クリア</button>}
@@ -393,7 +528,20 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
             </div>
           )}
 
-          <div className="section-label" style={{ marginTop: 10 }}>新規・復習の割合</div>
+          <div className="section-label" style={{ marginTop: 10 }}>
+            新規・復習の割合
+            <button
+              className="btn ghost sm"
+              style={{ float: 'right' }}
+              onClick={() => {
+                const rec = recommendNewPct(newRemaining, reviewRemaining, reviewStalledDays);
+                setNewPct(rec.pct);
+                onToast?.(rec.reason);
+              }}
+            >
+              🎯 今日のおすすめ
+            </button>
+          </div>
           <div className="chip-row">
             {[
               { p: null, l: 'すべて（従来通り）' },
@@ -423,7 +571,7 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
           </label>
           {timeAttack && (
             <div className="chip-row" style={{ marginTop: 6 }}>
-              {[10, 15, 20].map((s) => (
+              {[5, 10, 15, 20].map((s) => (
                 <button key={s} className={`chip ${taSeconds === s ? 'active' : ''}`} onClick={() => setTaSeconds(s)}>
                   {s}秒
                 </button>
@@ -440,7 +588,44 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
             演習を始める
           </button>
         </div>
+
+        {/* ○にした問題の見直し・高速回転（上の絞り込みを引き継ぐ。MaruReviewCard.jsxが単一の正） */}
+        <MaruReviewCard
+          maruStatusAll={maruStatusAll}
+          maruUncertainCount={maruUncertainCount}
+          maruExcludeMastered={maruExcludeMastered}
+          setMaruExcludeMastered={setMaruExcludeMastered}
+          maruStatusFiltered={maruStatusFiltered}
+          maruPool={maruPool}
+          onStartReview={startMaruReview}
+          onStartFast={startMaruFast}
+        />
+
+        {/* 3分の2バッファ術：学習時間から基礎タスク/バッファを自動計算する（BufferPlanCard.jsxが単一の正） */}
+        <BufferPlanCard
+          subject={subject}
+          history={history}
+          settings={settings}
+          updateSettings={updateSettings}
+          mood={mood}
+          onStart={startBuffer}
+          startDisabled={filteredPool.length === 0}
+          onToast={onToast}
+        />
       </div>
+    );
+  }
+
+  // ---- マネージャービュー（3分の2バッファ術：基礎タスク完了直後の振り返り） ----
+  if (idx >= order.length && buffer && !buffer.managerReview) {
+    return (
+      <ManagerReview
+        buffer={buffer}
+        onDecide={(completed, note) => {
+          const usage = resolveBufferUsage(completed);
+          setBuffer({ ...buffer, managerReview: { completed, ...(note ? { note } : {}) }, bufferUsage: usage });
+        }}
+      />
     );
   }
 
@@ -460,7 +645,15 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
       if (a.correct) byGenre[g].correct += 1;
     }
     const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
-    const weakness = wrongQs.length > 0 ? buildWeaknessSummary(wrongQs, links) : null;
+    const weakness = wrongQs.length > 0 ? buildWeaknessSummary(wrongQs, links, COMPARISONS) : null;
+    // 関連をたどって続ける：この回の問題と概念を共有する“つながり”を辿る（Review.jsxと同じ考え方）
+    const chainPool = [];
+    const chainExcl = new Set(order.map((q) => q.id));
+    for (const q of order) {
+      const nx = chainNext(q, questions, links, chainExcl);
+      if (nx) { chainPool.push(nx.question); chainExcl.add(nx.question.id); }
+      if (chainPool.length >= 10) break;
+    }
     return (
       <div className="view">
         <h2 className="view-title">お疲れさまでした</h2>
@@ -477,6 +670,36 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
             <button className="btn primary" onClick={restart}>もう一度</button>
           </div>
         </div>
+
+        {/* 3分の2バッファ術：振り返り後のバッファ枠（ご褒美復習／積み残し消化） */}
+        {buffer && buffer.managerReview && (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>🧩 バッファ枠：{bufferUsageLabel(buffer.bufferUsage)}</div>
+            <p className="inline-note" style={{ marginTop: 0 }}>ハリオ：「{harioBufferEncourage(buffer.bufferUsage)}」</p>
+            <button
+              className="btn primary block lg"
+              onClick={() => {
+                if (buffer.bufferUsage === 'review') {
+                  const pool = reviewPoolFor(afterSubject, srs);
+                  if (pool.length === 0) { onToast?.('復習対象が見つかりませんでした。またの機会に'); return; }
+                  beginWith(shuffle(pool).slice(0, Math.min(buffer.bufferQuestionCount || pool.length, pool.length)), false);
+                } else {
+                  beginWith(shuffle(afterSubject).slice(0, Math.max(1, buffer.bufferQuestionCount || 10)), false);
+                }
+              }}
+            >
+              {buffer.bufferUsage === 'review' ? `🎁 ご褒美復習（約${buffer.bufferQuestionCount}問）を始める` : `📥 積み残し（約${buffer.bufferQuestionCount}問）を消化する`}
+            </button>
+          </div>
+        )}
+
+        {/* 誤答理由の傾向・急増検知 */}
+        {(missTrend || missAnomaly?.isAnomaly) && (
+          <p className="inline-note">
+            {missAnomaly?.isAnomaly && <>今日は誤答が{missAnomaly.todayTotal}件と、直近の1日平均（約{missAnomaly.avgPerDay}件）よりかなり多めです。無理せず休憩も挟みましょう。<br /></>}
+            {missTrend && <>最近は「{missTypeLabel(missTrend.type)}」が増えています（直近7日で{missTrend.count}件）。</>}
+          </p>
+        )}
 
         {/* ジャンル別の正答率（#6・正答率の低い順） */}
         {genreRows.length > 1 && (
@@ -509,6 +732,19 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
                 <><br />繰り返しつまずいたキーワード：{weakness.topTags.map(([tg, c]) => `${tg}（×${c}）`).join('・')}</>
               )}
             </p>
+            {weakness.relatedComparisons.length > 0 && (
+              <>
+                <div className="section-label">関連する対比（混同しやすいポイント）</div>
+                {weakness.relatedComparisons.map((c) => (
+                  <div className="compare-item" key={c.id}>
+                    <div className="compare-title">{c.title}</div>
+                    <ul className="compare-members">
+                      {(c.members || []).slice(0, 4).map((m, i) => (<li key={i}>{m}</li>))}
+                    </ul>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
 
@@ -528,6 +764,13 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
               ✕ 間違えた{wrongQs.length}問だけ、もう一度
             </button>
           </div>
+        )}
+
+        {/* 関連をたどって続ける（Review.jsxと同じchainNext） */}
+        {chainPool.length > 0 && (
+          <button className="btn block" onClick={() => beginWith(chainPool, false)}>
+            🔗 関連をたどって続ける（{chainPool.length}問）
+          </button>
         )}
 
         {/* 明日の最初の1タスクを決めておく */}
@@ -562,10 +805,14 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
 
   // ---- 出題中 ----
   const current = order[idx];
+  // 3分の2バッファ術：基礎タスク進捗（実行役ビュー）＋未達が近い時のハリオのリマインド
+  const bufRemaining = buffer ? order.length - idx : 0;
+  const harioReminder = buffer && bufRemaining > 0 && bufRemaining <= 5 ? harioBaseTaskReminder(bufRemaining) : null;
   return (
     <div className="view">
       <div className="exam-timer">
         <span className="count">
+          {buffer && '🧩 基礎タスク・'}
           {subject === 'all' ? 'すべての科目' : subject}
         </span>
         {timeAttack && (
@@ -578,23 +825,32 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
       <div className="progress">
         <span style={{ width: `${((idx + 1) / order.length) * 100}%` }} />
       </div>
+      {harioReminder && (
+        <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{harioReminder}」</p>
+      )}
 
-      <QuestionCard
-        key={current.id}
-        question={current}
-        memo={memos[current.id]}
-        onSetMemo={setMemo}
-        link={links[current.id]}
-        onSetLink={setLink}
-        onOpenKeyword={onOpenKeyword}
-        onAnswered={handleAnswered}
-        onNext={handleNext}
-        selfGrade
-        bookmarked={!!bookmarks[current.id]}
-        onToggleBookmark={toggleBookmark}
-        GRADES={GRADES}
-        isLast={idx + 1 >= order.length}
-      />
+      {maruSessionKind === 'fast' ? (
+        <FastCard key={current.id} question={current} onGraded={answeredFast} GRADES={GRADES} />
+      ) : (
+        <QuestionCard
+          key={current.id}
+          question={current}
+          memo={memos[current.id]}
+          onSetMemo={setMemo}
+          link={links[current.id]}
+          onSetLink={setLink}
+          onOpenKeyword={onOpenKeyword}
+          onAnswered={handleAnswered}
+          onNext={handleNext}
+          selfGrade
+          bookmarked={!!bookmarks[current.id]}
+          onToggleBookmark={toggleBookmark}
+          GRADES={GRADES}
+          isLast={idx + 1 >= order.length}
+          onMissType={onMissType}
+          missType={latestMissType(missTypes[current.id])?.type || ''}
+        />
+      )}
       <ResetInline label="一問一答をリセット" onReset={resetQuiz} />
     </div>
   );

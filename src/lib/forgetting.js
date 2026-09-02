@@ -37,3 +37,17 @@ export function forgettingRisk(questions, srs, { now = Date.now(), threshold = 0
   out.sort((a, b) => b.risk - a.risk);
   return limit > 0 ? out.slice(0, limit) : out;
 }
+
+function dayIndex(date = new Date()) {
+  const start = Date.UTC(date.getFullYear(), 0, 0);
+  const diff = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - start;
+  return Math.floor(diff / (24 * 60 * 60 * 1000));
+}
+
+// #24：Analyticsだけでなく、Homeにも忘却リスク上位の1件を日替わりで出す（priorityFocus.js等と同じ
+//   日付ローテーション方式。安定して1日1件だけ表示され、リロードのたびには変わらない）。
+export function dailyForgettingPick(questions, srs, { now = Date.now(), threshold = 0.3, topN = 5 } = {}) {
+  const top = forgettingRisk(questions, srs, { now, threshold, limit: topN });
+  if (top.length === 0) return null;
+  return top[dayIndex(new Date(now)) % top.length];
+}

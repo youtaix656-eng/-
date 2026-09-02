@@ -5,6 +5,9 @@
 
 import { idbGet, idbSet } from './db.js';
 import { weakTagClusters } from './weakClusters.js';
+import { latestMissType, missTypeTrend } from './missTypes.js';
+import { tagFrequency } from './pastExamTrends.js';
+import { latestSpeedup } from './roundLog.js';
 
 const KEY = 'shinkyu:weeklyJournal'; // { [weekKey]: { note, at } }
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -35,7 +38,9 @@ export async function saveWeeklyNote(weekKey, note) {
 }
 
 // 直近7日間（現在時刻を含む、当日を含む）の解答から週報を自動生成する
-export function buildWeeklyReport(history = [], missTypes = {}, questions = [], links = {}, now = Date.now()) {
+// roundLogは省略可（後方互換）。渡すと「300問1周の速度」がSession.jsxの完了画面だけでなく
+// 週報にも出るようになる（周回速度は成長を示す数字なのに、これまで週報では使われていなかった）。
+export function buildWeeklyReport(history = [], missTypes = {}, questions = [], links = {}, now = Date.now(), roundLog = []) {
   const since = now - WEEK_MS;
   const weekHistory = history.filter((h) => h.at >= since);
   const total = weekHistory.length;
@@ -45,12 +50,24 @@ export function buildWeeklyReport(history = [], missTypes = {}, questions = [], 
   const wrongIds = [...new Set(weekHistory.filter((h) => !h.correct).map((h) => h.questionId))];
   const typeCounts = {};
   for (const id of wrongIds) {
-    const t = missTypes[id]?.type;
+    const t = latestMissType(missTypes[id])?.type;
     if (t) typeCounts[t] = (typeCounts[t] || 0) + 1;
   }
   const topType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
   const weakTags = weakTagClusters(weekHistory, questions, links, { minWrong: 1, limit: 5 });
+  // 弱点タグが、過去問で複数回出題されている頻出テーマでもあるか添える（pastExamTrends.jsのtagFrequencyと
+  // 突き合わせる。「弱いだけ」と「弱くてよく出る」を区別できるように）。
+  const freqByTag = new Map(tagFrequency(questions, links, { limit: 9999 }).map((f) => [f.tag, f.roundCount]));
+  const weakTagsRanked = weakTags.map((w) => ({ ...w, roundCount: freqByTag.get(w.tag) || 0 }));
 
-  return { since, total, correct, accuracy, wrongCount: wrongIds.length, typeCounts, topType, weakTags };
+  // 誤答理由の型が直近で増えているか（missTypes.jsのmissTypeTrend。7日窓とその前の7日窓を比較）。
+  // topTypeは「今週いちばん多かった型」の単純集計、trendは「増えている型」で見ている軸が違うため、
+  // 両方返す（片方が他方の下位互換ではない）。
+  const trend = missTypeTrend(missTypes, now);
+
+  // 300問1周の速度が前回より縮んでいるか（roundLog.jsのlatestSpeedup。1問あたりの所要時間で比較）
+  const speedup300 = latestSpeedup(roundLog, 300);
+
+  return { since, total, correct, accuracy, wrongCount: wrongIds.length, typeCounts, topType, weakTags: weakTagsRanked, trend, speedup300 };
 }
