@@ -1,17 +1,19 @@
 import React from 'react';
+import { useFocusJump } from './useFocusJump.js';
 
 // しらべる。読み物と道具の入口をまとめた画面。
 
 const MAP_SEARCH = 'https://www.google.com/maps/search/?api=1&query=公衆トイレ';
 
-export default function Know({ onGo }) {
+export default function Know({ onGo, focus, onFocusDone }) {
+  useFocusJump(focus, onFocusDone);
   return (
     <div className="view">
       <header className="view-head">
         <h1>しらべる</h1>
       </header>
 
-      <ul className="menu">
+      <ul className="menu" id="know-menu">
         <li>
           <button type="button" onClick={() => onGo('redflags')}>
             <strong>受診の目安</strong>

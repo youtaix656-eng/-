@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { recordedTotal } from '../lib/stats.js';
 import { todayKey } from '../lib/dates.js';
+import { useFocusJump } from './useFocusJump.js';
 
 // 設定・書き出し。
 // **消す操作には必ず確認を出し、何が消えるかを全部書く。**
@@ -17,7 +18,8 @@ const THEMES = [
   { id: 'dark', label: '暗い（夜の記録に）' },
 ];
 
-export default function Settings({ store }) {
+export default function Settings({ store, focus, onFocusDone }) {
+  useFocusJump(focus, onFocusDone);
   const fileRef = useRef(null);
   const [message, setMessage] = useState('');
   const total = recordedTotal(store.days);
@@ -79,7 +81,7 @@ export default function Settings({ store }) {
         <h1>このアプリのこと</h1>
       </header>
 
-      <section className="block">
+      <section className="block" id="set-storage">
         <div className="block-head">
           <h2>保存されているもの</h2>
         </div>
@@ -93,7 +95,7 @@ export default function Settings({ store }) {
         </p>
       </section>
 
-      <section className="block">
+      <section className="block" id="set-io">
         <div className="block-head">
           <h2>書き出す・取り込む</h2>
         </div>
@@ -115,7 +117,7 @@ export default function Settings({ store }) {
         {message && <p className="muted small">{message}</p>}
       </section>
 
-      <section className="block">
+      <section className="block" id="set-theme">
         <div className="block-head">
           <h2>見た目</h2>
         </div>
@@ -134,7 +136,7 @@ export default function Settings({ store }) {
         </div>
       </section>
 
-      <section className="block">
+      <section className="block" id="set-clear">
         <div className="block-head">
           <h2>すべて消す</h2>
         </div>

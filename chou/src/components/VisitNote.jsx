@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { lastKeys, todayKey } from '../lib/dates.js';
 import { buildVisitNote, visitNoteFilename, NOTE_PARTS, DEFAULT_PARTS, NOTE_RANGES } from '../lib/visitNote.js';
+import { useFocusJump } from './useFocusJump.js';
 
 // 受診メモ。**このアプリを持つ理由がここ。**
 // アプリは医療者へ送らない——作るのは文章まで。渡す相手は本人が選ぶ。
 
-export default function VisitNote({ store }) {
+export default function VisitNote({ store, focus, onFocusDone }) {
+  useFocusJump(focus, onFocusDone);
   const [days, setDays] = useState(14);
   const [parts, setParts] = useState(DEFAULT_PARTS);
   const [copied, setCopied] = useState('');
@@ -41,7 +43,7 @@ export default function VisitNote({ store }) {
         <p className="muted">記録から、そのまま読める形に組み立てます。</p>
       </header>
 
-      <section className="block">
+      <section className="block" id="note-range">
         <div className="block-head">
           <h2>期間</h2>
         </div>
@@ -60,7 +62,7 @@ export default function VisitNote({ store }) {
         </div>
       </section>
 
-      <section className="block">
+      <section className="block" id="note-parts">
         <div className="block-head">
           <h2>入れるもの</h2>
         </div>
@@ -80,7 +82,7 @@ export default function VisitNote({ store }) {
         ))}
       </section>
 
-      <section className="block">
+      <section className="block" id="note-out">
         <div className="block-head">
           <h2>できあがり</h2>
         </div>

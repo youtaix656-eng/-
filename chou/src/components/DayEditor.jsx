@@ -7,9 +7,9 @@ import BristolPicker from './Bristol.jsx';
 // 1日ぶんの入力。**ホームの「きょう」とカレンダーの日別の両方でこれを使う**
 // （画面ごとに書くと、片方だけ直したときに必ず食い違う）。
 
-function Choice({ label, options, value, onChange, name }) {
+function Choice({ label, options, value, onChange, name, id }) {
   return (
-    <div className="choice">
+    <div className="choice" id={id}>
       <div className="choice-label" id={`lbl-${name}`}>
         {label}
       </div>
@@ -84,6 +84,7 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
   return (
     <div className="day-editor">
       <Choice
+        id="rec-belly"
         name="belly"
         label="お腹の調子"
         options={BELLY_STEPS}
@@ -91,7 +92,7 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         onChange={(v) => store.updateDay(date, { belly: v })}
       />
 
-      <section className="block">
+      <section className="block" id="rec-stool">
         <div className="block-head">
           <h2>お通じ</h2>
           <button
@@ -147,7 +148,7 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         />
       </div>
 
-      <section className="block">
+      <section className="block" id="rec-meal">
         <div className="block-head">
           <h2>たべたもの</h2>
         </div>
@@ -198,7 +199,7 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         </p>
       </section>
 
-      <section className="block">
+      <section className="block" id="rec-note">
         <label className="block-head" htmlFor={`note-${date}`}>
           <h2>ひとこと（任意）</h2>
         </label>

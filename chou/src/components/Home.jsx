@@ -4,8 +4,10 @@ import DayEditor from './DayEditor.jsx';
 import { emptyDay, hasRecord } from '../lib/days.js';
 import { lastKeys, todayKey, formatKey } from '../lib/dates.js';
 import { recordedTotal, fillOf, foodSuggestions } from '../lib/stats.js';
+import { useFocusJump } from './useFocusJump.js';
 
-export default function Home({ store, onGo }) {
+export default function Home({ store, onGo, focus, onFocusDone }) {
+  useFocusJump(focus, onFocusDone);
   const today = todayKey();
   const day = store.days[today] || emptyDay(today);
   const recordedToday = hasRecord(day);
@@ -21,7 +23,7 @@ export default function Home({ store, onGo }) {
         <p className="muted">{formatKey(today)}</p>
       </header>
 
-      <section className="gut-card">
+      <section className="gut-card" id="gut-character">
         <Gut mood={recordedToday ? day.belly : null} />
         <p className="gut-line">{gutLine(day.belly, { recordedToday })}</p>
       </section>
@@ -34,7 +36,7 @@ export default function Home({ store, onGo }) {
         onOpenRedFlags={() => onGo('redflags')}
       />
 
-      <section className="block">
+      <section className="block" id="rec-total">
         <div className="block-head">
           <h2>これまで</h2>
         </div>

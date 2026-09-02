@@ -270,7 +270,7 @@ textarea { resize: vertical; }
   left: 0; right: 0; bottom: 0;
   height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   background: var(--paper);
   border-top: 1px solid var(--line-strong);
   z-index: 30;
@@ -301,3 +301,82 @@ textarea { resize: vertical; }
   background: var(--ink); color: var(--paper);
   font-size: 14px;
 }
+
+/* ── 目次・索引 ─────────────────────
+ * 飛び先の印は **属性**（data-flash）で受ける。className に足すと、
+ * 飛び先のカードが描き直された拍子に印だけ消える（鏡で実際に踏んだ）。 */
+[data-flash] {
+  animation: flash 2.2s ease-out;
+  border-radius: 12px;
+}
+@keyframes flash {
+  0%, 55% { box-shadow: 0 0 0 3px var(--line-strong); }
+  100% { box-shadow: 0 0 0 3px rgba(128, 128, 128, 0); }
+}
+/* 飛び先が下のバーに隠れないように */
+[id^='toc-row-'], [id^='food-'], [id^='flag-'], [id^='rec-'], [id^='look-'], [id^='note-'], [id^='set-'] {
+  scroll-margin-top: 1rem;
+  scroll-margin-bottom: 8rem;
+}
+
+.kana-bar { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.kana-key {
+  border: 1px solid var(--line-strong);
+  background: transparent; color: var(--ink);
+  border-radius: 8px; min-width: 2em; padding: 4px 6px; font-size: 14px;
+}
+
+.toc-list { list-style: none; padding: 0; margin: 4px 0; }
+.toc-list li { border-bottom: 1px solid var(--line); }
+.toc-item {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  width: 100%; text-align: left;
+  background: transparent; border: 0; color: var(--ink);
+  padding: 10px 2px; font-size: 16px;
+}
+.toc-title { flex: 1; }
+.toc-via { color: var(--ink-dim); font-size: 13px; }
+
+.badge-review {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+.badge-review.small { font-size: 11px; }
+
+/* ── 用語の詳細パネル ───────────────── */
+.panel-back {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(20, 20, 20, 0.55);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 12px;
+}
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 14px 16px 18px;
+  width: 100%; max-width: var(--max-w);
+  max-height: 78vh; overflow-y: auto;
+}
+.panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.panel-head h2 { font-size: 18px; }
+.dest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.dest {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--line-strong);
+  background: transparent; color: var(--ink);
+  border-radius: 10px; padding: 10px 12px; text-align: left;
+}
+.dest-type {
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 0 6px; font-size: 12px; color: var(--ink-dim); white-space: nowrap;
+}
+
+/* ── 追加・削除の候補 ───────────────── */
+.cand { border: 1px dashed var(--line-strong); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.cand-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
