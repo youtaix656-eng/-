@@ -3,11 +3,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as storage from './storage.js';
-import { applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK } from './srs.js';
+import {
+  applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK,
+  justBecameLeech, justResolvedLeech, resetDueForReview,
+} from './srs.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
 import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
 import { dedupeAgainst } from './importer.js';
+import { appendContentSeedLog } from './contentSeedLog.js';
+import { loadReviewZeroLog, markReviewZeroToday } from './reviewZeroLog.js';
 import sampleQuestions from '../data/sampleQuestions.js';
 import iryouQuestions from '../data/iryouQuestions.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
@@ -74,6 +79,7 @@ export function useStore() {
   const [numberOverrides, setNumberOverridesState] = useState({}); // 数値ファクトの上書き（毎年更新）
   const [seedToast, setSeedToast] = useState(0); // 体験談の取り込み件数
   const [importedToast, setImportedToast] = useState(0); // 問題の取り込み件数
+  const [contentSeedToast, setContentSeedToast] = useState(null); // 同梱データの版上げで追加された問題（{ total, bySubject }）
   const [syncToast, setSyncToast] = useState(0); // 別端末からの進捗取り込み
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
   const [cloudAutoSyncToast, setCloudAutoSyncToast] = useState(0); // クラウド自動同期で他端末の進捗を取り込んだ回数
@@ -170,6 +176,11 @@ export function useStore() {
       if (!alive) return;
       let baseQuestions = q && q.length > 0 ? q : sampleQuestions;
       let mutated = false; // 保存が必要な変更が入ったか
+      // コンテンツ拡充パイプラインのログ（#15・#24）：同梱データの版上げで実際に何問・
+      // どの科目に追加されたかを、以下の各バッチ増分ブロックが終わった時点で差分から求める
+      // （各ブロックを個別に計装するのではなく、質問オブジェクト自体が持つsubjectで
+      // まとめて集計する方が変更箇所が少なく、既存ブロックの構造も変えずに済む）。
+      const beforeSeedIds = new Set(baseQuestions.map((qq) => qq.id));
       // アプリ同梱の医療概論 一問一答（92問）を初回だけ問題バンクへ取り込む。
       // 既存ユーザーにも1回だけ追加され、削除しても再追加されないよう cfg にフラグを持つ。
       if (!cfg.iryouSeeded) {
@@ -282,6 +293,17 @@ export function useStore() {
         if (unique.length) baseQuestions = [...baseQuestions, ...unique];
         cfg.integratedVersion = INTEGRATED_VERSION;
         mutated = true;
+      }
+      // コンテンツ拡充パイプラインのログ（#15・#24）：上のバッチ増分ブロック群で実際に
+      // 追加された問題を科目別に集計し、起動時トースト（App.jsx）と履歴（contentSeedLog.js、
+      // CoverageMap.jsxの最終更新表示・週次の弱点ジャーナルの自動追記・ハリオ先生のお祝いで共用）に残す。
+      const newlySeeded = baseQuestions.filter((qq) => !beforeSeedIds.has(qq.id));
+      if (newlySeeded.length > 0) {
+        const bySubjectMap = new Map();
+        for (const qq of newlySeeded) bySubjectMap.set(qq.subject, (bySubjectMap.get(qq.subject) || 0) + 1);
+        const bySubject = [...bySubjectMap.entries()].map(([subject, count]) => ({ subject, count }));
+        setContentSeedToast({ total: newlySeeded.length, bySubject });
+        appendContentSeedLog({ totalAdded: newlySeeded.length, bySubject, ids: newlySeeded.map((qq) => qq.id) });
       }
       // チャットから投げた問題の取り込みリンク（#import=...）を端末に反映
       const importSeed = readImportFromHash();
@@ -740,27 +762,45 @@ export function useStore() {
     });
   }, []);
 
-  // 解答を記録（grade 省略時は正誤から自動判定）
-  const recordAnswer = useCallback((question, correct, grade, source, selfKind) => {
+  // 解答を記録（grade 省略時は正誤から自動判定）。復習ペース倍率（設定）を反映する。
+  // 戻り値：この解答でリーチ（要注意）に突入／脱出した場合のみ 'became'|'resolved'、それ以外は null
+  //   （Review.jsxがトースト表示に使う。実際の状態更新は従来どおりsetSrsのprevから安全に行い、
+  //   検知だけ直前のsrsから計算する＝実更新の安全性を変えない）。
+  const paceMultiplier = settings.srsPaceMultiplier || 1;
+  const recordAnswer = useCallback((question, correct, grade, source, selfKind, objectiveCorrect) => {
     const now = Date.now();
-    setSrs((prev) => ({
-      ...prev,
-      [question.id]:
-        grade != null
-          ? applyGrade(prev[question.id], grade, now)
-          : applyAnswer(prev[question.id], correct, now),
-    }));
+    const prevState = normalize(srs[question.id]);
+    const nextState =
+      grade != null
+        ? applyGrade(srs[question.id], grade, now, { paceMultiplier })
+        : applyAnswer(srs[question.id], correct, now, { paceMultiplier });
+    setSrs((prev) => ({ ...prev, [question.id]: nextState }));
+    let leechEvent = null;
+    if (justBecameLeech(prevState, nextState)) leechEvent = 'became';
+    else if (justResolvedLeech(prevState, nextState)) leechEvent = 'resolved';
     setHistory((prev) => [
       ...prev,
       // source: 'review' なら復習由来（復習専用の到達集計に使う）
       // selfKind: 自己採点の種類（'maru'|'sankaku'|'batsu'）。○△✕を区別する自己採点UIからのみ付与
-      { questionId: question.id, subject: question.subject, correct, at: now, ...(source ? { source } : {}), ...(selfKind ? { selfKind } : {}) },
+      // objectiveCorrect: 選択肢の客観的な正誤（selfKindの自己申告と食い違うことがある＝#1/#2）。
+      //   自己採点UI（QuestionCard.jsx）から選択肢を選んだ場合のみ渡される。
+      {
+        questionId: question.id, subject: question.subject, correct, at: now,
+        ...(source ? { source } : {}), ...(selfKind ? { selfKind } : {}),
+        ...(objectiveCorrect != null ? { objectiveCorrect } : {}),
+      },
     ]);
     // バックアップ促し用のカウンタ
     setSettings((prev) => ({
       ...prev,
       answersSinceBackup: (prev.answersSinceBackup || 0) + 1,
     }));
+    return leechEvent;
+  }, [srs, paceMultiplier]);
+
+  // 復習対象（isInReview）の期限をすべて「今」に揃える（G-16 全体の間隔リセット）
+  const resetAllReviewDue = useCallback(() => {
+    setSrs((prev) => resetDueForReview(prev));
   }, []);
 
   // 復習リストから手動で外す（○5回連続＝マスターと同じ状態にする。誤登録・簡単すぎる問題対策）
@@ -864,6 +904,7 @@ export function useStore() {
   }, []);
   const clearSeedToast = useCallback(() => setSeedToast(0), []);
   const clearImportedToast = useCallback(() => setImportedToast(0), []);
+  const clearContentSeedToast = useCallback(() => setContentSeedToast(null), []);
   const clearSyncToast = useCallback(() => setSyncToast(0), []);
 
   // キーワードのメタ（語呂合わせ）を更新
@@ -1003,6 +1044,15 @@ export function useStore() {
     return sortByPriority(pool, srs);
   }, [reviewQuestions, srs]);
 
+  // #1・#3・#5・#14・#19・#26・#29：復習が「ゼロに戻った日」を記録する単一の発生源。
+  //   復習対象は1件以上あるが、今まさに期限が来ているものは無い＝今日ぶんは片付いた、という状態。
+  const [reviewZeroLog, setReviewZeroLog] = useState({});
+  useEffect(() => { loadReviewZeroLog().then(setReviewZeroLog); }, []);
+  useEffect(() => {
+    if (!loaded || reviewQuestions.length === 0 || dueReviewQuestions.length > 0) return;
+    markReviewZeroToday().then(setReviewZeroLog);
+  }, [loaded, reviewQuestions.length, dueReviewQuestions.length]);
+
   return {
     loaded,
     questions,
@@ -1052,6 +1102,8 @@ export function useStore() {
     clearSeedToast,
     importedToast,
     clearImportedToast,
+    contentSeedToast,
+    clearContentSeedToast,
     syncToast,
     clearSyncToast,
     cloudAutoSyncToast,
@@ -1065,7 +1117,9 @@ export function useStore() {
     settings,
     reviewQuestions,
     dueReviewQuestions,
+    reviewZeroLog,
     recordAnswer,
+    resetAllReviewDue,
     removeFromReview,
     setNextDue,
     setMemo,

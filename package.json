@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:analyze": "ANALYZE=1 vite build",
     "preview": "vite preview",
     "test": "node --test",
     "validate": "node scripts/validate-content.mjs",
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "playwright": "^1.62.1",
+    "rollup-plugin-visualizer": "^7.1.1",
     "vite": "^5.4.11"
   }
 }

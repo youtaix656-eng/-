@@ -1675,53 +1675,6 @@ code.block {
 .kw-add input {
   flex: 1;
 }
-.related-cand {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text);
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  line-height: 1.5;
-  cursor: pointer;
-}
-.related-cand input {
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-  flex: 0 0 auto;
-  accent-color: var(--navy);
-}
-
-.cluster .cluster-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.cluster-kw {
-  font-size: 15px;
-  font-weight: 800;
-  color: #ffffff;
-}
-.cluster-count {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--surface-2);
-  border-radius: 999px;
-  padding: 2px 10px;
-}
-.cluster-q {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-sub);
-  line-height: 1.6;
-  padding: 4px 0;
-}
 .cluster-dot {
   flex: 0 0 auto;
   width: 7px;
@@ -1730,29 +1683,6 @@ code.block {
   background: var(--accent);
   margin-top: 7px;
 }
-.pair-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  box-shadow: var(--shadow);
-}
-.pair-q {
-  flex: 1;
-  font-size: 12.5px;
-  color: var(--text);
-  line-height: 1.5;
-}
-.pair-link {
-  flex: 0 0 auto;
-  color: var(--accent);
-  font-weight: 800;
-}
-
 @media (prefers-color-scheme: dark) {
   .streak-banner {
     background: linear-gradient(135deg, #2a2410, #33280f);
@@ -1798,16 +1728,6 @@ code.block {
 }
 .kw-chip-x:active {
   color: var(--wrong);
-}
-
-.cluster.focused {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(47, 125, 143, 0.35), var(--shadow);
-  animation: pulse 1.2s ease;
-}
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 6px rgba(47, 125, 143, 0.28), var(--shadow); }
-  100% { box-shadow: 0 0 0 2px rgba(47, 125, 143, 0.35), var(--shadow); }
 }
 
 /* ==== 出題ビルダー ==== */
@@ -3011,10 +2931,13 @@ code.block {
 .pomo-controls { margin-left: auto; display: flex; gap: 3px; }
 .pomo-btn {
   background: rgba(255,255,255,0.1); border: none; color: #fff;
-  width: 32px; height: 32px; border-radius: 8px; font-size: 14px; cursor: pointer;
+  width: 40px; height: 40px; border-radius: 8px; font-size: 14px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
 .pomo-btn.main { background: rgba(255,255,255,0.22); }
+.pomo-btn:focus-visible, .pomo-mini-body:focus-visible, .pomo-num-step:focus-visible {
+  outline: 2px solid #fff; outline-offset: 2px;
+}
 .pomo-progress { height: 4px; background: rgba(255,255,255,0.15); border-radius: 3px; margin-top: 6px; overflow: hidden; }
 .pomo-progress > span { display: block; height: 100%; background: var(--accent); transition: width 1s linear; }
 .pomo-cycles { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
@@ -3023,10 +2946,15 @@ code.block {
 .pomo-cycles-label { font-size: 10px; color: rgba(255,255,255,0.7); margin-left: auto; }
 
 .pomo-config {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 24;
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 31;
   background: var(--surface); border: 1px solid var(--border);
   border-top: none; border-radius: 0 0 var(--radius) var(--radius);
   padding: 12px; box-shadow: var(--shadow); color: var(--text);
+  /* 設定項目が増えて縦に長くなったため、下部ナビ（z-index:30）に隠れて押せなくならないよう
+     画面内に収まる高さで打ち切り、はみ出す分はパネル内でスクロールする。 */
+  max-height: calc(100vh - var(--nav-h) - var(--roadmap-bar-h) - 90px - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .pomo-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pomo-config-grid label { font-size: 11px; color: var(--text-sub); font-weight: 700; display: flex; flex-direction: column; gap: 3px; }
@@ -3035,9 +2963,75 @@ code.block {
   background: var(--surface-2); color: var(--text); font-size: 15px; width: 100%; box-sizing: border-box;
 }
 .pomo-music { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
-.pomo-switch { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.pomo-switch { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-top: 0; }
 .pomo-music-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .pomo-hint { font-size: 11px; color: var(--text-mute); margin-top: 6px; }
+.pomo-num-row { display: flex; align-items: center; gap: 4px; }
+.pomo-num-row input { flex: 1; text-align: center; }
+.pomo-num-step {
+  width: 28px; height: 28px; flex: 0 0 auto; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); background: var(--surface-2); color: var(--text);
+  font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.chip-with-remove { display: inline-flex; align-items: center; gap: 2px; }
+.chip-with-remove .chip { padding-right: 6px; }
+.chip-remove {
+  width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,0.15);
+  color: inherit; font-size: 11px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.pomo-tag-row { margin-top: 10px; }
+.pomo-tag-label { font-size: 11px; color: var(--text-sub); font-weight: 700; display: flex; flex-direction: column; gap: 3px; }
+.pomo-tag-label input {
+  padding: 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); font-size: 14px; width: 100%; box-sizing: border-box;
+}
+.pomo-stats { font-size: 10.5px; color: rgba(255,255,255,0.75); margin-top: 4px; }
+.pomo-progress.goal { height: 3px; margin-top: 3px; }
+.pomo-progress.goal > span { background: #ffd166; }
+
+/* 最小化中だけ画面下に浮かせる表示（設定でON時）。上部のヘッダー押し下げは
+   Pomodoro.jsx側で--pomo-hを0にして相殺するので、ここでは通常のドキュメント
+   フローから外すことだけ考える。 */
+.pomo-bar.mini.bottom-float {
+  position: fixed; left: 12px; right: 12px; top: auto; height: auto;
+  bottom: calc(var(--nav-h) + var(--roadmap-bar-h) + 10px + env(safe-area-inset-bottom, 0px));
+  border-radius: 999px; border-bottom: none; box-shadow: var(--shadow);
+  z-index: 26;
+}
+
+.chip-reorder {
+  width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,0.15);
+  color: inherit; font-size: 12px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.pomo-sound-sub { margin-top: 8px; padding-left: 4px; display: flex; flex-direction: column; gap: 6px; }
+.pomo-select-row { font-size: 12px; color: var(--text-sub); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.pomo-select-row select { padding: 5px 6px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+.pomo-select-row input[type="range"] { flex: 1; }
+
+.pomo-graph-wrap { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.pomo-graph { display: flex; align-items: flex-end; gap: 6px; height: 70px; }
+.pomo-graph-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.pomo-graph-bar { width: 70%; max-width: 20px; min-height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
+.pomo-graph-lbl { font-size: 9px; color: var(--text-mute); margin-top: 3px; }
+
+.pomo-focus-check, .pomo-pause-reason {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 6px;
+  background: rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 6px 10px;
+}
+.pomo-focus-btn {
+  background: none; border: none; font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 4px;
+}
+.pomo-focus-skip, .pomo-pause-reason .chip-remove {
+  margin-left: auto; background: rgba(255,255,255,0.15); border: none; color: inherit;
+  width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pomo-bg-note {
+  margin-top: 10px; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.pomo-bg-note .pomo-hint { color: var(--text-sub); }
 
 /* ===== 試験日カウントダウン（ホーム） ===== */
 .exam-countdown {

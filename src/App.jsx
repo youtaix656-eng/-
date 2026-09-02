@@ -3,6 +3,7 @@ import { useStore } from './lib/useStore.js';
 import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import { daysUntil } from './lib/gamify.js';
 import { haripanReminder } from './data/haripan.js';
+import { daysSinceLastZero } from './lib/reviewZeroLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
 // 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
 import Home from './components/Home.jsx';
@@ -13,8 +14,10 @@ import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
 import ScrollArrows from './components/ScrollArrows.jsx';
-import AuthGate from './components/AuthGate.jsx';
-import Pomodoro from './components/Pomodoro.jsx';
+// AuthGate（ロック未設定なら使わない）・Pomodoro（オプトイン機能）は、必要な人にだけ
+// 起動時バンドルの負担が乗るようlazy化（他の30以上の画面と同じ扱い）。
+const AuthGate = lazy(() => import('./components/AuthGate.jsx'));
+const Pomodoro = lazy(() => import('./components/Pomodoro.jsx'));
 import HistoryPanel from './components/HistoryPanel.jsx';
 // それ以外の画面は初回訪問時だけ読み込む（コード分割）。1.6MBの単一バンドルを分割し、
 // ホーム/カレンダー/一問一答/復習/音声/模試だけで開いた時の初期表示を軽くする。
@@ -61,6 +64,7 @@ const KeizetsuPageImages = lazy(() => import('./components/KeizetsuPageImages.js
 const Faq = lazy(() => import('./components/Faq.jsx'));
 const CognitiveStyleGuide = lazy(() => import('./components/CognitiveStyleGuide.jsx'));
 const CognitiveTraining = lazy(() => import('./components/CognitiveTraining.jsx'));
+const G100Guide = lazy(() => import('./components/G100Guide.jsx'));
 
 function ViewLoading() {
   return (
@@ -125,6 +129,7 @@ const VIEW_TITLES = {
   faq: '鍼灸国試アプリ Q&A',
   cognitivestyle: 'あなたの学習スタイル',
   cognitivetraining: '認知特性トレーニング',
+  g100guide: 'G-100 1〜100周ガイド',
   toc: '目次',
   settings: '設定',
 };
@@ -152,6 +157,8 @@ export default function App() {
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
+  // #18：Homeの「復習だけ◯問」からワンタップでReviewを自動開始するための中継。
+  const [reviewQuickStart, setReviewQuickStart] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
     try {
@@ -172,6 +179,14 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view]);
+
+  // 新しいバージョンの反映が、ポモドーロ実行中のため保留されていることを知らせる
+  // （main.jsxのService Worker更新ロジックから発火。黙って何も起きないと不安なため）。
+  useEffect(() => {
+    const onDeferred = () => showToast('🔄 新しいバージョンがあります。ポモドーロが一区切りつき次第、自動で反映されます');
+    window.addEventListener('app-update-deferred', onDeferred);
+    return () => window.removeEventListener('app-update-deferred', onDeferred);
+  }, []);
 
   // 学習セッションが完了画面（行き止まり）になっているかどうか。完了済みセッションを
   // 「前回開いていた画面」として復元・保存すると、タブの再読み込み（Androidが背面タブの
@@ -240,6 +255,16 @@ export default function App() {
     }
   }, [store.importedToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // コンテンツ拡充パイプライン（#15）：同梱データの版上げで新しい問題が追加されたら知らせる
+  useEffect(() => {
+    if (store.contentSeedToast) {
+      const { total, bySubject } = store.contentSeedToast;
+      const detail = (bySubject || []).map((s) => `${s.subject}+${s.count}`).join('・');
+      showToast(`問題データが更新されました：+${total}問${detail ? `（${detail}）` : ''}`);
+      store.clearContentSeedToast();
+    }
+  }, [store.contentSeedToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 別端末からQR/URLで進捗を取り込んだら知らせてホームへ
   useEffect(() => {
     if (store.syncToast > 0) {
@@ -270,8 +295,13 @@ export default function App() {
       const target = new Date(now);
       target.setHours(hh || 7, mm || 0, 0, 0);
       if (now < target) return;
-      // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）。復習期限の件数も伝える。
-      const body = haripanReminder(store.settings.examDate, (store.dueReviewQuestions || []).length);
+      // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）。復習期限の件数・
+      //   何日ゼロに戻せていないか（#6）も伝える。
+      const body = haripanReminder(
+        store.settings.examDate,
+        (store.dueReviewQuestions || []).length,
+        daysSinceLastZero(store.reviewZeroLog)
+      );
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('ハリオ先生', { body });
@@ -417,23 +447,32 @@ export default function App() {
   // ---- ログイン（端末内ロック）----
   // 鍵が設定済みで未解錠ならログイン画面。未設定なら初回のみ設定画面（スキップ可）。
   if (store.auth && !unlocked) {
-    return <AuthGate mode="login" auth={store.auth} onSetAuth={store.setAuth} onUnlock={unlock} />;
+    return (
+      <Suspense fallback={<ViewLoading />}>
+        <AuthGate mode="login" auth={store.auth} onSetAuth={store.setAuth} onUnlock={unlock} />
+      </Suspense>
+    );
   }
   if (!store.auth && !store.settings.authSkipped) {
     return (
-      <AuthGate
-        mode="setup"
-        auth={null}
-        onSetAuth={store.setAuth}
-        onUnlock={unlock}
-        onSkip={() => store.updateSettings({ authSkipped: true })}
-      />
+      <Suspense fallback={<ViewLoading />}>
+        <AuthGate
+          mode="setup"
+          auth={null}
+          onSetAuth={store.setAuth}
+          onUnlock={unlock}
+          onSkip={() => store.updateSettings({ authSkipped: true })}
+        />
+      </Suspense>
     );
   }
 
   const reviewCount = store.reviewQuestions.length;
   const needBackup =
     (store.settings.answersSinceBackup || 0) >= (store.settings.backupReminderEvery || 50);
+  // #22：学習セッション（10・60・300・900）を実際に解いている最中はバナーを出さない
+  //   （問題に集中している途中で割り込むと、解答フローが途切れる）。完了画面・開始画面は対象外。
+  const inActiveSession = view === 'session' && !!store.session && store.session.pos < store.session.target;
 
   const renderView = () => {
     switch (view) {
@@ -450,6 +489,14 @@ export default function App() {
             onInstall={installApp}
             onJumpToRoadmapLevel={jumpToRoadmapLevel}
             onStartSubjectQuiz={startSubjectQuiz}
+            onQuickReview={(n) => {
+              setReviewQuickStart(n);
+              setView('review');
+            }}
+            onGoAudioReview={() => {
+              setAudioReview(true);
+              setView('audio');
+            }}
           />
         );
       case 'quiz':
@@ -465,6 +512,7 @@ export default function App() {
               setQuizQuestions(null);
             }}
             onOpenKeyword={openKeyword}
+            onToast={showToast}
           />
         );
       case 'session':
@@ -478,6 +526,7 @@ export default function App() {
               setAudioReview(true);
               setView('audio');
             }}
+            onGoAnalytics={() => setView('analytics')}
           />
         );
       case 'review':
@@ -490,6 +539,8 @@ export default function App() {
               setAudioReview(ids && ids.length ? { ids } : true);
               setView('audio');
             }}
+            quickStartCount={reviewQuickStart}
+            onConsumeQuickStart={() => setReviewQuickStart(null)}
           />
         );
       case 'audio':
@@ -521,7 +572,7 @@ export default function App() {
       case 'numbers':
         return <NumberFacts store={store} onToast={showToast} />;
       case 'coverage':
-        return <CoverageMap store={store} onStartSubject={startSubjectQuiz} />;
+        return <CoverageMap store={store} onStartSubject={startSubjectQuiz} onNavigate={setView} onToast={showToast} />;
       case 'pasttrends':
         return <PastExamTrends store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'migrationguide':
@@ -615,6 +666,8 @@ export default function App() {
             onConsumeInitialMode={() => setFocusTrainingMode(null)}
           />
         );
+      case 'g100guide':
+        return <G100Guide store={store} onNavigate={setView} />;
       case 'toc':
         return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
       case 'connect':
@@ -648,7 +701,9 @@ export default function App() {
 
   return (
     <div className={`app${pomoOn ? ' has-pomo' : ''}`}>
-      <Pomodoro store={store} onToast={showToast} />
+      <Suspense fallback={null}>
+        <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
+      </Suspense>
       <header className="app-header">
         <h1>
           {view === 'home' ? (
@@ -690,7 +745,7 @@ export default function App() {
 
       <main>
         {/* バックアップ促しバナー */}
-        {needBackup && view !== 'settings' && (
+        {needBackup && view !== 'settings' && !inActiveSession && (
           <div className="reminder-banner">
             <span>
               📌 前回のバックアップから{store.settings.answersSinceBackup}問解きました。データ消失に備えて保存しましょう。

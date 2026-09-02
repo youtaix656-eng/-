@@ -50,6 +50,20 @@ export async function idbSet(key, value) {
   });
 }
 
+// 複数キーをまとめて1つのトランザクションで書き込む（storage.jsのデバウンス書き込みが使う。
+//   idbSetをキー数ぶん呼ぶより、ディスクI/Oのオーバーヘッドが少ない）。
+export async function idbSetMany(entries) {
+  if (!entries.length) return true;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    for (const [key, value] of entries) store.put(value, key);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export async function idbDelete(key) {
   const db = await openDB();
   return new Promise((resolve, reject) => {

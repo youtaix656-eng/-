@@ -15,12 +15,18 @@ import VoiceClone from './VoiceClone.jsx';
 import P2PTransfer from './P2PTransfer.jsx';
 import FileBackupCard from './FileBackupCard.jsx';
 import ErrorLogCard from './ErrorLogCard.jsx';
+import MissTypeHistoryCard from './MissTypeHistoryCard.jsx';
 import Diagnostics from './Diagnostics.jsx';
+import { requestPersistent } from '../lib/storageHealth.js';
 import SnapshotsCard from './SnapshotsCard.jsx';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 import { downloadFile } from '../lib/download.js';
 import { exportHistoryCsv } from '../lib/historyExport.js';
+import { reviewZeroLogToCsv } from '../lib/reviewZeroLog.js';
+import { loadMissTypes } from '../lib/missTypes.js';
+import { loadSelfKindCounts } from '../lib/starWeak.js';
+import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 
 // 設定・問題データ管理画面
 export default function Settings({ store, onToast, onOpenOcr, importText, onConsumeImportText, onNavigate }) {
@@ -38,6 +44,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     summarizeOldHistory,
     voiceCloneApiKey,
     saveVoiceCloneApiKey,
+    reviewZeroLog,
   } = store;
 
   const HISTORY_SUMMARY_CUTOFF_DAYS = 90;
@@ -178,6 +185,27 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             （±5%の範囲）。勤務シフト連携は未対応のため、この比率が基準になります。
           </div>
         </div>
+        <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+          <label htmlFor="settings-srs-pace">復習の間隔ペース</label>
+          <div className="range-row">
+            <input
+              id="settings-srs-pace"
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={settings.srsPaceMultiplier ?? 1}
+              onChange={(e) => updateSettings({ srsPaceMultiplier: Number(e.target.value) })}
+            />
+            <span className="range-val">
+              ×{(settings.srsPaceMultiplier ?? 1).toFixed(1)}{Math.abs((settings.srsPaceMultiplier ?? 1) - 1) < 0.01 ? '（標準）' : ''}
+            </span>
+          </div>
+          <div className="hint">
+            ○（完璧）が続いた時の次回間隔に掛ける倍率です。大きくするほど間隔が伸びてゆっくり回り、
+            小さくするほど短い間隔で頻繁に復習します。誤答・△・✕の後の約20分後リセットは変わりません。
+          </div>
+        </div>
         <label className="switch-row" style={{ marginTop: 6 }}>
           <input
             type="checkbox"
@@ -225,15 +253,24 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           <input
             type="checkbox"
             checked={!!(settings.pomodoro && settings.pomodoro.enabled)}
-            onChange={(e) =>
-              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: e.target.checked } })
-            }
+            onChange={(e) => {
+              updateSettings({ pomodoro: { ...(settings.pomodoro || {}), enabled: e.target.checked, updatedAt: Date.now() } });
+              // 消えにくいストレージへの格上げは、ユーザー操作を起点に依頼すると通りやすい。
+              // ONにする操作自体がその起点として自然なので、ここで一度だけ依頼する。
+              if (e.target.checked) requestPersistent().catch(() => {});
+            }}
           />
           <span>
             画面上部にポモドーロタイマーを表示
-            <small>勉強／休憩の時間・通知・開始Musicは、表示されたバーの ⚙ から設定できます。</small>
+            <small>オフの間もここで分数などを調整できます（表示中はバーの ⚙ からも同じ設定に入れます）。</small>
           </span>
         </label>
+        <div style={{ marginTop: 10 }}>
+          <PomodoroConfigFields
+            cfg={settings.pomodoro || {}}
+            setCfg={(patch) => updateSettings({ pomodoro: { ...(settings.pomodoro || {}), ...patch, updatedAt: Date.now() } })}
+          />
+        </div>
       </div>
 
       {/* ===== バックアップと復元（端末間の持ち運び） ===== */}
@@ -439,9 +476,21 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         </p>
         <button
           className="btn"
-          onClick={() => downloadFile(exportHistoryCsv(history, questions), 'shinkyu_history.csv', 'text/csv')}
+          onClick={async () => {
+            const [missTypes, selfKindCounts] = await Promise.all([loadMissTypes(), loadSelfKindCounts()]);
+            downloadFile(exportHistoryCsv(history, questions, { missTypes, selfKindCounts }), 'shinkyu_history.csv', 'text/csv');
+          }}
         >
           解答履歴をCSVで保存
+        </button>
+        {/* #29：復習を毎日ゼロに戻せた日のログをCSVで書き出す */}
+        <button
+          className="btn"
+          style={{ marginTop: 8 }}
+          onClick={() => downloadFile(reviewZeroLogToCsv(reviewZeroLog), 'shinkyu_review_zero_log.csv', 'text/csv')}
+          disabled={Object.keys(reviewZeroLog || {}).length === 0}
+        >
+          復習ゼロ達成ログをCSVで保存
         </button>
       </div>
 
@@ -549,6 +598,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       <SnapshotsCard onToast={onToast} />
       <Diagnostics store={store} onToast={onToast} />
       <ErrorLogCard onToast={onToast} />
+      <MissTypeHistoryCard onToast={onToast} />
     </div>
   );
 }

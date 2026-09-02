@@ -40,9 +40,11 @@ export default function Deals({ store, go, toast, highlight = null }) {
     setTab('deals');
   };
 
-  const save = () => {
+  // `addDeal` は revenue.js を押した時に読むので**非同期**。
+  // await を忘れると deal が Promise になり、開いた先が「案件が見つかりません」になる。
+  const save = async () => {
     if (!form.title.trim()) return;
-    const deal = store.addDeal({
+    const deal = await store.addDeal({
       ...form,
       fee: Number(form.fee) || 0,
       dueAt: form.dueAt ? new Date(form.dueAt).getTime() : null,

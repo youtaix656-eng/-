@@ -72,6 +72,34 @@ async function main() {
       if (await home.count()) { await home.click(); await page.waitForTimeout(200); }
     }
 
+    // ポモドーロタイマー：設定でON→開始→一時停止→リセットが最低限動くことだけ確認する
+    // （時間ベースのロジック自体はnode --testで検証済みなので、ここではUI操作だけを見る）。
+    await page.locator('button', { hasText: '設定・問題データ管理' }).first().click();
+    await page.waitForTimeout(400);
+    const pomoCheckbox = page.locator('label', { hasText: '画面上部にポモドーロタイマーを表示' }).locator('input[type="checkbox"]');
+    if (await pomoCheckbox.count()) {
+      if (!(await pomoCheckbox.isChecked())) await pomoCheckbox.check();
+      await page.waitForTimeout(300);
+      const home = page.locator('button', { hasText: 'ホーム' }).first();
+      if (await home.count()) { await home.click(); await page.waitForTimeout(300); }
+      const miniBody = page.locator('.pomo-mini-body');
+      const pomoOk = (await miniBody.count()) > 0;
+      console.log(pomoOk ? '✓ ポモドーロのミニバーが表示された' : '✗ ポモドーロのミニバーが見つからない');
+      if (!pomoOk) failed = true;
+      else {
+        const startBtn = page.locator('.pomo-btn[aria-label="開始/一時停止"]');
+        await startBtn.click();
+        await page.waitForTimeout(600);
+        const timeText = (await page.locator('.pomo-time.sm, .pomo-time').first().textContent()) || '';
+        console.log(/\d{2}:\d{2}/.test(timeText) ? '✓ ポモドーロが動作している（残り時間表示あり）' : '✗ ポモドーロの残り時間表示がおかしい');
+        if (!/\d{2}:\d{2}/.test(timeText)) failed = true;
+        await startBtn.click(); // 一時停止に戻す
+      }
+    } else {
+      console.log('✗ ポモドーロの設定チェックボックスが見つからない');
+      failed = true;
+    }
+
     if (errors.length) {
       console.error(`✗ コンソール/ページエラーが${errors.length}件発生しました:`);
       errors.slice(0, 10).forEach((e) => console.error('  -', e));

@@ -11,7 +11,7 @@
 // 自動で IndexedDB へ移行する。IndexedDB が使えない環境では localStorage に
 // フォールバックする。
 
-import { idbGet, idbSet, idbDelete, idbGetAll, isIdbSupported } from './db.js';
+import { idbGet, idbSet, idbSetMany, idbDelete, idbGetAll, isIdbSupported } from './db.js';
 
 export const KEYS = {
   questions: 'shinkyu:questions',
@@ -50,8 +50,59 @@ export const KEYS = {
 
 const useIdb = isIdbSupported();
 
+// ---- 書き込みのデバウンス＋重複排除＋離脱時フラッシュ ----
+//   1問答えるたびにsrs/historyなど複数キーが同時に更新され、そのままだとキーの数だけ
+//   即座に個別のIndexedDBトランザクションが走っていた（高速回転モード等で連打すると
+//   もたつきの原因になる）。同じキーへの短時間の連続書き込みは最後の値だけを残し
+//   （重複排除）、まとめて1回のタイマーで書き込む（デバウンス、Ouroの`ouro/lib/storage.js`
+//   で実証済みの間隔と同じ400ms）。ページを離れる・裏に回る時は必ず即座にflushする
+//   （デバウンス中のデータを失わないため）。
+const DEBOUNCE_MS = 400;
+const pending = new Map(); // key -> まだ実際には書き込んでいない最新値
+let flushTimer = null;
+
+function scheduleFlush() {
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = setTimeout(() => { flushTimer = null; flushPending(); }, DEBOUNCE_MS);
+}
+
+async function flushPending() {
+  if (pending.size === 0) return;
+  const entries = [...pending.entries()];
+  pending.clear();
+  if (useIdb) {
+    try {
+      await idbSetMany(entries);
+      return;
+    } catch (e) {
+      console.warn('idb batch write failed, fallback to localStorage', e);
+    }
+  }
+  for (const [key, value] of entries) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.error('storage write failed', key, e); }
+  }
+}
+
+// 保留中の書き込みを即座に確定させる。バックアップの書き出しなど、直後に最新値を
+// 別経路（idbGetAll等）で読み出す処理の前には必ず呼ぶこと（read()自身はpendingを
+// 見るので、read/loadXxx経由なら呼ばなくても常に最新値が返る）。
+export async function flushNow() {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  await flushPending();
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPending();
+  });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => { flushPending(); });
+}
+
 // ---- 低レベル read/write（IDB優先・localStorageフォールバック） ----
 async function read(key, fallback) {
+  if (pending.has(key)) return pending.get(key);
   try {
     if (useIdb) {
       const v = await idbGet(key);
@@ -70,24 +121,13 @@ async function read(key, fallback) {
 }
 
 async function write(key, value) {
-  try {
-    if (useIdb) {
-      await idbSet(key, value);
-      return true;
-    }
-  } catch (e) {
-    console.warn('idb write failed, fallback to localStorage', key, e);
-  }
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (e) {
-    console.error('storage write failed', key, e);
-    return false;
-  }
+  pending.set(key, value);
+  scheduleFlush();
+  return true;
 }
 
 async function remove(key) {
+  pending.delete(key);
   try {
     if (useIdb) await idbDelete(key);
   } catch (e) {
@@ -308,7 +348,10 @@ const DEFAULT_SETTINGS = {
   authSkipped: false, // 初回のログイン設定案内をスキップ済みか
   examDate: '', // 試験日（YYYY-MM-DD）カウントダウン用
   sessionNewRatio: 1, // 学習セッションの新規割合（0〜1、1=すべて新規）
+  srsPaceMultiplier: 1, // 復習間隔の倍率（0.5〜2。1=標準、大きいほど間隔を伸ばしてゆっくり回す）
   dailyGoal: 300, // 1日の目標問題数（ハリオ先生の「今日の進捗」表示に使用）
+  coverageThinThreshold: null, // 網羅マップ「手薄」の全科目共通しきい値（null=科目ごとの自動目安/既定値）
+  coverageRichThreshold: null, // 網羅マップ「充実」の全科目共通しきい値（null=科目ごとの自動目安/既定値）
   reminder: { enabled: false, time: '07:00', lastNotified: '' }, // 毎日の学習リマインド通知
   // ボイスクローン（音声学習の読み上げ声）。APIキー本体は含まない（voiceCloneSecretへ別保存）。
   voiceClone: { enabled: false, voiceId: '', voiceName: '' },

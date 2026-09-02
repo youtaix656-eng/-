@@ -66,3 +66,38 @@ export function questionsForWeakTags(weakTags, questions, links, { limit = 0 } =
   const out = questions.filter((q) => effectiveTags(q, links).some((t) => want.has(t)));
   return limit > 0 ? out.slice(0, limit) : out;
 }
+
+// タグ別の「今週 vs 先週」誤答率トレンド（#25）。以前はReview.jsxだけが持っていた
+//   インライン計算を切り出したもの（単一の正。WeeklyJournal.jsxでも同じ関数を使う）。
+//   tags: 文字列配列 or weakTagClusters()の結果（{tag}を持つオブジェクト配列）どちらでも可。
+export function tagTrend(history, questions, links, tags, { windowMs = 7 * 24 * 60 * 60 * 1000, now = Date.now() } = {}) {
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  const thisWeek = {};
+  const lastWeek = {};
+  for (const h of history) {
+    const q = byId.get(h.questionId);
+    if (!q) continue;
+    const age = now - h.at;
+    const bucket = age <= windowMs ? thisWeek : age <= 2 * windowMs ? lastWeek : null;
+    if (!bucket) continue;
+    for (const tg of effectiveTags(q, links)) {
+      if (!bucket[tg]) bucket[tg] = { wrong: 0, total: 0 };
+      bucket[tg].total += 1;
+      if (!h.correct) bucket[tg].wrong += 1;
+    }
+  }
+  return tags.map((w) => {
+    const tag = typeof w === 'string' ? w : w.tag;
+    const cur = thisWeek[tag];
+    const prev = lastWeek[tag];
+    const curRate = cur && cur.total >= 2 ? cur.wrong / cur.total : null;
+    const prevRate = prev && prev.total >= 2 ? prev.wrong / prev.total : null;
+    let trend = null;
+    if (curRate != null && prevRate != null) {
+      const diff = curRate - prevRate;
+      trend = diff <= -0.15 ? 'better' : diff >= 0.15 ? 'worse' : 'flat';
+    }
+    const base = typeof w === 'string' ? { tag } : w;
+    return { ...base, curRate, prevRate, trend };
+  });
+}

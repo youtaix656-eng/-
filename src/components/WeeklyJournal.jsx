@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { loadMissTypes, missTypeLabel } from '../lib/missTypes.js';
-import { weekKeyOf, buildWeeklyReport, loadWeeklyNotes, saveWeeklyNote } from '../lib/weeklyJournal.js';
+import { weekKeyOf, weekStartOf, buildWeeklyReport, loadWeeklyNotes, saveWeeklyNote } from '../lib/weeklyJournal.js';
+import { loadRoundLog } from '../lib/roundLog.js';
 import { formatPercent } from '../lib/stats.js';
+import { loadContentSeedLog, seedEntriesSince } from '../lib/contentSeedLog.js';
+import { zeroDaysSummary } from '../lib/reviewZeroLog.js';
+import { resolvedLeechesSince } from '../lib/reviewDwell.js';
+import { weakTagClusters, tagTrend } from '../lib/weakClusters.js';
 
 function formatWeekLabel(weekKeyStr) {
   const start = new Date(Number(weekKeyStr));
@@ -14,13 +19,17 @@ function formatWeekLabel(weekKeyStr) {
 //   3分の2バッファ術のマネージャービューと同じく「うまくいかなかったのは実行役ではなく
 //   計画の立て方」という前向きな前提でまとめる（自己否定を招く表現は使わない）。
 export default function WeeklyJournal({ store, onNavigate }) {
-  const { history, questions, links } = store;
+  const { history, questions, links, reviewZeroLog } = store;
   const [missTypes, setMissTypes] = useState({});
+  const [roundLog, setRoundLog] = useState([]);
   const [notes, setNotes] = useState({});
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState(false);
+  const [seedLog, setSeedLog] = useState([]); // #30：今週埋めた手薄科目の自動追記候補
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  useEffect(() => { loadRoundLog().then(setRoundLog); }, []);
+  useEffect(() => { loadContentSeedLog().then(setSeedLog); }, []);
   useEffect(() => {
     loadWeeklyNotes().then((all) => {
       setNotes(all);
@@ -30,9 +39,44 @@ export default function WeeklyJournal({ store, onNavigate }) {
   }, []);
 
   const report = useMemo(
-    () => buildWeeklyReport(history, missTypes, questions, links),
-    [history, missTypes, questions, links]
+    () => buildWeeklyReport(history, missTypes, questions, links, Date.now(), roundLog),
+    [history, missTypes, questions, links, roundLog]
   );
+
+  // #30：今週追加された問題（contentSeedLog.js）を「今週埋めた手薄科目」として一言候補にする。
+  const contentSummary = useMemo(() => {
+    const entries = seedEntriesSince(seedLog, weekStartOf());
+    const bySubject = new Map();
+    for (const e of entries) for (const s of e.bySubject || []) bySubject.set(s.subject, (bySubject.get(s.subject) || 0) + s.count);
+    const total = [...bySubject.values()].reduce((a, b) => a + b, 0);
+    if (total === 0) return null;
+    const detail = [...bySubject.entries()].map(([subject, count]) => `${subject}+${count}`).join('・');
+    return `今週は${detail}を追加した（計${total}問）。`;
+  }, [seedLog]);
+
+  // #5：今週、復習を溜めた（ゼロに戻せなかった）日数
+  const reviewStallSummary = useMemo(() => {
+    const s = zeroDaysSummary(reviewZeroLog, 7);
+    const stalled = s.total - s.achieved;
+    if (stalled === 0) return null;
+    return `今週は復習を溜めた（ゼロに戻せなかった）日が${stalled}日あった。`;
+  }, [reviewZeroLog]);
+
+  // #10：今週、要注意（リーチ）を解消できた件数
+  const resolvedLeechSummary = useMemo(() => {
+    const n = resolvedLeechesSince(history, weekStartOf());
+    if (n === 0) return null;
+    return `今週、要注意だった問題を${n}問マスターに導けた。`;
+  }, [history]);
+
+  // #25：先週より誤答率が改善した弱点テーマ
+  const improvedClusterSummary = useMemo(() => {
+    const clusters = weakTagClusters(history, questions, links, { minWrong: 1, limit: 12 });
+    const trended = tagTrend(history, questions, links, clusters);
+    const better = trended.filter((t) => t.trend === 'better').slice(0, 3);
+    if (better.length === 0) return null;
+    return `先週より「${better.map((t) => t.tag).join('」「')}」の誤答率が改善した。`;
+  }, [history, questions, links]);
 
   const thisWeekKey = weekKeyOf();
   const pastWeeks = useMemo(
@@ -80,12 +124,26 @@ export default function WeeklyJournal({ store, onNavigate }) {
                 今週いちばん多かった誤答理由は「{missTypeLabel(report.topType)}」でした。
               </p>
             )}
+            {report.trend && (
+              <p className="inline-note" style={{ marginTop: 4 }}>
+                最近増えている誤答理由は「{missTypeLabel(report.trend.type)}」です（直近7日で{report.trend.count}件）。
+              </p>
+            )}
+            {report.speedup300 != null && (
+              <p className="inline-note" style={{ marginTop: 4, color: report.speedup300 >= 0 ? 'var(--correct)' : undefined }}>
+                {report.speedup300 >= 0
+                  ? `300問1周の速さが前回より${report.speedup300}%縮んでいます。`
+                  : `300問1周の速さが前回より${-report.speedup300}%遅くなっています。`}
+              </p>
+            )}
             {report.weakTags.length > 0 && (
               <div style={{ marginTop: 10 }}>
-                <div className="section-hint">今週の弱点テーマ</div>
+                <div className="section-hint">今週の弱点テーマ<span className="section-hint">（🔥＝過去問で複数回出題の頻出テーマ）</span></div>
                 <div className="btn-row" style={{ flexWrap: 'wrap', marginTop: 4 }}>
                   {report.weakTags.map((t) => (
-                    <span className="chip" key={t.tag}>{t.tag}（誤答{t.wrong}）</span>
+                    <span className="chip" key={t.tag}>
+                      {t.roundCount >= 2 && '🔥 '}{t.tag}（誤答{t.wrong}）
+                    </span>
                   ))}
                 </div>
               </div>
@@ -96,6 +154,21 @@ export default function WeeklyJournal({ store, onNavigate }) {
 
       <div className="section-label">✍️ 来週の方針（一言）</div>
       <div className="card">
+        {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary].filter(Boolean).length > 0 && (
+          <div className="chip-row" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+            {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary]
+              .filter(Boolean)
+              .map((summary) => (
+                <button
+                  key={summary}
+                  className="chip"
+                  onClick={() => setDraft((d) => (d ? `${d} / ${summary}` : summary))}
+                >
+                  ＋ {summary}
+                </button>
+              ))}
+          </div>
+        )}
         <textarea
           className="journal-textarea"
           rows={3}

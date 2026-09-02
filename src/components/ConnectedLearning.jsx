@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { dateKey, dailyPick } from '../lib/connect.js';
 import { effectiveTags } from '../lib/query.js';
+import { studyStreak } from '../lib/stats.js';
 import {
   buildTermDict,
   suggestKeywords,
@@ -77,7 +78,7 @@ export default function ConnectedLearning({ store, onToast, focusKeyword, onCons
 
 // ===== 今日の1問 =====
 function Daily({ store, onToast }) {
-  const { questions, reviewQuestions, links, setLink, markDeepDive, settings, userDict } = store;
+  const { questions, reviewQuestions, links, setLink, markDeepDive, settings, userDict, history } = store;
   const today = dateKey();
   const pool = reviewQuestions.length > 0 ? reviewQuestions : questions;
   const q = useMemo(() => dailyPick(pool, today), [pool, today]);
@@ -124,6 +125,10 @@ function Daily({ store, onToast }) {
   };
 
   const streak = settings.deepDiveStreak || 0;
+  // 「今日の1問」の連続日数と、学習全体の連続日数（Home画面のstudyStreak）は別々に数えている
+  // （深掘りは1日1問、全体は復習や一問一答も含む）ので、片方だけ続いていてもう片方が
+  // 途切れていることに気づけないケースがあった。ここでだけ静かに知らせる（煽らない）。
+  const overallStreak = useMemo(() => studyStreak(history || []).streak, [history]);
 
   return (
     <>
@@ -134,6 +139,9 @@ function Daily({ store, onToast }) {
           <div className="streak-note">
             {settings.lastDeepDive === today ? '今日の深掘りは完了！' : '1日1問、積み重ねよう'}
           </div>
+          {streak > 0 && overallStreak === 0 && (
+            <div className="streak-note">今日の1問は続いていますが、学習全体の連続日数は途切れています。</div>
+          )}
         </div>
       </div>
 

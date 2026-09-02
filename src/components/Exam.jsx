@@ -3,7 +3,8 @@ import ResetInline from './ResetInline.jsx';
 import * as storage from '../lib/storage.js';
 import { effectiveTags } from '../lib/query.js';
 import { genreAccuracy, keywordAccuracy, topByAccuracy, relatedKeywordMap } from '../lib/audioplan.js';
-import { buildBlueprintExam, blueprintAvailability, shuffle } from '../lib/examBuilder.js';
+import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
+import { buildBlueprintExam, blueprintAvailability, preferUnused, shuffle } from '../lib/examBuilder.js';
 import { EXAM_BLUEPRINT_AM, EXAM_BLUEPRINT_PM } from '../data/examBlueprint.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { figureFor } from '../data/figures.jsx';
@@ -13,6 +14,11 @@ import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import { expectedProgress, isBehindPace, rankSlowQuestions } from '../lib/examPace.js';
 import { halfSplitAccuracy } from '../lib/examHalfSplit.js';
+import { loadExamUsageLog, appendExamUsageLog, recentlyUsedIds, overlapWithLast } from '../lib/examUsageLog.js';
+import { scoreContribution, pointsShortOfPassLine } from '../lib/examScoreContribution.js';
+import { phaseForDate } from '../data/roadmapPhases.js';
+import { daikoumokuRank } from '../lib/pastExamTrends.js';
+import { genreOf, daikoumoku } from '../lib/genreClassification.js';
 
 function fmtTime(sec) {
   const m = Math.floor(sec / 60);
@@ -28,11 +34,17 @@ const PRACTICE_COUNT = 90;
 const MODES = [
   { id: 'am', label: '午前', emoji: '🌅', desc: '専門基礎科目 90問（本番同形式・時間制限あり）' },
   { id: 'pm', label: '午後', emoji: '🌇', desc: '専門科目 90問（本番同形式・時間制限あり）' },
+  { id: 'full', label: '午前+午後 通し', emoji: '🏃', desc: '本番同様に午前90問→休憩→午後90問を通しで（#21）' },
   { id: 'strong', label: '得意な問題', emoji: '💪', desc: '得意なジャンル・キーワードを中心に最大90問' },
   { id: 'weak', label: '苦手な問題', emoji: '🎯', desc: '苦手なジャンル・キーワードを中心に最大90問' },
   { id: 'pick', label: '選択式', emoji: '🔍', desc: '科目・ジャンル・キーワードを選んで最大90問' },
 ];
 const MODE_BY_ID = Object.fromEntries(MODES.map((m) => [m.id, m]));
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 // 模擬試験モード
 // 午前／午後は本番同形式の科目配分・時間制限で通し演習。
@@ -49,12 +61,44 @@ export default function Exam({ store, onNavigate }) {
   const [remain, setRemain] = useState(0);
   const [timed, setTimed] = useState(false);
   const [shortfalls, setShortfalls] = useState([]);
-  const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
+  const [resume, setResume] = useState(null); // 前回の続きから
   const [paused, setPaused] = useState(false); // タイマーの一時停止
   const [zoom, setZoom] = useState(false); // 図の拡大表示
   const timerRef = useRef(null);
   const remainRef = useRef(0);
   useEffect(() => { remainRef.current = remain; }, [remain]);
+
+  // #21：午前+午後 通しモード（'full'）。午前が終わったら休憩をはさみ、午後は別途組み立てて続行する。
+  const [fullPhase, setFullPhase] = useState(null); // 'full'モード中のみ 'am' | 'pm'
+  const [amSnapshot, setAmSnapshot] = useState(null); // 'full'モードの午前終了時点の{order,answers,slowQuestions}
+
+  // #11・#15・#17・#18：模試の出題履歴（直近の使い回しを避ける）
+  const [examUsageLogState, setExamUsageLogState] = useState([]);
+  useEffect(() => { loadExamUsageLog().then(setExamUsageLogState); }, []);
+  const [overlapPct, setOverlapPct] = useState(null); // 直前の同モードとの重複率（#15、結果画面用）
+  // #14：直前期は常に「未出題優先」に固定する。それ以外はユーザーが選べる（#18）。
+  const phase = useMemo(() => phaseForDate(todayStr()), []);
+  const isChokuzenPhase = phase?.kind === 'chokuzen' || phase?.kind === 'final';
+  const [avoidRepeatChoice, setAvoidRepeatChoice] = useState(true);
+  const avoidRepeat = isChokuzenPhase ? true : avoidRepeatChoice;
+
+  // #28：一時停止の回数・合計時間（本番相当の集中力で解けているかの目安）
+  const [pauseCount, setPauseCount] = useState(0);
+  const [pausedMs, setPausedMs] = useState(0);
+  const pauseStartRef = useRef(null);
+  const togglePause = () => {
+    setPaused((v) => {
+      const next = !v;
+      if (next) {
+        pauseStartRef.current = Date.now();
+        setPauseCount((c) => c + 1);
+      } else if (pauseStartRef.current) {
+        setPausedMs((m) => m + (Date.now() - pauseStartRef.current));
+        pauseStartRef.current = null;
+      }
+      return next;
+    });
+  };
 
   // ---- ペース管理（①）：本番形式(am/pm)の各問にかけた時間を計測し、
   //   リアルタイムの目安表示と、終了後の「時間を使いすぎた問題」ランキングに使う ----
@@ -78,12 +122,15 @@ export default function Exam({ store, onNavigate }) {
     const bp = mid === 'am' ? EXAM_BLUEPRINT_AM : mid === 'pm' ? EXAM_BLUEPRINT_PM : null;
     return bp ? bp.minutes * 60 : null;
   };
-  const totalSeconds = timed ? totalSecondsForMode(modeId) : null;
+  const totalSeconds = timed ? totalSecondsForMode(modeId === 'full' ? fullPhase : modeId) : null;
   const paceInfo = useMemo(() => {
     if (!timed || !totalSeconds || order.length === 0) return null;
     const elapsed = Math.max(0, totalSeconds - remain);
     const expectedIdx = expectedProgress(elapsed, totalSeconds, order.length);
-    return { expectedIdx, behind: isBehindPace(idx, expectedIdx) };
+    // #23：1問あたりの目安秒（配分は問題ごとにシャッフルされ科目順には並ばないため、
+    // 科目別の区間目安ではなく「このペースを保てば間に合う」という単純な目安にする）。
+    const secPerQuestion = Math.round(totalSeconds / order.length);
+    return { expectedIdx, behind: isBehindPace(idx, expectedIdx), secPerQuestion };
   }, [timed, totalSeconds, remain, order.length, idx]);
 
   // ---- 得意／苦手モード：正答率から自動提案 ----
@@ -212,22 +259,39 @@ export default function Exam({ store, onNavigate }) {
     });
   };
 
+  // #11・#16・#17：avoidIds（直近の模試で使った問題）を渡すと後回しにする。
+  const avoidIdsFor = (usageModeId) =>
+    avoidRepeat ? recentlyUsedIds(examUsageLogState, usageModeId, { withinCount: 3 }) : new Set();
+
   const startExam = () => {
     let picked = [];
     let sf = [];
     let minutes = 0;
     let isTimed = false;
+    let usageModeId = modeId;
     if (modeId === 'am' || modeId === 'pm') {
       const blueprint = modeId === 'am' ? EXAM_BLUEPRINT_AM : EXAM_BLUEPRINT_PM;
-      const built = buildBlueprintExam(blueprint, questions);
+      const built = buildBlueprintExam(blueprint, questions, { avoidIds: avoidIdsFor(modeId), srs });
       picked = built.order;
       sf = built.shortfalls;
       minutes = blueprint.minutes;
       isTimed = true;
+    } else if (modeId === 'full') {
+      // #21：午前+午後 通し。まず午前を組み立てて開始し、午後は午前終了後の休憩画面で組み立てる。
+      const built = buildBlueprintExam(EXAM_BLUEPRINT_AM, questions, { avoidIds: avoidIdsFor('am'), srs });
+      picked = built.order;
+      sf = built.shortfalls;
+      minutes = EXAM_BLUEPRINT_AM.minutes;
+      isTimed = true;
+      usageModeId = 'am';
+      setFullPhase('am');
+      setAmSnapshot(null);
+      setPauseCount(0);
+      setPausedMs(0);
     } else if (modeId === 'strong' || modeId === 'weak') {
-      picked = shuffle(accuracyPool).slice(0, PRACTICE_COUNT);
+      picked = preferUnused(shuffle(accuracyPool), avoidIdsFor(modeId)).slice(0, PRACTICE_COUNT);
     } else if (modeId === 'pick') {
-      picked = shuffle(pickPool).slice(0, PRACTICE_COUNT);
+      picked = preferUnused(shuffle(pickPool), avoidIdsFor(modeId)).slice(0, PRACTICE_COUNT);
     }
     if (!picked.length) return;
     setShortfalls(sf);
@@ -237,7 +301,24 @@ export default function Exam({ store, onNavigate }) {
     setTimed(isTimed);
     setRemain(isTimed ? minutes * 60 : 0);
     setPaused(false);
+    setOverlapPct(overlapWithLast(examUsageLogState, usageModeId, picked.map((q) => q.id)));
     setStage('running');
+    appendExamUsageLog(usageModeId, picked.map((q) => q.id)).then(setExamUsageLogState);
+  };
+
+  // #21：午前が終わった後、休憩をはさんで午後を組み立てて開始する。
+  const startPmHalf = () => {
+    const built = buildBlueprintExam(EXAM_BLUEPRINT_PM, questions, { avoidIds: avoidIdsFor('pm'), srs });
+    setShortfalls((prev) => [...prev, ...built.shortfalls]);
+    setOrder(built.order);
+    setAnswers(new Array(built.order.length).fill(null));
+    setIdx(0);
+    setTimed(true);
+    setRemain(EXAM_BLUEPRINT_PM.minutes * 60);
+    setPaused(false);
+    setFullPhase('pm');
+    setStage('running');
+    appendExamUsageLog('pm', built.order.map((q) => q.id)).then(setExamUsageLogState);
   };
 
   // 保存済みの途中経過を読み込む（続きから）
@@ -265,6 +346,9 @@ export default function Exam({ store, onNavigate }) {
     setModeId(resume.modeId || null);
     setTimed(!!resume.timed);
     setPaused(false);
+    // #21：午前+午後 通しモードの続きから（午前分のスナップショットも一緒に復元する）
+    setFullPhase(resume.fullPhase || null);
+    setAmSnapshot(resume.amSnapshot || null);
     setResume(null);
     setStage('running');
   };
@@ -280,6 +364,8 @@ export default function Exam({ store, onNavigate }) {
       modeId,
       timed,
       presetLabel: MODE_BY_ID[modeId]?.label,
+      fullPhase,
+      amSnapshot,
       at: Date.now(),
     });
   }, [stage, idx, answers, order]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -294,6 +380,8 @@ export default function Exam({ store, onNavigate }) {
     setIdx(0);
     setRemain(0);
     setPaused(false);
+    setFullPhase(null);
+    setAmSnapshot(null);
     setStage('select');
   };
 
@@ -324,6 +412,11 @@ export default function Exam({ store, onNavigate }) {
     });
   };
 
+  // #22：合格ライン2回連続の判定用に、今回の結果が追加される「前」のexamResultsを覚えておく
+  // （addExamResultの効果でexamResultsが更新された後の再描画では、examResults[0]が今回自身に
+  // なってしまい「前回」の判定が崩れるため、finish()の時点でスナップショットする）。
+  const examResultsSnapshotRef = useRef([]);
+
   const finish = () => {
     clearInterval(timerRef.current);
     storage.clearExamProgress(); // 採点したら途中経過は破棄
@@ -333,32 +426,45 @@ export default function Exam({ store, onNavigate }) {
     if (prev && timeSpentRef.current[prev.idx] != null) {
       timeSpentRef.current[prev.idx] += (now - prev.at) / 1000;
     }
-    setSlowQuestions(timed ? rankSlowQuestions(order, timeSpentRef.current, 5) : []);
+    const slow = timed ? rankSlowQuestions(order, timeSpentRef.current, 5) : [];
+    // #21：午前+午後 通しモードで午前が終わった場合は、まだ採点せず休憩をはさむ。
+    if (modeId === 'full' && fullPhase === 'am') {
+      setAmSnapshot({ order, answers, slowQuestions: slow, pauseCount, pausedMs });
+      setStage('break');
+      return;
+    }
+    examResultsSnapshotRef.current = examResults || [];
+    setSlowQuestions(slow);
     setStage('result');
   };
 
   // 結果ステージに入ったら履歴へ記録（1回だけ）
   // 未解答（skip）はSRS・復習リストを汚さないよう記録しない（採点上は別途、不正解として集計）。
+  // #21：通しモード（full）は午前・午後を合算した180問ぶんを1回の結果として記録する。
+  const combinedOrder = modeId === 'full' && amSnapshot ? [...amSnapshot.order, ...order] : order;
+  const combinedAnswers = modeId === 'full' && amSnapshot ? [...amSnapshot.answers, ...answers] : answers;
+  const combinedSlowQuestions =
+    modeId === 'full' && amSnapshot ? [...amSnapshot.slowQuestions, ...slowQuestions].sort((a, b) => b.sec - a.sec).slice(0, 5) : slowQuestions;
   const recordedRef = useRef(false);
   useEffect(() => {
     if (stage === 'result' && !recordedRef.current) {
       recordedRef.current = true;
       let correctCount = 0;
       const perSubject = {};
-      order.forEach((q, i) => {
-        const correct = answers[i] === q.answer;
+      combinedOrder.forEach((q, i) => {
+        const correct = combinedAnswers[i] === q.answer;
         if (correct) correctCount += 1;
         if (!perSubject[q.subject]) perSubject[q.subject] = { total: 0, correct: 0 };
         perSubject[q.subject].total += 1;
         if (correct) perSubject[q.subject].correct += 1;
-        if (answers[i] == null) return; // 未解答はSRS・復習に記録しない
+        if (combinedAnswers[i] == null) return; // 未解答はSRS・復習に記録しない
         recordAnswer(q, correct);
       });
-      const scorePct = order.length > 0 ? Math.round((correctCount / order.length) * 100) : 0;
+      const scorePct = combinedOrder.length > 0 ? Math.round((correctCount / combinedOrder.length) * 100) : 0;
       addExamResult?.({
         mode: modeId,
         modeLabel: MODE_BY_ID[modeId]?.label,
-        count: order.length,
+        count: combinedOrder.length,
         correct: correctCount,
         scorePct,
         passed: scorePct >= PASS_RATE * 100,
@@ -392,6 +498,8 @@ export default function Exam({ store, onNavigate }) {
               style={{ textAlign: 'left', cursor: 'pointer', width: '100%' }}
               onClick={() => {
                 setModeId(m.id);
+                setFullPhase(null);
+                setAmSnapshot(null);
                 setStage('setup');
               }}
             >
@@ -401,6 +509,18 @@ export default function Exam({ store, onNavigate }) {
             </button>
           ))}
         </div>
+
+        {/* #30：前回の模試（本番同形式）からの経過日数 */}
+        {(() => {
+          const lastFormal = (examResults || []).find((r) => !r.mode || r.mode === 'am' || r.mode === 'pm' || r.mode === 'full');
+          if (!lastFormal) return null;
+          return (
+            <p className="inline-note" style={{ marginTop: 10 }}>
+              前回の模試（{lastFormal.modeLabel || '演習'}）から
+              {Math.max(0, Math.floor((Date.now() - lastFormal.at) / 86400000))}日
+            </p>
+          );
+        })()}
 
         {examResults && examResults.length > 0 && <ExamHistory results={examResults} passLine={PASS_RATE} />}
       </div>
@@ -412,6 +532,8 @@ export default function Exam({ store, onNavigate }) {
     const blueprint = modeId === 'am' ? EXAM_BLUEPRINT_AM : EXAM_BLUEPRINT_PM;
     const avail = blueprintAvailability(blueprint, questions);
     const shortfallSlots = avail.filter((a) => !a.sufficient);
+    // #12・#13：あと何回ぶん、使い回しなしで模試を組めるか（少ないほど直前期に問題が枯渇するリスク）
+    const lowRoundsSlots = avail.filter((a) => a.roundsPossible < 2);
     return (
       <div className="view">
         <button className="btn ghost sm" onClick={() => setStage('select')}>← モードを選び直す</button>
@@ -419,6 +541,28 @@ export default function Exam({ store, onNavigate }) {
         <p className="view-desc">
           本番同形式の科目配分で出題します。総合問題は連問形式（1つの事例に2〜3問）で最後にまとめて出題されます。
         </p>
+        {/* #14・#18：未出題優先トグル（直前期は常にON） */}
+        <label className="autokw-row card" style={{ marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={avoidRepeat}
+            disabled={isChokuzenPhase}
+            onChange={(e) => setAvoidRepeatChoice(e.target.checked)}
+          />
+          <span>
+            🔁 直近使った問題を避けて出題する（使い回し対策）
+            {isChokuzenPhase && <span className="inline-note">　直前期のため常にONです</span>}
+          </span>
+        </label>
+        {lowRoundsSlots.length > 0 && (
+          <p className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
+            ⚠ {lowRoundsSlots.map((a) => `${a.note}（あと${a.roundsPossible}回ぶん）`).join('・')}
+            は収録数が少なく、使い回しなしで組める模試の回数が限られています（#12・#13）。
+            {onNavigate && (
+              <>　<button className="btn ghost sm" onClick={() => onNavigate('coverage')}>網羅マップで確認する（#20）</button></>
+            )}
+          </p>
+        )}
         <div className="card">
           <div className="section-label" style={{ marginTop: 0 }}>科目別の出題数</div>
           {avail.map((a) => (
@@ -456,6 +600,70 @@ export default function Exam({ store, onNavigate }) {
           )}
           <button className="btn primary block lg" style={{ marginTop: 10 }} onClick={startExam}>
             試験を開始する
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- セットアップ：午前+午後 通し（#21） ----
+  if (stage === 'setup' && modeId === 'full') {
+    const availAm = blueprintAvailability(EXAM_BLUEPRINT_AM, questions);
+    const availPm = blueprintAvailability(EXAM_BLUEPRINT_PM, questions);
+    const shortfallSlots = [...availAm, ...availPm].filter((a) => !a.sufficient);
+    const lowRoundsSlots = [...availAm, ...availPm].filter((a) => a.roundsPossible < 2);
+    return (
+      <div className="view">
+        <button className="btn ghost sm" onClick={() => setStage('select')}>← モードを選び直す</button>
+        <h2 className="view-title">午前+午後 通し（180問）</h2>
+        <p className="view-desc">
+          本番同様に午前90問→休憩→午後90問を通しで行います。午前が終わると休憩画面をはさみ、
+          結果は180問分をまとめて表示します。
+        </p>
+        <label className="autokw-row card" style={{ marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={avoidRepeat}
+            disabled={isChokuzenPhase}
+            onChange={(e) => setAvoidRepeatChoice(e.target.checked)}
+          />
+          <span>
+            🔁 直近使った問題を避けて出題する（使い回し対策）
+            {isChokuzenPhase && <span className="inline-note">　直前期のため常にONです</span>}
+          </span>
+        </label>
+        {lowRoundsSlots.length > 0 && (
+          <p className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
+            ⚠ {lowRoundsSlots.map((a) => `${a.note}（あと${a.roundsPossible}回ぶん）`).join('・')}
+            は収録数が少なく、使い回しなしで組める模試の回数が限られています（#12・#13）。
+            {onNavigate && (
+              <>　<button className="btn ghost sm" onClick={() => onNavigate('coverage')}>網羅マップで確認する（#20）</button></>
+            )}
+          </p>
+        )}
+        <div className="card">
+          <div className="tiles" style={{ marginTop: 0 }}>
+            <div className="tile">
+              <div className="num">180</div>
+              <div className="lbl">問題数</div>
+            </div>
+            <div className="tile">
+              <div className="num">{EXAM_BLUEPRINT_AM.minutes + EXAM_BLUEPRINT_PM.minutes}</div>
+              <div className="lbl">制限時間（分・合計）</div>
+            </div>
+            <div className="tile">
+              <div className="num">60%</div>
+              <div className="lbl">合格ライン</div>
+            </div>
+          </div>
+          {shortfallSlots.length > 0 && (
+            <p className="inline-note">
+              ※ {shortfallSlots.map((s) => s.note).join('・')}
+              は収録数がまだ既定に届かないため、収録分＋関連科目の問題で代替します。
+            </p>
+          )}
+          <button className="btn primary block lg" style={{ marginTop: 10 }} onClick={startExam}>
+            午前90問から開始する
           </button>
         </div>
       </div>
@@ -632,40 +840,77 @@ export default function Exam({ store, onNavigate }) {
     );
   }
 
+  // ---- 休憩（#21：午前+午後 通しモードの、午前終了後〜午後開始前） ----
+  if (stage === 'break') {
+    const pmAvail = blueprintAvailability(EXAM_BLUEPRINT_PM, questions);
+    const pmShortfalls = pmAvail.filter((a) => !a.sufficient);
+    const amCorrect = amSnapshot
+      ? amSnapshot.order.reduce((acc, q, i) => acc + (amSnapshot.answers[i] === q.answer ? 1 : 0), 0)
+      : 0;
+    return (
+      <div className="view">
+        <h2 className="view-title">🍵 休憩</h2>
+        <div className="card" style={{ textAlign: 'center' }}>
+          <div style={{ fontWeight: 700, fontSize: 18 }}>午前90問、お疲れさまでした</div>
+          <p className="inline-note" style={{ marginTop: 6 }}>
+            午前の途中経過：{amSnapshot?.order.length || 0}問中 {amCorrect}問正解
+            （結果は午後も終えてから、180問分をまとめて表示します）
+          </p>
+          <p className="inline-note">
+            本番でも午前と午後の間に休憩があります。数分席を立ってから、準備ができたら午後を開始してください。
+          </p>
+        </div>
+        {pmShortfalls.length > 0 && (
+          <p className="inline-note">
+            ※ {pmShortfalls.map((s) => s.note).join('・')} は収録数がまだ既定に届かないため、収録分＋関連科目の問題で代替します。
+          </p>
+        )}
+        <button className="btn primary block lg" style={{ marginTop: 10 }} onClick={startPmHalf}>
+          午後90問を開始する
+        </button>
+        <ResetInline label="模試をリセット（採点せず破棄）" onReset={resetExam} />
+      </div>
+    );
+  }
+
   // ---- 結果 ----
   if (stage === 'result') {
-    const correctCount = order.reduce(
-      (acc, q, i) => acc + (answers[i] === q.answer ? 1 : 0),
+    const correctCount = combinedOrder.reduce(
+      (acc, q, i) => acc + (combinedAnswers[i] === q.answer ? 1 : 0),
       0
     );
-    const rate = order.length > 0 ? correctCount / order.length : 0;
+    const rate = combinedOrder.length > 0 ? correctCount / combinedOrder.length : 0;
     const passed = rate >= PASS_RATE;
-    const showPassLine = modeId === 'am' || modeId === 'pm';
-    const halfSplit = halfSplitAccuracy(order, answers);
+    const showPassLine = modeId === 'am' || modeId === 'pm' || modeId === 'full';
+    const blueprintForScore = modeId === 'am' ? EXAM_BLUEPRINT_AM : modeId === 'pm' ? EXAM_BLUEPRINT_PM : null;
+    const halfSplit = halfSplitAccuracy(combinedOrder, combinedAnswers);
     // 科目別の内訳
     const perSubject = {};
-    order.forEach((q, i) => {
+    combinedOrder.forEach((q, i) => {
       if (!perSubject[q.subject]) perSubject[q.subject] = { total: 0, correct: 0 };
       perSubject[q.subject].total += 1;
-      if (answers[i] === q.answer) perSubject[q.subject].correct += 1;
+      if (combinedAnswers[i] === q.answer) perSubject[q.subject].correct += 1;
     });
-    // ジャンル別の内訳（科目よりさらに細かい）
-    const perGenre = {};
-    order.forEach((q, i) => {
-      const g = q.genre || q.subject || 'その他';
-      if (!perGenre[g]) perGenre[g] = { total: 0, correct: 0 };
-      perGenre[g].total += 1;
-      if (answers[i] === q.answer) perGenre[g].correct += 1;
-    });
-    const genreRows = Object.entries(perGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
+    // #6・#25：出題数の重み×失点率で「伸ばすと効く科目」を出す（午前／午後のみ、配分が分かっているため）
+    const contribution = blueprintForScore ? scoreContribution(perSubject, blueprintForScore) : [];
+    const shortOfPass = showPassLine && !passed ? pointsShortOfPassLine(correctCount, combinedOrder.length, PASS_RATE) : 0;
+    // #22：合格ライン到達が2回連続しているか（午前・午後のみが対象。CLAUDE.mdのゴール判定と同じ定義）
+    const passLineHistory = examResultsSnapshotRef.current.filter((r) => !r.mode || r.mode === 'am' || r.mode === 'pm' || r.mode === 'full');
+    const streakOk = showPassLine && passed && passLineHistory.length >= 1 && passLineHistory[0]?.passed;
+    // ジャンル別の内訳（科目よりさらに細かい。genreBreakdown.jsが単一の正）
+    const genreRows = buildGenreBreakdown(
+      combinedOrder.map((q, i) => ({ genre: q.genre || q.subject, correct: combinedAnswers[i] === q.answer }))
+    );
     // 誤答・未解答の一覧
-    const wrongEntries = order
-      .map((q, i) => ({ q, chosen: answers[i] }))
+    const wrongEntries = combinedOrder
+      .map((q, i) => ({ q, chosen: combinedAnswers[i] }))
       .filter((e) => e.chosen !== e.q.answer);
     const wrongQs = wrongEntries.map((e) => e.q);
     const weakness = wrongQs.length > 0 ? buildWeaknessSummary(wrongQs, links) : null;
     const retryWrong = () => {
       if (wrongQs.length === 0) return;
+      setFullPhase(null);
+      setAmSnapshot(null);
       setShortfalls([]);
       setOrder(wrongQs);
       setAnswers(new Array(wrongQs.length).fill(null));
@@ -675,6 +920,25 @@ export default function Exam({ store, onNavigate }) {
       setPaused(false);
       setStage('running');
     };
+    // #26：苦手だった科目だけをもう一度（正答率下位の科目）
+    const retrySubject = (subjectName) => {
+      const pool = combinedOrder.filter((q) => q.subject === subjectName);
+      if (pool.length === 0) return;
+      setFullPhase(null);
+      setAmSnapshot(null);
+      setShortfalls([]);
+      setOrder(shuffle(pool));
+      setAnswers(new Array(pool.length).fill(null));
+      setIdx(0);
+      setTimed(false);
+      setRemain(0);
+      setPaused(false);
+      setStage('running');
+    };
+    const weakSubjects = Object.entries(perSubject)
+      .filter(([, v]) => v.total >= 3 && v.correct / v.total < 0.6)
+      .sort((a, b) => a[1].correct / a[1].total - b[1].correct / b[1].total)
+      .slice(0, 3);
 
     return (
       <div className="view">
@@ -687,10 +951,38 @@ export default function Exam({ store, onNavigate }) {
             <small>%</small>
           </div>
           <div className="sub">
-            {order.length}問中 {correctCount}問正解 ／ {order.length - correctCount}問不正解
+            {combinedOrder.length}問中 {correctCount}問正解 ／ {combinedOrder.length - correctCount}問不正解
             {showPassLine && `　合格ライン ${Math.round(PASS_RATE * 100)}%`}
           </div>
+          {!showPassLine && (
+            <div className="inline-note" style={{ marginTop: 4 }}>
+              （参考：合格ラインは{Math.round(PASS_RATE * 100)}%。このモードは配分が本番と異なるため合否判定の対象外です＝#29）
+            </div>
+          )}
         </div>
+
+        {showPassLine && !passed && shortOfPass > 0 && (
+          <p className="inline-note">
+            あと{shortOfPass}問正解していれば合格ラインでした（#25）。
+          </p>
+        )}
+        {streakOk && (
+          <p className="inline-note" style={{ color: 'var(--correct)' }}>
+            🎉 2回連続で合格ラインに到達しました。CLAUDE.mdのゴール（合格ライン2回連続）に届いています。
+          </p>
+        )}
+
+        {overlapPct != null && (
+          <p className="inline-note">
+            前回の同モードとの問題の重複率：{overlapPct}%{avoidRepeat ? '（未出題優先）' : ''}
+          </p>
+        )}
+        {(pauseCount > 0 || (amSnapshot?.pauseCount || 0) > 0) && (
+          <p className="inline-note">
+            一時停止：{pauseCount + (amSnapshot?.pauseCount || 0)}回・合計{Math.round((pausedMs + (amSnapshot?.pausedMs || 0)) / 1000)}秒
+            （本番相当の集中力で解けたかの目安＝#28）
+          </p>
+        )}
 
         {shortfalls.length > 0 && (
           <p className="inline-note">
@@ -698,27 +990,54 @@ export default function Exam({ store, onNavigate }) {
           </p>
         )}
 
-        {slowQuestions.length > 0 && (
+        {contribution.length > 0 && (
           <>
-            <div className="section-label" style={{ marginTop: 0 }}>⏱ 時間を使いすぎた問題</div>
+            <div className="section-label" style={{ marginTop: 0 }}>📉 伸ばすと効く科目（出題数の重み×失点率）</div>
             <div className="card">
               <p className="inline-note" style={{ margin: '0 0 8px' }}>
-                本番はここで足が止まりやすいポイントです。分からない問題は一旦飛ばす練習をしましょう。
+                出題数が多く、かつ間違いが多い科目ほど全体スコアへの影響が大きくなります（配点そのものは未確認のため、あくまで出題数の重みでの目安＝#6）。
               </p>
-              {slowQuestions.map((r, i) => (
-                <div className="stat-row" key={r.q.id}>
+              {contribution.slice(0, 5).map((r, i) => (
+                <div className="stat-row" key={r.subject}>
                   <div className="stat-head">
-                    <span className="stat-subject">{i + 1}. {r.q.subject}</span>
-                    <span className="stat-pct">{Math.round(r.sec)}秒</span>
+                    <span className="stat-subject">{i + 1}. {r.note}</span>
+                    <span className="stat-pct">正答率{Math.round(r.accuracy * 100)}%</span>
                   </div>
-                  <p className="inline-note" style={{ margin: '2px 0 0' }}>{r.q.question}</p>
                 </div>
               ))}
             </div>
           </>
         )}
 
-        {halfSplit && order.length >= 4 && (
+        {combinedSlowQuestions.length > 0 && (
+          <>
+            <div className="section-label" style={{ marginTop: 0 }}>⏱ 時間を使いすぎた問題</div>
+            <div className="card">
+              <p className="inline-note" style={{ margin: '0 0 8px' }}>
+                本番はここで足が止まりやすいポイントです。分からない問題は一旦飛ばす練習をしましょう。
+              </p>
+              {combinedSlowQuestions.map((r, i) => {
+                const g = genreOf(r.q);
+                const dk = g ? daikoumoku(g) : null;
+                const rank = dk ? daikoumokuRank(questions)[`${r.q.subject}|${dk}`] : null;
+                return (
+                  <div className="stat-row" key={r.q.id}>
+                    <div className="stat-head">
+                      <span className="stat-subject">
+                        {i + 1}. {r.q.subject}
+                        {rank && <span className="inline-note"> （頻出度{rank}）</span>}
+                      </span>
+                      <span className="stat-pct">{Math.round(r.sec)}秒</span>
+                    </div>
+                    <p className="inline-note" style={{ margin: '2px 0 0' }}>{r.q.question}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {halfSplit && combinedOrder.length >= 4 && (
           <>
             <div className="section-label" style={{ marginTop: 0 }}>🔋 前半・後半の正答率</div>
             <div className="card">
@@ -767,6 +1086,17 @@ export default function Exam({ store, onNavigate }) {
           );
         })}
 
+        {/* #26：苦手だった科目だけをもう一度 */}
+        {weakSubjects.length > 0 && (
+          <div className="chip-row" style={{ marginTop: 8 }}>
+            {weakSubjects.map(([s, v]) => (
+              <button key={s} className="chip" onClick={() => retrySubject(s)}>
+                🔁 {s}だけもう一度（{Math.round((v.correct / v.total) * 100)}%）
+              </button>
+            ))}
+          </div>
+        )}
+
         <p className="inline-note" style={{ marginTop: 10 }}>
           不正解・未解答の問題は復習リストへ自動的に追加されました。
         </p>
@@ -774,7 +1104,11 @@ export default function Exam({ store, onNavigate }) {
         <button
           className="btn primary block lg"
           style={{ marginTop: 16 }}
-          onClick={() => setStage('setup')}
+          onClick={() => {
+            setFullPhase(null);
+            setAmSnapshot(null);
+            setStage('setup');
+          }}
         >
           もう一度挑戦する
         </button>
@@ -884,7 +1218,7 @@ export default function Exam({ store, onNavigate }) {
           解答済み {answered} / {order.length}
         </span>
         {timed && (
-          <button className="btn ghost sm" onClick={() => setPaused((v) => !v)}>
+          <button className="btn ghost sm" onClick={togglePause}>
             {paused ? '▶ 再開' : '⏸ 一時停止'}
           </button>
         )}
@@ -894,7 +1228,7 @@ export default function Exam({ store, onNavigate }) {
       </div>
       {paceInfo && (
         <div className={`inline-note ${paceInfo.behind ? 'exam-pace-warn' : ''}`} style={{ margin: '4px 0 8px' }}>
-          ⏱ 目安：今ごろ{paceInfo.expectedIdx}問目くらい（今 {idx + 1}問目）
+          ⏱ 目安：今ごろ{paceInfo.expectedIdx}問目くらい（今 {idx + 1}問目）・1問あたり約{paceInfo.secPerQuestion}秒
           {paceInfo.behind && '　ペースが遅れています。わからない問題は後回しに'}
         </div>
       )}
@@ -1033,9 +1367,9 @@ function predictExam(results, passLine) {
 }
 
 // 模試の結果履歴と、合格ライン到達の推移グラフ＋合否予測
-// 対象は午前／午後（本番同形式）の結果のみ（得意・苦手・選択式は合格ラインの対象外のため除く）。
+// 対象は午前／午後／午前+午後通し（本番同形式）の結果のみ（得意・苦手・選択式は合格ラインの対象外のため除く）。
 function ExamHistory({ results, passLine }) {
-  const scoped = results.filter((r) => !r.mode || r.mode === 'am' || r.mode === 'pm');
+  const scoped = results.filter((r) => !r.mode || r.mode === 'am' || r.mode === 'pm' || r.mode === 'full');
   if (scoped.length === 0) return null;
   // 古い→新しい（左→右）に並べ、直近20件
   const items = [...scoped].slice(0, 20).reverse();
@@ -1089,18 +1423,29 @@ function ExamHistory({ results, passLine }) {
       </div>
       <div className="card">
         <div className="exam-chart">
-          {items.map((r, i) => (
-            <div className="exam-chart-col" key={r.id || i} title={`${new Date(r.at).toLocaleDateString('ja-JP')}：${r.scorePct}%`}>
-              <div className={`exam-chart-bar ${r.passed ? 'pass' : 'fail'}`} style={{ height: `${Math.max(4, r.scorePct)}%` }} />
-              <span className="exam-chart-lbl">{r.scorePct}</span>
-            </div>
-          ))}
+          {items.map((r, i) => {
+            // #27：その回答時点のロードマップフェーズ（直前期に入ってから受けたものかが分かるように）
+            const d = new Date(r.at);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const ph = phaseForDate(dateStr);
+            return (
+              <div
+                className="exam-chart-col"
+                key={r.id || i}
+                title={`${d.toLocaleDateString('ja-JP')}：${r.scorePct}%${ph ? `（${ph.label}）` : ''}`}
+              >
+                <div className={`exam-chart-bar ${r.passed ? 'pass' : 'fail'}`} style={{ height: `${Math.max(4, r.scorePct)}%` }} />
+                <span className="exam-chart-lbl">{r.scorePct}</span>
+                {ph && <span className="inline-note" style={{ fontSize: 9, color: ph.color }}>{ph.no}</span>}
+              </div>
+            );
+          })}
           <div className="exam-chart-line" style={{ bottom: `${passPct}%` }} title={`合格ライン ${passPct}%`}>
             <span>合格{passPct}%</span>
           </div>
         </div>
         <div className="inline-note" style={{ textAlign: 'center', marginTop: 6 }}>
-          緑＝合格ライン到達／灰＝未満。左（過去）→右（最近）。
+          緑＝合格ライン到達／灰＝未満。左（過去）→右（最近）。数字はロードマップのフェーズ番号（カーソルで詳細）。
         </div>
       </div>
     </div>

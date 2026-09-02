@@ -108,6 +108,11 @@ AI社員に仕事を依頼すると、社員どうしで引き継ぎながら仕
 | 89 | 競合台帳（実際に見た1件だけ。値段の位置・空いている所・古い観測の印） | `lib/rivals.js` / `Ventures.jsx` |
 | 90 | 需要の観測（見た声をその言葉のまま貯め、重なった語を出す） | `lib/demand.js` / `Ventures.jsx` |
 | 91 | 競合と市場を見る（観測を材料にした仕事の流れ） | `data/workflows.js` の `market_scan` |
+| 92 | 型パック（うまくいった流れを、結果の見本つきの売り物に固める） | `lib/kit.js` / `Kits.jsx` |
+| 93 | 3回ルール（回した記録から導く。足りなければ「未検証」と書き出す） | `kit.kitReady` / `task.kitId` |
+| 94 | 型を1ファイルで書き出す（キー・個人情報・社内の記憶は入らない） | `kit.exportKit` |
+| 95 | SKILL.md の形で書き出す（name / description つき・そのまま使える形） | `kit.exportSkillMd` |
+| 96 | パック（複数の型を1商品に。目次＋型ごとの SKILL.md） | `kit.exportPack` / `Kits.jsx` |
 
 設計の全体像（アーキテクチャ・DBスキーマ・API・拡張時の注意点）は
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。

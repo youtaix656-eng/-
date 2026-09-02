@@ -31,6 +31,7 @@ const Team = lazy(LOADERS.team);
 const Ledger = lazy(LOADERS.ledger);
 const Funnel = lazy(LOADERS.funnel);
 const Studio = lazy(LOADERS.studio);
+const Kits = lazy(LOADERS.kits);
 const Ventures = lazy(LOADERS.ventures);
 const VentureDetail = lazy(() => LOADERS.venture().then((m) => ({ default: m.VentureDetail })));
 const Rules = lazy(LOADERS.rules);
@@ -287,6 +288,7 @@ export default function App() {
         {view === 'ledger' && <Ledger store={store} go={go} toast={toast} />}
         {view === 'funnel' && <Funnel store={store} go={go} toast={toast} />}
         {view === 'studio' && <Studio store={store} go={go} toast={toast} />}
+        {view === 'kits' && <Kits store={store} go={go} toast={toast} />}
         {view === 'ventures' && <Ventures store={store} go={go} toast={toast} />}
         {view === 'venture' && <VentureDetail store={store} ventureId={arg} go={go} toast={toast} />}
         {view === 'rules' && <Rules store={store} toast={toast} />}

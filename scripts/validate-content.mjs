@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { SEED_BANKS, allSeedQuestions } from '../src/data/seedRegistry.js';
 import { validateBank } from '../src/lib/questionSchema.js';
 import { coverageBySubject, coverageSummary, coverageLevel } from '../src/lib/coverage.js';
+import { priorityTodo } from '../src/lib/coveragePriority.js';
+import { roundGapsBySubject } from '../src/lib/roundGaps.js';
 import { volatileNumberFacts } from '../src/data/mindmapData.js';
 import featureRegistry from '../src/data/featureRegistry.js';
 import { KEIKETSU_CARDS } from '../src/data/keiketsuCards.js';
@@ -66,13 +68,27 @@ line('■ 網羅マップ（科目 × 収録数）');
 const rows = coverageBySubject(all);
 const sum = coverageSummary(rows);
 for (const r of rows) {
-  const lv = coverageLevel(r.total);
+  const lv = coverageLevel(r.total, { thin: r.thinThreshold, rich: r.richThreshold });
   const mark = lv === 'none' ? '🔴' : lv === 'thin' ? '🟠' : lv === 'ok' ? '🟡' : '🟢';
-  line(`  ${mark} ${r.name}: ${r.total}問`);
+  line(`  ${mark} ${r.name}: ${r.total}問（しきい値${r.thinThreshold}${r.thresholdIsAuto ? '・自動' : ''}）`);
 }
-line(`  → 収録済み ${sum.withData}/${sum.subjects}科目・総${sum.total}問 ｜ 手薄(20未満) ${sum.thin.length} ｜ 未収録 ${sum.none.length}`);
+line(`  → 収録済み ${sum.withData}/${sum.subjects}科目・総${sum.total}問・充足率${Math.round(sum.fillRatio * 100)}% ｜ 手薄 ${sum.thin.length} ｜ 未収録 ${sum.none.length}`);
 if (sum.none.length) line(`     未収録: ${sum.none.map((r) => r.name).join('・')}`);
 if (sum.thin.length) line(`     手薄: ${sum.thin.map((r) => `${r.name}(${r.total})`).join('・')}`);
+line('  ※ CLAUDE.mdの「現状の手薄科目」はこの出力から更新すること（手入力で古いまま放置しない・#26）。');
+line('');
+
+// 4.5) 埋めるべき優先度（頻出度×手薄さ）と、回の抜け漏れ
+line('■ 網羅マップ：埋めるべき優先度トップ10（頻出度×手薄さ）');
+const todo = priorityTodo(rows, all, { limit: 10 });
+if (!todo.length) line('  （手薄な大項目なし）');
+for (const t of todo) line(`  ・${t.subject}${t.daikoumoku ? `｜${t.daikoumoku}` : ''}：${t.reason}`);
+line('');
+
+line('■ 回（第◯回）の収録抜け漏れ（他科目に複数ある回がこの科目だけ無い）');
+const gaps = roundGapsBySubject(all);
+if (!gaps.length) line('  （抜け漏れなし）');
+for (const g of gaps.slice(0, 10)) line(`  ・${g.subject}：第${g.missing.join('・第')}回が未収録`);
 line('');
 
 // 5) 数値ファクトの鮮度（volatile=毎年変わる数値）

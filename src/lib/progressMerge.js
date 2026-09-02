@@ -48,8 +48,17 @@ export function mergeObjectMap(local, remote, remoteNewer) {
 
 // settings: 個々のフィールドの新旧を判定する手段が無いため、全体として新しい側を優先しつつ、
 // 古い側にしかないキー（新しい側のアプリバージョンでは無いフィールド等）は残す。
+//
+// ただしpomodoro（ポモドーロタイマーの設定）だけは例外で、自分自身の更新時刻
+// （settings.pomodoro.updatedAt、Pomodoro.jsx/PomodoroConfigFields.jsxのsetCfgが
+// 毎回更新する）で新旧を判定する。settings全体のnewer判定は「他のどれか1つの設定を
+// 変えた時刻」でしかないため、それだけを基準にpomodoroごと丸ごと入れ替えると、
+// 無関係な設定を別端末で変えただけでポモドーロの設定が古い値に巻き戻ってしまう
+// （実際に起こりうる「ポモドーロがリセットされたように見える」原因の1つ）。
 export function mergeSettings(local, remote, remoteNewer) {
-  return mergeObjectMap(local, remote, remoteNewer);
+  const merged = mergeObjectMap(local, remote, remoteNewer);
+  merged.pomodoro = pickNewerByOwnTimestamp(local?.pomodoro, remote?.pomodoro, 'updatedAt');
+  return merged;
 }
 
 // 一問一答・模試・復習・音声・学習セッションの「続きから」（1つの活動を表す単一オブジェクト）。
