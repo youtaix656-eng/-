@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildGraphFromSolved, todaysLinks } from '../lib/kgService.js';
 import { graphStats, neighbors } from '../lib/knowledgeGraph.js';
 import { nodeDegrees, isolatedConcepts } from '../lib/learnerModel.js';
@@ -68,10 +68,11 @@ function RecallCard({ pair }) {
 }
 
 // 知識グラフ（#1〜#10 の可視化）— 解くたびに育つ知識のつながりを見せる。
-export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts }) {
+export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts, focusConcept, onConsumeFocusConcept }) {
   const { questions, srs, history, links } = store;
   const [pathA, setPathA] = useState('');
   const [pathB, setPathB] = useState('');
+  const pathSectionRef = useRef(null);
   const [fcIdx, setFcIdx] = useState(0);
   const [fcOpen, setFcOpen] = useState(false);
   const [assocMap, setAssocMap] = useState({});
@@ -146,6 +147,18 @@ export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts }
     () => Object.keys(graph.nodes).sort((a, b) => a.localeCompare(b, 'ja')),
     [graph]
   );
+
+  // 連結学習（ConnectedLearning.jsx）からの連携：指定された概念を「つながりを探す」の
+  //   概念Aへ自動セットし、該当セクションへスクロールする（Roadmap.jsxのfocusLevelと同じ型）。
+  useEffect(() => {
+    if (!focusConcept || !conceptList.includes(focusConcept)) return;
+    setPathA(focusConcept);
+    const timer = setTimeout(() => {
+      pathSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      onConsumeFocusConcept?.();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [focusConcept, conceptList]); // eslint-disable-line react-hooks/exhaustive-deps
   const path = useMemo(
     () => (pathA && pathB ? shortestPath(graph, pathA, pathB) : null),
     [graph, pathA, pathB]
@@ -327,7 +340,7 @@ export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts }
 
       {/* 最短経路（#10）：AとBはどうつながる？ */}
       {conceptList.length >= 2 && (
-        <>
+        <div ref={pathSectionRef}>
           <div className="section-label">🧭 つながりを探す（AとBの経路）</div>
           <div className="card">
             <div className="kg-path-controls">
@@ -358,7 +371,7 @@ export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts }
               )
             )}
           </div>
-        </>
+        </div>
       )}
 
       {rec.length > 0 && (

@@ -45,7 +45,7 @@ function poolFor(questions, subject) {
 // 出題順の組み立ては src/lib/sessionOrder.js に集約（Quiz.jsxと共用）。
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio, onGoAnalytics }) {
-  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded, setNextDue } = store;
+  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded, setNextDue, examResults } = store;
   // 完了画面の弱点分析（まぎらわしい対比）用データ。完了画面に到達した時だけ遅延読み込みする
   // （起動時バンドルから約14万字ぶんを外すため。mindmapDataLoader.jsが単一の正）。
   const mindmapData = useMindmapData(!!(session && session.pos >= session.target));
@@ -161,9 +161,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   //   「たまには苦手分野の〇〇にも挑戦してみましょう」と声掛けする。
   const focusSubject = useMemo(() => {
     const scope = scopeCoverage(questions, history);
-    const picks = todayFocusSubjects(scope, daysUntil(settings.examDate), { questions, limit: 1 });
+    const picks = todayFocusSubjects(scope, daysUntil(settings.examDate), { questions, limit: 1, examResults });
     return picks[0] || null;
-  }, [questions, history, settings.examDate]);
+  }, [questions, history, settings.examDate, examResults]);
 
   // 現在の条件で「まだ解いていない新規問題」が何問残っているか
   //   新規＝未着手（srs.seen が 0 または未登録）。buildMixedOrder の newPool と同じ定義。
