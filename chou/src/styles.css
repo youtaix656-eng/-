@@ -380,3 +380,19 @@ textarea { resize: vertical; }
 /* ── 追加・削除の候補 ───────────────── */
 .cand { border: 1px dashed var(--line-strong); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
 .cand-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* ── 食べ合わせ（アダムスキー式）────────
+ * 速さは**色で分けない**（色を入れると「危ない／安全」に見える）。
+ * 分けるのは枠線の形と字だけ。 */
+.tag.sp-fast { border-style: solid; }
+.tag.sp-slow { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tag.sp-neutral { border-style: dashed; }
+.tag.sp-unknown { border-style: dotted; color: var(--ink-dim); }
+
+.speed-list { list-style: none; padding: 0; margin: 8px 0; }
+.speed-list li {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
+.meal-block { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 8px; }

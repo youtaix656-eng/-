@@ -121,6 +121,7 @@ export default function Calendar({ store, onGo, focus, onFocusDone }) {
           store={store}
           suggestions={suggestions}
           onOpenRedFlags={() => onGo('redflags')}
+        onOpenCombine={() => onGo('combine')}
         />
       </section>
     </div>

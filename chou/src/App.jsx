@@ -10,6 +10,7 @@ import RedFlags from './components/RedFlags.jsx';
 import Fodmap from './components/Fodmap.jsx';
 import Settings from './components/Settings.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
+import Combine from './components/Combine.jsx';
 
 // 下部ナビは4つ。そのすぐ上に「受診メモをつくる」の常設バーを置く。
 // 受診メモはこのアプリを持つ理由なので、思い立った時にどの画面からでも開けること。
@@ -86,6 +87,9 @@ export default function App() {
         {view === 'visitnote' && <VisitNote store={store} focus={focus} onFocusDone={clearFocus} />}
         {view === 'redflags' && <RedFlags focus={focus} onFocusDone={clearFocus} />}
         {view === 'fodmap' && <Fodmap store={store} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'combine' && (
+          <Combine store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
         {view === 'settings' && <Settings store={store} focus={focus} onFocusDone={clearFocus} />}
         {view === 'toc' && (
           <TableOfContents store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />

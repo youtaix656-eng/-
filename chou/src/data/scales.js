@@ -28,6 +28,22 @@ export const LEVELS = [
 
 export const LEVEL_BY_ID = Object.fromEntries(LEVELS.map((s) => [s.id, s]));
 
+/**
+ * 体を動かしたか。**時間や歩数を数えない**——「何分やれば効く」という基準が手元に無いので、
+ * 自分の感じ方の段だけを残す（出典が挙げる「消化管が働きにくくなる3つの原因」のひとつ）。
+ */
+export const EXERCISE_STEPS = [
+  { id: 'none', label: 'していない', order: 0 },
+  { id: 'little', label: 'すこし動いた', order: 1 },
+  { id: 'some', label: 'まあまあ動いた', order: 2 },
+  { id: 'much', label: 'しっかり動いた', order: 3 },
+];
+
+export const EXERCISE_BY_ID = Object.fromEntries(EXERCISE_STEPS.map((s) => [s.id, s]));
+
+/** ストレス。痛み・張りと同じ4段を使いまわす（段を増やして迷わせない） */
+export const STRESS_LEVELS = LEVELS;
+
 /** ブリストルスケール（7段階）。説明は医療の言い方に寄せ、からかう言葉を入れない。
  * `reading` は目次・索引のためのもの（**手で書く。漢字の読みを機械が当てない**）。 */
 export const BRISTOL = [

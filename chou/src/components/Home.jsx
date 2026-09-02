@@ -34,6 +34,7 @@ export default function Home({ store, onGo, focus, onFocusDone }) {
         store={store}
         suggestions={suggestions}
         onOpenRedFlags={() => onGo('redflags')}
+        onOpenCombine={() => onGo('combine')}
       />
 
       <section className="block" id="rec-total">

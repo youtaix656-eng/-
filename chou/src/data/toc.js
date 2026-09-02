@@ -8,6 +8,7 @@ import { TERMS, SCREENS } from './terms.js';
 import { BRISTOL } from './scales.js';
 import { RED_FLAGS, RED_FLAG_SOURCE } from './redFlags.js';
 import { FODMAP_FOODS, FODMAP_LEVELS, FODMAP_SOURCE } from './fodmap.js';
+import { SPEED_NAMED, SPEED_BY_ID, BAD_PAIRS, ADAMSKI_UNVERIFIED } from './adamski.js';
 import { readingKey, normalizeAlnum } from '../lib/yomi.js';
 
 /** 飛び先の種類。**この4つだけ**（画面／記録の設問／機能／仕組み・決まり） */
@@ -26,6 +27,7 @@ export const TOC_GROUPS = [
   { id: 'scale', label: 'ものさし' },
   { id: 'flag', label: '受診の目安' },
   { id: 'food', label: '食材' },
+  { id: 'combine', label: '食べ合わせ' },
   { id: 'screen', label: '画面' },
   { id: 'user', label: '自分で追加' },
 ];
@@ -98,6 +100,56 @@ function fromFoods() {
   }));
 }
 
+/**
+ * 食べ合わせ（アダムスキー式）から。
+ *  - 低FODMAP の一覧に無い食べもの（出典だけが名指ししているもの）
+ *  - よくない組み合わせとして挙げられている代表例
+ *  - **裏が取れていない主張**（目次からも辿れるようにする。隠さないため）
+ * どれも出典を確かめきれていないので、確からしさは必ず `needs_review`。
+ */
+function fromAdamski() {
+  const inFodmap = new Set(FODMAP_FOODS.map((f) => f.name));
+  const foods = SPEED_NAMED.filter((f) => !inFodmap.has(f.name)).map((f) => ({
+    id: `toc-speed-${f.reading}`,
+    title: f.name,
+    reading: f.reading,
+    group: 'combine',
+    aliases: [],
+    description: `アダムスキー式では「${SPEED_BY_ID[f.speed].label}」とされています。${SPEED_BY_ID[f.speed].note}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'combine', targetId: 'combine-speeds', label: '一覧で見る' },
+      { type: 'function', view: 'combine', targetId: 'combine-check', label: '組み合わせを見る' },
+    ],
+  }));
+  const pairs = BAD_PAIRS.map((pair) => ({
+    id: `toc-badpair-${pair.id}`,
+    title: pair.title,
+    reading: pair.reading,
+    group: 'combine',
+    aliases: [],
+    description: `速い：${pair.fast}／遅い：${pair.slow}。${pair.note}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'combine', targetId: `badpair-${pair.id}`, label: '読む' },
+      { type: 'function', view: 'combine', targetId: 'combine-check', label: '組み合わせを見る' },
+    ],
+  }));
+  const claims = ADAMSKI_UNVERIFIED.map((item) => ({
+    id: `toc-unverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'combine',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'combine', targetId: `unverified-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...foods, ...pairs, ...claims];
+}
+
 function withGroup(list, group) {
   return list.map((entry) => ({ aliases: [], destinations: [], ...entry, group }));
 }
@@ -118,6 +170,7 @@ export function buildTocEntries(state = {}) {
     ...fromBristol(),
     ...fromRedFlags(),
     ...fromFoods(),
+    ...fromAdamski(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

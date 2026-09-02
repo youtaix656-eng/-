@@ -7,10 +7,10 @@
 //     「症状が無かった日」と読ませないため。
 //  3. **アプリが医療者へ送らない。** 作るのは文章まで。渡す相手は本人が選ぶ。
 
-import { BELLY_STEPS, BRISTOL_GROUPS, STOOL_MARKS } from '../data/scales.js';
+import { BELLY_STEPS, BRISTOL_GROUPS, STOOL_MARKS, LEVELS, EXERCISE_STEPS } from '../data/scales.js';
 import { formatKey } from './dates.js';
 import { hasRecord } from './days.js';
-import { fillOf, bellyCounts, bristolCounts, stoolPerDay, markDays, topFoods } from './stats.js';
+import { fillOf, bellyCounts, bristolCounts, stoolPerDay, markDays, topFoods, lifeCounts } from './stats.js';
 
 /** 「1日 1〜1回」と書かない（幅が無いときは幅で言わない） */
 export function perDayText(per) {
@@ -23,6 +23,7 @@ export const NOTE_PARTS = [
   { id: 'belly', label: 'お腹の調子' },
   { id: 'marks', label: '気になった項目（血が混じった・間に合わない感じ など）' },
   { id: 'foods', label: 'よく食べていたもの' },
+  { id: 'life', label: 'ストレス・体を動かしたか' },
   { id: 'notes', label: 'ひとことメモ' },
 ];
 
@@ -103,6 +104,30 @@ export function buildVisitNote(days, keys, parts = DEFAULT_PARTS) {
       lines.push('　数えられるだけの記録がありません');
     } else {
       lines.push(`　${foods.map((f) => `${f.food} ${f.days}日`).join(' / ')}`);
+    }
+    lines.push('');
+  }
+
+  if (on('life')) {
+    const life = lifeCounts(days, keys);
+    lines.push('■ ストレス・体を動かしたか（本人の感じ方）');
+    if (!life.stressDays && !life.exerciseDays) {
+      lines.push('　記録なし');
+    } else {
+      if (life.stressDays) {
+        lines.push(
+          `　ストレス：${LEVELS.filter((l) => life.stress[l.id])
+            .map((l) => `${l.label} ${life.stress[l.id]}日`)
+            .join(' / ')}`,
+        );
+      }
+      if (life.exerciseDays) {
+        lines.push(
+          `　体を動かした：${EXERCISE_STEPS.filter((e) => life.exercise[e.id])
+            .map((e) => `${e.label} ${life.exercise[e.id]}日`)
+            .join(' / ')}`,
+        );
+      }
     }
     lines.push('');
   }

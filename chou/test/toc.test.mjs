@@ -28,6 +28,7 @@ import { TERMS, SCREENS } from '../src/data/terms.js';
 import { BRISTOL } from '../src/data/scales.js';
 import { RED_FLAGS } from '../src/data/redFlags.js';
 import { FODMAP_FOODS } from '../src/data/fodmap.js';
+import { SPEED_NAMED, BAD_PAIRS, ADAMSKI_UNVERIFIED } from '../src/data/adamski.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -183,7 +184,16 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
   for (const screen of SCREENS) assert.ok(entries.some((e) => e.id === screen.id), screen.title);
   for (const flag of RED_FLAGS) assert.ok(entries.some((e) => e.title === flag.title), flag.title);
   for (const food of FODMAP_FOODS) assert.ok(entries.some((e) => e.title === food.name), food.name);
-  assert.equal(entries.length, TERMS.length + SCREENS.length + BRISTOL.length + RED_FLAGS.length + FODMAP_FOODS.length);
+  // 食べ合わせ（アダムスキー式）から来るぶん：低FODMAP に無い食べもの＋よくない組み合わせ＋裏が取れていない主張
+  const fromAdamskiCount =
+    SPEED_NAMED.filter((f) => !FODMAP_FOODS.some((x) => x.name === f.name)).length +
+    BAD_PAIRS.length +
+    ADAMSKI_UNVERIFIED.length;
+  for (const claim of ADAMSKI_UNVERIFIED) assert.ok(entries.some((e) => e.title === claim.title), claim.title);
+  assert.equal(
+    entries.length,
+    TERMS.length + SCREENS.length + BRISTOL.length + RED_FLAGS.length + FODMAP_FOODS.length + fromAdamskiCount,
+  );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');
   assert.match(source, /import \{ FODMAP_FOODS/);

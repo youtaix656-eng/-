@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BELLY_STEPS, LEVELS, STOOL_MARKS } from '../data/scales.js';
+import { BELLY_STEPS, LEVELS, EXERCISE_STEPS, STOOL_MARKS } from '../data/scales.js';
 import { nowTime } from '../lib/dates.js';
 import { flagMarksOf } from '../lib/days.js';
 import BristolPicker from './Bristol.jsx';
@@ -70,7 +70,7 @@ function StoolRow({ stool, onChange, onRemove }) {
   );
 }
 
-export default function DayEditor({ date, day, store, suggestions = [], onOpenRedFlags }) {
+export default function DayEditor({ date, day, store, suggestions = [], onOpenRedFlags, onOpenCombine }) {
   const [mealText, setMealText] = useState('');
   const flags = flagMarksOf(day);
 
@@ -148,6 +148,23 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         />
       </div>
 
+      <div className="two" id="rec-life">
+        <Choice
+          name="stress"
+          label="ストレス"
+          options={LEVELS}
+          value={day.stress}
+          onChange={(v) => store.updateDay(date, { stress: v })}
+        />
+        <Choice
+          name="exercise"
+          label="体を動かした"
+          options={EXERCISE_STEPS}
+          value={day.exercise}
+          onChange={(v) => store.updateDay(date, { exercise: v })}
+        />
+      </div>
+
       <section className="block" id="rec-meal">
         <div className="block-head">
           <h2>たべたもの</h2>
@@ -197,6 +214,11 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         <p className="muted small">
           区切りは「、」やスペースでざっくり数えています。書き方によっては拾えないものがあります。
         </p>
+        {day.meals.length > 0 && onOpenCombine && (
+          <button type="button" className="ghost small" onClick={onOpenCombine}>
+            この日の食べ合わせを見る
+          </button>
+        )}
       </section>
 
       <section className="block" id="rec-note">

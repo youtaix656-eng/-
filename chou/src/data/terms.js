@@ -297,6 +297,137 @@ export const TERMS = [
       { type: 'function', view: 'visitnote', targetId: 'note-parts', label: '受診メモに入れる' },
     ],
   },
+  {
+    id: 'term-combine',
+    title: '食べ合わせ（アダムスキー式）',
+    reading: 'たべあわせ',
+    aliases: [{ name: 'アダムスキー式', reading: 'あだむすきーしき' }],
+    description:
+      '消化の速いものと遅いものを一緒に食べない、という考え方です。出典は本人の要約で原著を確かめていないので、このアプリは「そう紹介されている」までしか書かず、詰まっている・毒素が出ているといった判定はしません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'function', view: 'combine', targetId: 'combine-check', label: '組み合わせを見る' },
+      { type: 'system', view: 'combine', targetId: 'combine-unverified', label: '裏が取れていない主張を読む' },
+    ],
+  },
+  {
+    id: 'term-speed-fast',
+    title: '消化の速い食べもの',
+    reading: 'しょうかのはやいたべもの',
+    aliases: [{ name: '速いもの', reading: 'はやいもの' }],
+    description:
+      'くだもの・トマト・かぼちゃ・パプリカ・唐辛子・はちみつ・緑茶・ヨーグルトが挙げられています。出典では「消化管を30分ほどで通る」と紹介されていますが、この数字は確かめられていません。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'combine', targetId: 'combine-speeds', label: '一覧で見る' }],
+  },
+  {
+    id: 'term-speed-slow',
+    title: '消化の遅い食べもの',
+    reading: 'しょうかのおそいたべもの',
+    aliases: [{ name: '遅いもの', reading: 'おそいもの' }],
+    description:
+      'パスタ・パン・米・ピザ・いも・とうもろこし・肉・魚・チーズ・卵・豆腐・ナッツなど、速いもの以外のほとんどです。同じ「遅い」どうしで食べるぶんには問題にならない、という考え方です。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'combine', targetId: 'combine-speeds', label: '一覧で見る' }],
+  },
+  {
+    id: 'term-speed-neutral',
+    title: 'ニュートラルの食べもの',
+    reading: 'にゅーとらるのたべもの',
+    aliases: [{ name: '中間のもの', reading: 'ちゅうかんのもの' }],
+    description:
+      '油・酢・にんにく・たまねぎ・なす・紅茶・コーヒー・砂糖・牛乳など。出典では「一緒に食べたものの消化を助ける」とされています。ただし、たまねぎ・にんにく・牛乳は低FODMAP では減らす候補で、言っていることが反対になります。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'combine', targetId: 'combine-speeds', label: '一覧で見る' },
+      { type: 'system', view: 'combine', targetId: 'combine-conflicts', label: '反対になるものを見る' },
+    ],
+  },
+  {
+    id: 'term-conflict',
+    title: '2つの考え方が反対になるところ',
+    reading: 'ふたつのかんがえかたがはんたいになるところ',
+    aliases: [{ name: '食い違い', reading: 'くいちがい' }],
+    description:
+      'はちみつ・ヨーグルト・にんにく・たまねぎ・牛乳は、低FODMAP では「多め（減らす候補）」、アダムスキー式では「速い・消化を助ける」とされ、正面から反対になります。このアプリはどちらが正しいかを決めません。合うかどうかは自分の記録で見つけてください。',
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'combine', targetId: 'combine-conflicts', label: '並べて見る' },
+      { type: 'page', view: 'fodmap', targetId: 'fodmap-notes', label: '低FODMAP の一覧を見る' },
+    ],
+  },
+  {
+    id: 'term-olive-oil',
+    title: 'オリーブオイルをひと口',
+    reading: 'おりーぶおいるをひとくち',
+    aliases: [],
+    description:
+      '合わない組み合わせを食べてしまった時に、出典が勧めている一手です。効き目が確かめられている手当てではありません。胆のうの病気や脂質の制限がある人は、先に相談してください。',
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'combine', targetId: 'combine-olive', label: '読む' }],
+  },
+  {
+    id: 'term-meal-gap',
+    title: '食事の間隔',
+    reading: 'しょくじのかんかく',
+    aliases: [{ name: '4時間空ける', reading: 'よじかんあける' }],
+    description:
+      '出典は「食事と食事の間を最低でも4時間」と勧めています。この数字は出典のもので、このアプリが確かめたものではありません。記録した時刻から間隔を並べますが、守れた回数は数えません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'combine', targetId: 'combine-gap', label: '自分の間隔を見る' },
+      { type: 'question', view: 'home', targetId: 'rec-meal', label: '食べた時刻を記録する' },
+    ],
+  },
+  {
+    id: 'term-light-morning',
+    title: '朝を軽くする',
+    reading: 'あさをかるくする',
+    aliases: [],
+    description:
+      '出典は「朝は速いものだけにすると腸を休ませやすい」と勧めています。ただし朝食を軽くする・抜くことが向かない人もいます（血糖に関わる持病・妊娠中・成長期・摂食障害の経験など）。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'combine', targetId: 'combine-gap', label: '読む' },
+      { type: 'system', view: 'combine', targetId: 'combine-precheck', label: 'はじめる前の確認' },
+    ],
+  },
+  {
+    id: 'term-stress',
+    title: 'ストレスの記録',
+    reading: 'すとれすのきろく',
+    aliases: [],
+    description:
+      '出典が挙げる「消化管が働きにくくなる3つの原因」のひとつです。4つの段で記録できます。お腹の調子との間にどちらが原因かは、並べただけでは分かりません。',
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'question', view: 'home', targetId: 'rec-life', label: 'きょうの記録へ' },
+      { type: 'page', view: 'look', targetId: 'look-life', label: 'ふりかえりで見る' },
+    ],
+  },
+  {
+    id: 'term-exercise',
+    title: '体を動かした記録',
+    reading: 'からだをうごかしたきろく',
+    aliases: [{ name: '運動の記録', reading: 'うんどうのきろく' }],
+    description:
+      '出典は「運動が腸のマッサージになる」と紹介しています。時間や歩数は数えません——「何分やれば効く」という基準が手元に無いからです。残すのは自分の感じ方の段だけです。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'question', view: 'home', targetId: 'rec-life', label: 'きょうの記録へ' },
+      { type: 'page', view: 'look', targetId: 'look-life', label: 'ふりかえりで見る' },
+    ],
+  },
+  {
+    id: 'term-partial-ok',
+    title: 'できる範囲でよい',
+    reading: 'できるはんいでよい',
+    aliases: [],
+    description:
+      '出典自身が「100%守ることはできないので、できる範囲で試してほしい」と書いています。このアプリも守れた回数を数えません。調子のよい日は好きなものを食べて構いません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'combine', targetId: 'combine-check', label: '食べ合わせをひらく' }],
+  },
 ];
 
 /** 目次に出す画面（飛び先の入口）。**画面を足したらここにも足す** */
@@ -345,5 +476,14 @@ export const SCREENS = [
     description: '保存されているもの・書き出し・取り込み・見た目・すべて消す をまとめた画面です。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'settings', targetId: 'set-storage', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-combine',
+    title: '食べ合わせ',
+    reading: 'たべあわせがめん',
+    aliases: [],
+    description: '消化の速い・遅いで組み合わせを見る画面です。低FODMAP と反対になる所も並べます。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'combine', targetId: 'combine-check', label: 'ひらく' }],
   },
 ];

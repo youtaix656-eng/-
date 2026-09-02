@@ -23,6 +23,14 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('combine')}>
+            <strong>食べ合わせ（アダムスキー式）</strong>
+            <span className="muted small">
+              消化の速いものと遅いものを一緒に食べない、という考え方。低FODMAP と反対になる所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('fodmap')}>
             <strong>低FODMAP の食材</strong>
             <span className="muted small">
