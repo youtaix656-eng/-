@@ -243,6 +243,12 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 | `shikaku-lab/` | `/shikaku-lab` | 資格ラボ（過去問→AI変換。資格試験ごとの対策法・勉強法・認知特性から学習計画書を作り、その計画書から「自分専用の対策アプリ」の設計書まで出す。上部にポモドーロタイマー常設。Vite + React JSX・端末内保存のみ）。詳細は `shikaku-lab/README.md` |
 | `maai/` | `/maai` | 間合い（まあい。恋愛の心理学を「近づき方」と「気づき方」の両方から。自分の側でできること30件＋人を思いどおりにする型31件＋同意8件。Vite + React JSX・端末内保存のみ）。詳細は `maai/README.md` |
 
+`chou/`（腸。お腹の悩み・腸活。IBS 中心）は**2026-09-02 時点で企画だけでコードは無い**。
+公開パス `/chou` は未実装なので**同梱アプリ表にはまだ載せない**（載せると 404 のURLを出すことになる）。
+企画・MVP・画面案は `chou/README.md` と `chou/docs/`（`MVP.md`／`SCREENS.md`）が単一の正。
+作り始める前に**ユーザーへ確認する3件**（トイレマップ＝位置情報／匿名掲示板＝サーバーとモデレーション／
+通知＝サーバーを持たないので約束できない）が `chou/README.md` の末尾にある。**勝手に足さない。**
+
 腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
 医療内容の追加時は `sourceIds` で出典必須、`src/lib/storage.js` はネットワークに触れない、
 同意文を変えたら `CONSENT_VERSION` を上げる。テストは `node --test` の再帰探索でルートの
