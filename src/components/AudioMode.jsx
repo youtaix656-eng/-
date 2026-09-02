@@ -7,7 +7,7 @@ import { VOICE_PRESETS, resolveVoiceURI, presetById } from '../data/voices.js';
 import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
-import { COMPARISONS, NUMBER_FACTS } from '../data/mindmapData.js';
+import { useMindmapData } from '../lib/mindmapDataLoader.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { reviewPoolFor, buildWeaknessSummary, weaknessSummaryToText, recommendNewPct } from '../lib/reviewPool.js';
 import { studyStreak } from '../lib/stats.js';
@@ -236,9 +236,12 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
 
   // 今のセッションで △・✕ と自己採点した問題（弱点分析の材料）
   const [sessionWrong, setSessionWrong] = useState([]);
+  // まぎらわしい対比・数値まとめ（mindmapData.js）は連結モード2/3や弱点分析（3問以上）でしか
+  // 使わないため、そのタイミングで遅延読み込みする（起動時バンドルから約14万字ぶんを外すため）。
+  const mindmapData = useMindmapData(mode === 2 || mode === 3 || sessionWrong.length >= 3);
   const weaknessSummary = useMemo(
-    () => buildWeaknessSummary(sessionWrong, links, COMPARISONS),
-    [sessionWrong, links]
+    () => buildWeaknessSummary(sessionWrong, links, mindmapData ? mindmapData.COMPARISONS : []),
+    [sessionWrong, links, mindmapData]
   );
 
   // 読み方の手動補正辞書（TTSの誤読を直す）
@@ -364,8 +367,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       const fallback = () => seqQ(pool).map((q) => ({ kind: 'question', q }));
 
       if (mode === 1) return poolKw.length ? readCluster(chainOrder(byCount[0], relatedMap, poolKw)) : fallback();
-      if (mode === 2) return relevant(COMPARISONS).map((c) => ({ kind: 'compare', comp: c }));
-      if (mode === 3) return relevant(NUMBER_FACTS).map((n) => ({ kind: 'number', num: n }));
+      if (mode === 2) return mindmapData ? relevant(mindmapData.COMPARISONS).map((c) => ({ kind: 'compare', comp: c })) : [];
+      if (mode === 3) return mindmapData ? relevant(mindmapData.NUMBER_FACTS).map((n) => ({ kind: 'number', num: n })) : [];
       if (mode === 4) return seqQ(pool).map((q) => ({ kind: 'cloze', q }));
       if (mode === 5) return weakSort(pool).map((q) => ({ kind: 'question', q }));
       if (mode === 6) return seqQ(pool).map((q) => ({ kind: 'choices', q }));
@@ -422,7 +425,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);

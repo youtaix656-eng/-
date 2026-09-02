@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { fileToDataUrl, isImageFile } from '../lib/image.js';
 import { makeImageEntry, addImageEntry, removeImageEntry, sortByPage } from '../lib/keizetsuPageImages.js';
 import { textbookSectionFor } from '../data/keizetsuTextbookMap.js';
+import { formatBytes } from '../lib/storageHealth.js';
 import * as storage from '../lib/storage.js';
 import PhotoSource from './PhotoSource.jsx';
 
@@ -11,7 +12,7 @@ import PhotoSource from './PhotoSource.jsx';
 // 問題になるため、この画面で追加した写真は「この端末のIndexedDBにのみ」保存し、
 // バックアップ・QR・クラウド自動同期にも含めない（storage.js参照）。他の端末や
 // 他の人には一切共有されない、あなただけの写真帳。
-export default function KeizetsuPageImages({ onToast, onNavigate }) {
+export default function KeizetsuPageImages({ onToast, onNavigate, onSendToOcr }) {
   const [entries, setEntries] = useState([]);
   const [pageNumber, setPageNumber] = useState('');
   const [label, setLabel] = useState('');
@@ -65,6 +66,9 @@ export default function KeizetsuPageImages({ onToast, onNavigate }) {
   };
 
   const sorted = useMemo(() => sortByPage(entries), [entries]);
+  // 端末内保存容量の目安（写真は1280px・JPEG q0.72に縮小済みだが、枚数が増えるほど積み上がるため
+  // 追加前に現在地が分かるよう表示する。lib/image.jsのfileToDataUrlが縮小・再エンコードを担う）。
+  const totalBytes = useMemo(() => entries.reduce((sum, e) => sum + (e.dataUrl?.length || 0), 0), [entries]);
 
   return (
     <div className="view">
@@ -107,7 +111,9 @@ export default function KeizetsuPageImages({ onToast, onNavigate }) {
 
       <PhotoSource open={sheetOpen} onClose={() => setSheetOpen(false)} onPick={addPhoto} />
 
-      <div className="section-label">保存済み（{sorted.length}枚）</div>
+      <div className="section-label">
+        保存済み（{sorted.length}枚・約{formatBytes(totalBytes)}）
+      </div>
       {sorted.length === 0 ? (
         <div className="empty">
           <div className="ico">📷</div>
@@ -126,6 +132,16 @@ export default function KeizetsuPageImages({ onToast, onNavigate }) {
                   {e.label ? `・${e.label}` : ''}
                   {section ? `（${section.title}）` : ''}
                 </div>
+                {onSendToOcr && (
+                  <button
+                    type="button"
+                    className="btn sm ghost block"
+                    style={{ marginTop: 4 }}
+                    onClick={() => onSendToOcr(e.dataUrl)}
+                  >
+                    🔤 OCRへ送る
+                  </button>
+                )}
               </div>
             );
           })}

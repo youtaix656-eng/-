@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { overallStats, studyStreak } from '../lib/stats.js';
+import { overallStats, studyStreak, subjectBalanceWarning, formatPercent } from '../lib/stats.js';
 import { estimateLevel } from '../lib/learnerLevel.js';
 import { todayFocusSubjects } from '../lib/todayFocus.js';
+import { isNowBestTime } from '../lib/timeOfDay.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress, clearQuizProgress, loadSyncMeta } from '../lib/storage.js';
@@ -82,7 +83,7 @@ function timeAgoJa(at) {
 const SYNC_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
 
 export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz, onQuickReview, onGoAudioReview }) {
-  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus, reviewZeroLog } = store;
+  const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus, reviewZeroLog, examResults } = store;
 
   // 直近の同期試行が失敗続きでも、実際に最後に成功したのがいつかを別途持っておく
   // （cloudSyncStatusは直近1回の結果しか持たないため）。syncMetaは同期が成功した時だけ
@@ -92,12 +93,19 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     if (!settings.googleDriveAutoSync) return;
     loadSyncMeta().then((m) => setLastSuccessfulSyncAt(m?.updatedAt || null));
   }, [settings.googleDriveAutoSync, cloudSyncStatus]);
-  const overall = overallStats(history);
+  const overall = useMemo(() => overallStats(history), [history]);
   const level = estimateLevel({ srs, history });
   const focusSubjects = useMemo(() => {
     const scope = scopeCoverage(questions, history);
-    return todayFocusSubjects(scope, daysUntil(settings.examDate), { questions });
-  }, [questions, history, settings.examDate]);
+    // 模試の伸びしろ分析（examScoreContribution.js）も加味：直近の本番同形式の模試で
+    // 出題数の重み込みで失点が大きい科目は、正答率だけでは見えない優先度を持つため。
+    return todayFocusSubjects(scope, daysUntil(settings.examDate), { questions, examResults });
+  }, [questions, history, settings.examDate, examResults]);
+  // 時間帯別パフォーマンス分析（Analytics.jsx）と連携：今が自分の正答率が高い時間帯なら知らせる。
+  const bestTimeNow = useMemo(() => isNowBestTime(history), [history]);
+  // 科目バランス警告（Analytics.jsx）と連携：特定科目だけ極端に低いままなら、
+  // 分析画面を開かなくてもホームで気づけるようにする。
+  const balanceWarning = useMemo(() => subjectBalanceWarning(history, questions), [history, questions]);
   const reviewCount = reviewQuestions.length;
   const dueCount = (dueReviewQuestions || []).length;
   const unreadCount = (unread || []).length;
@@ -186,7 +194,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   const forgettingPick = useMemo(() => dailyForgettingPick(questions, srs), [questions, srs]);
 
   const sessionActive = session && session.pos < session.target;
-  const { streak, longestStreak, studiedToday } = studyStreak(history);
+  const { streak, longestStreak, studiedToday } = useMemo(() => studyStreak(history), [history]);
   const examLeft = daysUntil(settings.examDate);
 
   // 一問一答の途中経過（1問ごと自動保存）を「続きから」に出す
@@ -329,6 +337,17 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
         </div>
       )}
 
+      {/* 時間帯別パフォーマンス分析（Analytics.jsx）と連携：今が得意な時間帯なら知らせる */}
+      {bestTimeNow && (
+        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>🕐 今は集中しやすい時間帯です</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            あなたは{bestTimeNow.label}の正答率が高い傾向です（{Math.round(bestTimeNow.accuracy * 100)}%）。
+            今のうちに1問でも進めておくと効率的かもしれません。
+          </p>
+        </div>
+      )}
+
       {/* 今日集中すべき科目：残り日数×手薄度×直近正答率から自動レコメンド。次のタスクが決まっている日は出さない */}
       {!nextTask && focusSubjects.length > 0 && (
         <div className="card">
@@ -345,6 +364,28 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 科目バランス警告（Analytics.jsx）と連携：特定科目だけ極端に低いままなら分析を開かなくても気づける */}
+      {balanceWarning.hasWarning && (
+        <div className="card" style={{ borderLeft: '4px solid var(--wrong)' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>⚖️ 科目バランスの偏りに注意</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            他の科目は平均{formatPercent(balanceWarning.avgAccuracy)}前後で解けているのに、
+            次の科目だけ極端に低いままです。
+          </p>
+          <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+            {balanceWarning.weakSubjects.map((s) => (
+              <button key={s.subject} className="chip" onClick={() => onStartSubjectQuiz?.(s.subject)}>
+                {s.subject}
+                <span className="inline-note" style={{ marginLeft: 4 }}>（{formatPercent(s.accuracy)}）</span>
+              </button>
+            ))}
+          </div>
+          <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onNavigate && onNavigate('analytics')}>
+            📊 分析で詳しく見る
+          </button>
         </div>
       )}
 

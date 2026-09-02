@@ -14,8 +14,10 @@ import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
 import ScrollArrows from './components/ScrollArrows.jsx';
-import AuthGate from './components/AuthGate.jsx';
-import Pomodoro from './components/Pomodoro.jsx';
+// AuthGate（ロック未設定なら使わない）・Pomodoro（オプトイン機能）は、必要な人にだけ
+// 起動時バンドルの負担が乗るようlazy化（他の30以上の画面と同じ扱い）。
+const AuthGate = lazy(() => import('./components/AuthGate.jsx'));
+const Pomodoro = lazy(() => import('./components/Pomodoro.jsx'));
 import HistoryPanel from './components/HistoryPanel.jsx';
 // それ以外の画面は初回訪問時だけ読み込む（コード分割）。1.6MBの単一バンドルを分割し、
 // ホーム/カレンダー/一問一答/復習/音声/模試だけで開いた時の初期表示を軽くする。
@@ -152,6 +154,9 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
+  const [focusFlashcardKeyword, setFocusFlashcardKeyword] = useState(null);
+  const [ocrInitialImage, setOcrInitialImage] = useState(null);
+  const [focusGraphConcept, setFocusGraphConcept] = useState(null);
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
@@ -375,6 +380,16 @@ export default function App() {
     setFocusKeyword(kw);
     setView('connect');
   };
+  // 語呂合わせノート→フラッシュカードへの連携（openKeywordと同じ「一度だけ消費」の型）。
+  const openFlashcardKeyword = (kw) => {
+    setFocusFlashcardKeyword(kw);
+    setView('flashcards');
+  };
+  // 連結学習→知識グラフへの連携（同じく「一度だけ消費」の型）。
+  const openGraphConcept = (concept) => {
+    setFocusGraphConcept(concept);
+    setView('kgraph');
+  };
   const jumpToRoadmapLevel = (levelId) => {
     setFocusRoadmapLevel(levelId);
     setView('roadmap');
@@ -390,6 +405,11 @@ export default function App() {
   const sendOcrToImport = (csv) => {
     setImportText(csv);
     setView('settings');
+  };
+  // 教科書ページ写真（KeizetsuPageImages.jsx）→OCR画面への連携。
+  const sendPhotoToOcr = (dataUrl) => {
+    setOcrInitialImage(dataUrl);
+    setView('ocr');
   };
 
   // 履歴に残す情報（タイトル・ジャンル）を今の文脈から組み立てる
@@ -445,17 +465,23 @@ export default function App() {
   // ---- ログイン（端末内ロック）----
   // 鍵が設定済みで未解錠ならログイン画面。未設定なら初回のみ設定画面（スキップ可）。
   if (store.auth && !unlocked) {
-    return <AuthGate mode="login" auth={store.auth} onSetAuth={store.setAuth} onUnlock={unlock} />;
+    return (
+      <Suspense fallback={<ViewLoading />}>
+        <AuthGate mode="login" auth={store.auth} onSetAuth={store.setAuth} onUnlock={unlock} />
+      </Suspense>
+    );
   }
   if (!store.auth && !store.settings.authSkipped) {
     return (
-      <AuthGate
-        mode="setup"
-        auth={null}
-        onSetAuth={store.setAuth}
-        onUnlock={unlock}
-        onSkip={() => store.updateSettings({ authSkipped: true })}
-      />
+      <Suspense fallback={<ViewLoading />}>
+        <AuthGate
+          mode="setup"
+          auth={null}
+          onSetAuth={store.setAuth}
+          onUnlock={unlock}
+          onSkip={() => store.updateSettings({ authSkipped: true })}
+        />
+      </Suspense>
     );
   }
 
@@ -570,11 +596,17 @@ export default function App() {
       case 'migrationguide':
         return <MigrationGuide store={store} onToast={showToast} />;
       case 'kgraph':
-        return <KnowledgeGraph store={store} onOpenKeyword={openKeyword} onStudyConcepts={(concepts) => {
-          const set = new Set(concepts);
-          const qs = store.questions.filter((q) => (q.tags || []).some((t) => set.has(t)));
-          if (qs.length) startCustomQuiz(qs);
-        }} />;
+        return <KnowledgeGraph
+          store={store}
+          onOpenKeyword={openKeyword}
+          onStudyConcepts={(concepts) => {
+            const set = new Set(concepts);
+            const qs = store.questions.filter((q) => (q.tags || []).some((t) => set.has(t)));
+            if (qs.length) startCustomQuiz(qs);
+          }}
+          focusConcept={focusGraphConcept}
+          onConsumeFocusConcept={() => setFocusGraphConcept(null)}
+        />;
       case 'roadmap':
         return (
           <Roadmap
@@ -587,7 +619,14 @@ export default function App() {
       case 'memos':
         return <Memos store={store} />;
       case 'ocr':
-        return <Ocr onToast={showToast} onSendToImport={sendOcrToImport} />;
+        return (
+          <Ocr
+            onToast={showToast}
+            onSendToImport={sendOcrToImport}
+            initialImage={ocrInitialImage}
+            onConsumeInitialImage={() => setOcrInitialImage(null)}
+          />
+        )
       case 'tools':
         return <QuestionTools store={store} onToast={showToast} />;
       case 'scope':
@@ -628,7 +667,14 @@ export default function App() {
       case 'mindmap':
         return <MindMap store={store} onOpenKeyword={openKeyword} />;
       case 'flashcards':
-        return <Flashcards store={store} onNavigate={setView} />;
+        return (
+          <Flashcards
+            store={store}
+            onNavigate={setView}
+            focusKeyword={focusFlashcardKeyword}
+            onConsumeKeyword={() => setFocusFlashcardKeyword(null)}
+          />
+        );
       case 'acupointtap':
         return <AcupointTap onNavigate={setView} />;
       case 'keiketsureverse':
@@ -640,9 +686,11 @@ export default function App() {
       case 'keizetsutextbook':
         return <KeizetsuTextbook store={store} onNavigate={setView} />;
       case 'keizetsupageimages':
-        return <KeizetsuPageImages onToast={showToast} onNavigate={setView} />;
+        return <KeizetsuPageImages onToast={showToast} onNavigate={setView} onSendToOcr={sendPhotoToOcr} />;
       case 'mnemonics':
-        return <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} />;
+        return (
+          <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} onOpenFlashcard={openFlashcardKeyword} />
+        );
       case 'mnemonicquiz':
         return <MnemonicQuiz store={store} onNavigate={setView} />;
       case 'features':
@@ -669,6 +717,7 @@ export default function App() {
             onToast={showToast}
             focusKeyword={focusKeyword}
             onConsumeKeyword={() => setFocusKeyword(null)}
+            onOpenGraph={openGraphConcept}
           />
         );
       case 'settings':
@@ -693,7 +742,9 @@ export default function App() {
 
   return (
     <div className={`app${pomoOn ? ' has-pomo' : ''}`}>
-      <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
+      <Suspense fallback={null}>
+        <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
+      </Suspense>
       <header className="app-header">
         <h1>
           {view === 'home' ? (

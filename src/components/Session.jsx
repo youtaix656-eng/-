@@ -7,7 +7,8 @@ import { getSubjects } from '../lib/stats.js';
 import { subjectMatches, SUBJECT_TAG_NAMES, scopeCoverage } from '../data/examScope.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { effectiveTags } from '../lib/query.js';
-import { COMPARISONS } from '../data/mindmapData.js';
+import { useMindmapData } from '../lib/mindmapDataLoader.js';
+import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/reviewPool.js';
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
@@ -44,7 +45,10 @@ function poolFor(questions, subject) {
 // 出題順の組み立ては src/lib/sessionOrder.js に集約（Quiz.jsxと共用）。
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio, onGoAnalytics }) {
-  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded, setNextDue } = store;
+  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded, setNextDue, examResults } = store;
+  // 完了画面の弱点分析（まぎらわしい対比）用データ。完了画面に到達した時だけ遅延読み込みする
+  // （起動時バンドルから約14万字ぶんを外すため。mindmapDataLoader.jsが単一の正）。
+  const mindmapData = useMindmapData(!!(session && session.pos >= session.target));
   // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
   const subjects = useMemo(() => {
     const present = getSubjects(questions);
@@ -157,9 +161,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   //   「たまには苦手分野の〇〇にも挑戦してみましょう」と声掛けする。
   const focusSubject = useMemo(() => {
     const scope = scopeCoverage(questions, history);
-    const picks = todayFocusSubjects(scope, daysUntil(settings.examDate), { questions, limit: 1 });
+    const picks = todayFocusSubjects(scope, daysUntil(settings.examDate), { questions, limit: 1, examResults });
     return picks[0] || null;
-  }, [questions, history, settings.examDate]);
+  }, [questions, history, settings.examDate, examResults]);
 
   // 現在の条件で「まだ解いていない新規問題」が何問残っているか
   //   新規＝未着手（srs.seen が 0 または未登録）。buildMixedOrder の newPool と同じ定義。
@@ -578,14 +582,12 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     const wrongQs = wrongEntries.map((e) => e.q);
     const sankakuCount = wrongEntries.filter((e) => e.selfKind === 'sankaku').length;
     const batsuCount = wrongEntries.length - sankakuCount;
-    const byGenre = {};
+    const genrePairs = [];
     for (const [qid, v] of latest) {
       const q = byId[qid]; if (!q) continue;
-      const g = q.genre || q.subject || 'その他';
-      if (!byGenre[g]) byGenre[g] = { total: 0, correct: 0 };
-      byGenre[g].total += 1; if (v.correct) byGenre[g].correct += 1;
+      genrePairs.push({ genre: q.genre || q.subject, correct: v.correct });
     }
-    const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
+    const genreRows = buildGenreBreakdown(genrePairs);
     const GENRE_ROWS_CAP = 8;
     const visibleGenreRows = showAllGenres ? genreRows : genreRows.slice(0, GENRE_ROWS_CAP);
     return (
@@ -667,8 +669,8 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
         )}
 
         {/* 今回の弱点分析（誤答・△・✕をまとめて対象に、実際の頻度だけから作成） */}
-        {wrongQs.length > 0 && (() => {
-          const summary = buildWeaknessSummary(wrongQs, links, COMPARISONS);
+        {wrongQs.length > 0 && mindmapData && (() => {
+          const summary = buildWeaknessSummary(wrongQs, links, mindmapData.COMPARISONS);
           if (!summary) return null;
           return (
             <div className="card">

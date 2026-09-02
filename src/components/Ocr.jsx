@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PhotoSource from './PhotoSource.jsx';
 
 // 写真・PDF からの取り込み補助（実験的）
@@ -9,7 +9,7 @@ import PhotoSource from './PhotoSource.jsx';
 //          スキャンPDFは抽出できないため、その場合は写真OCRを使う。
 // 抽出テキストは編集でき、CSV に整形してインポート画面へ渡せる。
 // ※ この機能のみインターネット接続が必要。
-export default function Ocr({ onToast, onSendToImport }) {
+export default function Ocr({ onToast, onSendToImport, initialImage, onConsumeInitialImage }) {
   const pdfRef = useRef(null);
   const [imgSheet, setImgSheet] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -18,18 +18,22 @@ export default function Ocr({ onToast, onSendToImport }) {
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
 
-  const runOcr = async (file) => {
+  // fileOrDataUrl: File（写真選択・PhotoSource経由）または dataURL文字列
+  //   （教科書ページ写真（KeizetsuPageImages.jsx）から送られてきた場合）。
+  //   tesseract.jsはどちらの形式もそのまま受け付けるが、プレビュー表示は
+  //   File専用のURL.createObjectURLをdataURL文字列には使えないため出し分ける。
+  const runOcr = async (fileOrDataUrl) => {
     setError('');
     setBusy(true);
     setProgress(0);
-    setPreview(URL.createObjectURL(file));
+    setPreview(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : URL.createObjectURL(fileOrDataUrl));
     try {
       // CDN から tesseract.js を動的読み込み（この機能はオフライン非対応）
       const mod = await import(
         /* @vite-ignore */ 'https://esm.sh/tesseract.js@5'
       );
       const Tesseract = mod.default || mod;
-      const { data } = await Tesseract.recognize(file, 'jpn', {
+      const { data } = await Tesseract.recognize(fileOrDataUrl, 'jpn', {
         logger: (m) => {
           if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 100));
         },
@@ -45,6 +49,14 @@ export default function Ocr({ onToast, onSendToImport }) {
       setBusy(false);
     }
   };
+
+  // 教科書ページ写真（KeizetsuPageImages.jsx）の「🔤 OCRへ送る」からの連携：
+  //   渡された画像で自動的にOCRを開始する（一度だけ消費）。
+  useEffect(() => {
+    if (!initialImage) return;
+    runOcr(initialImage);
+    onConsumeInitialImage?.();
+  }, [initialImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runPdf = async (file) => {
     setError('');

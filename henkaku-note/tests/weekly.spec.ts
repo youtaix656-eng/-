@@ -5,14 +5,12 @@ import {
   isWeekReviewable, MANAGER_ALLOCATION_OPTIONS, MANAGER_PLAN_OPTIONS, DOER_FEEL_OPTIONS,
 } from '../src/lib/weekly.js';
 import { buildDefaultHabits } from '../src/lib/habits.js';
-import type { DayRecord, Settings, WeeklyReview } from '../src/types/index.js';
+import { testSettings } from './fixtures.js';
+import type { DayRecord, WeeklyReview } from '../src/types/index.js';
 
 const AT = new Date(2026, 7, 1).getTime();
 const habits = buildDefaultHabits(AT);
-const settings: Settings = {
-  shiftEndDefault: '00:00', bedWithinMinutes: 90, offDayBedtime: '23:00',
-  audioLinkEnabled: false, audioLinkUrl: '', showStreakProminently: false, meditationBell: true, meditationDefaultMinutes: 10,
-};
+const settings = testSettings();
 
 function day(date: string, over: Partial<DayRecord> = {}): DayRecord {
   return { date, checked: [], declaration: '', note: '', shift: null, shiftEndsAt: null, sleep: null, updatedAt: 0, ...over };

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as storage from '../lib/storage.js';
 import { makePage, addPage, removePage, searchPages, snippetFor, buildSearchPrompt } from '../lib/keiketsuLibrary.js';
+import { formatBytes } from '../lib/storageHealth.js';
 
 // 経絡経穴の教科書材料の置き場（検索可能な原文ライブラリ）。
 //
@@ -58,6 +59,8 @@ export default function KeiketsuLibrary({ onToast, onNavigate }) {
   };
 
   const results = useMemo(() => searchPages(pages, query), [pages, query]);
+  // 端末内保存容量の目安（貼り付けた原文が積み上がるほど増えるため、追加前に現在地が分かるよう表示）。
+  const totalBytes = useMemo(() => pages.reduce((sum, p) => sum + (p.text?.length || 0) + (p.title?.length || 0), 0), [pages]);
   const sorted = useMemo(() => [...results].sort((a, b) => b.addedAt - a.addedAt), [results]);
 
   return (
@@ -119,6 +122,11 @@ export default function KeiketsuLibrary({ onToast, onNavigate }) {
         質問すると、数字・専門用語を勝手に変えず、答えの根拠を照合表つきで返すよう指示済みです。
       </p>
 
+      {pages.length > 0 && (
+        <p className="inline-note" style={{ marginTop: 4 }}>
+          保存済み {pages.length}件・約{formatBytes(totalBytes)}
+        </p>
+      )}
       <div className="field" style={{ marginTop: 16 }}>
         <label htmlFor="keiketsu-lib-search">検索</label>
         <input

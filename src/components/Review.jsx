@@ -8,7 +8,8 @@ import { weakTagClusters, tagTrend } from '../lib/weakClusters.js';
 import { relatedQuestions } from '../lib/related.js';
 import { filterReview, sortReview, riskOf } from '../lib/reviewOrder.js';
 import { studyStreak } from '../lib/stats.js';
-import { comparisonsForKeyword, COMPARISONS } from '../data/mindmapData.js';
+import { useMindmapData } from '../lib/mindmapDataLoader.js';
+import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import {
   loadMissTypes, recordMissType, missTypeLabel, MISS_TYPE_DELAY_MS, MISS_TYPES,
   latestMissType, missTypeTrend, missTypeAnomaly,
@@ -123,6 +124,9 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quick
   const [started, setStarted] = useState(false);
   const [order, setOrder] = useState([]);
   const [idx, setIdx] = useState(0);
+  // まぎらわしい対比（mindmapData.js）は出題中・完了画面でしか使わないため、開始してから
+  // 遅延読み込みする（起動時バンドルから約14万字ぶんを外すため。mindmapDataLoader.jsが単一の正）。
+  const mindmapData = useMindmapData(started);
   const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0 });
   const [resume, setResume] = useState(null); // 前回の途中経過（続きから）
   const missRef = useRef([]); // この回で ○ にならなかった（不正解・△・✕）問題（{ q, selfKind }）
@@ -904,17 +908,10 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quick
       if (nx) { chainPool.push(nx.question); excl.add(nx.question.id); }
       if (chainPool.length >= 10) break;
     }
-    // ジャンル別正答率（苦手順）：このセッションで出た問題（order）を対象に
-    const byGenre = {};
+    // ジャンル別正答率（苦手順）：このセッションで出た問題（order）を対象に（genreBreakdown.jsが単一の正）
     const missIdSet = new Set(misses.map((q) => q.id));
-    for (const q of order) {
-      const g = q.genre || q.subject || 'その他';
-      if (!byGenre[g]) byGenre[g] = { total: 0, correct: 0 };
-      byGenre[g].total += 1;
-      if (!missIdSet.has(q.id)) byGenre[g].correct += 1;
-    }
-    const genreRows = Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
-    const weakness = misses.length > 0 ? buildWeaknessSummary(misses, links, COMPARISONS) : null;
+    const genreRows = buildGenreBreakdown(order.map((q) => ({ genre: q.genre || q.subject, correct: !missIdSet.has(q.id) })));
+    const weakness = misses.length > 0 && mindmapData ? buildWeaknessSummary(misses, links, mindmapData.COMPARISONS) : null;
     // #26：このセッションで復習（期限が来ているもの）を完全にゼロへ戻せたか
     const justReachedZero = dueReviewQuestions.length === 0 && reviewQuestions.length > 0;
     return (
@@ -1062,8 +1059,10 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quick
   const curTags = effectiveTags(current, links);
   const curComparisons = [];
   const seenCmp = new Set();
-  for (const t of curTags) {
-    for (const c of comparisonsForKeyword(t)) if (!seenCmp.has(c.id)) { seenCmp.add(c.id); curComparisons.push(c); }
+  if (mindmapData) {
+    for (const t of curTags) {
+      for (const c of mindmapData.comparisonsForKeyword(t)) if (!seenCmp.has(c.id)) { seenCmp.add(c.id); curComparisons.push(c); }
+    }
   }
   // なぜ今この問題か（#10）
   const curRisk = Math.round(riskOf(current, srs) * 100);

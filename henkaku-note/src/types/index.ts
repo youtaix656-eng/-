@@ -41,6 +41,85 @@ export interface MeditationSession {
   recordedAt: number;
 }
 
+/** 人との接点の濃さ。氏名は持たない（誰かを記録する機能にしない） */
+export type SocialContact = 'deep' | 'light' | 'none';
+
+/**
+ * 『最高の体調』由来の1日の記録。
+ * どれも「やったかどうか」の記録で、体内の炎症そのものを測るものではない。
+ */
+export interface ConditionRecord {
+  /** その日に食べた発酵食品の種類（数より種類） */
+  ferments: string[];
+  /** 食物繊維を取れた食品 */
+  fibers: string[];
+  /** 外で自然に触れた分数 */
+  natureMinutes: number;
+  /** 室内に取り入れた自然（観葉植物・写真・音） */
+  indoorNature: string[];
+  social: SocialContact | null;
+  anxietyFelt: boolean | null;
+  /** 不安への対処（宇宙・大自然・アート・瞑想） */
+  anxietyActions: string[];
+  /** 睡眠まわりの習慣（ベッドは寝る場所・日中の太陽光・夜は暗く） */
+  sleepHygiene: string[];
+}
+
+/** 本書の「良質な睡眠の最低条件」を測るための記録 */
+export interface SleepQualityRecord {
+  /** 眠りに落ちるまでの時間（分） */
+  fallAsleepMinutes: number | null;
+  /** 夜中に目が覚めた回数 */
+  awakenings: number | null;
+  /** 目が覚めたあと20分以内に再び眠れたか */
+  backToSleepWithin20: boolean | null;
+  /** 寝床にいた時間（分） */
+  inBedMinutes: number | null;
+  /** 実際に眠っていた時間（分） */
+  sleptMinutes: number | null;
+}
+
+/** その日の食事の記録（時間と量だけ。何をどれだけ食べたかの栄養計算はしない） */
+export interface MealRecord {
+  /** その日の最初の食事 'HH:MM' */
+  firstMealAt: string | null;
+  /** その日の最後の食事 'HH:MM' */
+  lastMealAt: string | null;
+  /** 最後の食事が日付をまたいだか（夜勤明けの深夜の食事） */
+  lastMealCrossesMidnight: boolean;
+  /** 満腹度。腹八分目で止められたか */
+  fullness: 'eight' | 'full' | 'over' | null;
+  /** 止めどきのサイン（ふらつき等）。責めるためではなく、休む判断のために持つ */
+  signs: string[];
+}
+
+/** モンクモードの記録（既存と重なっていない項目だけ） */
+export interface MonkRecord {
+  waterMl: number;
+  electrolyte: boolean;
+  steps: number;
+  workoutMinutes: number;
+  /** 運動した時刻 'HH:MM'（運動後の集中しやすい時間帯を出すのに使う） */
+  workoutAt: string | null;
+  readingMinutes: number;
+  /** 決めたSNSのルールを守れたか */
+  snsRuleKept: boolean | null;
+  /** 一人で集中した時間（分）。※「人間関係を切る」ではなく時間の確保として持つ */
+  soloMinutes: number;
+}
+
+/** 起きて最初のルーティンの記録 */
+export interface RoutineRecord {
+  /** 終えたステップのid */
+  doneSteps: string[];
+  /** ルーティンを始めた時刻 'HH:MM' */
+  startedAt: string | null;
+  /** 起きた時刻 'HH:MM'（「朝◯時」ではなく起きてから何分で始めたかを見るため） */
+  wakeAt: string | null;
+  /** 起きてすぐ水を1杯飲んだか */
+  waterOnWaking: boolean;
+}
+
 export interface DayRecord {
   /** 'YYYY-MM-DD' */
   date: string;
@@ -57,6 +136,12 @@ export interface DayRecord {
   sleep: SleepEntry | null;
   /** その日の瞑想（1日に複数回できる）。古いデータには無いので、読む側は空配列を既定にする */
   meditations?: MeditationSession[];
+  /** 『最高の体調』の記録。古いデータには無いので、読む側は既定値を用意する */
+  condition?: ConditionRecord;
+  sleepQuality?: SleepQualityRecord;
+  meal?: MealRecord;
+  monk?: MonkRecord;
+  routine?: RoutineRecord;
   updatedAt: number;
 }
 
@@ -113,6 +198,42 @@ export interface Settings {
   meditationBell: boolean;
   /** タイマーの既定の長さ（分） */
   meditationDefaultMinutes: number;
+
+  // ── 食事の時間と量 ──
+  /**
+   * 前の食事から次の食事まで空ける目標（時間）。
+   * 出典は「◯時間以上」としているが、受け取った文字起こしでその数字が欠けていたため、
+   * 出典の値としては持たず、アプリの初期値として持つ（利用者が変えられる）。
+   */
+  fastingTargetHours: number;
+  /** 勤務日だけ短くする目標（0で「勤務日も同じ」） */
+  fastingWorkdayHours: number;
+  /** いま取り組んでいる段階（PLANS の id） */
+  fastingPlan: string;
+  /** その段階を始めた日 'YYYY-MM-DD' */
+  fastingPlanSince: string | null;
+  /** 始める前の確認で当てはまった項目 */
+  fastingPrechecks: string[];
+
+  // ── モンクモード ──
+  monkWaterMl: number;
+  monkSteps: number;
+  monkWorkoutPerWeek: number;
+  /** 選んでいるSNSの制限の仕方（SNS_RULES の id） */
+  monkSnsRule: string | null;
+  /** 塩・血圧まわりの事前確認で当てはまった項目 */
+  monkPrechecks: string[];
+
+  // ── 起きて最初のルーティン ──
+  routinePreset: 'full' | 'short' | 'custom';
+  /** custom の時の各ステップの分数 */
+  routineCustomMinutes: Record<string, number>;
+  /** 実行する順番（ステップのid）。空なら既定の並び */
+  routineOrder: string[];
+  /** アファメーション（数字と期限を入れた目標） */
+  affirmations: string[];
+  /** 起床の目標時刻。寝る前に「◯時間も眠れる」と言い換えるのに使う */
+  wakeTargetAt: string | null;
 }
 
 export interface AppState {
@@ -122,4 +243,10 @@ export interface AppState {
   weeks: Record<string, WeeklyReview>;
   cycles: Cycle[];
   settings: Settings;
+  /**
+   * 3のルール（今日／今週／今月に3つずつ）。
+   * キーは threeRules.ts の keyFor が作る（'2026-08-30' / 'w:2026-08-24' / 'm:2026-08'）。
+   * 日・週・月で同じ仕組みを使い、3か所に別の実装を持たない。
+   */
+  threeRules?: Record<string, string[]>;
 }

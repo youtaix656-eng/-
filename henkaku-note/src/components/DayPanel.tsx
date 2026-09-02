@@ -6,6 +6,14 @@ import { bedtimeTarget, guessCrossesMidnight, judgeBedtime } from '../lib/shift'
 import { suggestionsFor } from '../lib/audioLink';
 import { MEDITATION_HABIT_ID } from '../data/presets';
 import MeditationCard from './MeditationCard';
+import ConditionCard from './ConditionCard';
+import MealCard from './MealCard';
+import MonkModeCard from './MonkModeCard';
+import MorningRoutineCard from './MorningRoutineCard';
+import ThreeRules from './ThreeRules';
+import { getThree } from '../lib/threeRules';
+import { SLEEP_CRITERIA, durationVerdict, judgeSleepQuality, emptySleepQuality } from '../lib/sleepQuality';
+import { BEDTIME_MINDSET_NOTE, hoursUntilWake, sleepPhrase } from '../lib/morningRoutine';
 import type { AppState } from '../types';
 
 interface Props {
@@ -106,6 +114,111 @@ function BedtimeCard({ state, date }: { state: AppState; date: string }) {
           （原典の「夜11時就寝」は夜勤と両立しないため、終業時刻を基準に計算しています）
         </p>
       )}
+
+      <BedtimeMindset state={state} date={date} />
+
+      <SleepQualityBlock state={state} date={date} />
+    </div>
+  );
+}
+
+/**
+ * 寝る前の言い方（モーニングメソッドの「朝起きて最初に考えることは、寝る前に最後に考えたことと同じ」）。
+ * 「◯時間しか眠れない」ではなく「◯時間も眠れる」と言い換える。
+ * 就寝目標（shift.ts）と起床の目標時刻がそろっている時だけ出す。
+ */
+function BedtimeMindset({ state, date }: { state: AppState; date: string }) {
+  const target = bedtimeTarget(state.days[date], state.settings);
+  const hours = hoursUntilWake(target ? target.minutes : null, state.settings.wakeTargetAt);
+  if (hours === null) return null;
+  return (
+    <p className="note-line warm" style={{ margin: 0 }}>
+      {sleepPhrase(hours)}
+      <span className="muted small" style={{ display: 'block', marginTop: 4 }}>{BEDTIME_MINDSET_NOTE}</span>
+    </p>
+  );
+}
+
+/**
+ * 眠りの質（『最高の体調』の「良質な睡眠の最低条件」）。
+ * 就寝目標＝いつ寝たか、こちら＝どう眠れたか。層が違うのでロジックは分けたまま、画面は同じカードにまとめる。
+ * 記録していない項目は「分からない」のままにして、睡眠不足だと決めつけない。
+ */
+function SleepQualityBlock({ state, date }: { state: AppState; date: string }) {
+  const [open, setOpen] = useState(false);
+  const q = { ...emptySleepQuality(), ...(state.days[date]?.sleepQuality ?? {}) };
+  const result = judgeSleepQuality(q);
+  const duration = durationVerdict(q);
+  const num = (v: number | null) => (v === null ? '' : String(v));
+
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <hr className="divider" />
+      <button type="button" className="btn slim ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        {open ? '眠りの質を閉じる' : '眠りの質を記録する'}
+        {result.allMet !== null && (
+          <span className={`tag ${result.allMet ? 'dawn' : 'ember'}`} style={{ marginLeft: 8 }}>
+            {result.allMet ? '4条件すべて' : `${result.unmet.length}件 未達`}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <p className="small muted" style={{ margin: 0 }}>
+            本書の「良質な睡眠の最低条件」です。分かるものだけで構いません（空欄は判定しません）。
+          </p>
+          <label className="field">
+            <span className="field-label">眠りに落ちるまで（分）</span>
+            <input type="number" min={0} max={600} value={num(q.fallAsleepMinutes)}
+              onChange={(e) => actions.setSleepQuality(date, { fallAsleepMinutes: e.target.value === '' ? null : Number(e.target.value) })} />
+          </label>
+          <label className="field">
+            <span className="field-label">夜中に目が覚めた回数</span>
+            <input type="number" min={0} max={20} value={num(q.awakenings)}
+              onChange={(e) => actions.setSleepQuality(date, { awakenings: e.target.value === '' ? null : Number(e.target.value) })} />
+          </label>
+          {(q.awakenings ?? 0) > 0 && (
+            <div className="chips">
+              <button type="button" className="chip" aria-pressed={q.backToSleepWithin20 === true}
+                onClick={() => actions.setSleepQuality(date, { backToSleepWithin20: q.backToSleepWithin20 === true ? null : true })}>
+                20分以内に再び眠れた
+              </button>
+              <button type="button" className="chip" aria-pressed={q.backToSleepWithin20 === false}
+                onClick={() => actions.setSleepQuality(date, { backToSleepWithin20: q.backToSleepWithin20 === false ? null : false })}>
+                20分以上かかった
+              </button>
+            </div>
+          )}
+          <div className="row" style={{ flexWrap: 'nowrap', gap: 8 }}>
+            <label className="field" style={{ flex: 1 }}>
+              <span className="field-label">寝床にいた時間（分）</span>
+              <input type="number" min={0} max={1440} value={num(q.inBedMinutes)}
+                onChange={(e) => actions.setSleepQuality(date, { inBedMinutes: e.target.value === '' ? null : Number(e.target.value) })} />
+            </label>
+            <label className="field" style={{ flex: 1 }}>
+              <span className="field-label">眠っていた時間（分）</span>
+              <input type="number" min={0} max={1440} value={num(q.sleptMinutes)}
+                onChange={(e) => actions.setSleepQuality(date, { sleptMinutes: e.target.value === '' ? null : Number(e.target.value) })} />
+            </label>
+          </div>
+
+          {duration.verdict !== 'unknown' && <p className="small" style={{ margin: 0 }}>{duration.text}</p>}
+          {result.efficiency !== null && <p className="small muted" style={{ margin: 0 }}>睡眠効率 {result.efficiency}%</p>}
+
+          <div className="stack" style={{ gap: 4 }}>
+            {SLEEP_CRITERIA.map((cri) => {
+              const state2 = result.met.includes(cri) ? 'met' : result.unmet.includes(cri) ? 'unmet' : 'unknown';
+              return (
+                <p key={cri.id} className="small" style={{ margin: 0, color: state2 === 'unknown' ? 'var(--mist)' : undefined }}>
+                  {state2 === 'met' ? '✓' : state2 === 'unmet' ? '·' : '–'} {cri.label}
+                  {state2 === 'unmet' && <span className="muted" style={{ display: 'block', paddingLeft: 14 }}>{cri.hint}</span>}
+                </p>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -133,17 +246,31 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
         <div className="rate-bar" aria-hidden="true"><span style={{ width: `${Math.round(rate * 100)}%` }} /></div>
         {isFuture && <p className="small muted" style={{ margin: 0 }}>先の日付です。予定（勤務日・休日）だけ先に入れておけます。</p>}
 
-        <label className="field">
-          <span className="field-label">今日の宣言（{DECLARATION_MAX}文字まで）</span>
-          <input
-            type="text"
-            maxLength={DECLARATION_MAX}
-            value={record?.declaration ?? ''}
-            placeholder="今日はこれをやる、と一文で"
-            onChange={(e) => actions.setDeclaration(date, e.target.value)}
-          />
-        </label>
+        {/* 古い「今日の宣言」は、書いてあるものだけ読めるように残す（3のルールに置き換えた） */}
+        {record?.declaration ? (
+          <label className="field">
+            <span className="field-label">今日の宣言（{DECLARATION_MAX}文字まで）</span>
+            <input
+              type="text"
+              maxLength={DECLARATION_MAX}
+              value={record.declaration}
+              onChange={(e) => actions.setDeclaration(date, e.target.value)}
+            />
+          </label>
+        ) : null}
       </div>
+
+      <MorningRoutineCard state={state} date={date} today={today} />
+
+      <ThreeRules
+        state={state}
+        scope="day"
+        date={date}
+        title="今日の3つ"
+        lead="毎朝3つ書き出して、目の前に置いておく。1つだけでも構いません。"
+        upper={getThree(state.threeRules, 'week', date)}
+        upperLabel="今週の3つ"
+      />
 
       <div className="card">
         <h3>今日の習慣</h3>
@@ -175,6 +302,12 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
           </button>
         )}
       </div>
+
+      <ConditionCard state={state} date={date} />
+
+      <MealCard state={state} date={date} today={today} />
+
+      <MonkModeCard state={state} date={date} today={today} />
 
       {suggestions.length > 0 && (
         <div className="card">

@@ -24,8 +24,11 @@ const INDEX_HTML = join(DIST, 'index.html');
 // 以前の「dist/assets全体で1400KB」は測り方自体が誤っていたため、この値には
 // 連続性が無い（過去の推移とは比較しないこと）。
 // 2026-09-02、900KB予算が残り僅かになった（888KB）ためユーザー指定で1MBへ引き上げ。
-const MAX_BUNDLE_SIZE = 1024 * 1024; // 1MB
-const BUDGET_KB = { js: MAX_BUNDLE_SIZE / 1024, css: 150 };
+// 同日、mindmapData.jsの動的化・Pomodoro/AuthGateのlazy化等で実測591KB/95KBまで
+// 大幅に下がったため、予算を「これ以上増やさない」ガードレールとして引き下げ直した
+// （実測591KB+今後の余裕で700KB、CSS94KB+余裕で110KB。1MBのままだと再肥大化に気づけない）。
+const MAX_BUNDLE_SIZE = 700 * 1024; // 700KB
+const BUDGET_KB = { js: MAX_BUNDLE_SIZE / 1024, css: 110 };
 
 if (!existsSync(INDEX_HTML)) {
   console.error('✗ dist/index.html がありません。先に `npm run build` を実行してください。');

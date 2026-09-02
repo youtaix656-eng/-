@@ -12,5 +12,5 @@
     "types": ["node"]
   },
   "include": ["src/lib", "src/types", "tests"],
-  "exclude": ["src/lib/useStore.ts"]
+  "exclude": []
 }

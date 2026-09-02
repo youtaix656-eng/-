@@ -9,6 +9,7 @@ import WeeklyReviewView from './components/WeeklyReviewView';
 import HabitsView from './components/HabitsView';
 import SettingsView from './components/SettingsView';
 import CycleCard from './components/CycleCard';
+import ThreeRules from './components/ThreeRules';
 
 type View = 'today' | 'calendar' | 'weekly' | 'habits' | 'settings';
 
@@ -68,6 +69,13 @@ export default function App() {
           <div className="page">
             <CycleCard state={state} today={today} />
             <DayPanel state={state} date={today} today={today} onOpenWeekly={() => setView('weekly')} />
+            <ThreeRules
+              state={state}
+              scope="month"
+              date={today}
+              title="今月の3つ"
+              lead="月初めに3つ。実践期間の「最上位目標1つ」とは別で、今月やり遂げたいことです。"
+            />
           </div>
         )}
 

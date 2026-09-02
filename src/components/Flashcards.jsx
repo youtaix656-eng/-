@@ -3,6 +3,7 @@ import { KEIKETSU_CARDS, YOUKETSU_TABLE } from '../data/keiketsuCards.js';
 import { figureFor } from '../data/figures.jsx';
 import { CHOICE_QUIZ_SUBJECTS, subjectMatches } from '../data/examScope.js';
 import { loadFlashcardSrs, gradeFlashcard, weakCardIds, cardMastered, cardWrongCount } from '../lib/flashcardSrs.js';
+import { effectiveTags } from '../lib/query.js';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -17,8 +18,10 @@ const KEIKETSU_MODE = '__keiketsu__';
 
 // フラッシュカード：経穴専用カード（既存）＋ 全科目対応（一問一答の問題から自動生成）。
 // 表＝問題文／裏＝正解＋解説。タップで裏返し、前後で移動。
-export default function Flashcards({ store, onNavigate }) {
+export default function Flashcards({ store, onNavigate, focusKeyword, onConsumeKeyword }) {
   const questions = store?.questions || [];
+  const links = store?.links;
+  const kwMeta = store?.kwMeta;
   const [mode, setMode] = useState(KEIKETSU_MODE);
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -46,13 +49,47 @@ export default function Flashcards({ store, onNavigate }) {
     setFlipped(false);
   }, [mode, weakOnly]);
 
+  // 語呂合わせノートからの連携：指定キーワードに関連する問題の科目へ切り替える
+  //   （openKeyword/ConnectedLearning.jsxと同じ「一定時間で自動消費」の型）。
+  useEffect(() => {
+    if (!focusKeyword) return;
+    const target = questions.find((q) => effectiveTags(q, links).includes(focusKeyword));
+    if (target) {
+      const known = CHOICE_QUIZ_SUBJECTS.find((s) => subjectMatches(target.subject, s));
+      setMode(known ? known.name : target.subject);
+    }
+    const t = setTimeout(() => onConsumeKeyword?.(), 1500);
+    return () => clearTimeout(t);
+  }, [focusKeyword]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isKeiketsu = mode === KEIKETSU_MODE;
   const cards = isKeiketsu ? keiketsuCards : genericCards;
+
+  // 科目切り替え後、該当キーワードのカードへジャンプする
+  useEffect(() => {
+    if (!focusKeyword || isKeiketsu) return;
+    const i = genericCards.findIndex((q) => effectiveTags(q, links).includes(focusKeyword));
+    if (i >= 0) {
+      setIdx(i);
+      setFlipped(false);
+    }
+  }, [focusKeyword, genericCards]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // cards配列がidx変更より先に切り替わる描画（フィルタ切替直後など）でも範囲外参照にならないよう、
   // 表示に使うindexはその場でクランプする（idx自体のリセットはuseEffect側で行う）。
   const safeIdx = Math.min(idx, Math.max(0, cards.length - 1));
   const card = cards[safeIdx];
   const Fig = isKeiketsu && card?.figure ? figureFor(card.figure) : null;
+  // 語呂合わせノート（kwMeta）と連携：このカードのキーワードに語呂合わせが登録されていれば、
+  // 裏面に一緒に表示する（単一の正はMnemonicNotebook.jsxと同じkwMeta。ここでは再実装しない）。
+  const cardMnemonic = useMemo(() => {
+    if (!card || isKeiketsu) return null;
+    for (const kw of effectiveTags(card, links)) {
+      const m = kwMeta?.[kw];
+      if (m && m.mnemonic && m.mnemonic.trim()) return { keyword: kw, text: m.mnemonic };
+    }
+    return null;
+  }, [card, isKeiketsu, links, kwMeta]);
 
   const go = (d) => {
     if (cards.length === 0) return;
@@ -160,9 +197,22 @@ export default function Flashcards({ store, onNavigate }) {
                     {card.explanation}
                   </p>
                 )}
+                {cardMnemonic && (
+                  <p className="inline-note" style={{ marginTop: 10, textAlign: 'left' }}>
+                    💡 {cardMnemonic.text}
+                  </p>
+                )}
               </div>
             )}
           </button>
+
+          {!isKeiketsu && flipped && cardMnemonic && (
+            <div className="btn-row" style={{ marginTop: 10 }}>
+              <button className="btn ghost block" onClick={() => onNavigate && onNavigate('mnemonics')}>
+                📔 語呂合わせノートで見る
+              </button>
+            </div>
+          )}
 
           {isKeiketsu && flipped && (
             <div className="btn-row" style={{ marginTop: 10 }}>

@@ -276,3 +276,13 @@ input[type='time'] { font-family: var(--mono); }
 .list { margin: 0; padding-left: 1.2em; }
 .list li { margin-bottom: 4px; }
 .list li:last-child { margin-bottom: 0; }
+
+/* 最高の体調（領域ごとの開閉） */
+.cond-row { display: flex; flex-direction: column; gap: 8px; }
+.cond-body {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--indigo);
+  margin-left: 6px;
+}
+.cond-body .section-title { margin-top: 2px; }

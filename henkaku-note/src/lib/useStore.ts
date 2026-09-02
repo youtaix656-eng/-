@@ -9,6 +9,9 @@ import { startOfWeek, toKey } from './date.js';
 import { emptyReview, isReviewWritten, reviewCheckDate } from './weekly.js';
 import { WEEKLY_REVIEW_HABIT_ID } from './habits.js';
 import { MEDITATION_HABIT_ID } from '../data/presets.js';
+import { emptyCondition, conditionOf } from './condition.js';
+import { emptySleepQuality } from './sleepQuality.js';
+import { keyFor, normalizeThree, type Scope } from './threeRules.js';
 import type { AppState, DayRecord, Habit, Settings, WeeklyReview, Cycle } from '../types/index.js';
 
 export const STATE_VERSION = 1;
@@ -23,6 +26,21 @@ export function defaultSettings(): Settings {
     showStreakProminently: false,
     meditationBell: true,
     meditationDefaultMinutes: 10,
+    fastingTargetHours: 12,
+    fastingWorkdayHours: 0,
+    fastingPlan: 'three',
+    fastingPlanSince: null,
+    fastingPrechecks: [],
+    monkWaterMl: 2000,
+    monkSteps: 8000,
+    monkWorkoutPerWeek: 3,
+    monkSnsRule: null,
+    monkPrechecks: [],
+    routinePreset: 'full',
+    routineCustomMinutes: {},
+    routineOrder: [],
+    affirmations: [],
+    wakeTargetAt: null,
   };
 }
 
@@ -34,6 +52,7 @@ export function initialState(at: number): AppState {
     weeks: {},
     cycles: [],
     settings: defaultSettings(),
+    threeRules: {},
   };
 }
 
@@ -124,6 +143,106 @@ export const actions = {
         meditations: (d.meditations ?? []).filter((_, i) => i !== index),
       })),
     );
+  },
+  /** 『最高の体調』の記録。人間関係を書いたら①仲間にもチェックを入れる（同じことを2回聞かない） */
+  setCondition(date: string, patch: Partial<ReturnType<typeof emptyCondition>>) {
+    const socialTouched = patch.social === 'deep' || patch.social === 'light';
+    set((s) => {
+      const hasPeers = s.habits.some((h) => h.id === 'step1-peers' && h.archivedAt === null);
+      return withDay(s, date, (d) => ({
+        ...d,
+        condition: { ...conditionOf(d), ...patch },
+        checked:
+          socialTouched && hasPeers && !d.checked.includes('step1-peers')
+            ? [...d.checked, 'step1-peers']
+            : d.checked,
+      }));
+    });
+  },
+  setSleepQuality(date: string, patch: Partial<ReturnType<typeof emptySleepQuality>>) {
+    set((s) => withDay(s, date, (d) => ({ ...d, sleepQuality: { ...emptySleepQuality(), ...(d.sleepQuality ?? {}), ...patch } })));
+  },
+
+  /** 食事の記録（時間と量だけ） */
+  setMeal(date: string, patch: Partial<import('../types/index.js').MealRecord>) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        meal: {
+          firstMealAt: null, lastMealAt: null, lastMealCrossesMidnight: false, fullness: null, signs: [],
+          ...(d.meal ?? {}),
+          ...patch,
+        },
+      })),
+    );
+  },
+  /** 起きて最初のルーティンの記録 */
+  setRoutine(date: string, patch: Partial<import('../types/index.js').RoutineRecord>) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        routine: { doneSteps: [], startedAt: null, wakeAt: null, waterOnWaking: false, ...(d.routine ?? {}), ...patch },
+      })),
+    );
+  },
+  /** ステップを1つ終えた印を付ける（同じidを二重に入れない） */
+  completeRoutineStep(date: string, stepId: string) {
+    set((s) =>
+      withDay(s, date, (d) => {
+        const cur = d.routine ?? { doneSteps: [], startedAt: null, wakeAt: null, waterOnWaking: false };
+        if (cur.doneSteps.includes(stepId)) return d;
+        return { ...d, routine: { ...cur, doneSteps: [...cur.doneSteps, stepId] } };
+      }),
+    );
+  },
+  setAffirmation(index: number, text: string) {
+    set((s) => {
+      const list = [...(s.settings.affirmations ?? [])];
+      while (list.length < 3) list.push('');
+      list[index] = text.slice(0, 80);
+      return { ...s, settings: { ...s.settings, affirmations: list.slice(0, 3) } };
+    });
+  },
+
+  /** モンクモードの記録（水・歩数・運動・読書・SNS・一人の時間） */
+  setMonk(date: string, patch: Partial<import('../types/index.js').MonkRecord>) {
+    set((s) =>
+      withDay(s, date, (d) => ({
+        ...d,
+        monk: {
+          waterMl: 0, electrolyte: false, steps: 0, workoutMinutes: 0, workoutAt: null,
+          readingMinutes: 0, snsRuleKept: null, soloMinutes: 0,
+          ...(d.monk ?? {}),
+          ...patch,
+        },
+      })),
+    );
+  },
+
+  /** 段階を変える。変えた日を覚えておき、次の段階へ進める判断に使う */
+  setFastingPlan(planId: string, date: string) {
+    set((s) => ({ ...s, settings: { ...s.settings, fastingPlan: planId, fastingPlanSince: date } }));
+  },
+
+  /** 3のルール。日・週・月を同じ表で持つ */
+  setThreeRule(scope: Scope, date: string, index: number, text: string) {
+    const key = keyFor(scope, date);
+    set((s) => {
+      const list = normalizeThree(s.threeRules?.[key]);
+      list[index] = text.slice(0, 60);
+      return { ...s, threeRules: { ...(s.threeRules ?? {}), [key]: list } };
+    });
+  },
+  /** 上の階層から降ろす（空いている枠に入れる） */
+  fillThreeRule(scope: Scope, date: string, text: string) {
+    const key = keyFor(scope, date);
+    set((s) => {
+      const list = normalizeThree(s.threeRules?.[key]);
+      const slot = list.findIndex((t) => t.trim().length === 0);
+      if (slot < 0) return s;
+      list[slot] = text.slice(0, 60);
+      return { ...s, threeRules: { ...(s.threeRules ?? {}), [key]: list } };
+    });
   },
   clearDay(date: string) {
     set((s) => {

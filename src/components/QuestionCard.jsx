@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { figureFor } from '../data/figures.jsx';
 import { MISS_TYPES } from '../lib/missTypes.js';
 import { variantsOf } from '../lib/synonyms.js';
-import { comparisonsForKeyword } from '../data/mindmapData.js';
+import { useMindmapData } from '../lib/mindmapDataLoader.js';
 import { speak, cancelSpeech, isSpeechSupported } from '../lib/speech.js';
 
 // 1問を表示し、解答・正誤判定・解説・メモを扱う共通コンポーネント
@@ -50,6 +50,10 @@ export default function QuestionCard({
   const cardRef = useRef(null);
   const touchX = useRef(null);
 
+  // 対比カード用データ（mindmapData.js）は答えが開示された時だけ必要になるので、
+  // そのタイミングで遅延読み込みする（起動時バンドルから約14万字ぶんを外すため）。
+  const mindmapData = useMindmapData(revealed && !(comparisons && comparisons.length));
+
   // 選択肢は原問どおりの並びで表示（シャッフルなし）。
   // ※解説文の「選択肢1・4が正しい」等の番号参照と①②③④を一致させるため固定。
   const displayOrder = useMemo(
@@ -71,12 +75,13 @@ export default function QuestionCard({
   // 対比カード（#15）：propが無ければタグから補完し、正解時も控えめに提示
   const effComparisons = useMemo(() => {
     if (comparisons && comparisons.length) return comparisons;
+    if (!mindmapData) return [];
     const out = [], seen = new Set();
     for (const t of (question.tags || [])) {
-      for (const c of comparisonsForKeyword(t)) if (!seen.has(c.id)) { seen.add(c.id); out.push(c); }
+      for (const c of mindmapData.comparisonsForKeyword(t)) if (!seen.has(c.id)) { seen.add(c.id); out.push(c); }
     }
     return out.slice(0, 2);
-  }, [question.id, comparisons]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [question.id, comparisons, mindmapData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setSelected(null);

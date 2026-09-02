@@ -1,0 +1,21 @@
+{
+  "name": "chou",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "腸（ちょう） — お腹の記録を、受診のときに渡せる形で残す（端末内保存のみ）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
