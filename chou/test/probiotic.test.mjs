@@ -92,7 +92,7 @@ test('期間が来ても、どうするかはアプリが決めない', () => {
 });
 
 test('商品を勧めない・順位を付けない', () => {
-  assert.equal(PRODUCTS.length, 3);
+  assert.ok(PRODUCTS.length >= 3);
   for (const p of PRODUCTS) {
     assert.ok(p.bacteria.length >= 1, p.id);
     assert.ok(p.forms.length >= 1, p.id);
@@ -106,7 +106,11 @@ test('商品を勧めない・順位を付けない', () => {
   assert.doesNotMatch(screen, /PRODUCTS[\s\S]{0,40}\.sort\(/);
   assert.doesNotMatch(codeOf('lib/probiotic.js'), /\.sort\(/);
   // 次に試す候補は「今のもの以外」を並べるだけ
-  assert.deepEqual(othersThan('biofermin', PRODUCTS).map((p) => p.id), ['miyarisan', 'biothree']);
+  // 出典が増えても順番を作らない：**元の並びのまま「今のもの以外」を返すだけ**
+  assert.deepEqual(
+    othersThan('biofermin', PRODUCTS).map((p) => p.id),
+    PRODUCTS.filter((p) => p.id !== 'biofermin').map((p) => p.id),
+  );
 });
 
 test('出典の誤りをそのまま通さない（整腸剤は食品ではない）', () => {

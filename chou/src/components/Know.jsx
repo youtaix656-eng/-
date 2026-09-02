@@ -47,6 +47,14 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('prebiotics')}>
+            <strong>善玉菌の餌</strong>
+            <span className="muted small">
+              水溶性食物繊維・オリゴ糖・レジスタントスターチ。低FODMAP と目的が反対を向く所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('probiotics')}>
             <strong>整腸剤</strong>
             <span className="muted small">

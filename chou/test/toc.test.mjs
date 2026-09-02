@@ -38,6 +38,13 @@ import {
   CLEANUP_CORRECTIONS,
   CLEANUP_UNVERIFIED,
 } from '../src/data/cleanup.js';
+import {
+  PREBIOTIC_FOODS,
+  PREBIOTIC_KINDS,
+  SOURCE_CONFLICTS,
+  PREBIOTIC_CORRECTIONS,
+  PREBIOTIC_UNVERIFIED,
+} from '../src/data/prebiotics.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -212,6 +219,18 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     CLEANUP_CORRECTIONS.length +
     CLEANUP_UNVERIFIED.length;
   for (const step of CLEANUP_STEPS) assert.ok(entries.some((e) => e.title === step.title), step.title);
+  // 善玉菌の餌から来るぶん（食べものは「◯◯（善玉菌の餌）」＋オメガ3・リンゴ酢の2件）
+  const fromPrebioticCount =
+    PREBIOTIC_KINDS.length +
+    PREBIOTIC_FOODS.length +
+    SOURCE_CONFLICTS.length +
+    PREBIOTIC_CORRECTIONS.length +
+    PREBIOTIC_UNVERIFIED.length +
+    2;
+  for (const food of PREBIOTIC_FOODS) {
+    assert.ok(entries.some((e) => e.title === `${food.name}（善玉菌の餌）`), food.name);
+  }
+  for (const item of SOURCE_CONFLICTS) assert.ok(entries.some((e) => e.title === item.title), item.title);
   assert.equal(
     entries.length,
     TERMS.length +
@@ -221,7 +240,8 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       FODMAP_FOODS.length +
       fromAdamskiCount +
       fromCareCount +
-      fromCleanupCount,
+      fromCleanupCount +
+      fromPrebioticCount,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

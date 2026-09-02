@@ -2,7 +2,9 @@
 // （書き写すと、片方だけ直したときに黙って食い違う。このリポジトリの他アプリと同じ線）。
 //
 // 元データ：`terms.js`（用語・画面）／`scales.js`（ブリストル）／`redFlags.js`（受診の目安）／
-// `fodmap.js`（食材）。ユーザーが候補から追加したものは端末内の `userTerms` として重ねる。
+// `fodmap.js`（食材）／`adamski.js`（食べ合わせ）／`probiotics.js`・`seasonings.js`（整腸剤・調味料）／
+// `cleanup.js`（腸のお掃除）／`prebiotics.js`（善玉菌の餌）。
+// ユーザーが候補から追加したものは端末内の `userTerms` として重ねる。
 
 import { TERMS, SCREENS } from './terms.js';
 import { BRISTOL } from './scales.js';
@@ -11,6 +13,16 @@ import { FODMAP_FOODS, FODMAP_LEVELS, FODMAP_SOURCE } from './fodmap.js';
 import { SPEED_NAMED, SPEED_BY_ID, BAD_PAIRS, ADAMSKI_UNVERIFIED } from './adamski.js';
 import { BACTERIA, PRODUCTS, PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from './probiotics.js';
 import { SEASONINGS, SEASONING_AVOID } from './seasonings.js';
+import {
+  PREBIOTIC_FOODS,
+  PREBIOTIC_KINDS,
+  KIND_BY_ID,
+  SOURCE_CONFLICTS,
+  PREBIOTIC_CORRECTIONS,
+  PREBIOTIC_UNVERIFIED,
+  OMEGA3,
+  APPLE_VINEGAR,
+} from './prebiotics.js';
 import {
   CLEANUP_STEPS,
   STRESS_RELIEF,
@@ -39,6 +51,7 @@ export const TOC_GROUPS = [
   { id: 'combine', label: '食べ合わせ' },
   { id: 'care', label: '整腸剤・調味料' },
   { id: 'cleanup', label: '腸のお掃除' },
+  { id: 'prebiotic', label: '善玉菌の餌' },
   { id: 'screen', label: '画面' },
   { id: 'user', label: '自分で追加' },
 ];
@@ -303,6 +316,110 @@ function fromCleanup() {
   return [...steps, ...relief, ...posture, ...fixes, ...claims];
 }
 
+/**
+ * 善玉菌の餌（プレバイオティクス）から。
+ * **食べものは「◯◯（善玉菌の餌）」という題にする**——バナナ・ごぼう・キウイなど6件は
+ * 低FODMAP の一覧にも同じ名前で載っていて、同じ題にすると重複で落ちる
+ * （調味料の「◯◯の選び方」と同じ直し方。素の名前は別名で引ける）。
+ * **食い違いも目次に置く**——低FODMAP とぶつかることも、出典どうしが食い違うことも、
+ * 目次から辿れないと「無かったこと」になってしまう。
+ */
+function fromPrebiotics() {
+  const kinds = PREBIOTIC_KINDS.map((kind) => ({
+    id: `toc-pkind-${kind.id}`,
+    title: kind.label,
+    reading: kind.reading,
+    group: 'prebiotic',
+    aliases: [],
+    description: `${kind.note} 出典が「善玉菌の餌」として挙げている3つのうちのひとつです。`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'prebiotics', targetId: `kind-${kind.id}`, label: '読む' },
+    ],
+  }));
+  const foods = PREBIOTIC_FOODS.map((food) => ({
+    id: `toc-prebiotic-${food.reading}`,
+    title: `${food.name}（善玉菌の餌）`,
+    reading: `${food.reading}ぜんだまきんのえさ`,
+    group: 'prebiotic',
+    aliases: [{ name: food.name, reading: food.reading }],
+    description: [
+      `出典では${KIND_BY_ID[food.kind].label}として挙げられています。`,
+      food.note,
+      food.fodmapName
+        ? `低FODMAP の一覧では「${food.fodmapName}」として出てきます（目的が反対を向いているので、両方を並べています）。`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'prebiotics', targetId: `prebiotic-${food.reading}`, label: '一覧で見る' },
+      { type: 'system', view: 'prebiotics', targetId: 'prebiotic-vs-fodmap', label: '低FODMAP との食い違いを読む' },
+    ],
+  }));
+  const conflicts = SOURCE_CONFLICTS.map((item) => ({
+    id: `toc-sconflict-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'prebiotic',
+    aliases: [],
+    description: `A：${item.a}／B：${item.b} このアプリはどちらが正しいかを決めません。`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'prebiotics', targetId: `sconflict-${item.id}`, label: '両方の言い分を読む' },
+    ],
+  }));
+  const fixes = PREBIOTIC_CORRECTIONS.map((item) => ({
+    id: `toc-pbcorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'prebiotic',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'prebiotics', targetId: `pcorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = PREBIOTIC_UNVERIFIED.map((item) => ({
+    id: `toc-pbunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'prebiotic',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'prebiotics', targetId: `punv2-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  const omega3 = {
+    id: 'toc-omega3',
+    title: OMEGA3.title,
+    reading: OMEGA3.reading,
+    group: 'prebiotic',
+    aliases: [{ name: 'オメガ3', reading: 'おめがすりー' }],
+    description: `${OMEGA3.body} 注意：${OMEGA3.caution}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'prebiotics', targetId: 'prebiotic-omega3', label: '読む' }],
+  };
+  const vinegar = {
+    id: 'toc-apple-vinegar',
+    title: APPLE_VINEGAR.title,
+    reading: APPLE_VINEGAR.reading,
+    group: 'prebiotic',
+    aliases: [{ name: 'りんご酢', reading: 'りんごす' }],
+    description: `${APPLE_VINEGAR.body} 注意：${APPLE_VINEGAR.caution}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'prebiotics', targetId: 'prebiotic-vinegar', label: '読む' },
+      { type: 'system', view: 'prebiotics', targetId: 'sconflict-vinegar', label: '出典の食い違いを読む' },
+    ],
+  };
+  return [...kinds, ...foods, ...conflicts, ...fixes, ...claims, omega3, vinegar];
+}
+
 function withGroup(list, group) {
   return list.map((entry) => ({ aliases: [], destinations: [], ...entry, group }));
 }
@@ -326,6 +443,7 @@ export function buildTocEntries(state = {}) {
     ...fromAdamski(),
     ...fromCare(),
     ...fromCleanup(),
+    ...fromPrebiotics(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

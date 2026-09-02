@@ -612,6 +612,32 @@ export const TERMS = [
       { type: 'page', view: 'cleanup', targetId: 'cleanup-posture', label: '姿勢の項を読む' },
     ],
   },
+  {
+    id: 'term-prebiotic',
+    title: 'プレバイオティクス',
+    reading: 'ぷればいおてぃくす',
+    aliases: [{ name: '善玉菌の餌', reading: 'ぜんだまきんのえさ' }],
+    description:
+      'もともと腸にいる菌の餌になるとされる食べもの（水溶性食物繊維・オリゴ糖・レジスタントスターチ）のことです。生きた菌そのものを入れる考え方（プロバイオティクス）とは別のものとして紹介されます。低FODMAP は同じ糖を減らす考え方なので、目的が反対を向いています。このアプリはどちらが正しいかを決めません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'prebiotics', targetId: 'prebiotic-kinds', label: '善玉菌の餌をひらく' },
+      { type: 'system', view: 'prebiotics', targetId: 'prebiotic-vs-fodmap', label: '低FODMAP との食い違いを読む' },
+    ],
+  },
+  {
+    id: 'term-probiotic-word',
+    title: 'プロバイオティクス',
+    reading: 'ぷろばいおてぃくす',
+    aliases: [],
+    description:
+      '生きた菌そのものをとる考え方のことです。整腸剤やヨーグルトがこれにあたると紹介されます。餌を増やす考え方（プレバイオティクス）とは別のものです。なお「飲んだ菌が住み着くかどうか」は出典どうしで言うことが違います。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'probiotics', targetId: 'probiotic-mine', label: '整腸剤の画面をひらく' },
+      { type: 'system', view: 'prebiotics', targetId: 'sconflict-settle', label: '住み着くのかの食い違いを読む' },
+    ],
+  },
 ];
 
 /** 目次に出す画面（飛び先の入口）。**画面を足したらここにも足す** */
@@ -696,5 +722,15 @@ export const SCREENS = [
     description: '出典が挙げる5つと、3つの考え方が食い違う所、訂正、裏が取れていない主張をまとめた画面です。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'cleanup', targetId: 'cleanup-steps', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-prebiotics',
+    title: '善玉菌の餌の画面',
+    reading: 'ぜんだまきんのえさのがめん',
+    aliases: [{ name: 'プレバイオティクスの画面', reading: 'ぷればいおてぃくすのがめん' }],
+    description:
+      '餌になるとされる食べものと、低FODMAP とぶつかる所、出典どうしが食い違う所、訂正、裏が取れていない主張をまとめた画面です。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'prebiotics', targetId: 'prebiotic-kinds', label: 'ひらく' }],
   },
 ];

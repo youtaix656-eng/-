@@ -10,6 +10,7 @@
 import { FODMAP_FOODS, FODMAP_LEVELS } from '../data/fodmap.js';
 import { SPEED_NAMED, SPEED_BY_ID } from '../data/adamski.js';
 import { FERMENTED_FOODS } from '../data/cleanup.js';
+import { PREBIOTIC_FOODS, KIND_BY_ID } from '../data/prebiotics.js';
 import { SPEED_BASIS_LABELS } from '../data/adamski.js';
 import { speedOf, speedLabel } from './combine.js';
 
@@ -121,3 +122,48 @@ export function threeWayConflicts() {
 export const FERMENT_NOTE =
   '同じ食べものについて、考え方によって言うことが変わります。'
   + 'このアプリはどれが正しいかを決めません。合うかどうかは、しばらく試して自分の記録で見つけてください。';
+
+/**
+ * 善玉菌の餌（プレバイオティクス）を、低FODMAP と突き合わせる。
+ *
+ * **この2つは目的が反対を向いている。** プレバイオティクスは大腸で発酵する糖・繊維を
+ * わざと増やす考え方で、低FODMAP はその発酵しやすい糖を減らす考え方。
+ * お腹の張りで困っている人には、片方が合って片方が合わないことがある。
+ * **どちらが正しいかは決めない。**
+ *
+ * 突き合わせる相手（`fodmapName`）は**手で書いてある**——名前の当てずっぽうな一致で
+ * 食い違いを作らないため。書いていないものは「一覧に出てきません」と正直に出す。
+ */
+export function prebioticViews() {
+  return PREBIOTIC_FOODS.map((food) => {
+    const inFodmap = food.fodmapName ? FODMAP_FOODS.find((f) => f.name === food.fodmapName) : null;
+    const level = inFodmap ? levelLabel(inFodmap.level) : null;
+    return {
+      name: food.name,
+      reading: food.reading,
+      kind: KIND_BY_ID[food.kind] ? KIND_BY_ID[food.kind].label : food.kind,
+      note: food.note,
+      fodmap: level,
+      fodmapName: food.fodmapName,
+      // 低FODMAP が「多め／量による」なら、餌を増やす考え方とぶつかる
+      conflict: Boolean(inFodmap && inFodmap.level !== 'low'),
+      views: [
+        `腸活では：善玉菌の餌（${KIND_BY_ID[food.kind] ? KIND_BY_ID[food.kind].label : food.kind}）として勧められています。`,
+        level
+          ? `低FODMAP の一覧では「${food.fodmapName}」が「${level}」に入っています。`
+          : '低FODMAP の一覧には出てきません。',
+      ],
+    };
+  });
+}
+
+/** 餌を増やす考え方と、減らす考え方がぶつかる食べもの */
+export function prebioticConflicts() {
+  return prebioticViews().filter((v) => v.conflict);
+}
+
+/** 目的が反対を向いていることを、必ず添える一文 */
+export const PREBIOTIC_VS_FODMAP_NOTE =
+  '「善玉菌の餌を増やす」と「発酵しやすい糖を減らす（低FODMAP）」は、目的が反対を向いています。'
+  + 'どちらが正しいかはこのアプリでは決めません。お腹の張りやガスで困っているなら、'
+  + '増やすほうを少しずつ試して、合わなければやめてください。';
