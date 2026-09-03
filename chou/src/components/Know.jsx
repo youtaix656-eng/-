@@ -63,6 +63,22 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('protein')}>
+            <strong>タンパク質と腸</strong>
+            <span className="muted small">
+              出典が挙げる目安と、ためしにやめてみる（小麦・乳製品）。グラム数は計算しません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('fasting')}>
+            <strong>断食・空腹の時間</strong>
+            <span className="muted small">
+              このアプリは勧めていません。やめどきと、そのままにできない主張を先に並べます。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('otc')}>
             <strong>市販薬とのつきあい方</strong>
             <span className="muted small">

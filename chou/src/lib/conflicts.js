@@ -12,6 +12,8 @@ import { SPEED_NAMED, SPEED_BY_ID } from '../data/adamski.js';
 import { FERMENTED_FOODS } from '../data/cleanup.js';
 import { PREBIOTIC_FOODS, KIND_BY_ID } from '../data/prebiotics.js';
 import { HELPFUL_HABITS, WEAK_STOMACH_AVOID } from '../data/gutHabits.js';
+import { PROTEIN_GUIDES, ELIMINATION_TARGETS } from '../data/protein.js';
+import { FASTING_SHAPES } from '../data/fasting.js';
 import { SPEED_BASIS_LABELS } from '../data/adamski.js';
 import { speedOf, speedLabel } from './combine.js';
 
@@ -227,3 +229,103 @@ export function withinSourceFiberConflict() {
     note: WEAK_STOMACH_AVOID.note,
   };
 }
+
+// ───────────────── タンパク質ファースト ⇄ 胃が弱っているとき ─────────────────
+//
+// **同じ「肉と魚」について、正面から逆のことを言っている。**
+// タンパク質の側は「炭水化物より先に、多めに」、胃の側は「弱っているときは避ける」。
+// どちらも「胃にとどまる時間」を理由にしているのに、結論が反対になっているのが面白いところ。
+
+/** タンパク質ファーストと、胃が弱っているときの避けかたを並べる（どちらも決めない） */
+export function proteinViews() {
+  const first = PROTEIN_GUIDES.find((g) => g.id === 'first');
+  return [
+    {
+      id: 'protein_first',
+      side: 'タンパク質と腸の側',
+      applies: 'ふだん・タンパク質が足りていないと感じるとき',
+      says: '炭水化物より先に、タンパク質（肉・魚・卵・大豆）を多めに',
+      why: '炭水化物は胃に長くとどまり、未消化のまま腸へ行くと発酵して腸内環境を乱すとされるため',
+      source: first ? first.said : '',
+    },
+    {
+      id: 'weak_stomach',
+      side: '胃腸の習慣の側',
+      applies: '胃が弱っているとき',
+      says: '脂肪の多い肉と魚、食物繊維の多いきのこ・野菜を避ける',
+      why: '胃の仕事はかき混ぜる下ごしらえで、脂肪と食物繊維はそれに時間がかかるとされるため',
+      source: WEAK_STOMACH_AVOID.body,
+    },
+  ];
+}
+
+export const PROTEIN_NOTE =
+  '同じ「肉と魚」について、片方は増やせ、片方は避けろと言っています。'
+  + 'どちらも「胃にとどまる時間」を理由にしているのに、結論が反対を向いているところです。'
+  + 'このアプリはどちらが正しいかを決めません——いま胃が弱っているかどうかで、読む先が変わります。';
+
+// ───────────────── 朝食を抜く ⇄ 朝に食べる ─────────────────
+//
+// **断食の側は「午前は固形物をとらない」、腸活の側は「朝に整腸剤と食べものを」。**
+// 便のことで困っている人にとっては、ここがいちばん実害の出やすい食い違い。
+
+/** 朝食についての言い分を並べる（どちらも決めない） */
+export function breakfastViews() {
+  const morning = FASTING_SHAPES.find((s) => s.id === 'morning_water');
+  const banana = PREBIOTIC_FOODS.find((f) => f.name === 'バナナ');
+  return [
+    {
+      id: 'skip',
+      side: '断食の側',
+      applies: '空腹の時間を長くしてみたいとき',
+      says: '午前は固形物をとらず、水分だけにする',
+      why: '午前は体が出す時間で、内臓を休ませるとされるため',
+      source: morning ? morning.said : '',
+    },
+    {
+      id: 'eat',
+      side: '善玉菌の餌・整腸剤の側',
+      applies: '便が出にくいとき',
+      says: '朝に整腸剤と、餌になる食べもの（バナナなど）をとる',
+      why: '食べものが胃に入ると腸が動きはじめるとされ、朝は出しやすい時間だとされるため',
+      source: banana ? banana.note : '',
+    },
+  ];
+}
+
+export const BREAKFAST_NOTE =
+  '朝食を抜くか、朝に食べるかで、言っていることが逆になります。'
+  + '**便が出にくくて困っている人には、ここがいちばん実害の出やすいところ**です——'
+  + '朝食を抜くと出にくくなる人がいます。このアプリはどちらが正しいかを決めません。'
+  + '自分の記録で、どちらが自分に合うかを見てください。';
+
+// ───────────────── 乳製品：3つの言い分 ─────────────────
+
+/**
+ * 乳製品についての言い分を、**元データから毎回導いて**並べる。
+ * 腸活（発酵食品）／低FODMAP／今回の出典（やめてみる）で3つに割れる。
+ */
+export function dairyViews() {
+  const names = ['ヨーグルト', '牛乳'];
+  return names.map((name) => {
+    const ferment = FERMENTED_FOODS.find((f) => f.name === name || (f.name && f.name.includes(name)));
+    const fodmap = FODMAP_FOODS.find((f) => f.name === name);
+    const target = ELIMINATION_TARGETS.find((t) => t.id === 'dairy');
+    return {
+      name,
+      views: [
+        ferment
+          ? `腸活では：発酵食品として勧められています（${ferment.note || ''}）`.trim()
+          : '腸活では：発酵食品として勧められることがあります。',
+        fodmap
+          ? `低FODMAP の一覧では「${levelLabel(fodmap.level)}」に入っています。`
+          : '低FODMAP の一覧には出てきません。',
+        target ? `タンパク質と腸の側では：一度やめて、体の変化を見ることを勧めています。` : '',
+      ].filter(Boolean),
+    };
+  });
+}
+
+export const DAIRY_NOTE =
+  '乳製品は、勧める側・減らす候補にする側・一度やめてみる側の3つに割れます。'
+  + 'このアプリはどれが正しいかを決めません。合う・合わないは自分の記録で見つけてください。';

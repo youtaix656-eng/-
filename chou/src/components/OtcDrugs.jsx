@@ -8,6 +8,14 @@ import {
   OTC_PARTIAL_OK,
   OTC_SOURCE,
 } from '../data/otcDrugs.js';
+import {
+  MAGNESIUM_FOODS,
+  MAGNESIUM_CLAIMED_EFFECTS,
+  MAGNESIUM_SCOPE_NOTE,
+  MAGNESIUM_CORRECTIONS,
+  MAGNESIUM_UNVERIFIED,
+  MAGNESIUM_SOURCE,
+} from '../data/magnesium.js';
 import useFocusJump from './useFocusJump.js';
 
 // 市販薬とのつきあい方。
@@ -71,6 +79,55 @@ export default function OtcDrugs({ onGo, focus, onFocusDone }) {
         <button type="button" className="ghost" onClick={() => onGo('home', 'rec-otc')}>
           きょう使った市販薬を記録する
         </button>
+      </section>
+
+      <section className="block" id="otc-magnesium">
+        <div className="block-head">
+          <h2>マグネシウム</h2>
+        </div>
+        <p className="muted small">{MAGNESIUM_SCOPE_NOTE.replace(/\*\*/g, '')}</p>
+        <ul className="flags">
+          {MAGNESIUM_CLAIMED_EFFECTS.map((item) => (
+            <li key={item.id} id={`mg-${item.id}`}>
+              <strong>{item.title}</strong>
+              <span className="muted small">
+                {item.gut ? '腸の話：このアプリで扱います。' : '腸の話ではありません：このアプリでは扱いません。'}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <h3>食べものから取るなら</h3>
+        <ul className="flags">
+          {MAGNESIUM_FOODS.map((food) => (
+            <li key={food.id} id={`mgfood-${food.id}`}>
+              <strong>{food.name}</strong>
+              <span className="muted small">{food.note}</span>
+            </li>
+          ))}
+        </ul>
+        {MAGNESIUM_CORRECTIONS.map((item) => (
+          <div key={item.id} className="cand" id={`mgcorrection-${item.id}`}>
+            <div className="cand-head">
+              <strong>{item.title}</strong>
+            </div>
+            <p className="muted small">出典：{item.claim}</p>
+            <p>{item.correction.replace(/\*\*/g, '')}</p>
+          </div>
+        ))}
+        <ul className="flags">
+          {MAGNESIUM_UNVERIFIED.map((item) => (
+            <li key={item.id} id={`mgunv-${item.id}`}>
+              <strong>{item.title}</strong>
+              <span className="muted small">出典：{item.claim}</span>
+              <span className="muted small">{item.note.replace(/\*\*/g, '')}</span>
+              <span className="badge-review">※要確認</span>
+            </li>
+          ))}
+        </ul>
+        <p className="muted small" id="magnesium-source">
+          出典：{MAGNESIUM_SOURCE.text}
+          {MAGNESIUM_SOURCE.check && ' ※要確認'}
+        </p>
       </section>
 
       <section className="block" id="otc-corrections">

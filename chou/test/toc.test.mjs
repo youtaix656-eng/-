@@ -59,6 +59,20 @@ import {
   HABIT_CORRECTIONS,
   HABIT_UNVERIFIED,
 } from '../src/data/gutHabits.js';
+import {
+  PROTEIN_FOODS,
+  PROTEIN_GUIDES,
+  ELIMINATION_TARGETS,
+  PROTEIN_CORRECTIONS,
+  PROTEIN_UNVERIFIED,
+} from '../src/data/protein.js';
+import {
+  FASTING_SHAPES,
+  FASTING_CLAIMS,
+  FASTING_CORRECTIONS,
+  FASTING_UNVERIFIED,
+} from '../src/data/fasting.js';
+import { MAGNESIUM_CORRECTIONS, MAGNESIUM_UNVERIFIED } from '../src/data/magnesium.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -254,7 +268,13 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     BUTYRATE_UNVERIFIED.length;
   for (const item of WITHDRAWN) assert.ok(entries.some((e) => e.title === item.title), item.title);
   // 市販薬から来るぶん（薬は「◯◯（市販薬）」という題。素の名前は別名で引ける）
-  const fromOtcCount = OTC_KINDS.length + OTC_CORRECTIONS.length + OTC_UNVERIFIED.length;
+  // マグネシウムは市販薬の画面の中の節なので、このまとまりに入る
+  const fromOtcCount =
+    OTC_KINDS.length +
+    OTC_CORRECTIONS.length +
+    OTC_UNVERIFIED.length +
+    MAGNESIUM_CORRECTIONS.length +
+    MAGNESIUM_UNVERIFIED.length;
   for (const kind of OTC_KINDS) {
     const entry = entries.find((e) => e.title === `${kind.name}（市販薬）`);
     assert.ok(entry, kind.name);
@@ -270,6 +290,26 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
   for (const item of [...HARMFUL_HABITS, ...HELPFUL_HABITS]) {
     assert.ok(entries.some((e) => e.title === item.title), item.title);
   }
+  // タンパク質から来るぶん（食べものは「◯◯（タンパク質）」＋ビタミンDの1件）
+  const fromProteinCount =
+    PROTEIN_FOODS.length +
+    PROTEIN_GUIDES.length +
+    ELIMINATION_TARGETS.length +
+    1 +
+    PROTEIN_CORRECTIONS.length +
+    PROTEIN_UNVERIFIED.length;
+  for (const food of PROTEIN_FOODS) {
+    const entry = entries.find((e) => e.title === `${food.name}（タンパク質）`);
+    assert.ok(entry, food.name);
+    assert.ok(entry.aliases.some((a) => a.name === food.name), `${food.name}: 別名が無い`);
+  }
+  // 断食から来るぶん。**やめどきは項目にしない**（文の一覧であって項目ではない）
+  const fromFastingCount =
+    FASTING_SHAPES.length +
+    FASTING_CLAIMS.length +
+    FASTING_CORRECTIONS.length +
+    FASTING_UNVERIFIED.length;
+  for (const item of FASTING_CORRECTIONS) assert.ok(entries.some((e) => e.title === item.title), item.title);
   assert.equal(
     entries.length,
     TERMS.length +
@@ -283,7 +323,9 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       fromPrebioticCount +
       fromButyrateCount +
       fromOtcCount +
-      fromHabitCount,
+      fromHabitCount +
+      fromProteinCount +
+      fromFastingCount,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

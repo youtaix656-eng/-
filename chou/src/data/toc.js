@@ -45,6 +45,21 @@ import {
   HABIT_CORRECTIONS,
   HABIT_UNVERIFIED,
 } from './gutHabits.js';
+import {
+  PROTEIN_FOODS,
+  PROTEIN_GUIDES,
+  ELIMINATION_TARGETS,
+  VITAMIN_D,
+  PROTEIN_CORRECTIONS,
+  PROTEIN_UNVERIFIED,
+} from './protein.js';
+import {
+  FASTING_SHAPES,
+  FASTING_CLAIMS,
+  FASTING_CORRECTIONS,
+  FASTING_UNVERIFIED,
+} from './fasting.js';
+import { MAGNESIUM_CORRECTIONS, MAGNESIUM_UNVERIFIED } from './magnesium.js';
 import { readingKey, normalizeAlnum } from '../lib/yomi.js';
 
 /** 飛び先の種類。**この4つだけ**（画面／記録の設問／機能／仕組み・決まり） */
@@ -70,6 +85,8 @@ export const TOC_GROUPS = [
   { id: 'butyrate', label: '酪酸菌' },
   { id: 'otc', label: '市販薬' },
   { id: 'habit', label: '胃腸の習慣' },
+  { id: 'protein', label: 'タンパク質' },
+  { id: 'fasting', label: '断食・空腹' },
   { id: 'screen', label: '画面' },
   { id: 'user', label: '自分で追加' },
 ];
@@ -521,7 +538,7 @@ function fromOtc() {
     reading: `${kind.reading}しはんやく`,
     group: 'otc',
     aliases: [{ name: kind.name, reading: kind.reading }],
-    description: `出典の説明：${kind.said} ${kind.doctor.replace(/\*\*/g, '')}`,
+    description: `出典の説明：${kind.said.replace(/\*\*/g, '')} ${kind.doctor.replace(/\*\*/g, '')}`,
     descriptionStatus: 'needs_review',
     destinations: [
       { type: 'page', view: 'otc', targetId: `otc-${kind.id}`, label: '読む' },
@@ -552,7 +569,34 @@ function fromOtc() {
       { type: 'system', view: 'otc', targetId: `ounv-${item.id}`, label: '裏が取れていない主張として読む' },
     ],
   }));
-  return [...kinds, ...fixes, ...claims];
+  // マグネシウムは市販薬の画面の中の節なので、このまとまりへ足す。
+  // **食べもの（きのこ・海藻・きな粉・アーモンド）は項目にしない**——
+  // アーモンドは低FODMAP の一覧と題がぶつかり、ほかも食材の一覧から辿れるため。
+  const mgFixes = MAGNESIUM_CORRECTIONS.map((item) => ({
+    id: `toc-mgcorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'otc',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'otc', targetId: `mgcorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const mgClaims = MAGNESIUM_UNVERIFIED.map((item) => ({
+    id: `toc-mgunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'otc',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'otc', targetId: `mgunv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...kinds, ...fixes, ...claims, ...mgFixes, ...mgClaims];
 }
 
 /** 胃腸の習慣から。**習慣には記録できる所への飛び先を必ず持たせる** */
@@ -623,6 +667,140 @@ function fromHabits() {
   return [...harmful, ...helpful, weak, ...fixes, ...claims];
 }
 
+/**
+ * タンパク質と腸から。
+ * **食べものは「◯◯（タンパク質）」という題にする**——卵・納豆・肉・魚・木綿豆腐は
+ * 低FODMAP や食べ合わせの一覧にも同じ名前で載っていて、同じ題にすると重複で落ちる
+ * （「◯◯（善玉菌の餌）」と同じ直し方。素の名前は別名で引ける）。
+ */
+function fromProtein() {
+  const foods = PROTEIN_FOODS.map((food) => ({
+    id: `toc-protein-${food.id}`,
+    title: `${food.name}（タンパク質）`,
+    reading: `${food.reading}たんぱくしつ`,
+    group: 'protein',
+    aliases: [{ name: food.name, reading: food.reading }],
+    description: `出典の目安：${food.amount}。${food.note}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'protein', targetId: `protein-${food.id}`, label: '一覧で見る' },
+    ],
+  }));
+  const guides = PROTEIN_GUIDES.map((guide) => ({
+    id: `toc-pguide-${guide.id}`,
+    title: guide.title,
+    reading: guide.reading,
+    group: 'protein',
+    aliases: [],
+    description: `${guide.said} ${guide.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'protein', targetId: `guide-${guide.id}`, label: '読む' }],
+  }));
+  const targets = ELIMINATION_TARGETS.map((target) => ({
+    id: `toc-elim-${target.id}`,
+    title: `${target.name}をやめてみる`,
+    reading: `${target.reading}をやめてみる`,
+    group: 'protein',
+    aliases: [{ name: target.name, reading: target.reading }],
+    description: `${target.said} ${target.caution.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'function', view: 'protein', targetId: `elim-${target.id}`, label: 'ためしてみる' },
+    ],
+  }));
+  const vitamind = {
+    id: 'toc-vitamind',
+    title: VITAMIN_D.title,
+    reading: VITAMIN_D.reading,
+    group: 'protein',
+    aliases: [],
+    description: `${VITAMIN_D.body} 注意：${VITAMIN_D.caution.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'protein', targetId: 'protein-vitamind', label: '読む' }],
+  };
+  const fixes = PROTEIN_CORRECTIONS.map((item) => ({
+    id: `toc-prcorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'protein',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'protein', targetId: `prcorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = PROTEIN_UNVERIFIED.map((item) => ({
+    id: `toc-prunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'protein',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'protein', targetId: `prunv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...foods, ...guides, ...targets, vitamind, ...fixes, ...claims];
+}
+
+/**
+ * 断食・空腹の時間から。
+ * **やめどきは目次に置かない**——文の一覧であって項目ではないため
+ * （画面の `fasting-stop` へは「断食・空腹の画面」から辿れる）。
+ */
+function fromFasting() {
+  const shapes = FASTING_SHAPES.map((shape) => ({
+    id: `toc-fshape-${shape.id}`,
+    title: shape.title,
+    reading: shape.reading,
+    group: 'fasting',
+    aliases: [],
+    description: `${shape.said} ${shape.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'fasting', targetId: `shape-${shape.id}`, label: '読む' },
+      { type: 'system', view: 'fasting', targetId: 'fasting-stop', label: 'やめどきを先に読む' },
+    ],
+  }));
+  const claims = FASTING_CLAIMS.map((item) => ({
+    id: `toc-fclaim-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'fasting',
+    aliases: [],
+    description: [item.body, item.note].filter(Boolean).join(' '),
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'fasting', targetId: `fclaim-${item.id}`, label: '読む' }],
+  }));
+  const fixes = FASTING_CORRECTIONS.map((item) => ({
+    id: `toc-fcorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'fasting',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'fasting', targetId: `fcorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const unverified = FASTING_UNVERIFIED.map((item) => ({
+    id: `toc-funverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'fasting',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'fasting', targetId: `funv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...shapes, ...claims, ...fixes, ...unverified];
+}
+
 function withGroup(list, group) {
   return list.map((entry) => ({ aliases: [], destinations: [], ...entry, group }));
 }
@@ -650,6 +828,8 @@ export function buildTocEntries(state = {}) {
     ...fromButyrate(),
     ...fromOtc(),
     ...fromHabits(),
+    ...fromProtein(),
+    ...fromFasting(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

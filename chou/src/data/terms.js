@@ -695,6 +695,48 @@ export const TERMS = [
       { type: 'page', view: 'visitnote', targetId: 'note-parts', label: '受診メモに入れる' },
     ],
   },
+  {
+    id: 'term-magnesium',
+    title: 'マグネシウム',
+    reading: 'まぐねしうむ',
+    aliases: [{ name: '酸化マグネシウム', reading: 'さんかまぐねしうむ' }],
+    description:
+      'ミネラルのひとつです。腸の話としては、酸化マグネシウムが便秘で処方されることの多い薬だという点がいちばん関わります（腸の中に水を集めて便をやわらかくするとされます）。処方されているものを自分でやめないでください。腎臓が悪い人では体にたまりすぎることがあるので、サプリで足すのも自己判断でしないでください。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'otc', targetId: 'otc-magnesium', label: '市販薬の画面で読む' },
+      { type: 'question', view: 'home', targetId: 'rec-otc', label: '使った日を記録する' },
+    ],
+  },
+  {
+    id: 'term-elimination',
+    title: 'ためしにやめてみる',
+    reading: 'ためしにやめてみる',
+    aliases: [
+      { name: '除去', reading: 'じょきょ' },
+      { name: 'グルテンフリー', reading: 'ぐるてんふりー' },
+    ],
+    description:
+      'ある食べものをしばらくやめて、体の変化を見る試し方です。低FODMAP と同じ考え方で、やめたままにするのではなく、期間が終わったら一度もとに戻して変わるかどうかを見ます。このアプリは同時に2つやめられません（どちらが効いたのか分からなくなるため）。守れた日数も、良くなったかどうかも記録しません。',
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'function', view: 'protein', targetId: 'protein-elimination', label: 'ためしてみる' },
+      { type: 'page', view: 'fodmap', targetId: 'fodmap-notes', label: '低FODMAP の考え方を読む' },
+    ],
+  },
+  {
+    id: 'term-autophagy-word',
+    title: 'オートファジー（言葉として）',
+    reading: 'おーとふぁじーことばとして',
+    aliases: [],
+    description:
+      '細胞の中の古いタンパク質を作り替える仕組みのことです。「16時間あけると活性化する」という線引きが広まっていますが、出どころをたどれていません。時間で切りかわるスイッチのような説明は分かりやすいぶん、そのまま信じられやすいところです。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'fasting', targetId: 'fclaim-autophagy', label: '断食の画面で読む' },
+      { type: 'system', view: 'fasting', targetId: 'funv-sixteen', label: '裏が取れていない主張として読む' },
+    ],
+  },
 ];
 
 /** 目次に出す画面（飛び先の入口）。**画面を足したらここにも足す** */
@@ -819,5 +861,25 @@ export const SCREENS = [
       '傷つけるとされる習慣・整えるとされる習慣と、食物繊維についての言い分が割れるところをまとめた画面です。やれた数は数えません。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'habits', targetId: 'habit-harmful', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-protein',
+    title: 'タンパク質の画面',
+    reading: 'たんぱくしつのがめん',
+    aliases: [],
+    description:
+      '出典が挙げるタンパク質源と目安、ためしにやめてみる（小麦・乳製品）、乳製品の3つの言い分、訂正、裏が取れていない主張をまとめた画面です。グラム数は計算しません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'protein', targetId: 'protein-foods', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-fasting',
+    title: '断食・空腹の画面',
+    reading: 'だんじきくうふくのがめん',
+    aliases: [{ name: '半日断食', reading: 'はんにちだんじき' }],
+    description:
+      'このアプリは断食を勧めていません。やめどきを先に置き、出典のやり方・そのままにできない主張・裏が取れていない主張を並べた画面です。日数も時間も数えません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'fasting', targetId: 'fasting-stop', label: 'ひらく' }],
   },
 ];

@@ -10,6 +10,9 @@ import { PREBIOTIC_UNVERIFIED, PREBIOTIC_CORRECTIONS, SOURCE_CONFLICTS } from '.
 import { BUTYRATE_UNVERIFIED, BUTYRATE_CORRECTIONS, WITHDRAWN } from '../src/data/butyrate.js';
 import { OTC_UNVERIFIED, OTC_CORRECTIONS } from '../src/data/otcDrugs.js';
 import { HABIT_UNVERIFIED, HABIT_CORRECTIONS } from '../src/data/gutHabits.js';
+import { PROTEIN_UNVERIFIED, PROTEIN_CORRECTIONS, PROTEIN_GUIDES } from '../src/data/protein.js';
+import { FASTING_UNVERIFIED, FASTING_CORRECTIONS } from '../src/data/fasting.js';
+import { MAGNESIUM_UNVERIFIED, MAGNESIUM_CORRECTIONS } from '../src/data/magnesium.js';
 
 /**
  * **引用して否定している出典の言い分**は、見張りの対象から外す。
@@ -33,6 +36,13 @@ const QUOTED = [
   ...OTC_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
   ...HABIT_UNVERIFIED.map((i) => i.claim),
   ...HABIT_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...PROTEIN_UNVERIFIED.map((i) => i.claim),
+  ...PROTEIN_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...PROTEIN_GUIDES.map((i) => i.said),
+  ...FASTING_UNVERIFIED.map((i) => i.claim),
+  ...FASTING_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...MAGNESIUM_UNVERIFIED.map((i) => i.claim),
+  ...MAGNESIUM_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
 ].filter(Boolean);
 
 function stripQuoted(text) {
