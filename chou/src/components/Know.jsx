@@ -23,10 +23,122 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('digest')}>
+            <strong>まとめて見る</strong>
+            <span className="muted small">
+              訂正・裏が取れていない主張・食い違い・扱わないこと・出典を、素材をまたいで横に並べます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('ibs')}>
+            <strong>過敏性腸症候群のこと</strong>
+            <span className="muted small">
+              検査で異常が出ないこと、分け方、出典が挙げる手当て。記録から型は当てません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('cleanup')}>
+            <strong>腸のお掃除（5つ）</strong>
+            <span className="muted small">
+              食べ物・発酵食品・ストレス・姿勢・運動と睡眠。3つの考え方が食い違う所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('combine')}>
+            <strong>食べ合わせ（アダムスキー式）</strong>
+            <span className="muted small">
+              消化の速いものと遅いものを一緒に食べない、という考え方。低FODMAP と反対になる所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('fodmap')}>
             <strong>低FODMAP の食材</strong>
             <span className="muted small">
               少なめ／量による／多め の一覧。自分のからだの結果を1件ずつ付けられます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('prebiotics')}>
+            <strong>善玉菌の餌</strong>
+            <span className="muted small">
+              水溶性食物繊維・オリゴ糖・レジスタントスターチ。低FODMAP と目的が反対を向く所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('butyrate')}>
+            <strong>酪酸菌と短鎖脂肪酸</strong>
+            <span className="muted small">
+              出典が挙げるはたらきと、出典自身が取り下げた説（痩せ菌・デブ菌）を並べます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('morning')}>
+            <strong>朝のリズムと排便</strong>
+            <span className="muted small">
+              出典が挙げる特徴とやってみること。出なくても責めない、が芯です。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('scared')}>
+            <strong>名指しされた食べもの</strong>
+            <span className="muted small">
+              「猛毒」「食べるな」と言われるもの。このアプリは食べものに札を貼りません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('protein')}>
+            <strong>タンパク質と腸</strong>
+            <span className="muted small">
+              出典が挙げる目安と、ためしにやめてみる（小麦・乳製品）。グラム数は計算しません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('fasting')}>
+            <strong>断食・空腹の時間</strong>
+            <span className="muted small">
+              このアプリは勧めていません。やめどきと、そのままにできない主張を先に並べます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('otc')}>
+            <strong>市販薬とのつきあい方</strong>
+            <span className="muted small">
+              下痢止め・胃薬・痛み止め。飲み合わせは判定しません。使った日は記録に残せます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('habits')}>
+            <strong>胃腸の習慣</strong>
+            <span className="muted small">
+              傷つけるとされる7つ・整えるとされる4つ。食物繊維の言い分が割れる所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('probiotics')}>
+            <strong>整腸剤</strong>
+            <span className="muted small">
+              飲んでいるものを登録して、試している期間を見ます。どれかを勧めることはしません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('seasonings')}>
+            <strong>調味料の選び方</strong>
+            <span className="muted small">
+              さしすせそ＋みりん・甘酒の7つ。買うときに表示のどこを見るか。
             </span>
           </button>
         </li>

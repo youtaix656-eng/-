@@ -16,6 +16,8 @@ import {
   undoLastTocAdditions,
   setVerified,
 } from './tocCandidates.js';
+import { emptyProbiotic, normalizeProbiotic } from './probiotic.js';
+import { normalizeEliminations, normalizeElimination, canStart, running } from './elimination.js';
 import { emptyDay, normalizeDays, normalizeDay, newId } from './days.js';
 import { todayKey } from './dates.js';
 
@@ -25,6 +27,11 @@ const EMPTY = {
   settings: { theme: 'auto' },
   // 目次まわり。**候補は本体（userTerms）とは別に持つ**——「追加する」を押すまで目次に出さない
   ...emptyTocState(),
+  // 整腸剤（飲んでいるもの1つ）と、調味料の棚おろし
+  probiotic: emptyProbiotic(),
+  seasonings: {},
+  // ためしにやめてみた期間（小麦・乳製品など）。**同時に走るのは1件だけ**
+  eliminations: [],
 };
 
 /** 消したものを戻せる時間 */
@@ -39,6 +46,9 @@ function hydrate(raw) {
     userTerms: Array.isArray(raw.userTerms) ? raw.userTerms.filter((t) => t && t.id && t.title) : [],
     removedIds: Array.isArray(raw.removedIds) ? raw.removedIds.filter((id) => typeof id === 'string') : [],
     tocHistory: Array.isArray(raw.tocHistory) ? raw.tocHistory.filter((h) => h && h.id) : [],
+    probiotic: normalizeProbiotic(raw.probiotic),
+    seasonings: raw.seasonings && typeof raw.seasonings === 'object' ? { ...raw.seasonings } : {},
+    eliminations: normalizeEliminations(raw.eliminations),
   };
 }
 
@@ -172,6 +182,51 @@ export function useStore() {
     });
   }, []);
 
+  /** 飲んでいる整腸剤（1つだけ）。**効いたかは記録しない**——残すのは何をいつから、まで */
+  const setProbiotic = useCallback((patch) => {
+    setState((prev) => ({ ...prev, probiotic: normalizeProbiotic({ ...prev.probiotic, ...patch }) }));
+  }, []);
+
+  /**
+   * ためしにやめてみるのを始める。**2つ同時には始めない**——どちらが効いたのか
+   * 分からなくなるため。断るだけで、**勝手に入れ替えない**（`canStart` を見て返す）。
+   */
+  const startElimination = useCallback((targetId, startedOn) => {
+    const check = canStart(state.eliminations, targetId);
+    if (!check.ok) return check;
+    const entry = normalizeElimination({ targetId, startedOn: startedOn || todayKey() });
+    if (!entry) return { ok: false, reason: '始める日が正しくありません。' };
+    setState((prev) => ({ ...prev, eliminations: [...prev.eliminations, entry] }));
+    return { ok: true, reason: '' };
+  }, [state.eliminations]);
+
+  /** 終える。**採点しない**——終えた日とひとことだけを残す */
+  const endElimination = useCallback((id, endedOn, note) => {
+    setState((prev) => ({
+      ...prev,
+      eliminations: prev.eliminations.map((e) =>
+        e.id === id
+          ? normalizeElimination({ ...e, endedOn: endedOn || todayKey(), note: note === undefined ? e.note : note })
+          : e,
+      ).filter(Boolean),
+    }));
+  }, []);
+
+  /** 消す（作った記録は必ず消せるようにする） */
+  const removeElimination = useCallback((id) => {
+    setState((prev) => ({ ...prev, eliminations: prev.eliminations.filter((e) => e.id !== id) }));
+  }, []);
+
+  /** 調味料の棚おろし。**採点しない**——押した本人の答えを残すだけ */
+  const setSeasoning = useCallback((id, choice) => {
+    setState((prev) => {
+      const next = { ...prev.seasonings };
+      if (!choice || next[id] === choice) delete next[id];
+      else next[id] = choice;
+      return { ...prev, seasonings: next };
+    });
+  }, []);
+
   const setSettings = useCallback((patch) => {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
   }, []);
@@ -241,6 +296,8 @@ export function useStore() {
       settings: state.settings,
       userTerms: state.userTerms,
       removedIds: state.removedIds,
+      probiotic: state.probiotic,
+      seasonings: state.seasonings,
     }),
     [state],
   );
@@ -294,6 +351,12 @@ export function useStore() {
     removeDay,
     setFoodResult,
     setSettings,
+    setProbiotic,
+    setSeasoning,
+    startElimination,
+    endElimination,
+    removeElimination,
+    runningElimination: running(state.eliminations),
     addTocCandidate,
     acceptTocCandidate,
     rejectTocCandidate,

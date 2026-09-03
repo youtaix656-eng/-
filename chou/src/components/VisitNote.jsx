@@ -2,11 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { lastKeys, todayKey } from '../lib/dates.js';
 import { buildVisitNote, visitNoteFilename, NOTE_PARTS, DEFAULT_PARTS, NOTE_RANGES } from '../lib/visitNote.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 受診メモ。**このアプリを持つ理由がここ。**
 // アプリは医療者へ送らない——作るのは文章まで。渡す相手は本人が選ぶ。
 
-export default function VisitNote({ store, focus, onFocusDone }) {
+export default function VisitNote({ store, focus, onFocusDone, onGo }) {
   useFocusJump(focus, onFocusDone);
   const [days, setDays] = useState(14);
   const [parts, setParts] = useState(DEFAULT_PARTS);
@@ -108,6 +109,7 @@ export default function VisitNote({ store, focus, onFocusDone }) {
         </p>
         <p>アプリが誰かへ送ることはありません。コピーしたあと、貼る先は自分で選んでください。</p>
       </div>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

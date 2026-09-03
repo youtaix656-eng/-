@@ -8,10 +8,20 @@
 //  3. 外から来たもの（取り込んだファイル）は必ず `normalizeDay` を通してから画面へ渡す。
 //     項目が1つ欠けているだけで画面が落ちるのを防ぐ。
 
-import { BELLY_BY_ID, LEVEL_BY_ID, STOOL_MARKS, FLAG_MARK_IDS } from '../data/scales.js';
+import {
+  BELLY_BY_ID,
+  LEVEL_BY_ID,
+  EXERCISE_BY_ID,
+  SLEEP_BY_ID,
+  POSTURE_BY_ID,
+  STOOL_MARKS,
+  FLAG_MARK_IDS,
+} from '../data/scales.js';
+import { OTC_KINDS } from '../data/otcDrugs.js';
 import { parseKey, timeOrder } from './dates.js';
 
 const MARK_IDS = STOOL_MARKS.map((m) => m.id);
+const OTC_IDS = OTC_KINDS.map((k) => k.id);
 const NOTE_MAX = 2000; // 1日のひとことの上限（切ったことは画面に出す）
 const FOOD_MAX = 500;
 
@@ -28,6 +38,12 @@ export function emptyDay(date) {
     belly: null,
     pain: null,
     bloat: null,
+    stress: null,
+    exercise: null,
+    sleep: null,
+    posture: null,
+    probiotic: false,
+    otc: [],
     stools: [],
     meals: [],
     note: '',
@@ -69,6 +85,12 @@ export function normalizeDay(raw) {
   day.belly = BELLY_BY_ID[raw.belly] ? raw.belly : null;
   day.pain = LEVEL_BY_ID[raw.pain] ? raw.pain : null;
   day.bloat = LEVEL_BY_ID[raw.bloat] ? raw.bloat : null;
+  day.stress = LEVEL_BY_ID[raw.stress] ? raw.stress : null;
+  day.exercise = EXERCISE_BY_ID[raw.exercise] ? raw.exercise : null;
+  day.sleep = SLEEP_BY_ID[raw.sleep] ? raw.sleep : null;
+  day.posture = POSTURE_BY_ID[raw.posture] ? raw.posture : null;
+  day.probiotic = raw.probiotic === true;
+  day.otc = Array.isArray(raw.otc) ? raw.otc.filter((id) => OTC_IDS.includes(id)) : [];
   day.stools = (Array.isArray(raw.stools) ? raw.stools : [])
     .map(normalizeStool)
     .filter(Boolean)
@@ -99,6 +121,12 @@ export function hasRecord(day) {
     day.belly ||
       (day.pain && day.pain !== 'none') ||
       (day.bloat && day.bloat !== 'none') ||
+      (day.stress && day.stress !== 'none') ||
+      (day.exercise && day.exercise !== 'none') ||
+      day.sleep ||
+      day.posture ||
+      day.probiotic ||
+      day.otc.length ||
       day.stools.length ||
       day.meals.length ||
       (day.note && day.note.trim()),

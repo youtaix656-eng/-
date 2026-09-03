@@ -24,10 +24,75 @@ import {
   PLACEHOLDER_DESCRIPTION,
   EMPTY_DESTINATIONS_TEXT,
 } from '../src/data/toc.js';
+import {
+  IBS_TYPES,
+  IBS_PITFALLS,
+  IBS_APPROACHES,
+  SIBO_POINTS,
+  SELF_CARE,
+  IBS_CORRECTIONS,
+  IBS_UNVERIFIED,
+} from '../src/data/ibs.js';
+import { GUT_CARE_TOPICS } from '../src/lib/homeTopics.js';
+import { CONFLICT_TOPICS, SCOPE_NOTES, crossTopics } from '../src/lib/digest.js';
 import { TERMS, SCREENS } from '../src/data/terms.js';
 import { BRISTOL } from '../src/data/scales.js';
 import { RED_FLAGS } from '../src/data/redFlags.js';
 import { FODMAP_FOODS } from '../src/data/fodmap.js';
+import { SPEED_NAMED, BAD_PAIRS, ADAMSKI_UNVERIFIED } from '../src/data/adamski.js';
+import { BACTERIA, PRODUCTS, PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from '../src/data/probiotics.js';
+import { SEASONINGS } from '../src/data/seasonings.js';
+import {
+  CLEANUP_STEPS,
+  STRESS_RELIEF,
+  POSTURE_TIPS,
+  CLEANUP_CORRECTIONS,
+  CLEANUP_UNVERIFIED,
+} from '../src/data/cleanup.js';
+import {
+  PREBIOTIC_FOODS,
+  PREBIOTIC_KINDS,
+  SOURCE_CONFLICTS,
+  PREBIOTIC_CORRECTIONS,
+  PREBIOTIC_UNVERIFIED,
+} from '../src/data/prebiotics.js';
+import {
+  SHORT_CHAIN,
+  BUTYRATE_ROLES,
+  BUTYRATE_RUMORS,
+  WITHDRAWN,
+  BUTYRATE_CORRECTIONS,
+  BUTYRATE_UNVERIFIED,
+} from '../src/data/butyrate.js';
+import { OTC_KINDS, OTC_CORRECTIONS, OTC_UNVERIFIED } from '../src/data/otcDrugs.js';
+import {
+  HARMFUL_HABITS,
+  HELPFUL_HABITS,
+  HABIT_CORRECTIONS,
+  HABIT_UNVERIFIED,
+} from '../src/data/gutHabits.js';
+import {
+  PROTEIN_FOODS,
+  PROTEIN_GUIDES,
+  ELIMINATION_TARGETS,
+  PROTEIN_CORRECTIONS,
+  PROTEIN_UNVERIFIED,
+} from '../src/data/protein.js';
+import {
+  FASTING_SHAPES,
+  FASTING_CLAIMS,
+  FASTING_CORRECTIONS,
+  FASTING_UNVERIFIED,
+} from '../src/data/fasting.js';
+import { MAGNESIUM_CORRECTIONS, MAGNESIUM_UNVERIFIED } from '../src/data/magnesium.js';
+import {
+  MORNING_TRAITS,
+  MORNING_HABITS,
+  MORNING_CORRECTIONS,
+  MORNING_UNVERIFIED,
+} from '../src/data/morning.js';
+import { NAMED_FOODS, SCARED_CORRECTIONS, SCARED_UNVERIFIED } from '../src/data/scaredFoods.js';
+import { ALCOHOL_GUT, ALCOHOL_CORRECTIONS, ALCOHOL_UNVERIFIED } from '../src/data/alcohol.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -183,7 +248,152 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
   for (const screen of SCREENS) assert.ok(entries.some((e) => e.id === screen.id), screen.title);
   for (const flag of RED_FLAGS) assert.ok(entries.some((e) => e.title === flag.title), flag.title);
   for (const food of FODMAP_FOODS) assert.ok(entries.some((e) => e.title === food.name), food.name);
-  assert.equal(entries.length, TERMS.length + SCREENS.length + BRISTOL.length + RED_FLAGS.length + FODMAP_FOODS.length);
+  // 食べ合わせ（アダムスキー式）から来るぶん：低FODMAP に無い食べもの＋よくない組み合わせ＋裏が取れていない主張
+  const fromAdamskiCount =
+    SPEED_NAMED.filter((f) => !FODMAP_FOODS.some((x) => x.name === f.name)).length +
+    BAD_PAIRS.length +
+    ADAMSKI_UNVERIFIED.length;
+  for (const claim of ADAMSKI_UNVERIFIED) assert.ok(entries.some((e) => e.title === claim.title), claim.title);
+  // 整腸剤・調味料から来るぶん
+  const fromCareCount =
+    BACTERIA.length + PRODUCTS.length + PROBIOTIC_UNVERIFIED.length + PROBIOTIC_CORRECTIONS.length + SEASONINGS.length + 1;
+  for (const b of BACTERIA) assert.ok(entries.some((e) => e.title === b.name), b.name);
+  for (const s of SEASONINGS) assert.ok(entries.some((e) => e.title === `${s.title}の選び方`), s.title);
+  // 腸のお掃除から来るぶん
+  const fromCleanupCount =
+    CLEANUP_STEPS.length +
+    STRESS_RELIEF.length +
+    POSTURE_TIPS.length +
+    CLEANUP_CORRECTIONS.length +
+    CLEANUP_UNVERIFIED.length;
+  for (const step of CLEANUP_STEPS) assert.ok(entries.some((e) => e.title === step.title), step.title);
+  // 善玉菌の餌から来るぶん（食べものは「◯◯（善玉菌の餌）」＋オメガ3・リンゴ酢の2件）
+  const fromPrebioticCount =
+    PREBIOTIC_KINDS.length +
+    PREBIOTIC_FOODS.length +
+    SOURCE_CONFLICTS.length +
+    PREBIOTIC_CORRECTIONS.length +
+    PREBIOTIC_UNVERIFIED.length +
+    2;
+  for (const food of PREBIOTIC_FOODS) {
+    assert.ok(entries.some((e) => e.title === `${food.name}（善玉菌の餌）`), food.name);
+  }
+  for (const item of SOURCE_CONFLICTS) assert.ok(entries.some((e) => e.title === item.title), item.title);
+  // 酪酸菌から来るぶん。**芽胞は用語（term-spore）が単一の正なので、ここでは作らない**
+  const fromButyrateCount =
+    SHORT_CHAIN.length +
+    BUTYRATE_ROLES.length +
+    BUTYRATE_RUMORS.length +
+    WITHDRAWN.length +
+    BUTYRATE_CORRECTIONS.length +
+    BUTYRATE_UNVERIFIED.length;
+  for (const item of WITHDRAWN) assert.ok(entries.some((e) => e.title === item.title), item.title);
+  // 市販薬から来るぶん（薬は「◯◯（市販薬）」という題。素の名前は別名で引ける）
+  // マグネシウムは市販薬の画面の中の節なので、このまとまりに入る
+  const fromOtcCount =
+    OTC_KINDS.length +
+    OTC_CORRECTIONS.length +
+    OTC_UNVERIFIED.length +
+    MAGNESIUM_CORRECTIONS.length +
+    MAGNESIUM_UNVERIFIED.length;
+  for (const kind of OTC_KINDS) {
+    const entry = entries.find((e) => e.title === `${kind.name}（市販薬）`);
+    assert.ok(entry, kind.name);
+    assert.ok(entry.aliases.some((a) => a.name === kind.name), `${kind.name}: 別名が無い`);
+  }
+  // 胃腸の習慣から来るぶん（＋「胃が弱っているときに避けるとされるもの」の1件）
+  // お酒は胃腸の習慣の画面の中の節なので、このまとまりに入る（＋量の目安の1件）
+  const fromHabitCount =
+    HARMFUL_HABITS.length +
+    HELPFUL_HABITS.length +
+    1 +
+    HABIT_CORRECTIONS.length +
+    HABIT_UNVERIFIED.length +
+    ALCOHOL_GUT.length +
+    1 +
+    ALCOHOL_CORRECTIONS.length +
+    ALCOHOL_UNVERIFIED.length;
+  for (const item of [...HARMFUL_HABITS, ...HELPFUL_HABITS]) {
+    assert.ok(entries.some((e) => e.title === item.title), item.title);
+  }
+  // タンパク質から来るぶん（食べものは「◯◯（タンパク質）」＋ビタミンDの1件）
+  const fromProteinCount =
+    PROTEIN_FOODS.length +
+    PROTEIN_GUIDES.length +
+    ELIMINATION_TARGETS.length +
+    1 +
+    PROTEIN_CORRECTIONS.length +
+    PROTEIN_UNVERIFIED.length;
+  for (const food of PROTEIN_FOODS) {
+    const entry = entries.find((e) => e.title === `${food.name}（タンパク質）`);
+    assert.ok(entry, food.name);
+    assert.ok(entry.aliases.some((a) => a.name === food.name), `${food.name}: 別名が無い`);
+  }
+  // 断食から来るぶん。**やめどきは項目にしない**（文の一覧であって項目ではない）
+  // 断食から来るぶん（＋「空腹の時間中でも食べてよいとされるもの」の1件）。
+  // **やめどきは項目にしない**（文の一覧であって項目ではない）
+  const fromFastingCount =
+    FASTING_SHAPES.length +
+    FASTING_CLAIMS.length +
+    FASTING_CORRECTIONS.length +
+    FASTING_UNVERIFIED.length +
+    1;
+  // 朝のリズムから来るぶん
+  const fromMorningCount =
+    MORNING_TRAITS.length +
+    MORNING_HABITS.length +
+    MORNING_CORRECTIONS.length +
+    MORNING_UNVERIFIED.length;
+  for (const item of MORNING_HABITS) assert.ok(entries.some((e) => e.title === item.title), item.title);
+  // 名指しされた食べものから来るぶん（＋サバ缶の1件）。
+  // **食べものの題に「食べるな」の意味を込めない**ので、名前そのままで置く
+  const fromScaredCount =
+    NAMED_FOODS.length + 1 + SCARED_CORRECTIONS.length + SCARED_UNVERIFIED.length;
+  // 過敏性腸症候群から来るぶん（＋「検査で異常が出ないこと」の1件）
+  const fromIbsCount =
+    1 +
+    // 「このアプリが引き受けないところ」の1件
+    1 +
+    IBS_TYPES.length +
+    IBS_PITFALLS.length +
+    IBS_APPROACHES.length +
+    SIBO_POINTS.length +
+    SELF_CARE.length +
+    IBS_CORRECTIONS.length +
+    IBS_UNVERIFIED.length;
+  for (const item of [...IBS_TYPES, ...IBS_PITFALLS, ...SIBO_POINTS, ...IBS_CORRECTIONS]) {
+    assert.ok(entries.some((e) => e.title === item.title), item.title);
+  }
+  for (const food of NAMED_FOODS) assert.ok(entries.some((e) => e.title === food.name), food.name);
+  for (const item of FASTING_CORRECTIONS) assert.ok(entries.some((e) => e.title === item.title), item.title);
+  assert.equal(
+    entries.length,
+    TERMS.length +
+      SCREENS.length +
+      BRISTOL.length +
+      RED_FLAGS.length +
+      FODMAP_FOODS.length +
+      fromAdamskiCount +
+      fromCareCount +
+      fromCleanupCount +
+      fromPrebioticCount +
+      fromButyrateCount +
+      fromOtcCount +
+      fromHabitCount +
+      fromProteinCount +
+      fromFastingCount +
+      fromMorningCount +
+      fromScaredCount +
+      fromIbsCount +
+      // ホームの「あなたに向いた腸活」に並べているまとまり（1件足せば目次も増える）
+      GUT_CARE_TOPICS.length +
+      // 横断のまとめから来るぶん（節8件＋素材をまたぐ話＋食い違い＋扱わないこと。
+      // 過敏性腸症候群の「引き受けないところ」は fromIbs が出しているので1件引く）
+      8 +
+      crossTopics().length +
+      CONFLICT_TOPICS.length +
+      (SCOPE_NOTES.length - 1),
+  );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');
   assert.match(source, /import \{ FODMAP_FOODS/);

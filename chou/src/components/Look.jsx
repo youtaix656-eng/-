@@ -1,5 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { BELLY_STEPS, BRISTOL, BRISTOL_GROUPS, STOOL_MARKS } from '../data/scales.js';
+import {
+  BELLY_STEPS,
+  BRISTOL,
+  BRISTOL_GROUPS,
+  STOOL_MARKS,
+  LEVELS,
+  EXERCISE_STEPS,
+  SLEEP_STEPS,
+  POSTURE_STEPS,
+} from '../data/scales.js';
 import { lastKeys, todayKey, formatShort } from '../lib/dates.js';
 import { perDayText } from '../lib/visitNote.js';
 import { useFocusJump } from './useFocusJump.js';
@@ -11,8 +20,10 @@ import {
   markDays,
   topFoods,
   hardBellyDays,
+  lifeCounts,
   MIN_FOOD_DAYS,
 } from '../lib/stats.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // ふりかえり。**この画面がいちばん壊しやすい。**
 // 「たまねぎ → 腹痛」と矢印で結んだ瞬間に、根拠のない食事指導になる。
@@ -84,6 +95,7 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
   const marks = useMemo(() => markDays(store.days, keys), [store.days, keys]);
   const foods = useMemo(() => topFoods(store.days, keys, 10), [store.days, keys]);
   const hard = useMemo(() => hardBellyDays(store.days, keys), [store.days, keys]);
+  const life = useMemo(() => lifeCounts(store.days, keys), [store.days, keys]);
 
   const maxBristol = Math.max(1, ...Object.values(bristol.byNumber));
 
@@ -193,6 +205,54 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
             )}
           </section>
 
+          <section className="block" id="look-life">
+            <div className="block-head">
+              <h2>暮らしのこと</h2>
+            </div>
+            {life.stressDays === 0 && life.exerciseDays === 0 && life.sleepDays === 0 && life.postureDays === 0 ? (
+              <p className="muted">この期間の記録はまだありません。「きょう」の画面から記録できます。</p>
+            ) : (
+              <>
+                {life.stressDays > 0 && (
+                  <p>
+                    ストレス：
+                    {LEVELS.filter((l) => life.stress[l.id])
+                      .map((l) => `${l.label} ${life.stress[l.id]}日`)
+                      .join(' / ')}
+                  </p>
+                )}
+                {life.exerciseDays > 0 && (
+                  <p>
+                    体を動かした：
+                    {EXERCISE_STEPS.filter((e) => life.exercise[e.id])
+                      .map((e) => `${e.label} ${life.exercise[e.id]}日`)
+                      .join(' / ')}
+                  </p>
+                )}
+                {life.sleepDays > 0 && (
+                  <p>
+                    眠れたか：
+                    {SLEEP_STEPS.filter((e) => life.sleep[e.id])
+                      .map((e) => `${e.label} ${life.sleep[e.id]}日`)
+                      .join(' / ')}
+                  </p>
+                )}
+                {life.postureDays > 0 && (
+                  <p>
+                    姿勢：
+                    {POSTURE_STEPS.filter((e) => life.posture[e.id])
+                      .map((e) => `${e.label} ${life.posture[e.id]}日`)
+                      .join(' / ')}
+                  </p>
+                )}
+              </>
+            )}
+            <p className="muted small">
+              ここも並べているだけです。ストレス・運動・睡眠・姿勢とお腹の調子のあいだに
+              どちらが原因かは、この表からは分かりません。
+            </p>
+          </section>
+
           <section className="block" id="look-foods">
             <div className="block-head">
               <h2>よく食べていたもの</h2>
@@ -221,6 +281,7 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
           </section>
         </>
       )}
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

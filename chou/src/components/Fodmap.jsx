@@ -8,12 +8,16 @@ import {
   FOOD_RESULTS,
 } from '../data/fodmap.js';
 import { foodTargetId, tabForTarget } from '../data/toc.js';
+import { speedOf, speedLabel } from '../lib/combine.js';
+import { conflictOf, CONFLICT_NOTE } from '../lib/conflicts.js';
+import { SPEED_BASIS_LABELS } from '../data/adamski.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 低FODMAP の食材一覧。
 // **合う／合わないを機械が決めない**——結果を押すのは本人（fodmap.js の決めごと4）。
 
-export default function Fodmap({ store, focus, onFocusDone }) {
+export default function Fodmap({ store, focus, onFocusDone, onGo }) {
   const [q, setQ] = useState('');
   const [level, setLevel] = useState('all');
 
@@ -118,6 +122,24 @@ export default function Fodmap({ store, focus, onFocusDone }) {
                     </span>
                   </div>
                   {food.note && <p className="muted small">{food.note}</p>}
+                  {(() => {
+                    // アダムスキー式の見方を重ねる。**低FODMAP と反対になる時は必ずそう書く**
+                    // （どちらが正しいかはアプリが決めない）。
+                    const speed = speedOf(food.name);
+                    const clash = conflictOf(food.name);
+                    return (
+                      <p className="muted small">
+                        アダムスキー式では「{speedLabel(speed.speed)}」
+                        <span className="muted small">（{SPEED_BASIS_LABELS[speed.basis]}）</span>
+                        {clash && (
+                          <>
+                            <br />
+                            <span className="badge-review">言っていることが反対</span> {CONFLICT_NOTE}
+                          </>
+                        )}
+                      </p>
+                    );
+                  })()}
                   <div className="food-results">
                     <span className="muted small">自分のからだでは：</span>
                     {FOOD_RESULTS.map((r) => (
@@ -145,6 +167,7 @@ export default function Fodmap({ store, focus, onFocusDone }) {
         <br />
         最終確認：{FODMAP_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

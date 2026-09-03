@@ -10,6 +10,20 @@ import RedFlags from './components/RedFlags.jsx';
 import Fodmap from './components/Fodmap.jsx';
 import Settings from './components/Settings.jsx';
 import TableOfContents from './components/TableOfContents.jsx';
+import Combine from './components/Combine.jsx';
+import Probiotics from './components/Probiotics.jsx';
+import Seasonings from './components/Seasonings.jsx';
+import Cleanup from './components/Cleanup.jsx';
+import Prebiotics from './components/Prebiotics.jsx';
+import Butyrate from './components/Butyrate.jsx';
+import OtcDrugs from './components/OtcDrugs.jsx';
+import GutHabits from './components/GutHabits.jsx';
+import Protein from './components/Protein.jsx';
+import Fasting from './components/Fasting.jsx';
+import Morning from './components/Morning.jsx';
+import ScaredFoods from './components/ScaredFoods.jsx';
+import Ibs from './components/Ibs.jsx';
+import Digest from './components/Digest.jsx';
 
 // 下部ナビは4つ。そのすぐ上に「受診メモをつくる」の常設バーを置く。
 // 受診メモはこのアプリを持つ理由なので、思い立った時にどの画面からでも開けること。
@@ -83,10 +97,38 @@ export default function App() {
         {view === 'calendar' && <Calendar store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'look' && <Look store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'know' && <Know onGo={go} focus={focus} onFocusDone={clearFocus} />}
-        {view === 'visitnote' && <VisitNote store={store} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'visitnote' && (
+          <VisitNote store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
         {view === 'redflags' && <RedFlags focus={focus} onFocusDone={clearFocus} />}
-        {view === 'fodmap' && <Fodmap store={store} focus={focus} onFocusDone={clearFocus} />}
-        {view === 'settings' && <Settings store={store} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'fodmap' && <Fodmap store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'combine' && (
+          <Combine store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'probiotics' && (
+          <Probiotics store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'seasonings' && (
+          <Seasonings store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'cleanup' && (
+          <Cleanup store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'prebiotics' && (
+          <Prebiotics store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'butyrate' && <Butyrate onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'otc' && <OtcDrugs onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'habits' && <GutHabits onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'protein' && (
+          <Protein store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'fasting' && <Fasting onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'morning' && <Morning onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'scared' && <ScaredFoods onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'ibs' && <Ibs onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'digest' && <Digest onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'settings' && <Settings store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'toc' && (
           <TableOfContents store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
         )}

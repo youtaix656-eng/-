@@ -13,6 +13,7 @@ import {
 } from '../lib/dates.js';
 import { foodSuggestions } from '../lib/stats.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 const pad = (n) => String(n).padStart(2, '0');
@@ -121,8 +122,10 @@ export default function Calendar({ store, onGo, focus, onFocusDone }) {
           store={store}
           suggestions={suggestions}
           onOpenRedFlags={() => onGo('redflags')}
+        onOpenCombine={() => onGo('combine')}
         />
       </section>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }
