@@ -31,6 +31,62 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('diseases')}>
+            <strong>お腹の病気の読み物</strong>
+            <span className="muted small">
+              名前が挙がることのある病気の説明。当てはめる仕掛けは作っていません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('ibscare')}>
+            <strong>型ごとにできること</strong>
+            <span className="muted small">
+              下痢・便秘・混合・分類不能。型は自分で選ぶだけで、記録から当てません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('breathing')}>
+            <strong>お腹の力を抜く</strong>
+            <span className="muted small">
+              お腹で息をする・なでる。やめどきを先に置いています。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('eatingout')}>
+            <strong>外で食べるときの選び方</strong>
+            <span className="muted small">
+              買うときに表示のどこを見るか。お店や商品の名前は持ちません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('flora')}>
+            <strong>腸内フローラの言葉</strong>
+            <span className="muted small">
+              よく出てくる言葉の説明。あなたの菌がどうなっているかは分かりません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('visits')}>
+            <strong>通院</strong>
+            <span className="muted small">
+              予定・聞きたいこと・言われたこと。通知は鳴らしません。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('periods')}>
+            <strong>いつもと違う期間</strong>
+            <span className="muted small">
+              旅行・薬が変わった・生理など。印をつけるだけで、判定はしません。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('ibs')}>
             <strong>過敏性腸症候群のこと</strong>
             <span className="muted small">

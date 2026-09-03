@@ -67,6 +67,19 @@ export const POSTURE_STEPS = [
 
 export const POSTURE_BY_ID = Object.fromEntries(POSTURE_STEPS.map((s) => [s.id, s]));
 
+/**
+ * 水分。**「1日◯リットル」という目安を持たない**（README 決まり4。手元に無い基準）。
+ * 数えるのは量ではなく、その日の自分の感じ方の段だけ。
+ * 水分を制限するように言われている持病がある人は、量を変える前に医師に聞く。
+ */
+export const WATER_STEPS = [
+  { id: 'little', label: 'あまり飲めなかった', order: 0 },
+  { id: 'usual', label: 'いつもくらい', order: 1 },
+  { id: 'more', label: 'いつもより多め', order: 2 },
+];
+
+export const WATER_BY_ID = Object.fromEntries(WATER_STEPS.map((s) => [s.id, s]));
+
 /** ブリストルスケール（7段階）。説明は医療の言い方に寄せ、からかう言葉を入れない。
  * `reading` は目次・索引のためのもの（**手で書く。漢字の読みを機械が当てない**）。 */
 export const BRISTOL = [

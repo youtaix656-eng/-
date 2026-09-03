@@ -40,6 +40,12 @@ import {
 } from './butyrate.js';
 import { OTC_KINDS, OTC_CORRECTIONS, OTC_UNVERIFIED } from './otcDrugs.js';
 import { IBS_OUT_OF_SCOPE } from './ibs.js';
+import { DISEASES } from './diseases.js';
+import { BREATH_STEPS, MASSAGE_STEPS } from './breathing.js';
+import { CARE_BY_TYPE } from './ibsCare.js';
+import { EATING_OUT_KINDS } from './eatingOut.js';
+import { FLORA_BASICS, FLORA_CORRECTIONS, FLORA_UNVERIFIED } from './flora.js';
+import { PERIOD_KINDS } from '../lib/periods.js';
 import {
   SCOPE_NOTES as DIGEST_SCOPE_NOTES,
   crossTopics as digestCrossTopics,
@@ -122,6 +128,11 @@ export const TOC_GROUPS = [
   { id: 'scale', label: 'ものさし' },
   { id: 'flag', label: '受診の目安' },
   { id: 'ibs', label: '過敏性腸症候群' },
+  { id: 'disease', label: 'お腹の病気' },
+  { id: 'body', label: 'からだのケア' },
+  { id: 'eatout', label: '外で食べる' },
+  { id: 'flora', label: '腸内フローラ' },
+  { id: 'record', label: '記録のしかた' },
   { id: 'digest', label: 'まとめて見る' },
   { id: 'food', label: '食材' },
   { id: 'combine', label: '食べ合わせ' },
@@ -1318,6 +1329,79 @@ function fromDigest() {
   return [...sections, ...topics, ...conflicts, ...scope];
 }
 
+/** 新しい読み物・記録の仕組みから（**元データから毎回導く**） */
+function fromNewReading() {
+  const strip = (t) => String(t || '').replace(/\*\*/g, '');
+  const diseases = DISEASES.map((d) => ({
+    id: `toc-disease-${d.id}`,
+    title: d.title,
+    reading: d.reading,
+    group: 'disease',
+    aliases: [],
+    description: `${strip(d.what)} ${strip(d.note)}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'system', view: 'diseases', targetId: `disease-${d.id}`, label: '読む' }],
+  }));
+  const breath = [
+    ...BREATH_STEPS.map((x) => ({ x, prefix: 'breath' })),
+    ...MASSAGE_STEPS.map((x) => ({ x, prefix: 'massage' })),
+  ].map(({ x, prefix }) => ({
+    id: `toc-${prefix}-${x.id}`,
+    title: x.title,
+    reading: x.reading,
+    group: 'body',
+    aliases: [],
+    description: strip(x.body),
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'system', view: 'breathing', targetId: `${prefix}-${x.id}`, label: '読む' }],
+  }));
+  const care = CARE_BY_TYPE.map((c) => ({
+    id: `toc-care-${c.typeId}`,
+    title: c.title,
+    reading: c.reading,
+    group: 'body',
+    aliases: [],
+    description: c.items.map((i) => strip(i.body)).join(' '),
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'system', view: 'ibscare', targetId: `care-${c.typeId}`, label: '読む' }],
+  }));
+  const eatout = EATING_OUT_KINDS.map((k) => ({
+    id: `toc-eatout-${k.id}`,
+    title: k.title,
+    reading: k.reading,
+    group: 'eatout',
+    aliases: [],
+    description: `${strip(k.body)} 見るところ：${strip(k.look)}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'system', view: 'eatingout', targetId: `eatout-${k.id}`, label: '読む' }],
+  }));
+  const flora = [
+    ...FLORA_BASICS.map((x) => ({ x, prefix: 'flora', body: x.body, status: 'needs_review' })),
+    ...FLORA_CORRECTIONS.map((x) => ({ x, prefix: 'fcorrection', body: x.correction, status: 'verified' })),
+    ...FLORA_UNVERIFIED.map((x) => ({ x, prefix: 'funv', body: x.note, status: 'needs_review' })),
+  ].map(({ x, prefix, body, status }) => ({
+    id: `toc-${prefix}-${x.id}`,
+    title: x.title,
+    reading: x.reading,
+    group: 'flora',
+    aliases: [],
+    description: strip(body),
+    descriptionStatus: status,
+    destinations: [{ type: 'system', view: 'flora', targetId: `${prefix}-${x.id}`, label: '読む' }],
+  }));
+  const periods = PERIOD_KINDS.map((k) => ({
+    id: `toc-period-${k.id}`,
+    title: `いつもと違う期間：${k.label}`,
+    reading: `いつもとちがうきかん${k.reading}`,
+    group: 'record',
+    aliases: [{ name: k.label, reading: k.reading }],
+    description: 'いつもと条件が違う期間に印をつけておけます。印をつけるだけで、症状の理由をアプリが決めることはありません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'periods', targetId: 'period-add', label: 'ひらく' }],
+  }));
+  return [...diseases, ...breath, ...care, ...eatout, ...flora, ...periods];
+}
+
 export function buildTocEntries(state = {}) {
   const userTerms = Array.isArray(state.userTerms) ? state.userTerms : [];
   const removed = new Set(Array.isArray(state.removedIds) ? state.removedIds : []);
@@ -1340,6 +1424,7 @@ export function buildTocEntries(state = {}) {
     ...fromMorning(),
     ...fromScared(),
     ...fromIbs(),
+    ...fromNewReading(),
     ...fromDigest(),
     ...withGroup(userTerms, 'user'),
   ];

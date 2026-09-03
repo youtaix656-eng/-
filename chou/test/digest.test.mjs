@@ -229,6 +229,11 @@ test('どの画面からも受診の目安へ行ける', () => {
     'RedFlagLink.jsx',
     'Know.jsx', // 一覧の先頭が受診の目安そのもの
     'Gut.jsx', 'Bristol.jsx', 'DayEditor.jsx', 'TermPanel.jsx', 'TocCandidates.jsx', // 画面の中の部品
+    // 画面ではない共通部品（`view` を持たないので、ここに導線を置く相手がいない）
+    'Finder.jsx', 'ScrollArrows.jsx',
+    // 落ちた時の受け皿。**押せるボタンを増やさない**——ここで別画面へ飛ばすと、
+    // 落ちた原因の画面に戻れなくなる。戻るボタンだけを出す
+    'ErrorBoundary.jsx',
     'useFocusJump.js',
   ]);
   const files = readdirSync(dir).filter((f) => f.endsWith('.jsx') && !skip.has(f));

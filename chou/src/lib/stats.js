@@ -16,6 +16,7 @@ import {
   EXERCISE_STEPS,
   SLEEP_STEPS,
   POSTURE_STEPS,
+  WATER_STEPS,
 } from '../data/scales.js';
 import { hasRecord, recordedKeys, foodsOfDay } from './days.js';
 
@@ -195,4 +196,21 @@ export function otcCounts(days, keys) {
     for (const id of day.otc) byKind[id] = (byKind[id] || 0) + 1;
   }
   return { byKind, anyDays };
+}
+
+/**
+ * 水分の段ごとの日数。**量（リットル）を数えない**（README 決まり4）。
+ * `lifeCounts` に足さず別にしてあるのは、既に使っている画面の形を変えないため。
+ */
+export function waterCounts(days, keys) {
+  const counts = Object.fromEntries(WATER_STEPS.map((s) => [s.id, 0]));
+  let recorded = 0;
+  for (const key of keys) {
+    const water = days[key] && days[key].water;
+    if (water && counts[water] !== undefined) {
+      counts[water] += 1;
+      recorded += 1;
+    }
+  }
+  return { counts, recorded };
 }

@@ -1017,6 +1017,76 @@ export const SCREENS = [
     destinations: [{ type: 'page', view: 'digest', targetId: 'digest-cross', label: 'ひらく' }],
   },
   {
+    id: 'screen-diseases',
+    title: 'お腹の病気の読み物の画面',
+    reading: 'おなかのびょうきのよみもののがめん',
+    aliases: [{ name: '病気図鑑', reading: 'びょうきずかん' }],
+    description:
+      'お腹の症状で名前が挙がることのある病気を、読むだけの一覧として並べた画面です。当てはめる仕掛け（チェックリスト・「あなたはこれかも」）は作っていません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'diseases', targetId: 'disease-list', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-breathing',
+    title: 'お腹の力を抜く画面',
+    reading: 'おなかのちからをぬくがめん',
+    aliases: [{ name: '腹式呼吸', reading: 'ふくしきこきゅう' }],
+    description:
+      'お腹で息をする・お腹をなでる、を置いた画面です。やめどきをやり方より前に置いてあり、痛みが強いときはしないと必ず書いています。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'breathing', targetId: 'breath-stop', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-ibscare',
+    title: '型ごとにできることの画面',
+    reading: 'かたごとにできることのがめん',
+    aliases: [],
+    description:
+      '下痢・便秘・混合・分類不能の型ごとに、よく挙げられることを並べた画面です。型は自分で選ぶだけで、記録から当てることはしません。ガスで困っている人は分け方に居場所が無いことも必ず出します。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'ibscare', targetId: 'care-pick', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-eatingout',
+    title: '外で食べるときの選び方の画面',
+    reading: 'そとでたべるときのえらびかたのがめん',
+    aliases: [{ name: 'コンビニの選び方', reading: 'こんびにのえらびかた' }],
+    description:
+      '外食・中食で「買うときに表示のどこを見るか」を並べた画面です。お店や商品の名前は持たず、値段の話もしません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'eatingout', targetId: 'eatout-list', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-flora',
+    title: '腸内フローラの言葉の画面',
+    reading: 'ちょうないふろーらのことばのがめん',
+    aliases: [],
+    description:
+      '「腸内フローラ」のまわりでよく出る言葉の説明・訂正・裏が取れていない主張を並べた画面です。あなたの腸内細菌がどうなっているかは、このアプリでは分かりません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'flora', targetId: 'flora-basics', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-visits',
+    title: '通院の画面',
+    reading: 'つういんのがめん',
+    aliases: [{ name: '聞きたいこと', reading: 'ききたいこと' }],
+    description:
+      '通院の予定・聞きたいこと・受診のあとに言われたことを残す画面です。通知は鳴らしません（サーバーを持たないので約束できないため）。受診メモへそのまま引き継げます。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'visits', targetId: 'visit-add', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-periods',
+    title: 'いつもと違う期間の画面',
+    reading: 'いつもとちがうきかんのがめん',
+    aliases: [],
+    description:
+      '旅行・薬が変わった・生理など、いつもと条件が違う期間に印をつける画面です。印をつけるだけで、症状の理由をアプリが決めることも、次がいつ来るかを出すこともしません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'periods', targetId: 'period-add', label: 'ひらく' }],
+  },
+  {
     id: 'screen-scared',
     title: '名指しされた食べものの画面',
     reading: 'なざしされたたべもののがめん',

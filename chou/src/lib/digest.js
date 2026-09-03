@@ -62,6 +62,11 @@ import { PROTEIN_CORRECTIONS, PROTEIN_UNVERIFIED, PROTEIN_SOURCE } from '../data
 import { RED_FLAGS, RED_FLAG_SOURCE } from '../data/redFlags.js';
 import { SCARED_CORRECTIONS, SCARED_UNVERIFIED, SCARED_SOURCE } from '../data/scaredFoods.js';
 import { SEASONING_SOURCE } from '../data/seasonings.js';
+import { DISEASES, DISEASE_SOURCE } from '../data/diseases.js';
+import { BREATH_STEPS, MASSAGE_STEPS, BREATHING_SOURCE } from '../data/breathing.js';
+import { CARE_BY_TYPE, CARE_SOURCE } from '../data/ibsCare.js';
+import { EATING_OUT_KINDS, EATING_OUT_SOURCE } from '../data/eatingOut.js';
+import { FLORA_BASICS, FLORA_CORRECTIONS, FLORA_UNVERIFIED, FLORA_SOURCE } from '../data/flora.js';
 import {
   conflictFoods,
   CONFLICT_NOTE,
@@ -303,6 +308,72 @@ export const DIGEST_SUBJECTS = [
     },
   },
   {
+    id: 'diseases',
+    title: 'お腹の病気の読み物',
+    reading: 'おなかのびょうきのよみもの',
+    view: 'diseases',
+    source: DISEASE_SOURCE,
+    sourceTargetId: 'disease-source',
+    pools: {
+      correction: { items: [], targetId: null },
+      unverified: { items: [], targetId: null },
+      disease: { items: DISEASES, targetId: 'disease-list' },
+    },
+  },
+  {
+    id: 'breathing',
+    title: 'お腹の力を抜く',
+    reading: 'おなかのちからをぬく',
+    view: 'breathing',
+    source: BREATHING_SOURCE,
+    sourceTargetId: 'breath-source',
+    pools: {
+      correction: { items: [], targetId: null },
+      unverified: { items: [], targetId: null },
+      breath: { items: BREATH_STEPS, targetId: 'breath-steps' },
+      massage: { items: MASSAGE_STEPS, targetId: 'breath-massage' },
+    },
+  },
+  {
+    id: 'ibscare',
+    title: '型ごとにできること',
+    reading: 'かたごとにできること',
+    view: 'ibscare',
+    source: CARE_SOURCE,
+    sourceTargetId: 'care-source',
+    pools: {
+      correction: { items: [], targetId: null },
+      unverified: { items: [], targetId: null },
+      care: { items: CARE_BY_TYPE.map((c) => ({ ...c, id: c.typeId })), targetId: 'care-pick' },
+    },
+  },
+  {
+    id: 'eatingout',
+    title: '外で食べるときの選び方',
+    reading: 'そとでたべるときのえらびかた',
+    view: 'eatingout',
+    source: EATING_OUT_SOURCE,
+    sourceTargetId: 'eatout-source',
+    pools: {
+      correction: { items: [], targetId: null },
+      unverified: { items: [], targetId: null },
+      eatout: { items: EATING_OUT_KINDS, targetId: 'eatout-list' },
+    },
+  },
+  {
+    id: 'flora',
+    title: '腸内フローラの言葉',
+    reading: 'ちょうないふろーらのことば',
+    view: 'flora',
+    source: FLORA_SOURCE,
+    sourceTargetId: 'flora-source',
+    pools: {
+      correction: { items: FLORA_CORRECTIONS, targetId: 'flora-corrections' },
+      unverified: { items: FLORA_UNVERIFIED, targetId: 'flora-unverified' },
+      basic: { items: FLORA_BASICS, targetId: 'flora-basics' },
+    },
+  },
+  {
     id: 'ibs',
     title: '過敏性腸症候群',
     reading: 'かびんせいちょうしょうこうぐん',
@@ -332,6 +403,12 @@ export const POOL_LABELS = {
   flag: '受診の目安',
   exclusion: '過敏性腸症候群の芯',
   approach: '出典が挙げるやり方',
+  disease: '病気の説明',
+  breath: 'お腹で息をする',
+  massage: 'お腹をなでる',
+  care: '型ごとにできること',
+  eatout: '外で食べるときの見どころ',
+  basic: '腸内フローラの言葉',
 };
 
 const subjectById = (id) => DIGEST_SUBJECTS.find((s) => s.id === id) || null;

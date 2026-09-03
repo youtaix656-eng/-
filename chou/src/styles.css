@@ -396,3 +396,89 @@ textarea { resize: vertical; }
 }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
 .meal-block { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 8px; }
+
+/* ───────── 読みやすさの設定（提案26・追加依頼4） ─────────
+   画面ごとに書かず、根っこの属性だけで効かせる。**色は増やさない**（R=G=B のまま）。 */
+:root[data-text='large'] { font-size: 18px; }
+:root[data-text='xlarge'] { font-size: 21px; }
+
+:root[data-contrast='high'] {
+  --line: #000;
+  --muted: #1a1a1a;
+}
+:root[data-contrast='high'][data-theme='dark'],
+:root[data-contrast='high'] .app[data-theme='dark'] {
+  --line: #fff;
+  --muted: #e8e8e8;
+}
+:root[data-contrast='high'] .muted { opacity: 1; }
+:root[data-contrast='high'] .block,
+:root[data-contrast='high'] .notice,
+:root[data-contrast='high'] .cand { border-width: 2px; }
+
+:root[data-motion='reduce'] *,
+:root[data-motion='reduce'] *::before,
+:root[data-motion='reduce'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ───────── 右端のスクロール矢印（提案24） ─────────
+   下部ナビ・常設バーより下に置く（重なったら隠れる側）。
+   **端まで来た側は消さずに薄くする**（消すと位置が動いて押し損ねる）。 */
+.scroll-arrows {
+  position: fixed;
+  right: 0.6rem;
+  bottom: 8.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  z-index: 5;
+}
+.scroll-arrow {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+  color: inherit;
+  cursor: pointer;
+}
+.scroll-arrow.dim { opacity: 0.35; }
+
+/* さがす欄（提案22） */
+.finder { margin: 0.6rem 0 1rem; }
+.finder .search input { width: 100%; }
+
+/* 図をまん中に置く枠（お腹の図・QR） */
+.figure-row { display: flex; justify-content: center; padding: 0.6rem 0; }
+
+/* 入力の行（通院・期間の印） */
+.field { display: block; margin: 0.5rem 0; }
+.field > span { display: block; margin-bottom: 0.2rem; }
+.field input,
+.field textarea { width: 100%; }
+
+/* ───────── 印刷（提案13・追加依頼5） ─────────
+   **白い紙に黒い字**に反転する。黒地のまま刷るとインクを大量に使い、読めない。
+   画面のための飾り（ナビ・バー・矢印・ボタン）は紙に出さない。 */
+@media print {
+  :root,
+  :root[data-theme='dark'] {
+    --bg: #fff;
+    --fg: #000;
+    --line: #000;
+    --muted: #333;
+  }
+  html, body, .app { background: #fff !important; color: #000 !important; }
+  nav, .nav, .note-bar, .scroll-arrows, .undo-bar, .save-failed { display: none !important; }
+  button { display: none !important; }
+  .block, .notice, .cand { border: 1px solid #000 !important; break-inside: avoid; }
+  .view, .page { padding: 0 !important; }
+  a[href]::after { content: ''; }
+  @page { margin: 14mm; }
+}

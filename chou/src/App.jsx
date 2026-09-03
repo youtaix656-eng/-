@@ -24,6 +24,15 @@ import Morning from './components/Morning.jsx';
 import ScaredFoods from './components/ScaredFoods.jsx';
 import Ibs from './components/Ibs.jsx';
 import Digest from './components/Digest.jsx';
+import Diseases from './components/Diseases.jsx';
+import Breathing from './components/Breathing.jsx';
+import IbsCare from './components/IbsCare.jsx';
+import EatingOut from './components/EatingOut.jsx';
+import Flora from './components/Flora.jsx';
+import Visits from './components/Visits.jsx';
+import Periods from './components/Periods.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import ScrollArrows from './components/ScrollArrows.jsx';
 
 // 下部ナビは4つ。そのすぐ上に「受診メモをつくる」の常設バーを置く。
 // 受診メモはこのアプリを持つ理由なので、思い立った時にどの画面からでも開けること。
@@ -64,8 +73,18 @@ function NavIcon({ id }) {
 
 export default function App() {
   const store = useStore();
-  const [view, setView] = useState('home');
+  // ホーム画面のショートカット（manifest の `?view=`）から開いた時だけ、その画面で始める。
+  // **知らない名前は無視して「きょう」へ**（当てずっぽうで別の画面を開かない）。
+  const [view, setView] = useState(() => {
+    try {
+      const want = new URLSearchParams(window.location.search).get('view');
+      return want === 'visitnote' || want === 'home' ? want : 'home';
+    } catch {
+      return 'home';
+    }
+  });
   const [focus, setFocus] = useState('');
+  const [navArg, setNavArg] = useState('');
 
   useEffect(() => {
     const theme = store.settings.theme;
@@ -73,11 +92,23 @@ export default function App() {
     else document.documentElement.setAttribute('data-theme', theme);
   }, [store.settings.theme]);
 
+  // 読みやすさの設定は、根っこの属性で受ける（CSS だけで効かせる＝画面ごとに書かない）
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-text', store.settings.textSize || 'normal');
+    root.setAttribute('data-contrast', store.settings.contrast || 'normal');
+    if (store.settings.reduceMotion) root.setAttribute('data-motion', 'reduce');
+    else root.removeAttribute('data-motion');
+  }, [store.settings.textSize, store.settings.contrast, store.settings.reduceMotion]);
+
   // **飛び先を指定した移動では画面の先頭へ戻さない**（戻すと、運んだ画面が直後に引き戻される。
   // 鏡で実際に踏んだ事故）。判定は `lib/focus.js` の `shouldScrollTop` が単一の正。
-  const go = useCallback((next, targetId) => {
+  // 第3引数は「その画面へ持っていく値」（いまはカレンダーの日付だけ）。
+  // **一度使ったら消す**——戻ってきたときに前の値で開き直さないため。
+  const go = useCallback((next, targetId, arg) => {
     setView(next);
     setFocus(targetId || '');
+    setNavArg(arg || '');
     if (shouldScrollTop(targetId)) window.scrollTo(0, 0);
   }, []);
 
@@ -93,8 +124,11 @@ export default function App() {
       )}
 
       <main>
+        <ErrorBoundary where={view} onError={store.logError} onReset={() => go('home')} key={view}>
         {view === 'home' && <Home store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
-        {view === 'calendar' && <Calendar store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'calendar' && (
+          <Calendar store={store} onGo={go} focus={focus} onFocusDone={clearFocus} openDate={navArg} />
+        )}
         {view === 'look' && <Look store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'know' && <Know onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'visitnote' && (
@@ -128,11 +162,26 @@ export default function App() {
         {view === 'scared' && <ScaredFoods onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'ibs' && <Ibs onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'digest' && <Digest onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'diseases' && <Diseases onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'breathing' && <Breathing onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'ibscare' && (
+          <IbsCare store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'eatingout' && <EatingOut onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'flora' && <Flora onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'visits' && (
+          <Visits store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
+        {view === 'periods' && (
+          <Periods store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
+        )}
         {view === 'settings' && <Settings store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'toc' && (
           <TableOfContents store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
         )}
+        </ErrorBoundary>
       </main>
+      <ScrollArrows />
 
       {store.undo && (
         <div className="undo-bar" role="status">

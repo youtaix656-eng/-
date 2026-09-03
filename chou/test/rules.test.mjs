@@ -24,7 +24,13 @@ import { IBS_UNVERIFIED, IBS_CORRECTIONS, IBS_EXCLUSION, SELF_CARE } from '../sr
  * 引用した文まで弾くと、**間違いを指摘した所だけが落ちる**（黙って消すことになり本末転倒）。
  * 見張るのは「アプリ自身が言っていること」。
  */
+import { FLORA_CORRECTIONS, FLORA_UNVERIFIED } from '../src/data/flora.js';
+import { DISEASES } from '../src/data/diseases.js';
+
 const QUOTED = [
+  ...FLORA_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...FLORA_UNVERIFIED.map((i) => i.claim),
+  ...DISEASES.map((i) => i.signs),
   ...ADAMSKI_UNVERIFIED.map((i) => i.claim),
   ...PROBIOTIC_UNVERIFIED.map((i) => i.claim),
   ...PROBIOTIC_CORRECTIONS.map((i) => i.claim),
