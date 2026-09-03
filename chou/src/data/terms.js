@@ -30,6 +30,35 @@ export const TERMS = [
     ],
   },
   {
+    id: 'term-sibo',
+    title: 'SIBO',
+    reading: 'SIBO',
+    aliases: [
+      { name: 'シーボ', reading: 'しーぼ' },
+      { name: '小腸内細菌増殖', reading: 'しょうちょうないさいきんぞうしょく' },
+    ],
+    description:
+      '小腸で細菌がふえているとされる状態につけられた呼び名です。出典自身が「保険の病名としては認められていない」と言っており、この名前で説明を受けていない人のほうが多いはずです。このアプリは記録からこの状態を当てません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'ibs', targetId: 'ibs-sibo', label: '出典が言っていることを読む' },
+      { type: 'system', view: 'ibs', targetId: 'iunv-sibo_rate', label: '割合の主張を読む' },
+    ],
+  },
+  {
+    id: 'term-exclusion',
+    title: '除外診断',
+    reading: 'じょがいしんだん',
+    aliases: [],
+    description:
+      '同じような症状を出すほかの病気を先に外していって、最後に残ったときにその呼び名が付く、という決め方です。だから検査で異常が出ないことは、この呼び名が付くための条件のほうであって、「気のせい」という意味ではありません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'ibs', targetId: 'ibs-exclusion', label: '読む' },
+      { type: 'function', view: 'visitnote', targetId: 'note-out', label: '受診メモをつくる' },
+    ],
+  },
+  {
     id: 'term-fodmap',
     title: 'FODMAP',
     reading: 'FODMAP',
@@ -943,6 +972,16 @@ export const SCREENS = [
       '朝の排便について、出典が挙げる特徴とやってみることを並べた画面です。「出なくても自分を責めない」を先に置いています。当てはまった数は数えません。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'morning', targetId: 'morning-traits', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-ibs',
+    title: '過敏性腸症候群の画面',
+    reading: 'かびんせいちょうしょうこうぐんのがめん',
+    aliases: [{ name: 'IBSの画面', reading: 'IBSのがめん' }],
+    description:
+      '検査で異常が出ないこと（除外診断）を先に置き、出典が挙げる分け方・見落としやすいところ・手当て・SIBO・体験談・訂正・裏が取れていない主張を並べた画面です。記録から型を当てることはしません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'ibs', targetId: 'ibs-exclusion', label: 'ひらく' }],
   },
   {
     id: 'screen-scared',

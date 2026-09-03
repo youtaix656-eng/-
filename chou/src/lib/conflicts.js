@@ -8,14 +8,20 @@
 // **一覧は元データから毎回導く**（書き写さない）。片方を直したときに黙って食い違わないため。
 
 import { FODMAP_FOODS, FODMAP_LEVELS } from '../data/fodmap.js';
-import { SPEED_NAMED, SPEED_BY_ID } from '../data/adamski.js';
+import {
+  SPEED_NAMED,
+  SPEED_BY_ID,
+  SPEED_BASIS_LABELS,
+  MEAL_GAP_HOURS,
+  MEAL_GAP_NOTE,
+} from '../data/adamski.js';
 import { FERMENTED_FOODS } from '../data/cleanup.js';
 import { PREBIOTIC_FOODS, KIND_BY_ID } from '../data/prebiotics.js';
 import { HELPFUL_HABITS, WEAK_STOMACH_AVOID } from '../data/gutHabits.js';
 import { PROTEIN_GUIDES, ELIMINATION_TARGETS } from '../data/protein.js';
 import { FASTING_SHAPES, FASTING_ALLOWED } from '../data/fasting.js';
 import { NAMED_FOODS } from '../data/scaredFoods.js';
-import { SPEED_BASIS_LABELS } from '../data/adamski.js';
+import { SELF_CARE, SIBO_POINTS } from '../data/ibs.js';
 import { speedOf, speedLabel } from './combine.js';
 
 const levelLabel = (id) => {
@@ -394,3 +400,77 @@ export const FASTING_ALLOWED_CLASH_NOTE =
   '断食の側は「空腹の時間中でもチーズやヨーグルトなら食べてよい」と言い、'
   + 'タンパク質の側は「乳製品を一度やめてみる」と言います。'
   + 'このアプリはどちらが正しいかを決めません——合う・合わないは自分の記録で見つけてください。';
+
+// ───────────── 発酵食品：4つめの言い分（胃腸が弱っているときはやめる） ─────────────
+//
+// `fermentViews` は腸活／低FODMAP／アダムスキー式の**3つ**を返す（既存の画面がそれを前提にしている）。
+// 過敏性腸症候群の素材で出てきた4つめ——「胃腸が弱っているタイプの人にはいったんやめた」——は、
+// **既存の3つを壊さずに足すため、別の関数として持つ。**
+// 4つめだけ層が違うことに注意：ほかの3つは食べもの一般の話だが、これは
+// **「いま弱っているとき」という条件つきの体験談**。だから views にもそう書く。
+
+/** ヨーグルト・納豆を、4つの言い分から並べる（どれが正しいかを決めない） */
+export function ibsFermentViews() {
+  const stop = SELF_CARE.find((s) => s.id === 'stop_ferment');
+  return ['ヨーグルト', '納豆'].map((name) => {
+    const base = fermentViews().find((v) => v.name === name);
+    return {
+      name,
+      reading: base ? base.reading : '',
+      views: [
+        ...(base ? base.views : []),
+        `過敏性腸症候群の体験談では：${stop ? stop.said : ''}。いったんやめたと書かれています。`,
+      ],
+    };
+  });
+}
+
+export const IBS_FERMENT_NOTE =
+  '同じヨーグルト・納豆について、勧める側・減らす候補にする側・朝に勧める側・'
+  + 'いったんやめた側の4つに割れます。**4つめだけは「いま胃腸が弱っているとき」という'
+  + '条件つきの体験談**で、ほかの3つと同じ層の話ではありません。'
+  + 'このアプリはどれが正しいかを決めません。';
+
+// ───────────── 食事の間隔4時間：同じ数字、別々の理由 ─────────────
+//
+// **同じ「4時間」が、まったく別の説明から出てきている。**
+// 数字がそろっていることを「裏づけが取れた」と読ませないために並べる——
+// たまたま同じ数だっただけで、どちらももとをたどれていない。
+
+/** 4時間という数字を、どの出典がどんな理由で言っているかを並べる */
+export function mealGapViews() {
+  const mmc = SIBO_POINTS.find((p) => p.id === 'mmc');
+  const hunger = SELF_CARE.find((s) => s.id === 'hunger');
+  return [
+    {
+      id: 'adamski',
+      side: '食べ合わせ（アダムスキー式）の側',
+      hours: MEAL_GAP_HOURS,
+      says: '食事と食事の間を最低でも4時間',
+      why: '前の食べものが消化管を通りきる前に次を入れない、という考え方のため',
+      source: MEAL_GAP_NOTE,
+    },
+    {
+      id: 'mmc',
+      side: 'SIBO・お掃除ぜん動の側',
+      hours: 4,
+      says: '空腹の時間がないと、菌やガスを送り出す動きが働かない',
+      why: '胃に食べものが入っている間はその動きが止まるとされるため',
+      source: mmc ? mmc.body : '',
+    },
+    {
+      id: 'self',
+      side: '体験談の側',
+      hours: 4,
+      says: '1食食べたら最低4時間は空け、空いてから食べる',
+      why: '毎食の消化を済ませてから次を入れる、という考え方のため',
+      source: hunger ? hunger.said : '',
+    },
+  ];
+}
+
+export const MEAL_GAP_CONFLICT_NOTE =
+  '3つとも「4時間」と言っていますが、**理由はそれぞれ別です。**'
+  + '数字がそろっていることを、裏づけが取れたことと読まないでください——'
+  + 'どれも、もとをたどれていない目安です。'
+  + 'このアプリは食事の間隔を出しますが、守れたかどうかを採点しません。';

@@ -23,6 +23,14 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('ibs')}>
+            <strong>過敏性腸症候群のこと</strong>
+            <span className="muted small">
+              検査で異常が出ないこと、分け方、出典が挙げる手当て。記録から型は当てません。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('cleanup')}>
             <strong>腸のお掃除（5つ）</strong>
             <span className="muted small">

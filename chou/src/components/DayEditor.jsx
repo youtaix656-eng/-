@@ -132,7 +132,7 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         )}
       </section>
 
-      <div className="two">
+      <div className="two" id="rec-pain">
         <Choice
           name="pain"
           label="痛み"

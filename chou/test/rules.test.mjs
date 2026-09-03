@@ -16,6 +16,7 @@ import { MAGNESIUM_UNVERIFIED, MAGNESIUM_CORRECTIONS } from '../src/data/magnesi
 import { MORNING_UNVERIFIED, MORNING_CORRECTIONS } from '../src/data/morning.js';
 import { SCARED_UNVERIFIED, SCARED_CORRECTIONS } from '../src/data/scaredFoods.js';
 import { ALCOHOL_UNVERIFIED, ALCOHOL_CORRECTIONS, ALCOHOL_GUIDE } from '../src/data/alcohol.js';
+import { IBS_UNVERIFIED, IBS_CORRECTIONS, IBS_EXCLUSION, SELF_CARE } from '../src/data/ibs.js';
 
 /**
  * **引用して否定している出典の言い分**は、見張りの対象から外す。
@@ -53,6 +54,10 @@ const QUOTED = [
   ...ALCOHOL_UNVERIFIED.flatMap((i) => [i.claim, i.title]),
   ...ALCOHOL_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
   ALCOHOL_GUIDE.said,
+  ...IBS_UNVERIFIED.flatMap((i) => [i.claim, i.title]),
+  ...IBS_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...SELF_CARE.map((i) => i.said),
+  IBS_EXCLUSION.said,
 ].filter(Boolean);
 
 function stripQuoted(text) {

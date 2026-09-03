@@ -24,6 +24,15 @@ import {
   PLACEHOLDER_DESCRIPTION,
   EMPTY_DESTINATIONS_TEXT,
 } from '../src/data/toc.js';
+import {
+  IBS_TYPES,
+  IBS_PITFALLS,
+  IBS_APPROACHES,
+  SIBO_POINTS,
+  SELF_CARE,
+  IBS_CORRECTIONS,
+  IBS_UNVERIFIED,
+} from '../src/data/ibs.js';
 import { TERMS, SCREENS } from '../src/data/terms.js';
 import { BRISTOL } from '../src/data/scales.js';
 import { RED_FLAGS } from '../src/data/redFlags.js';
@@ -336,6 +345,19 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
   // **食べものの題に「食べるな」の意味を込めない**ので、名前そのままで置く
   const fromScaredCount =
     NAMED_FOODS.length + 1 + SCARED_CORRECTIONS.length + SCARED_UNVERIFIED.length;
+  // 過敏性腸症候群から来るぶん（＋「検査で異常が出ないこと」の1件）
+  const fromIbsCount =
+    1 +
+    IBS_TYPES.length +
+    IBS_PITFALLS.length +
+    IBS_APPROACHES.length +
+    SIBO_POINTS.length +
+    SELF_CARE.length +
+    IBS_CORRECTIONS.length +
+    IBS_UNVERIFIED.length;
+  for (const item of [...IBS_TYPES, ...IBS_PITFALLS, ...SIBO_POINTS, ...IBS_CORRECTIONS]) {
+    assert.ok(entries.some((e) => e.title === item.title), item.title);
+  }
   for (const food of NAMED_FOODS) assert.ok(entries.some((e) => e.title === food.name), food.name);
   for (const item of FASTING_CORRECTIONS) assert.ok(entries.some((e) => e.title === item.title), item.title);
   assert.equal(
@@ -355,7 +377,8 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       fromProteinCount +
       fromFastingCount +
       fromMorningCount +
-      fromScaredCount,
+      fromScaredCount +
+      fromIbsCount,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

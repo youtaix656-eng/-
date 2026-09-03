@@ -75,6 +75,16 @@ import {
   SCARED_UNVERIFIED,
 } from './scaredFoods.js';
 import {
+  IBS_TYPES,
+  IBS_EXCLUSION,
+  IBS_PITFALLS,
+  IBS_APPROACHES,
+  SIBO_POINTS,
+  SELF_CARE,
+  IBS_CORRECTIONS,
+  IBS_UNVERIFIED,
+} from './ibs.js';
+import {
   ALCOHOL_GUT,
   ALCOHOL_GUIDE,
   ALCOHOL_CORRECTIONS,
@@ -97,6 +107,7 @@ export const TOC_GROUPS = [
   { id: 'term', label: '用語' },
   { id: 'scale', label: 'ものさし' },
   { id: 'flag', label: '受診の目安' },
+  { id: 'ibs', label: '過敏性腸症候群' },
   { id: 'food', label: '食材' },
   { id: 'combine', label: '食べ合わせ' },
   { id: 'care', label: '整腸剤・調味料' },
@@ -946,6 +957,115 @@ function fromMorning() {
  * **食べものの題に「食べるな」の意味を込めない**——名前だけを置き、
  * 説明のほうで「そう名指しされている」と書く。
  */
+function fromIbs() {
+  const types = IBS_TYPES.map((item) => ({
+    id: `toc-itype-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'ibs',
+    aliases: [],
+    description: `${item.body} 出典：${item.said}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'ibs', targetId: `itype-${item.id}`, label: '読む' },
+      { type: 'question', view: item.record.view, targetId: item.record.targetId, label: item.record.label },
+    ],
+  }));
+  const exclusion = [
+    {
+      id: 'toc-ibs-exclusion',
+      title: IBS_EXCLUSION.title,
+      reading: IBS_EXCLUSION.reading,
+      group: 'ibs',
+      aliases: [],
+      description: `${IBS_EXCLUSION.body} ${IBS_EXCLUSION.note.replace(/\*\*/g, '')}`,
+      descriptionStatus: 'verified',
+      destinations: [
+        { type: 'page', view: 'ibs', targetId: 'ibs-exclusion', label: '読む' },
+        { type: 'function', view: 'visitnote', targetId: 'note-out', label: '受診メモをつくる' },
+      ],
+    },
+  ];
+  const pitfalls = IBS_PITFALLS.map((item) => ({
+    id: `toc-ipit-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'ibs',
+    aliases: [],
+    description: item.body,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'ibs', targetId: `ipit-${item.id}`, label: '読む' },
+      { type: 'question', view: item.link.view, targetId: item.link.targetId, label: item.link.label },
+    ],
+  }));
+  const approaches = IBS_APPROACHES.map((item) => ({
+    id: `toc-iapp-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'ibs',
+    aliases: [],
+    description: `${item.body} ${item.caution.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'ibs', targetId: `iapp-${item.id}`, label: '読む' },
+      ...(item.link
+        ? [{ type: 'page', view: item.link.view, targetId: item.link.targetId, label: item.link.label }]
+        : []),
+    ],
+  }));
+  const sibo = SIBO_POINTS.map((item) => ({
+    id: `toc-sibo-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'ibs',
+    aliases: [],
+    description: item.body,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'ibs', targetId: `sibo-${item.id}`, label: '読む' }],
+  }));
+  const self = SELF_CARE.map((item) => ({
+    id: `toc-iself-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'ibs',
+    aliases: [],
+    description: `出典：${item.said}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'ibs', targetId: `iself-${item.id}`, label: '読む' }],
+  }));
+  const fixes = IBS_CORRECTIONS.map((item) => ({
+    id: `toc-icorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'ibs',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'ibs', targetId: `icorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = IBS_UNVERIFIED.map((item) => ({
+    id: `toc-iunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'ibs',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'ibs', targetId: `iunv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...exclusion, ...types, ...pitfalls, ...approaches, ...sibo, ...self, ...fixes, ...claims];
+}
+
+/**
+ * 名指しされた食べものから。
+ * **食べものの題に「食べるな」の意味を込めない**——名前だけを置き、
+ * 説明のほうで「そう名指しされている」と書く。
+ */
 function fromScared() {
   const foods = NAMED_FOODS.map((food) => ({
     id: `toc-named-${food.id}`,
@@ -1028,6 +1148,7 @@ export function buildTocEntries(state = {}) {
     ...fromFasting(),
     ...fromMorning(),
     ...fromScared(),
+    ...fromIbs(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

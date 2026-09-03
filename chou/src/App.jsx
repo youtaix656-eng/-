@@ -22,6 +22,7 @@ import Protein from './components/Protein.jsx';
 import Fasting from './components/Fasting.jsx';
 import Morning from './components/Morning.jsx';
 import ScaredFoods from './components/ScaredFoods.jsx';
+import Ibs from './components/Ibs.jsx';
 
 // 下部ナビは4つ。そのすぐ上に「受診メモをつくる」の常設バーを置く。
 // 受診メモはこのアプリを持つ理由なので、思い立った時にどの画面からでも開けること。
@@ -120,6 +121,7 @@ export default function App() {
         {view === 'fasting' && <Fasting onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'morning' && <Morning onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'scared' && <ScaredFoods onGo={go} focus={focus} onFocusDone={clearFocus} />}
+        {view === 'ibs' && <Ibs onGo={go} focus={focus} onFocusDone={clearFocus} />}
         {view === 'settings' && <Settings store={store} focus={focus} onFocusDone={clearFocus} />}
         {view === 'toc' && (
           <TableOfContents store={store} onGo={go} focus={focus} onFocusDone={clearFocus} />
