@@ -2364,6 +2364,19 @@ grep調査した上で13件を提案・そのうち11件（過去問PDF等の素
 実データでの隣接ズレ0件は前回バッチで確認済みのアルゴリズム自体は変更していない——変更は
 「どのpoolから対応表を作るか」の呼び出し側の配線のみ）。
 
+**追加修正（同日）**：再QAで見つけた1件（軽微・ユーザー指定で修正）——
+「もう一度」で○の見直し・高速回転を再演習すると、開始時と同じ「うっかり○を先頭に、古い順」
+という並び（`useMaruReview.js`の`orderMaruStatus`が決める優先順位）が失われ、毎回シャッフルし
+直されていた。**`Session.jsx`の「もう一度」ボタンは、`session.label`が`○の見直し`／
+`○の高速回転`の時だけ`ids`をそのまま渡し直す**（`buildOrder`を経由させない＝開始時の
+`onStartReview`/`onStartFast`と同じ経路）。**`Quiz.jsx`の`restart()`にも同じ問題があった**
+（`beginWith(sessionPool, true, ...)`で`maruSessionKind`の有無を見ずに常に再シャッフルして
+いた）ため、`doShuffle`を`maruSessionKind == null`にして同様に修正。誤答復習・バッファ枠は
+開始時から毎回シャッフルしていたので、もう一度でも従来通り再シャッフルする（変更なし）。
+`node --test`（2607件）・`npx vite build`・`npm run validate`・`check-bundle-size.mjs`は
+すべて通過。この修正はSession.jsxの既存の`onStartReview`/`onStartFast`と全く同じ配線を
+「もう一度」の分岐にも適用しただけ（新しい仕組みは作っていない）。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

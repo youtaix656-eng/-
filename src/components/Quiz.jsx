@@ -301,9 +301,12 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     const byId = new Map(questions.map((q) => [q.id, q]));
     beginWith(ids.map((id) => byId.get(id)).filter(Boolean), false);
   };
-  // 「もう一度」＝同じ母集団を再シャッフルして再演習（○の見直し等はlabel相当のmaruSessionKindを引き継ぐ）
+  // 「もう一度」＝同じ母集団を再演習（○の見直し等はlabel相当のmaruSessionKindを引き継ぐ）。
+  //   ○の見直し・高速回転は開始時と同じく「うっかり○を先頭に、古い順」の並びを保つため
+  //   再シャッフルしない（startMaruReview/startMaruFastと同じdoShuffle=false）。それ以外は
+  //   開始時から毎回シャッフルしていたので、もう一度でも再シャッフルする。
   const restart = () => {
-    if (sessionPool) beginWith(sessionPool, true, { maruKind: maruSessionKind });
+    if (sessionPool) beginWith(sessionPool, maruSessionKind == null, { maruKind: maruSessionKind });
     else start();
   };
 

@@ -754,7 +754,16 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
                 className="btn primary"
                 onClick={() => {
                   const curatedPool = (session.ids || []).map((id) => byId[id]).filter(Boolean);
-                  begin(curatedPool.length, { pool: curatedPool, subject: session.subject, fast: session.fast, newRatio: session.newRatio, allowSeen: true, label: session.label });
+                  // ○の見直し／高速回転は、開始時と同じく「うっかり○を先頭に、古い順」の並びを
+                  // 保つため再シャッフルしない（idsをそのまま渡す＝begin()内のbuildOrderを経由しない）。
+                  // それ以外（誤答復習・バッファ枠）は開始時から毎回シャッフルしていたので、
+                  // もう一度でも同じくpoolだけ渡して再シャッフルさせる。
+                  const isMaruLabel = session.label === '○の見直し' || session.label === '○の高速回転';
+                  begin(curatedPool.length, {
+                    pool: curatedPool, subject: session.subject, fast: session.fast, newRatio: session.newRatio,
+                    allowSeen: true, label: session.label,
+                    ...(isMaruLabel ? { ids: curatedPool.map((q) => q.id) } : {}),
+                  });
                 }}
               >
                 もう一度
