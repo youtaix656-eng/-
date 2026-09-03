@@ -10,6 +10,9 @@ import {
   GUT_CARE_TOPICS,
   GUT_CARE_NOTE,
 } from '../lib/homeTopics.js';
+import { missingDays, gapLine, GAP_NOTE } from '../lib/gaps.js';
+import { nextVisit, visitLine, openQuestions, NO_REMINDER_NOTE } from '../lib/visits.js';
+import { openPeriods, KIND_BY_ID, periodLength } from '../lib/periods.js';
 import { useFocusJump } from './useFocusJump.js';
 import RedFlagLink from './RedFlagLink.jsx';
 
@@ -27,6 +30,13 @@ export default function Home({ store, onGo, focus, onFocusDone }) {
     () => probioticHome(store.probiotic, store.days, today),
     [store.probiotic, store.days, today],
   );
+  // 抜けている日（提案2）。**責める言い方をしない**——出すのは空いている日まで
+  const missing = useMemo(() => missingDays(store.days, 14, today), [store.days, today]);
+  // つぎの通院（提案14）。**鳴らさない**——表示するだけ
+  const visit = useMemo(() => nextVisit(store.visits, today), [store.visits, today]);
+  const open = useMemo(() => openQuestions(visit), [visit]);
+  // いま続いている「いつもと違う期間」の印（提案6）
+  const running = useMemo(() => openPeriods(store.periods), [store.periods]);
 
   return (
     <div className="view">
@@ -144,6 +154,64 @@ export default function Home({ store, onGo, focus, onFocusDone }) {
           途切れた日が「怠けた日」に見えないようにしています。
         </p>
       </section>
+
+      {visit && (
+        <section className="block" id="home-visit">
+          <div className="block-head">
+            <h2>つぎの通院</h2>
+          </div>
+          <p>
+            {visitLine(visit, today)}
+            {visit.place ? `（${visit.place}）` : ''}
+          </p>
+          {open.length > 0 && (
+            <p className="muted small">まだ聞けていないこと {open.length}件。受診メモに一緒に出せます。</p>
+          )}
+          <button type="button" className="ghost" onClick={() => onGo('visits', `visit-${visit.id}`)}>
+            通院の画面をひらく
+          </button>
+          <p className="muted small">{NO_REMINDER_NOTE}</p>
+        </section>
+      )}
+
+      {running.length > 0 && (
+        <section className="block" id="home-period">
+          <div className="block-head">
+            <h2>いま印をつけている期間</h2>
+          </div>
+          <ul className="flags">
+            {running.map((p) => (
+              <li key={p.id}>
+                <strong>{(KIND_BY_ID[p.kind] || {}).label || p.kind}</strong>
+                <span className="muted small">
+                  {p.from} から（{periodLength(p, today)}日目）{p.note ? `／${p.note}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="ghost" onClick={() => onGo('periods')}>
+            期間の印を見る
+          </button>
+        </section>
+      )}
+
+      <section className="block" id="home-gaps">
+        <div className="block-head">
+          <h2>空いている日</h2>
+        </div>
+        <p>{gapLine(missing, 14)}</p>
+        {missing.length > 0 && (
+          <div className="suggest">
+            {missing.slice(0, 7).map((key) => (
+              <button key={key} type="button" className="chip small" onClick={() => onGo('calendar', '', key)}>
+                {formatKey(key, { withYear: false })}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="muted small">{GAP_NOTE}</p>
+      </section>
+
       <RedFlagLink onGo={onGo} />
     </div>
   );

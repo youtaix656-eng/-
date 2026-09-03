@@ -1,0 +1,31 @@
+{
+  "name": "腸（ちょう）",
+  "short_name": "腸",
+  "description": "お腹の調子とお通じを毎日ひとタップで記録し、受診のときにそのまま渡せる形にするアプリ。記録はこの端末の中だけに残ります。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbfbfb",
+  "theme_color": "#fbfbfb",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "きょうの記録",
+      "short_name": "きょう",
+      "description": "今日のお腹の記録をひらく",
+      "url": "./?view=home"
+    },
+    {
+      "name": "受診メモ",
+      "short_name": "受診メモ",
+      "description": "受診のときに渡せる形にする",
+      "url": "./?view=visitnote"
+    }
+  ]
+}

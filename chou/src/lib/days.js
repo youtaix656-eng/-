@@ -14,6 +14,7 @@ import {
   EXERCISE_BY_ID,
   SLEEP_BY_ID,
   POSTURE_BY_ID,
+  WATER_BY_ID,
   STOOL_MARKS,
   FLAG_MARK_IDS,
 } from '../data/scales.js';
@@ -42,6 +43,7 @@ export function emptyDay(date) {
     exercise: null,
     sleep: null,
     posture: null,
+    water: null,
     probiotic: false,
     otc: [],
     stools: [],
@@ -89,6 +91,7 @@ export function normalizeDay(raw) {
   day.exercise = EXERCISE_BY_ID[raw.exercise] ? raw.exercise : null;
   day.sleep = SLEEP_BY_ID[raw.sleep] ? raw.sleep : null;
   day.posture = POSTURE_BY_ID[raw.posture] ? raw.posture : null;
+  day.water = WATER_BY_ID[raw.water] ? raw.water : null;
   day.probiotic = raw.probiotic === true;
   day.otc = Array.isArray(raw.otc) ? raw.otc.filter((id) => OTC_IDS.includes(id)) : [];
   day.stools = (Array.isArray(raw.stools) ? raw.stools : [])
@@ -125,6 +128,7 @@ export function hasRecord(day) {
       (day.exercise && day.exercise !== 'none') ||
       day.sleep ||
       day.posture ||
+      day.water ||
       day.probiotic ||
       day.otc.length ||
       day.stools.length ||

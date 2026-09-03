@@ -1,6 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { recordedTotal } from '../lib/stats.js';
-import { todayKey } from '../lib/dates.js';
+import { todayKey, lastKeys } from '../lib/dates.js';
+import { daysToCsv, csvFilename, CSV_NOTE } from '../lib/csv.js';
+import { canShare, shareText, downloadText, SHARE_NOTE } from '../lib/share.js';
+import { encodeTransfer, decodeTransfer, fitsInQr, TRANSFER_NOTE, TRANSFER_TOO_BIG } from '../lib/transfer.js';
+import { toMatrix } from '../lib/qr.js';
+import { formatAt, toText, ERROR_LOG_NOTE, ERROR_LOG_EMPTY } from '../lib/errorLog.js';
+import { VOICE_OPT_IN_TITLE, VOICE_OPT_IN_NOTE, canListen } from '../lib/voice.js';
+import { canSpeak, SPEAK_NOTE } from '../lib/speak.js';
 import { useFocusJump } from './useFocusJump.js';
 import RedFlagLink from './RedFlagLink.jsx';
 
@@ -19,24 +26,108 @@ const THEMES = [
   { id: 'dark', label: '暗い（夜の記録に）' },
 ];
 
+/** 文字の大きさ。**「読めない」を我慢させない**（飛び先の余白は rem で持ってある） */
+const TEXT_SIZES = [
+  { id: 'normal', label: '標準' },
+  { id: 'large', label: '大きめ' },
+  { id: 'xlarge', label: '特大' },
+];
+
+const CONTRASTS = [
+  { id: 'normal', label: 'ふつう' },
+  { id: 'high', label: 'はっきり' },
+];
+
+/** QR を線ではなく四角で描く（**画像ファイルを持たない**。決まり9） */
+function QrCode({ matrix }) {
+  if (!matrix) return null;
+  const n = matrix.length;
+  const rects = [];
+  for (let r = 0; r < n; r += 1) {
+    for (let c = 0; c < n; c += 1) {
+      if (matrix[r][c]) rects.push(<rect key={`${r}-${c}`} x={c} y={r} width="1" height="1" fill="#000" />);
+    }
+  }
+  return (
+    <svg viewBox={`-2 -2 ${n + 4} ${n + 4}`} width="240" height="240" role="img" aria-label="受け渡し用のQRコード">
+      <rect x="-2" y="-2" width={n + 4} height={n + 4} fill="#fff" />
+      {rects}
+    </svg>
+  );
+}
+
 export default function Settings({ store, focus, onFocusDone, onGo }) {
   useFocusJump(focus, onFocusDone);
   const fileRef = useRef(null);
   const [message, setMessage] = useState('');
+  const [handoff, setHandoff] = useState('');
+  const [matrix, setMatrix] = useState(null);
+  const [paste, setPaste] = useState('');
   const total = recordedTotal(store.days);
   const size = store.storageSize();
 
+  const backupText = () => JSON.stringify(store.exportAll(), null, 2);
+
   const exportFile = () => {
-    const blob = new Blob([JSON.stringify(store.exportAll(), null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chou-backup_${todayKey()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(`chou-backup_${todayKey()}.json`, backupText(), 'application/json;charset=utf-8');
     setMessage('書き出しました。記録そのものが入っているので、置き場所に気をつけてください。');
+  };
+
+  /** 共有シートへ渡す。**使えなければダウンロードへ落とす**（何も起きないボタンにしない） */
+  const shareBackup = async () => {
+    const ok = await shareText({ title: '腸（ちょう）の記録', text: backupText() });
+    if (!ok) {
+      exportFile();
+      setMessage('共有できなかったので、ファイルに書き出しました。');
+    } else {
+      setMessage('渡しました。渡した先に記録がそのまま残ります。');
+    }
+  };
+
+  /** CSV。**判定も平均も入らない**——書いたものだけ（決まり2・3） */
+  const exportCsv = (n) => {
+    const keys = lastKeys(n, todayKey());
+    downloadText(csvFilename(keys), daysToCsv(store.days, keys), 'text/csv;charset=utf-8');
+    setMessage('CSVを書き出しました。表計算ソフトで開けます。');
+  };
+
+  /**
+   * 別の端末へ渡す文字列を作る。QR は**入る大きさの時だけ**出す（入ったふりをしない）。
+   * ライブラリは押した時に読み込む（起動時の重さにしない）。
+   */
+  const makeHandoff = async () => {
+    const text = encodeTransfer(store.exportAll());
+    setHandoff(text);
+    setMatrix(null);
+    if (!fitsInQr(text)) {
+      setMessage(TRANSFER_TOO_BIG);
+      return;
+    }
+    setMessage('');
+    try {
+      const mod = await import('../lib/vendor/qrcode-generator.mjs');
+      setMatrix(toMatrix(mod.default || mod, text));
+    } catch {
+      setMessage(TRANSFER_TOO_BIG);
+    }
+  };
+
+  const takeHandoff = () => {
+    const result = decodeTransfer(paste);
+    if (!result.ok) {
+      setMessage(result.reason);
+      return;
+    }
+    if (!window.confirm('取り込みますか？ 今ある記録は消しません（同じ日は、あとから直したほうを残します）。')) {
+      return;
+    }
+    const out = store.importAll(result.data);
+    setMessage(
+      out.ok
+        ? `取り込みました（新しく足した ${out.added}日 / 上書きした ${out.updated}日）。`
+        : '読み取れませんでした。',
+    );
+    setPaste('');
   };
 
   const importFile = async (event) => {
@@ -115,7 +206,75 @@ export default function Settings({ store, focus, onFocusDone, onGo }) {
           className="sr-only"
           onChange={importFile}
         />
+        {canShare() && (
+          <button type="button" className="ghost" onClick={shareBackup}>
+            共有する（メール・チャットなどへ）
+          </button>
+        )}
+        {canShare() && <p className="muted small">{SHARE_NOTE}</p>}
         {message && <p className="muted small">{message}</p>}
+      </section>
+
+      <section className="block" id="set-csv">
+        <div className="block-head">
+          <h2>CSVで書き出す</h2>
+        </div>
+        <p className="muted small">{CSV_NOTE}</p>
+        <div className="row">
+          <button type="button" className="ghost" onClick={() => exportCsv(30)}>
+            この30日ぶん
+          </button>
+          <button type="button" className="ghost" onClick={() => exportCsv(90)}>
+            この90日ぶん
+          </button>
+          <button type="button" className="ghost" onClick={() => exportCsv(400)}>
+            ぜんぶ
+          </button>
+        </div>
+      </section>
+
+      <section className="block" id="set-handoff">
+        <div className="block-head">
+          <h2>別の端末へ渡す</h2>
+        </div>
+        <p className="muted small">{TRANSFER_NOTE}</p>
+        <button type="button" className="ghost" onClick={makeHandoff}>
+          渡すものを作る
+        </button>
+        {handoff && (
+          <>
+            {matrix && (
+              <div className="figure-row">
+                <QrCode matrix={matrix} />
+              </div>
+            )}
+            <label className="field">
+              <span className="muted small">この文字列をコピーして、もう一方の端末に貼ってください</span>
+              <textarea className="note-out" rows="4" readOnly value={handoff} />
+            </label>
+            <button
+              type="button"
+              className="ghost small"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(handoff);
+                  setMessage('コピーしました。');
+                } catch {
+                  setMessage('コピーできませんでした。上の文字列を選んでコピーしてください。');
+                }
+              }}
+            >
+              コピーする
+            </button>
+          </>
+        )}
+        <label className="field">
+          <span className="muted small">受け取る（貼り付けて取り込む）</span>
+          <textarea rows="3" value={paste} onChange={(e) => setPaste(e.target.value)} />
+        </label>
+        <button type="button" className="ghost" onClick={takeHandoff}>
+          貼ったものを取り込む
+        </button>
       </section>
 
       <section className="block" id="set-theme">
@@ -135,6 +294,127 @@ export default function Settings({ store, focus, onFocusDone, onGo }) {
             </button>
           ))}
         </div>
+
+        <div className="block-head">
+          <h3>文字の大きさ</h3>
+        </div>
+        <div className="seg" role="group" aria-label="文字の大きさ">
+          {TEXT_SIZES.map((size2) => (
+            <button
+              key={size2.id}
+              type="button"
+              className={`chip${(store.settings.textSize || 'normal') === size2.id ? ' on' : ''}`}
+              aria-pressed={(store.settings.textSize || 'normal') === size2.id}
+              onClick={() => store.setSettings({ textSize: size2.id })}
+            >
+              {size2.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="block-head">
+          <h3>見え方</h3>
+        </div>
+        <div className="seg" role="group" aria-label="コントラスト">
+          {CONTRASTS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`chip${(store.settings.contrast || 'normal') === c.id ? ' on' : ''}`}
+              aria-pressed={(store.settings.contrast || 'normal') === c.id}
+              onClick={() => store.setSettings({ contrast: c.id })}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <label className="mark">
+          <input
+            type="checkbox"
+            checked={Boolean(store.settings.reduceMotion)}
+            onChange={() => store.setSettings({ reduceMotion: !store.settings.reduceMotion })}
+          />
+          <span>動きを少なくする（画面のアニメーションを止めます）</span>
+        </label>
+
+        {canSpeak() && (
+          <>
+            <div className="block-head">
+              <h3>読み上げ</h3>
+            </div>
+            <label className="mark">
+              <input
+                type="checkbox"
+                checked={Boolean(store.settings.speak)}
+                onChange={() => store.setSettings({ speak: !store.settings.speak })}
+              />
+              <span>読み物に読み上げのボタンを出す（既定はオフ）</span>
+            </label>
+            <p className="muted small">{SPEAK_NOTE}</p>
+          </>
+        )}
+      </section>
+
+      <section className="block" id="set-voice">
+        <div className="block-head">
+          <h2>{VOICE_OPT_IN_TITLE}</h2>
+        </div>
+        <p className="muted small">{VOICE_OPT_IN_NOTE}</p>
+        {canListen() ? (
+          <label className="mark">
+            <input
+              type="checkbox"
+              checked={Boolean(store.settings.voiceInput)}
+              onChange={() => store.setSettings({ voiceInput: !store.settings.voiceInput })}
+            />
+            <span>声で入力できるようにする（既定はオフ）</span>
+          </label>
+        ) : (
+          <p className="muted small">この端末では音声入力を使えません。</p>
+        )}
+      </section>
+
+      <section className="block" id="set-errors">
+        <div className="block-head">
+          <h2>エラーの記録</h2>
+        </div>
+        <p className="muted small">{ERROR_LOG_NOTE}</p>
+        {store.errors.length === 0 ? (
+          <p className="muted">{ERROR_LOG_EMPTY}</p>
+        ) : (
+          <>
+            <ul className="flags">
+              {store.errors.map((e) => (
+                <li key={e.id}>
+                  <span className="muted small">
+                    {formatAt(e.at)}
+                    {e.where ? `／${e.where}` : ''}
+                  </span>
+                  <span className="small">{e.message}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="row">
+              <button
+                type="button"
+                className="ghost small"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(toText(store.errors));
+                    setMessage('エラーの記録をコピーしました。');
+                  } catch {
+                    setMessage('コピーできませんでした。');
+                  }
+                }}
+              >
+                コピーする
+              </button>
+              <button type="button" className="ghost small" onClick={store.clearErrors}>
+                エラーの記録を消す
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="block" id="set-clear">

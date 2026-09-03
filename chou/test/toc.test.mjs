@@ -35,6 +35,12 @@ import {
 } from '../src/data/ibs.js';
 import { GUT_CARE_TOPICS } from '../src/lib/homeTopics.js';
 import { CONFLICT_TOPICS, SCOPE_NOTES, crossTopics } from '../src/lib/digest.js';
+import { DISEASES } from '../src/data/diseases.js';
+import { BREATH_STEPS, MASSAGE_STEPS } from '../src/data/breathing.js';
+import { CARE_BY_TYPE } from '../src/data/ibsCare.js';
+import { EATING_OUT_KINDS } from '../src/data/eatingOut.js';
+import { FLORA_BASICS, FLORA_CORRECTIONS, FLORA_UNVERIFIED } from '../src/data/flora.js';
+import { PERIOD_KINDS } from '../src/lib/periods.js';
 import { TERMS, SCREENS } from '../src/data/terms.js';
 import { BRISTOL } from '../src/data/scales.js';
 import { RED_FLAGS } from '../src/data/redFlags.js';
@@ -392,7 +398,17 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       8 +
       crossTopics().length +
       CONFLICT_TOPICS.length +
-      (SCOPE_NOTES.length - 1),
+      (SCOPE_NOTES.length - 1) +
+      // 新しい読み物・記録の仕組みから来るぶん（1件足せば目次も増える）
+      DISEASES.length +
+      BREATH_STEPS.length +
+      MASSAGE_STEPS.length +
+      CARE_BY_TYPE.length +
+      EATING_OUT_KINDS.length +
+      FLORA_BASICS.length +
+      FLORA_CORRECTIONS.length +
+      FLORA_UNVERIFIED.length +
+      PERIOD_KINDS.length,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

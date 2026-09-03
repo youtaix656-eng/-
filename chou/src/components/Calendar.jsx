@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import DayEditor from './DayEditor.jsx';
 import { BELLY_BY_ID } from '../data/scales.js';
 import { emptyDay, hasRecord } from '../lib/days.js';
@@ -14,15 +14,24 @@ import {
 import { foodSuggestions } from '../lib/stats.js';
 import { useFocusJump } from './useFocusJump.js';
 import RedFlagLink from './RedFlagLink.jsx';
+import { periodsOn, KIND_BY_ID } from '../lib/periods.js';
 
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 const pad = (n) => String(n).padStart(2, '0');
 
-export default function Calendar({ store, onGo, focus, onFocusDone }) {
+export default function Calendar({ store, onGo, focus, onFocusDone, openDate = '' }) {
   useFocusJump(focus, onFocusDone);
   const today = todayKey();
-  const [month, setMonth] = useState(() => monthStart(today));
-  const [selected, setSelected] = useState(today);
+  // ホームの「空いている日」から開いた時は、その日を選んだ状態で始める。
+  // **描く前に決める**（`useEffect` で変えると、掴みに行く時にまだ前の日で描かれている）
+  const [month, setMonth] = useState(() => monthStart(openDate || today));
+  const [selected, setSelected] = useState(openDate || today);
+  const lastOpen = useRef(openDate);
+  if (openDate && openDate !== lastOpen.current) {
+    lastOpen.current = openDate;
+    setSelected(openDate);
+    setMonth(monthStart(openDate));
+  }
   const suggestions = useMemo(() => foodSuggestions(store.days, 8), [store.days]);
 
   const cells = useMemo(() => {
@@ -102,6 +111,14 @@ export default function Calendar({ store, onGo, focus, onFocusDone }) {
       <section className="block">
         <div className="block-head">
           <h2>{formatKey(selected)}</h2>
+          {periodsOn(store.periods, selected).length > 0 && (
+            <p className="muted small">
+              この日の印：
+              {periodsOn(store.periods, selected)
+                .map((p) => (KIND_BY_ID[p.kind] || {}).label || p.kind)
+                .join('・')}
+            </p>
+          )}
           {hasRecord(day) && (
             <button
               type="button"

@@ -24,6 +24,33 @@ import {
   MIN_FOOD_DAYS,
 } from '../lib/stats.js';
 import RedFlagLink from './RedFlagLink.jsx';
+import {
+  weeklyReview,
+  weeklyRows,
+  diffLine,
+  rangeLabel,
+  WEEKLY_NOTE,
+  WEEKLY_FLAG_NOTE,
+} from '../lib/weekly.js';
+import {
+  foodCompareList,
+  compareStatus,
+  FOOD_COMPARE_NOTE,
+  byWeekday,
+  WEEKDAY_NOTE,
+  lifeOverlay,
+  LIFE_OVERLAY_NOTE,
+  windowCompare,
+  WINDOW_NOTE,
+  eliminationCompare,
+  ELIMINATION_COMPARE_NOTE,
+  probioticOverlay,
+  PROBIOTIC_OVERLAY_NOTE,
+} from '../lib/compare.js';
+import { waterCounts } from '../lib/stats.js';
+import { WATER_STEPS } from '../data/scales.js';
+
+const WATER_LABELS = Object.fromEntries(WATER_STEPS.map((w) => [w.id, w.label]));
 
 // ふりかえり。**この画面がいちばん壊しやすい。**
 // 「たまねぎ → 腹痛」と矢印で結んだ瞬間に、根拠のない食事指導になる。
@@ -96,6 +123,24 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
   const foods = useMemo(() => topFoods(store.days, keys, 10), [store.days, keys]);
   const hard = useMemo(() => hardBellyDays(store.days, keys), [store.days, keys]);
   const life = useMemo(() => lifeCounts(store.days, keys), [store.days, keys]);
+  const water = useMemo(() => waterCounts(store.days, keys), [store.days, keys]);
+  // 並べるだけの層（提案7〜12・決まり3。**矢印を書かない**）
+  const weekly = useMemo(() => weeklyReview(store.days, today), [store.days, today]);
+  const foodRows = useMemo(
+    () => foodCompareList(store.days, keys, foods.map((f) => f.food), 6),
+    [store.days, keys, foods],
+  );
+  const weekdays = useMemo(() => byWeekday(store.days, keys), [store.days, keys]);
+  const overlay = useMemo(() => lifeOverlay(store.days, keys), [store.days, keys]);
+  const windows = useMemo(() => windowCompare(store.days, days, today), [store.days, days, today]);
+  const elimCompare = useMemo(
+    () => eliminationCompare(store.days, store.runningElimination, today),
+    [store.days, store.runningElimination, today],
+  );
+  const probCompare = useMemo(
+    () => probioticOverlay(store.days, store.probiotic, today),
+    [store.days, store.probiotic, today],
+  );
 
   const maxBristol = Math.max(1, ...Object.values(bristol.byNumber));
 
@@ -272,6 +317,164 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
               </p>
             </div>
           </section>
+
+          <section className="block" id="look-weekly">
+            <div className="block-head">
+              <h2>今週と先週</h2>
+            </div>
+            <p className="muted small">
+              今週 {rangeLabel(weekly.thisWeek.range)} ／ 先週 {rangeLabel(weekly.lastWeek.range)}
+            </p>
+            <ul className="flags">
+              {weeklyRows(weekly).map((row) => (
+                <li key={row.id} id={`weekly-${row.id}`}>
+                  <strong>{row.label}</strong>
+                  <span className="small">
+                    今週 {row.now}{row.unit} ／ 先週 {row.before}{row.unit}（{diffLine(row)}）
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">{WEEKLY_NOTE}</p>
+            <p className="muted small">{WEEKLY_FLAG_NOTE}</p>
+          </section>
+
+          <section className="block" id="look-water">
+            <div className="block-head">
+              <h2>水分</h2>
+            </div>
+            {water.recorded === 0 ? (
+              <p className="muted">まだ記録がありません。「1日◯リットル」という目安はこのアプリでは持ちません。</p>
+            ) : (
+              <p>
+                {Object.entries(water.counts)
+                  .filter(([, n]) => n > 0)
+                  .map(([id, n]) => `${WATER_LABELS[id] || id} ${n}日`)
+                  .join(' / ')}
+              </p>
+            )}
+          </section>
+
+          <section className="block" id="look-food-compare">
+            <div className="block-head">
+              <h2>食べた日と、食べなかった日</h2>
+            </div>
+            {foodRows.length === 0 ? (
+              <p className="muted">{compareStatus(foodRows, foods)}</p>
+            ) : (
+              <ul className="flags">
+                {foodRows.map((row) => (
+                  <li key={row.food} id={`fcmp-${row.food}`}>
+                    <strong>{row.food}</strong>
+                    <span className="small">
+                      食べた日 {row.with.days}日のうち つらいほう {row.with.hard}日 ／
+                      食べなかった日 {row.without.days}日のうち つらいほう {row.without.hard}日
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="notice">
+              <p>{FOOD_COMPARE_NOTE}</p>
+              <button type="button" className="ghost" onClick={() => onGo('protein', 'protein-elimination')}>
+                ためしにやめてみる
+              </button>
+            </div>
+          </section>
+
+          <section className="block" id="look-weekday">
+            <div className="block-head">
+              <h2>曜日ごと</h2>
+            </div>
+            <ul className="flags">
+              {weekdays.filter((w) => w.days > 0).map((w) => (
+                <li key={w.w} id={`wd-${w.w}`}>
+                  <strong>{w.label}曜日</strong>
+                  <span className="small">
+                    書けた日 {w.days}日／つらいほう {w.hard}日／お通じ {w.stools}回
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">{WEEKDAY_NOTE}</p>
+          </section>
+
+          <section className="block" id="look-overlay">
+            <div className="block-head">
+              <h2>暮らしと重ねて並べる</h2>
+            </div>
+            {overlay.length === 0 ? (
+              <p className="muted">ストレス・眠れたか・体を動かした・姿勢・水分の記録がまだありません。</p>
+            ) : (
+              overlay.map((axis) => (
+                <div key={axis.id} className="cand" id={`ov-${axis.id}`}>
+                  <strong>{axis.label}</strong>
+                  <ul className="flags">
+                    {axis.rows.map((row) => (
+                      <li key={row.id}>
+                        <span className="small">
+                          {row.label}：{row.days}日のうち つらいほう {row.hard}日
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            )}
+            <p className="muted small">{LIFE_OVERLAY_NOTE}</p>
+          </section>
+
+          <section className="block" id="look-window">
+            <div className="block-head">
+              <h2>前の{windows.n}日と比べる</h2>
+            </div>
+            {windows.enough ? (
+              <p>
+                いま（{rangeLabel(windows.nowRange)}）書けた日 {windows.filled.now}日・つらいほう {windows.now.hard}日 ／
+                前（{rangeLabel(windows.beforeRange)}）書けた日 {windows.filled.before}日・つらいほう {windows.before.hard}日
+              </p>
+            ) : (
+              <p className="muted">どちらかの期間の記録がまだ少ないので、並べていません。</p>
+            )}
+            <p className="muted small">{WINDOW_NOTE}</p>
+          </section>
+
+          {elimCompare && (
+            <section className="block" id="look-elim">
+              <div className="block-head">
+                <h2>やめてみた前後</h2>
+              </div>
+              {elimCompare.enough ? (
+                <p>
+                  やめている間（{rangeLabel(elimCompare.duringRange)}）つらいほう {elimCompare.during.hard}日／
+                  その前（{rangeLabel(elimCompare.beforeRange)}）つらいほう {elimCompare.before.hard}日
+                </p>
+              ) : (
+                <p className="muted">まだ日数が足りないので、並べていません。</p>
+              )}
+              <p className="muted small">{ELIMINATION_COMPARE_NOTE}</p>
+            </section>
+          )}
+
+          {probCompare && (
+            <section className="block" id="look-probiotic">
+              <div className="block-head">
+                <h2>整腸剤を試している間</h2>
+              </div>
+              <p className="muted small">
+                {probCompare.name}／飲んだ印を付けた日 {probCompare.takenDays}日
+              </p>
+              {probCompare.enough ? (
+                <p>
+                  試している間（{rangeLabel(probCompare.sinceRange)}）つらいほう {probCompare.since.hard}日／
+                  その前（{rangeLabel(probCompare.beforeRange)}）つらいほう {probCompare.before.hard}日
+                </p>
+              ) : (
+                <p className="muted">まだ日数が足りないので、並べていません。</p>
+              )}
+              <p className="muted small">{PROBIOTIC_OVERLAY_NOTE}</p>
+            </section>
+          )}
 
           <section className="block">
             <p className="muted small">
