@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BELLY_STEPS, LEVELS, EXERCISE_STEPS, SLEEP_STEPS, POSTURE_STEPS, STOOL_MARKS } from '../data/scales.js';
+import { OTC_KINDS } from '../data/otcDrugs.js';
 import { nowTime } from '../lib/dates.js';
 import { flagMarksOf } from '../lib/days.js';
 import BristolPicker from './Bristol.jsx';
@@ -194,6 +195,32 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
           </label>
         </section>
       )}
+
+      <section className="block" id="rec-otc">
+        <div className="block-head">
+          <h2>使った市販薬</h2>
+        </div>
+        <p className="muted small">
+          飲んだ・貼ったものに印をつけます。<strong>良し悪しは判定しません。</strong>
+          受診のときに聞かれることなので、受診メモにそのまま出せます。
+        </p>
+        {OTC_KINDS.map((kind) => (
+          <label key={kind.id} className="mark">
+            <input
+              type="checkbox"
+              checked={day.otc.includes(kind.id)}
+              onChange={() =>
+                store.updateDay(date, {
+                  otc: day.otc.includes(kind.id)
+                    ? day.otc.filter((id) => id !== kind.id)
+                    : [...day.otc, kind.id],
+                })
+              }
+            />
+            <span>{kind.name}</span>
+          </label>
+        ))}
+      </section>
 
       <section className="block" id="rec-meal">
         <div className="block-head">

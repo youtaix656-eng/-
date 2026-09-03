@@ -18,7 +18,17 @@ import {
 } from '../data/scales.js';
 import { formatKey } from './dates.js';
 import { hasRecord } from './days.js';
-import { fillOf, bellyCounts, bristolCounts, stoolPerDay, markDays, topFoods, lifeCounts } from './stats.js';
+import {
+  fillOf,
+  bellyCounts,
+  bristolCounts,
+  stoolPerDay,
+  markDays,
+  topFoods,
+  lifeCounts,
+  otcCounts,
+} from './stats.js';
+import { OTC_KINDS } from '../data/otcDrugs.js';
 
 /** 「1日 1〜1回」と書かない（幅が無いときは幅で言わない） */
 export function perDayText(per) {
@@ -32,10 +42,13 @@ export const NOTE_PARTS = [
   { id: 'marks', label: '気になった項目（血が混じった・間に合わない感じ など）' },
   { id: 'foods', label: 'よく食べていたもの' },
   { id: 'life', label: 'ストレス・体を動かしたか・睡眠・姿勢' },
+  { id: 'otc', label: '使った市販薬（下痢止め・痛み止めなど）' },
   { id: 'notes', label: 'ひとことメモ' },
 ];
 
-export const DEFAULT_PARTS = ['stool', 'belly', 'marks', 'notes'];
+// 市販薬は既定で入れる——**受診のときに必ず聞かれることで、本人が言い忘れやすい**ため
+// （出典も「飲んでいることを必ず伝える」と書いている）。記録が無ければ行ごと出ない。
+export const DEFAULT_PARTS = ['stool', 'belly', 'marks', 'otc', 'notes'];
 
 const markLabel = (id) => {
   const found = STOOL_MARKS.find((m) => m.id === id);
@@ -152,6 +165,18 @@ export function buildVisitNote(days, keys, parts = DEFAULT_PARTS) {
       }
     }
     lines.push('');
+  }
+
+  if (on('otc')) {
+    const otc = otcCounts(days, keys);
+    if (otc.anyDays > 0) {
+      lines.push('■ 使った市販薬（本人の記録）');
+      for (const kind of OTC_KINDS) {
+        const n = otc.byKind[kind.id];
+        if (n) lines.push(`　${kind.name}：${n}日`);
+      }
+      lines.push('');
+    }
   }
 
   if (on('notes')) {

@@ -55,6 +55,30 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('butyrate')}>
+            <strong>酪酸菌と短鎖脂肪酸</strong>
+            <span className="muted small">
+              出典が挙げるはたらきと、出典自身が取り下げた説（痩せ菌・デブ菌）を並べます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('otc')}>
+            <strong>市販薬とのつきあい方</strong>
+            <span className="muted small">
+              下痢止め・胃薬・痛み止め。飲み合わせは判定しません。使った日は記録に残せます。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('habits')}>
+            <strong>胃腸の習慣</strong>
+            <span className="muted small">
+              傷つけるとされる7つ・整えるとされる4つ。食物繊維の言い分が割れる所も並べます。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('probiotics')}>
             <strong>整腸剤</strong>
             <span className="muted small">

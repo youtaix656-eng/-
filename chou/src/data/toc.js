@@ -30,6 +30,21 @@ import {
   CLEANUP_CORRECTIONS,
   CLEANUP_UNVERIFIED,
 } from './cleanup.js';
+import {
+  SHORT_CHAIN,
+  BUTYRATE_ROLES,
+  WITHDRAWN,
+  BUTYRATE_CORRECTIONS,
+  BUTYRATE_UNVERIFIED,
+} from './butyrate.js';
+import { OTC_KINDS, OTC_CORRECTIONS, OTC_UNVERIFIED } from './otcDrugs.js';
+import {
+  HARMFUL_HABITS,
+  HELPFUL_HABITS,
+  WEAK_STOMACH_AVOID,
+  HABIT_CORRECTIONS,
+  HABIT_UNVERIFIED,
+} from './gutHabits.js';
 import { readingKey, normalizeAlnum } from '../lib/yomi.js';
 
 /** 飛び先の種類。**この4つだけ**（画面／記録の設問／機能／仕組み・決まり） */
@@ -52,6 +67,9 @@ export const TOC_GROUPS = [
   { id: 'care', label: '整腸剤・調味料' },
   { id: 'cleanup', label: '腸のお掃除' },
   { id: 'prebiotic', label: '善玉菌の餌' },
+  { id: 'butyrate', label: '酪酸菌' },
+  { id: 'otc', label: '市販薬' },
+  { id: 'habit', label: '胃腸の習慣' },
   { id: 'screen', label: '画面' },
   { id: 'user', label: '自分で追加' },
 ];
@@ -420,6 +438,191 @@ function fromPrebiotics() {
   return [...kinds, ...foods, ...conflicts, ...fixes, ...claims, omega3, vinegar];
 }
 
+/**
+ * 酪酸菌・短鎖脂肪酸から。
+ * **「出典自身が取り下げた説」も目次に置く**——本や記事にはまだ残っているので、
+ * 検索して辿り着いたときに「もう言われていない」と分かる場所が要る。
+ */
+function fromButyrate() {
+  // 「短鎖脂肪酸」という総称でも引けるようにする（別名は用語ではなくここに持つ——
+  // 用語の側にも「酪酸」を置くと題がぶつかり、あとから来た派生側が黙って落ちる）
+  const scfa = SHORT_CHAIN.map((item) => ({
+    id: `toc-scfa-${item.id}`,
+    title: item.name,
+    reading: item.reading,
+    group: 'butyrate',
+    aliases: [{ name: '短鎖脂肪酸', reading: 'たんさしぼうさん' }],
+    description: `${item.note} 出典が名前を挙げている短鎖脂肪酸のひとつです。`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'butyrate', targetId: `scfa-${item.id}`, label: '読む' },
+      { type: 'page', view: 'butyrate', targetId: 'butyrate-roles', label: 'はたらきを読む' },
+    ],
+  }));
+  const roles = BUTYRATE_ROLES.map((role) => ({
+    id: `toc-brole-${role.id}`,
+    title: role.title,
+    reading: role.reading,
+    group: 'butyrate',
+    aliases: [],
+    description: [role.body, role.note].filter(Boolean).join(' '),
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'butyrate', targetId: `brole-${role.id}`, label: '読む' }],
+  }));
+  const withdrawn = WITHDRAWN.map((item) => ({
+    id: `toc-withdrawn-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'butyrate',
+    aliases: [],
+    description: `広まった説：${item.claim}。${item.withdrawn} ${item.note}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'butyrate', targetId: `withdrawn-${item.id}`, label: '取り下げの経緯を読む' },
+    ],
+  }));
+  const fixes = BUTYRATE_CORRECTIONS.map((item) => ({
+    id: `toc-bcorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'butyrate',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'butyrate', targetId: `bcorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = BUTYRATE_UNVERIFIED.map((item) => ({
+    id: `toc-bunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'butyrate',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'butyrate', targetId: `bunv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  // 芽胞は用語（`term-spore`）が単一の正なのでここでは作らない（題がぶつかる）
+  return [...scfa, ...roles, ...withdrawn, ...fixes, ...claims];
+}
+
+/**
+ * 市販薬から。
+ * **薬の項目には必ず「記録する」か「受診の目安」への飛び先を付ける**
+ * ——読んで終わりにせず、次にできることへ出すため。
+ */
+function fromOtc() {
+  const kinds = OTC_KINDS.map((kind) => ({
+    id: `toc-otc-${kind.id}`,
+    title: `${kind.name}（市販薬）`,
+    reading: `${kind.reading}しはんやく`,
+    group: 'otc',
+    aliases: [{ name: kind.name, reading: kind.reading }],
+    description: `出典の説明：${kind.said} ${kind.doctor.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'otc', targetId: `otc-${kind.id}`, label: '読む' },
+      { type: 'question', view: 'home', targetId: 'rec-otc', label: '使った日を記録する' },
+    ],
+  }));
+  const fixes = OTC_CORRECTIONS.map((item) => ({
+    id: `toc-ocorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'otc',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'otc', targetId: `ocorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = OTC_UNVERIFIED.map((item) => ({
+    id: `toc-ounverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'otc',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'otc', targetId: `ounv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...kinds, ...fixes, ...claims];
+}
+
+/** 胃腸の習慣から。**習慣には記録できる所への飛び先を必ず持たせる** */
+function fromHabits() {
+  const harmful = HARMFUL_HABITS.map((item) => ({
+    id: `toc-harm-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'habit',
+    aliases: [],
+    description: `${item.body} ${item.said.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'habits', targetId: `harm-${item.id}`, label: '読む' },
+      { type: 'question', view: item.record.view, targetId: item.record.targetId, label: item.record.label },
+    ],
+  }));
+  const helpful = HELPFUL_HABITS.map((item) => ({
+    id: `toc-help-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'habit',
+    aliases: [],
+    description: `${item.body} ${item.said.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'habits', targetId: `help-${item.id}`, label: '読む' },
+      { type: 'question', view: item.record.view, targetId: item.record.targetId, label: item.record.label },
+    ],
+  }));
+  const weak = {
+    id: 'toc-weak-stomach',
+    title: WEAK_STOMACH_AVOID.title,
+    reading: WEAK_STOMACH_AVOID.reading,
+    group: 'habit',
+    aliases: [],
+    description: `${WEAK_STOMACH_AVOID.items.join('・')}。${WEAK_STOMACH_AVOID.body} ${WEAK_STOMACH_AVOID.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'habits', targetId: 'habit-weak-stomach', label: '読む' },
+      { type: 'system', view: 'habits', targetId: 'habit-fiber', label: '食物繊維の食い違いを読む' },
+    ],
+  };
+  const fixes = HABIT_CORRECTIONS.map((item) => ({
+    id: `toc-hcorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'habit',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'habits', targetId: `hcorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = HABIT_UNVERIFIED.map((item) => ({
+    id: `toc-hunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'habit',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'habits', targetId: `hunv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...harmful, ...helpful, weak, ...fixes, ...claims];
+}
+
 function withGroup(list, group) {
   return list.map((entry) => ({ aliases: [], destinations: [], ...entry, group }));
 }
@@ -444,6 +647,9 @@ export function buildTocEntries(state = {}) {
     ...fromCare(),
     ...fromCleanup(),
     ...fromPrebiotics(),
+    ...fromButyrate(),
+    ...fromOtc(),
+    ...fromHabits(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

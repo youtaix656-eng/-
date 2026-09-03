@@ -117,6 +117,7 @@ export default function Prebiotics({ store, focus, onFocusDone, onGo }) {
             </div>
             <p className="muted small">A：{item.a}</p>
             <p className="muted small">B：{item.b}</p>
+            {item.c && <p className="muted small">C：{item.c}</p>}
           </div>
         ))}
       </section>

@@ -180,3 +180,19 @@ export function lifeCounts(days, keys) {
   }
   return { stress, exercise, sleep, posture, stressDays, exerciseDays, sleepDays, postureDays };
 }
+
+/**
+ * 市販薬を使った日を、種類ごとに数える。
+ * **飲んだ量も、良し悪しも見ない**——受診のときに「使っているものがある」と伝えるための数え方。
+ */
+export function otcCounts(days, keys) {
+  const byKind = {};
+  let anyDays = 0;
+  for (const key of keys) {
+    const day = days[key];
+    if (!day || !Array.isArray(day.otc) || day.otc.length === 0) continue;
+    anyDays += 1;
+    for (const id of day.otc) byKind[id] = (byKind[id] || 0) + 1;
+  }
+  return { byKind, anyDays };
+}

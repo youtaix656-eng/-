@@ -45,6 +45,20 @@ import {
   PREBIOTIC_CORRECTIONS,
   PREBIOTIC_UNVERIFIED,
 } from '../src/data/prebiotics.js';
+import {
+  SHORT_CHAIN,
+  BUTYRATE_ROLES,
+  WITHDRAWN,
+  BUTYRATE_CORRECTIONS,
+  BUTYRATE_UNVERIFIED,
+} from '../src/data/butyrate.js';
+import { OTC_KINDS, OTC_CORRECTIONS, OTC_UNVERIFIED } from '../src/data/otcDrugs.js';
+import {
+  HARMFUL_HABITS,
+  HELPFUL_HABITS,
+  HABIT_CORRECTIONS,
+  HABIT_UNVERIFIED,
+} from '../src/data/gutHabits.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -231,6 +245,31 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     assert.ok(entries.some((e) => e.title === `${food.name}（善玉菌の餌）`), food.name);
   }
   for (const item of SOURCE_CONFLICTS) assert.ok(entries.some((e) => e.title === item.title), item.title);
+  // 酪酸菌から来るぶん。**芽胞は用語（term-spore）が単一の正なので、ここでは作らない**
+  const fromButyrateCount =
+    SHORT_CHAIN.length +
+    BUTYRATE_ROLES.length +
+    WITHDRAWN.length +
+    BUTYRATE_CORRECTIONS.length +
+    BUTYRATE_UNVERIFIED.length;
+  for (const item of WITHDRAWN) assert.ok(entries.some((e) => e.title === item.title), item.title);
+  // 市販薬から来るぶん（薬は「◯◯（市販薬）」という題。素の名前は別名で引ける）
+  const fromOtcCount = OTC_KINDS.length + OTC_CORRECTIONS.length + OTC_UNVERIFIED.length;
+  for (const kind of OTC_KINDS) {
+    const entry = entries.find((e) => e.title === `${kind.name}（市販薬）`);
+    assert.ok(entry, kind.name);
+    assert.ok(entry.aliases.some((a) => a.name === kind.name), `${kind.name}: 別名が無い`);
+  }
+  // 胃腸の習慣から来るぶん（＋「胃が弱っているときに避けるとされるもの」の1件）
+  const fromHabitCount =
+    HARMFUL_HABITS.length +
+    HELPFUL_HABITS.length +
+    1 +
+    HABIT_CORRECTIONS.length +
+    HABIT_UNVERIFIED.length;
+  for (const item of [...HARMFUL_HABITS, ...HELPFUL_HABITS]) {
+    assert.ok(entries.some((e) => e.title === item.title), item.title);
+  }
   assert.equal(
     entries.length,
     TERMS.length +
@@ -241,7 +280,10 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       fromAdamskiCount +
       fromCareCount +
       fromCleanupCount +
-      fromPrebioticCount,
+      fromPrebioticCount +
+      fromButyrateCount +
+      fromOtcCount +
+      fromHabitCount,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

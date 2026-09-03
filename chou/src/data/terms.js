@@ -457,9 +457,12 @@ export const TERMS = [
     reading: 'がほう',
     aliases: [],
     description:
-      '菌を包む殻のようなもの。出典では「胃酸や熱、抗生物質に強く、生きたまま腸へ届きやすい」と紹介されています。※要確認',
+      '菌を包む殻のようなもの。出典では「胃酸や熱、抗生物質に強く、生きたまま腸へ届きやすい」と紹介されています。医療機関で抗生物質と一緒に整腸剤が出されることがあるのも、この性質のためだと説明されます。ただし、何をどう飲むかは処方した医師・薬剤師に聞いてください。※要確認',
     descriptionStatus: 'needs_review',
-    destinations: [{ type: 'page', view: 'probiotics', targetId: 'bacteria-miyairi', label: '菌の一覧で見る' }],
+    destinations: [
+      { type: 'page', view: 'probiotics', targetId: 'bacteria-miyairi', label: '菌の一覧で見る' },
+      { type: 'page', view: 'butyrate', targetId: 'butyrate-spore', label: '酪酸菌の画面で読む' },
+    ],
   },
   {
     id: 'term-trial-month',
@@ -638,6 +641,60 @@ export const TERMS = [
       { type: 'system', view: 'prebiotics', targetId: 'sconflict-settle', label: '住み着くのかの食い違いを読む' },
     ],
   },
+  {
+    id: 'term-treg',
+    title: '制御性T細胞',
+    reading: 'せいぎょせいてぃーさいぼう',
+    aliases: [],
+    description:
+      '免疫の強さを、強すぎず弱すぎずに保つとされる細胞です。「免疫を上げる」ではなく「調節する」という言い方をされます。出典は、酪酸がこの細胞にはたらくと説明しています。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'butyrate', targetId: 'brole-treg', label: '酪酸のはたらきを読む' },
+    ],
+  },
+  {
+    id: 'term-nsaids',
+    title: 'NSAIDs（非ステロイド性抗炎症薬）',
+    reading: 'えぬせいずひすてろいどせいこうえんしょうやく',
+    aliases: [
+      { name: '痛み止め', reading: 'いたみどめ' },
+      { name: '解熱鎮痛薬', reading: 'げねつちんつうやく' },
+    ],
+    description:
+      '痛みや熱をおさえる薬のグループです。炎症をおさえる仕組みが、胃のかべを守る仕組みと同じところにはたらくため、胃が荒れやすくなると説明されています。湿布にも同じ成分が入っているとされます。飲んでいることは受診のときに必ず伝えてください。自分の判断でやめないでください。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'otc', targetId: 'otc-nsaids', label: '市販薬の画面で読む' },
+      { type: 'question', view: 'home', targetId: 'rec-otc', label: '使った日を記録する' },
+    ],
+  },
+  {
+    id: 'term-pylori',
+    title: 'ピロリ菌',
+    reading: 'ぴろりきん',
+    aliases: [],
+    description:
+      '胃に住み着くことのある細菌です。出典は、痛み止めとあわせて胃潰瘍・十二指腸潰瘍の大きな原因になると説明しています。検査や除菌については医療機関で相談してください。このアプリは検査も判定もしません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'habits', targetId: 'harm-painkiller', label: '痛み止めの項を読む' },
+      { type: 'page', view: 'redflags', targetId: 'flag-list', label: '受診の目安を見る' },
+    ],
+  },
+  {
+    id: 'term-otc-record',
+    title: '使った市販薬の記録',
+    reading: 'つかったしはんやくのきろく',
+    aliases: [],
+    description:
+      '飲んだ・貼った市販薬に印をつけるだけの記録です。量も良し悪しも見ません。受診のときに必ず聞かれることで、言い忘れやすいので、受診メモに既定で入るようにしてあります。',
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'question', view: 'home', targetId: 'rec-otc', label: 'きょうの記録へ' },
+      { type: 'page', view: 'visitnote', targetId: 'note-parts', label: '受診メモに入れる' },
+    ],
+  },
 ];
 
 /** 目次に出す画面（飛び先の入口）。**画面を足したらここにも足す** */
@@ -732,5 +789,35 @@ export const SCREENS = [
       '餌になるとされる食べものと、低FODMAP とぶつかる所、出典どうしが食い違う所、訂正、裏が取れていない主張をまとめた画面です。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'prebiotics', targetId: 'prebiotic-kinds', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-butyrate',
+    title: '酪酸菌の画面',
+    reading: 'らくさんきんのがめん',
+    aliases: [],
+    description:
+      '酪酸菌と短鎖脂肪酸について、出典が挙げるはたらき・出典自身が取り下げた説・訂正・裏が取れていない主張をまとめた画面です。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'butyrate', targetId: 'butyrate-roles', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-otc',
+    title: '市販薬の画面',
+    reading: 'しはんやくのがめん',
+    aliases: [{ name: '市販薬とのつきあい方', reading: 'しはんやくとのつきあいかた' }],
+    description:
+      'お腹に関わる市販薬（下痢止め・吐き気止め・胃薬・痛み止め・整腸剤）について、出典の説明と、そのままにできないところをまとめた画面です。飲み合わせも用量も判定しません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'otc', targetId: 'otc-kinds', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-habits',
+    title: '胃腸の習慣の画面',
+    reading: 'いちょうのしゅうかんのがめん',
+    aliases: [],
+    description:
+      '傷つけるとされる習慣・整えるとされる習慣と、食物繊維についての言い分が割れるところをまとめた画面です。やれた数は数えません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'habits', targetId: 'habit-harmful', label: 'ひらく' }],
   },
 ];

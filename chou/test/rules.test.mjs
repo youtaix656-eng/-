@@ -6,6 +6,10 @@ import { GUT_LINES } from '../src/lib/gutLine.js';
 import { ADAMSKI_UNVERIFIED } from '../src/data/adamski.js';
 import { PROBIOTIC_UNVERIFIED, PROBIOTIC_CORRECTIONS } from '../src/data/probiotics.js';
 import { CLEANUP_UNVERIFIED, CLEANUP_CORRECTIONS } from '../src/data/cleanup.js';
+import { PREBIOTIC_UNVERIFIED, PREBIOTIC_CORRECTIONS, SOURCE_CONFLICTS } from '../src/data/prebiotics.js';
+import { BUTYRATE_UNVERIFIED, BUTYRATE_CORRECTIONS, WITHDRAWN } from '../src/data/butyrate.js';
+import { OTC_UNVERIFIED, OTC_CORRECTIONS } from '../src/data/otcDrugs.js';
+import { HABIT_UNVERIFIED, HABIT_CORRECTIONS } from '../src/data/gutHabits.js';
 
 /**
  * **引用して否定している出典の言い分**は、見張りの対象から外す。
@@ -19,6 +23,16 @@ const QUOTED = [
   ...PROBIOTIC_CORRECTIONS.map((i) => i.claim),
   ...CLEANUP_UNVERIFIED.map((i) => i.claim),
   ...CLEANUP_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...PREBIOTIC_UNVERIFIED.map((i) => i.claim),
+  ...PREBIOTIC_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...SOURCE_CONFLICTS.flatMap((i) => [i.a, i.b, i.c]),
+  ...BUTYRATE_UNVERIFIED.map((i) => i.claim),
+  ...BUTYRATE_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...WITHDRAWN.flatMap((i) => [i.claim, i.title]),
+  ...OTC_UNVERIFIED.map((i) => i.claim),
+  ...OTC_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...HABIT_UNVERIFIED.map((i) => i.claim),
+  ...HABIT_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
 ].filter(Boolean);
 
 function stripQuoted(text) {

@@ -11,6 +11,7 @@ import { FODMAP_FOODS, FODMAP_LEVELS } from '../data/fodmap.js';
 import { SPEED_NAMED, SPEED_BY_ID } from '../data/adamski.js';
 import { FERMENTED_FOODS } from '../data/cleanup.js';
 import { PREBIOTIC_FOODS, KIND_BY_ID } from '../data/prebiotics.js';
+import { HELPFUL_HABITS, WEAK_STOMACH_AVOID } from '../data/gutHabits.js';
 import { SPEED_BASIS_LABELS } from '../data/adamski.js';
 import { speedOf, speedLabel } from './combine.js';
 
@@ -167,3 +168,62 @@ export const PREBIOTIC_VS_FODMAP_NOTE =
   '「善玉菌の餌を増やす」と「発酵しやすい糖を減らす（低FODMAP）」は、目的が反対を向いています。'
   + 'どちらが正しいかはこのアプリでは決めません。お腹の張りやガスで困っているなら、'
   + '増やすほうを少しずつ試して、合わなければやめてください。';
+
+// ───────────────────────── 食物繊維：胃の側 ⇄ 腸の側 ─────────────────────────
+//
+// **これは食べものの食い違いではなく、「どの臓器を見ているか」の食い違い。**
+// 胃の側は「かき混ぜるのに時間がかかるから、弱っているときは避ける」と言い、
+// 腸の側は「もともといる菌の餌になるから増やす」と言う。どちらも同じ食べものの話で、
+// **見ている場所が違うだけなので、どちらかが嘘というわけではない。**
+// だからこそアプリが片方を選ぶと、もう片方を必要としている人を取りこぼす。
+
+/**
+ * 食物繊維についての2つの言い分を、そのまま並べて返す。
+ * `applies` は「いつの話か」——読む人が自分の今と照らせるようにするためのもの
+ * （アプリが今の状態を判定して出し分けたりはしない）。
+ */
+export function fiberViews() {
+  return [
+    {
+      id: 'stomach',
+      side: '胃の側（胃腸を強くする habits）',
+      applies: '胃が弱っているとき',
+      says: '食物繊維の多いきのこ・野菜と、脂肪の多い肉・魚は避ける',
+      why: '胃は消化そのものより下ごしらえ（かき混ぜる）をしていて、この2つに時間がかかるとされるため',
+    },
+    {
+      id: 'gut',
+      side: '腸の側（善玉菌の餌 prebiotics）',
+      applies: '善玉菌を増やしたいとき',
+      says: '水溶性食物繊維・オリゴ糖・レジスタントスターチを増やす',
+      why: 'もともといる菌の餌になるとされるため',
+    },
+    {
+      id: 'fodmap',
+      side: '低FODMAP',
+      applies: 'お腹の張り・ガスで困っているとき',
+      says: '発酵しやすい糖を減らす（食物繊維の多いものにも当てはまるものがある）',
+      why: '大腸で発酵するとガスが出て、張りや痛みにつながるとされるため',
+    },
+  ];
+}
+
+export const FIBER_NOTE =
+  '同じ食物繊維の話でも、見ている場所が違うと言うことが逆になります。'
+  + 'どれかが嘘というわけではありません。このアプリはどれが正しいかを決めません——'
+  + 'いま困っているのが胃なのかお腹なのかで、読む先が変わります。';
+
+/**
+ * 同じ出典の中で言うことが割れているところ（`gutHabits.js`）。
+ * **1つの出典の中の食い違いなので、出典どうしの食い違い（`SOURCE_CONFLICTS`）とは別に持つ。**
+ */
+export function withinSourceFiberConflict() {
+  const helpful = HELPFUL_HABITS.find((h) => h.id === 'fiber');
+  return {
+    id: 'fiber_same_source',
+    title: '同じ出典の中でも、食物繊維の扱いが割れている',
+    a: helpful ? helpful.body : '',
+    b: WEAK_STOMACH_AVOID.body,
+    note: WEAK_STOMACH_AVOID.note,
+  };
+}

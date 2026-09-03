@@ -17,9 +17,11 @@ import {
   STOOL_MARKS,
   FLAG_MARK_IDS,
 } from '../data/scales.js';
+import { OTC_KINDS } from '../data/otcDrugs.js';
 import { parseKey, timeOrder } from './dates.js';
 
 const MARK_IDS = STOOL_MARKS.map((m) => m.id);
+const OTC_IDS = OTC_KINDS.map((k) => k.id);
 const NOTE_MAX = 2000; // 1日のひとことの上限（切ったことは画面に出す）
 const FOOD_MAX = 500;
 
@@ -41,6 +43,7 @@ export function emptyDay(date) {
     sleep: null,
     posture: null,
     probiotic: false,
+    otc: [],
     stools: [],
     meals: [],
     note: '',
@@ -87,6 +90,7 @@ export function normalizeDay(raw) {
   day.sleep = SLEEP_BY_ID[raw.sleep] ? raw.sleep : null;
   day.posture = POSTURE_BY_ID[raw.posture] ? raw.posture : null;
   day.probiotic = raw.probiotic === true;
+  day.otc = Array.isArray(raw.otc) ? raw.otc.filter((id) => OTC_IDS.includes(id)) : [];
   day.stools = (Array.isArray(raw.stools) ? raw.stools : [])
     .map(normalizeStool)
     .filter(Boolean)
@@ -122,6 +126,7 @@ export function hasRecord(day) {
       day.sleep ||
       day.posture ||
       day.probiotic ||
+      day.otc.length ||
       day.stools.length ||
       day.meals.length ||
       (day.note && day.note.trim()),
