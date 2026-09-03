@@ -974,6 +974,29 @@ export const SCREENS = [
     destinations: [{ type: 'page', view: 'morning', targetId: 'morning-traits', label: 'ひらく' }],
   },
   {
+    id: 'screen-home-probiotic',
+    title: 'ホームの整腸剤',
+    reading: 'ほーむのせいちょうざい',
+    aliases: [{ name: '整腸剤の項目', reading: 'せいちょうざいのこうもく' }],
+    description:
+      'ホームに常設している整腸剤のまとまりです。登録しているものと試している期間、いま収録されている整腸剤の情報の内訳を出します。商品は勧めず、順位も付けません。飲み合わせは調べません。',
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'page', view: 'home', targetId: 'home-probiotic', label: 'ひらく' },
+      { type: 'page', view: 'probiotics', targetId: 'probiotic-mine', label: '整腸剤の画面へ' },
+    ],
+  },
+  {
+    id: 'screen-home-gutcare',
+    title: 'あなたに向いた腸活',
+    reading: 'あなたにむいたちょうかつ',
+    aliases: [],
+    description:
+      'ホームに常設している腸活のまとまりです。どれが向いているかをアプリが決めることはしません——置いてあるのは、読んで自分で選ぶための材料です。いまは酪酸菌まとめが入っています。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'home', targetId: 'home-gutcare', label: 'ひらく' }],
+  },
+  {
     id: 'screen-ibs',
     title: '過敏性腸症候群の画面',
     reading: 'かびんせいちょうしょうこうぐんのがめん',

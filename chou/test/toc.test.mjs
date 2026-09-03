@@ -33,6 +33,7 @@ import {
   IBS_CORRECTIONS,
   IBS_UNVERIFIED,
 } from '../src/data/ibs.js';
+import { GUT_CARE_TOPICS } from '../src/lib/homeTopics.js';
 import { TERMS, SCREENS } from '../src/data/terms.js';
 import { BRISTOL } from '../src/data/scales.js';
 import { RED_FLAGS } from '../src/data/redFlags.js';
@@ -378,7 +379,9 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       fromFastingCount +
       fromMorningCount +
       fromScaredCount +
-      fromIbsCount,
+      fromIbsCount +
+      // ホームの「あなたに向いた腸活」に並べているまとまり（1件足せば目次も増える）
+      GUT_CARE_TOPICS.length,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

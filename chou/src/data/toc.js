@@ -90,6 +90,7 @@ import {
   ALCOHOL_CORRECTIONS,
   ALCOHOL_UNVERIFIED,
 } from './alcohol.js';
+import { GUT_CARE_TOPICS } from '../lib/homeTopics.js';
 import { readingKey, normalizeAlnum } from '../lib/yomi.js';
 
 /** 飛び先の種類。**この4つだけ**（画面／記録の設問／機能／仕組み・決まり） */
@@ -1117,6 +1118,26 @@ function fromScared() {
   return [...foods, superFood, ...fixes, ...claims];
 }
 
+/**
+ * ホームの「あなたに向いた腸活」に並べているまとまりから。
+ * **`GUT_CARE_TOPICS` に1件足せば、目次にも自動で増える**（書き写さない）。
+ */
+function fromHomeTopics() {
+  return GUT_CARE_TOPICS.map((topic) => ({
+    id: `toc-gutcare-${topic.id}`,
+    title: topic.title,
+    reading: topic.reading,
+    group: 'screen',
+    aliases: [],
+    description: topic.lead,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'page', view: 'home', targetId: `home-${topic.id}`, label: 'ホームで読む' },
+      { type: 'page', view: topic.view, targetId: topic.targetId, label: topic.label },
+    ],
+  }));
+}
+
 function withGroup(list, group) {
   return list.map((entry) => ({ aliases: [], destinations: [], ...entry, group }));
 }
@@ -1134,6 +1155,7 @@ export function buildTocEntries(state = {}) {
   const all = [
     ...withGroup(TERMS, 'term'),
     ...withGroup(SCREENS, 'screen'),
+    ...fromHomeTopics(),
     ...fromBristol(),
     ...fromRedFlags(),
     ...fromFoods(),
