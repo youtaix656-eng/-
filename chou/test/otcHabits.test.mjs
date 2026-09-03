@@ -343,6 +343,9 @@ test('目次からも辿れる（画面にある id を指す）', () => {
     [/^help-/, /id=\{`help-\$\{/],
     [/^hcorrection-/, /id=\{`hcorrection-\$\{/],
     [/^hunv-/, /id=\{`hunv-\$\{/],
+    [/^alc-/, /id=\{`alc-\$\{/],
+    [/^acorrection-/, /id=\{`acorrection-\$\{/],
+    [/^aunv-/, /id=\{`aunv-\$\{/],
   ];
   const targets = entries
     .filter((e) => ['butyrate', 'otc', 'habit'].includes(e.group))

@@ -73,6 +73,14 @@ import {
   FASTING_UNVERIFIED,
 } from '../src/data/fasting.js';
 import { MAGNESIUM_CORRECTIONS, MAGNESIUM_UNVERIFIED } from '../src/data/magnesium.js';
+import {
+  MORNING_TRAITS,
+  MORNING_HABITS,
+  MORNING_CORRECTIONS,
+  MORNING_UNVERIFIED,
+} from '../src/data/morning.js';
+import { NAMED_FOODS, SCARED_CORRECTIONS, SCARED_UNVERIFIED } from '../src/data/scaredFoods.js';
+import { ALCOHOL_GUT, ALCOHOL_CORRECTIONS, ALCOHOL_UNVERIFIED } from '../src/data/alcohol.js';
 import { makeCandidate, detectMarkerTerms, TRIGGERS, CANDIDATE_CHOICES } from '../src/data/tocCandidates.js';
 import {
   emptyTocState,
@@ -281,12 +289,17 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     assert.ok(entry.aliases.some((a) => a.name === kind.name), `${kind.name}: 別名が無い`);
   }
   // 胃腸の習慣から来るぶん（＋「胃が弱っているときに避けるとされるもの」の1件）
+  // お酒は胃腸の習慣の画面の中の節なので、このまとまりに入る（＋量の目安の1件）
   const fromHabitCount =
     HARMFUL_HABITS.length +
     HELPFUL_HABITS.length +
     1 +
     HABIT_CORRECTIONS.length +
-    HABIT_UNVERIFIED.length;
+    HABIT_UNVERIFIED.length +
+    ALCOHOL_GUT.length +
+    1 +
+    ALCOHOL_CORRECTIONS.length +
+    ALCOHOL_UNVERIFIED.length;
   for (const item of [...HARMFUL_HABITS, ...HELPFUL_HABITS]) {
     assert.ok(entries.some((e) => e.title === item.title), item.title);
   }
@@ -304,11 +317,26 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     assert.ok(entry.aliases.some((a) => a.name === food.name), `${food.name}: 別名が無い`);
   }
   // 断食から来るぶん。**やめどきは項目にしない**（文の一覧であって項目ではない）
+  // 断食から来るぶん（＋「空腹の時間中でも食べてよいとされるもの」の1件）。
+  // **やめどきは項目にしない**（文の一覧であって項目ではない）
   const fromFastingCount =
     FASTING_SHAPES.length +
     FASTING_CLAIMS.length +
     FASTING_CORRECTIONS.length +
-    FASTING_UNVERIFIED.length;
+    FASTING_UNVERIFIED.length +
+    1;
+  // 朝のリズムから来るぶん
+  const fromMorningCount =
+    MORNING_TRAITS.length +
+    MORNING_HABITS.length +
+    MORNING_CORRECTIONS.length +
+    MORNING_UNVERIFIED.length;
+  for (const item of MORNING_HABITS) assert.ok(entries.some((e) => e.title === item.title), item.title);
+  // 名指しされた食べものから来るぶん（＋サバ缶の1件）。
+  // **食べものの題に「食べるな」の意味を込めない**ので、名前そのままで置く
+  const fromScaredCount =
+    NAMED_FOODS.length + 1 + SCARED_CORRECTIONS.length + SCARED_UNVERIFIED.length;
+  for (const food of NAMED_FOODS) assert.ok(entries.some((e) => e.title === food.name), food.name);
   for (const item of FASTING_CORRECTIONS) assert.ok(entries.some((e) => e.title === item.title), item.title);
   assert.equal(
     entries.length,
@@ -325,7 +353,9 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       fromOtcCount +
       fromHabitCount +
       fromProteinCount +
-      fromFastingCount,
+      fromFastingCount +
+      fromMorningCount +
+      fromScaredCount,
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

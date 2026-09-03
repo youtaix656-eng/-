@@ -13,6 +13,9 @@ import { HABIT_UNVERIFIED, HABIT_CORRECTIONS } from '../src/data/gutHabits.js';
 import { PROTEIN_UNVERIFIED, PROTEIN_CORRECTIONS, PROTEIN_GUIDES } from '../src/data/protein.js';
 import { FASTING_UNVERIFIED, FASTING_CORRECTIONS } from '../src/data/fasting.js';
 import { MAGNESIUM_UNVERIFIED, MAGNESIUM_CORRECTIONS } from '../src/data/magnesium.js';
+import { MORNING_UNVERIFIED, MORNING_CORRECTIONS } from '../src/data/morning.js';
+import { SCARED_UNVERIFIED, SCARED_CORRECTIONS } from '../src/data/scaredFoods.js';
+import { ALCOHOL_UNVERIFIED, ALCOHOL_CORRECTIONS, ALCOHOL_GUIDE } from '../src/data/alcohol.js';
 
 /**
  * **引用して否定している出典の言い分**は、見張りの対象から外す。
@@ -43,6 +46,13 @@ const QUOTED = [
   ...FASTING_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
   ...MAGNESIUM_UNVERIFIED.map((i) => i.claim),
   ...MAGNESIUM_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...MORNING_UNVERIFIED.flatMap((i) => [i.claim, i.title]),
+  ...MORNING_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...SCARED_UNVERIFIED.flatMap((i) => [i.claim, i.title]),
+  ...SCARED_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ...ALCOHOL_UNVERIFIED.flatMap((i) => [i.claim, i.title]),
+  ...ALCOHOL_CORRECTIONS.flatMap((i) => [i.claim, i.title]),
+  ALCOHOL_GUIDE.said,
 ].filter(Boolean);
 
 function stripQuoted(text) {

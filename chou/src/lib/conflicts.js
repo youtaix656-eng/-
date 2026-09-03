@@ -13,7 +13,8 @@ import { FERMENTED_FOODS } from '../data/cleanup.js';
 import { PREBIOTIC_FOODS, KIND_BY_ID } from '../data/prebiotics.js';
 import { HELPFUL_HABITS, WEAK_STOMACH_AVOID } from '../data/gutHabits.js';
 import { PROTEIN_GUIDES, ELIMINATION_TARGETS } from '../data/protein.js';
-import { FASTING_SHAPES } from '../data/fasting.js';
+import { FASTING_SHAPES, FASTING_ALLOWED } from '../data/fasting.js';
+import { NAMED_FOODS } from '../data/scaredFoods.js';
 import { SPEED_BASIS_LABELS } from '../data/adamski.js';
 import { speedOf, speedLabel } from './combine.js';
 
@@ -329,3 +330,67 @@ export function dairyViews() {
 export const DAIRY_NOTE =
   '乳製品は、勧める側・減らす候補にする側・一度やめてみる側の3つに割れます。'
   + 'このアプリはどれが正しいかを決めません。合う・合わないは自分の記録で見つけてください。';
+
+// ───────────────── 漬物：同じ出典の中で悪者にも救い主にもなる ─────────────────
+//
+// **これは出典どうしではなく、ひとつの出典の中の食い違い。**
+// 同じ動画が「一口で認知症2倍の猛毒」と言い、そのあとで「無添加を適量なら認知症予防に直結」
+// と言っている。**強い言葉が先に来るので、あとの但し書きは読まれにくい。** だから並べる。
+
+/** 漬物についての言い分を、元データから毎回導いて並べる */
+export function tsukemonoViews() {
+  const named = NAMED_FOODS.find((f) => f.id === 'tsukemono');
+  const ferment = FERMENTED_FOODS.find((f) => f.name === 'ぬか漬け');
+  return [
+    {
+      id: 'scared',
+      side: '名指しした側（同じ出典の前半）',
+      says: '塩分が多く、減塩のものは添加物が多い。認知症のリスクを上げる',
+      source: named ? named.said : '',
+    },
+    {
+      id: 'recommended',
+      side: '勧めた側（同じ出典の後半）',
+      says: '無添加のものを適量なら、発酵食品として腸によく、認知症予防に直結する',
+      source: named ? named.note : '',
+    },
+    {
+      id: 'cleanup',
+      side: '腸のお掃除の側（別の出典）',
+      says: 'ぬか漬けは発酵食品として勧められている',
+      source: ferment ? `発酵食品の一覧に「${ferment.name}」が入っています。` : '',
+    },
+  ];
+}
+
+export const TSUKEMONO_NOTE =
+  '同じ動画の中で、漬物は「猛毒」にも「認知症予防」にもなっています。'
+  + '**強い言葉のほうが先に来て記憶に残るので、あとの但し書きは読まれにくいところです。**'
+  + 'このアプリはどちらが正しいかを決めません。';
+
+// ───────────────── 乳製品：断食中はOK ⇄ 一度やめてみる ─────────────────
+
+/**
+ * 空腹の時間中に食べてよいとされるものと、除去を勧める側を並べる。
+ * **チーズ・ヨーグルトがちょうど反対を向いている。**
+ */
+export function fastingAllowedViews() {
+  const target = ELIMINATION_TARGETS.find((t) => t.id === 'dairy');
+  return FASTING_ALLOWED.map((item) => ({
+    id: item.id,
+    name: item.name,
+    reading: item.reading,
+    clash: Boolean(item.clash),
+    views: [
+      `断食の側では：空腹の時間中でも食べてよいものとして挙げられています。`,
+      item.clash && target
+        ? `タンパク質と腸の側では：一度やめて、体の変化を見ることを勧めています。`
+        : 'ほかの出典とはぶつかっていません。',
+    ],
+  }));
+}
+
+export const FASTING_ALLOWED_CLASH_NOTE =
+  '断食の側は「空腹の時間中でもチーズやヨーグルトなら食べてよい」と言い、'
+  + 'タンパク質の側は「乳製品を一度やめてみる」と言います。'
+  + 'このアプリはどちらが正しいかを決めません——合う・合わないは自分の記録で見つけてください。';

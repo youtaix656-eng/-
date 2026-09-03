@@ -58,8 +58,28 @@ import {
   FASTING_CLAIMS,
   FASTING_CORRECTIONS,
   FASTING_UNVERIFIED,
+  FASTING_ALLOWED,
+  FASTING_ALLOWED_NOTE,
 } from './fasting.js';
 import { MAGNESIUM_CORRECTIONS, MAGNESIUM_UNVERIFIED } from './magnesium.js';
+import {
+  MORNING_TRAITS,
+  MORNING_HABITS,
+  MORNING_CORRECTIONS,
+  MORNING_UNVERIFIED,
+} from './morning.js';
+import {
+  NAMED_FOODS,
+  SUPER_FOOD,
+  SCARED_CORRECTIONS,
+  SCARED_UNVERIFIED,
+} from './scaredFoods.js';
+import {
+  ALCOHOL_GUT,
+  ALCOHOL_GUIDE,
+  ALCOHOL_CORRECTIONS,
+  ALCOHOL_UNVERIFIED,
+} from './alcohol.js';
 import { readingKey, normalizeAlnum } from '../lib/yomi.js';
 
 /** 飛び先の種類。**この4つだけ**（画面／記録の設問／機能／仕組み・決まり） */
@@ -87,6 +107,8 @@ export const TOC_GROUPS = [
   { id: 'habit', label: '胃腸の習慣' },
   { id: 'protein', label: 'タンパク質' },
   { id: 'fasting', label: '断食・空腹' },
+  { id: 'morning', label: '朝のリズム' },
+  { id: 'scared', label: '名指しされた食べもの' },
   { id: 'screen', label: '画面' },
   { id: 'user', label: '自分で追加' },
 ];
@@ -664,7 +686,52 @@ function fromHabits() {
       { type: 'system', view: 'habits', targetId: `hunv-${item.id}`, label: '裏が取れていない主張として読む' },
     ],
   }));
-  return [...harmful, ...helpful, weak, ...fixes, ...claims];
+  // お酒は胃腸の習慣の画面の中の節なので、このまとまりへ足す
+  const alcohol = ALCOHOL_GUT.map((item) => ({
+    id: `toc-alc-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'habit',
+    aliases: [],
+    description: item.body,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'habits', targetId: `alc-${item.id}`, label: '読む' }],
+  }));
+  const guide = {
+    id: 'toc-alcohol-guide',
+    title: ALCOHOL_GUIDE.title,
+    reading: ALCOHOL_GUIDE.reading,
+    group: 'habit',
+    aliases: [{ name: '適量', reading: 'てきりょう' }],
+    description: `${ALCOHOL_GUIDE.said} ${ALCOHOL_GUIDE.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'habits', targetId: 'alcohol-guide', label: '読む' }],
+  };
+  const alcFixes = ALCOHOL_CORRECTIONS.map((item) => ({
+    id: `toc-acorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'habit',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'habits', targetId: `acorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const alcClaims = ALCOHOL_UNVERIFIED.map((item) => ({
+    id: `toc-aunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'habit',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'habits', targetId: `aunv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...harmful, ...helpful, weak, ...fixes, ...claims, ...alcohol, guide, ...alcFixes, ...alcClaims];
 }
 
 /**
@@ -798,7 +865,136 @@ function fromFasting() {
       { type: 'system', view: 'fasting', targetId: `funv-${item.id}`, label: '裏が取れていない主張として読む' },
     ],
   }));
-  return [...shapes, ...claims, ...fixes, ...unverified];
+  // 空腹の時間中に食べてよいとされるものは**1件にまとめる**——
+  // チーズ・ヨーグルトは低FODMAP の一覧と題がぶつかり、そこからも辿れるため。
+  const allowed = {
+    id: 'toc-fasting-allowed',
+    title: '空腹の時間中でも食べてよいとされるもの',
+    reading: 'くうふくのじかんちゅうでもたべてよいとされるもの',
+    group: 'fasting',
+    aliases: [],
+    description: `${FASTING_ALLOWED.map((a) => a.name).join('・')}。${FASTING_ALLOWED_NOTE.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'fasting', targetId: 'fasting-allowed', label: '読む' },
+      { type: 'function', view: 'protein', targetId: 'protein-elimination', label: '乳製品をやめてみる側を見る' },
+    ],
+  };
+  return [...shapes, ...claims, ...fixes, ...unverified, allowed];
+}
+
+/**
+ * 朝のリズムから。
+ * **「出なくても責めない」は、このアプリの芯と同じ向き**なので目次からも辿れるようにする。
+ */
+function fromMorning() {
+  const traits = MORNING_TRAITS.map((item) => ({
+    id: `toc-trait-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'morning',
+    aliases: [],
+    description: item.body,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'morning', targetId: `trait-${item.id}`, label: '読む' },
+      { type: 'page', view: item.link.view, targetId: item.link.targetId, label: item.link.label },
+    ],
+  }));
+  const habits = MORNING_HABITS.map((item) => ({
+    id: `toc-mhabit-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'morning',
+    aliases: [],
+    description: `${item.body} ${item.caution.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'morning', targetId: `mhabit-${item.id}`, label: '読む' },
+      { type: 'question', view: 'home', targetId: 'rec-stool', label: 'お通じを記録する' },
+    ],
+  }));
+  const fixes = MORNING_CORRECTIONS.map((item) => ({
+    id: `toc-mcorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'morning',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'morning', targetId: `mcorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = MORNING_UNVERIFIED.map((item) => ({
+    id: `toc-munverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'morning',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'morning', targetId: `munv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...traits, ...habits, ...fixes, ...claims];
+}
+
+/**
+ * 名指しされた食べものから。
+ * **食べものの題に「食べるな」の意味を込めない**——名前だけを置き、
+ * 説明のほうで「そう名指しされている」と書く。
+ */
+function fromScared() {
+  const foods = NAMED_FOODS.map((food) => ({
+    id: `toc-named-${food.id}`,
+    title: food.name,
+    reading: food.reading,
+    group: 'scared',
+    aliases: [],
+    description: `出典の言い分：${food.said} 選ぶときに見るところ：${food.look} ${food.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'scared', targetId: `named-${food.id}`, label: '読む' },
+      { type: 'system', view: 'scared', targetId: 'scorrection-poison_food', label: '「猛毒」と呼ばない理由を読む' },
+    ],
+  }));
+  const superFood = {
+    id: 'toc-superfood',
+    title: SUPER_FOOD.name,
+    reading: SUPER_FOOD.reading,
+    group: 'scared',
+    aliases: [],
+    description: `出典の言い分：${SUPER_FOOD.said} ${SUPER_FOOD.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [{ type: 'page', view: 'scared', targetId: 'super-food', label: '読む' }],
+  };
+  const fixes = SCARED_CORRECTIONS.map((item) => ({
+    id: `toc-scorrection-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'scared',
+    aliases: [],
+    description: `出典：${item.claim}。${item.correction.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'scared', targetId: `scorrection-${item.id}`, label: '読む' },
+    ],
+  }));
+  const claims = SCARED_UNVERIFIED.map((item) => ({
+    id: `toc-sunverified-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'scared',
+    aliases: [],
+    description: `出典の主張：${item.claim}。${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'system', view: 'scared', targetId: `sunv-${item.id}`, label: '裏が取れていない主張として読む' },
+    ],
+  }));
+  return [...foods, superFood, ...fixes, ...claims];
 }
 
 function withGroup(list, group) {
@@ -830,6 +1026,8 @@ export function buildTocEntries(state = {}) {
     ...fromHabits(),
     ...fromProtein(),
     ...fromFasting(),
+    ...fromMorning(),
+    ...fromScared(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

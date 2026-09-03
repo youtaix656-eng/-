@@ -63,6 +63,22 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('morning')}>
+            <strong>朝のリズムと排便</strong>
+            <span className="muted small">
+              出典が挙げる特徴とやってみること。出なくても責めない、が芯です。
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => onGo('scared')}>
+            <strong>名指しされた食べもの</strong>
+            <span className="muted small">
+              「猛毒」「食べるな」と言われるもの。このアプリは食べものに札を貼りません。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('protein')}>
             <strong>タンパク質と腸</strong>
             <span className="muted small">

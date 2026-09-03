@@ -10,8 +10,14 @@ import {
   FASTING_PRECHECK_WARNING,
   FASTING_PARTIAL_OK,
   FASTING_SOURCE,
+  FASTING_ALLOWED_NOTE,
 } from '../data/fasting.js';
-import { breakfastViews, BREAKFAST_NOTE } from '../lib/conflicts.js';
+import {
+  breakfastViews,
+  BREAKFAST_NOTE,
+  fastingAllowedViews,
+  FASTING_ALLOWED_CLASH_NOTE,
+} from '../lib/conflicts.js';
 import useFocusJump from './useFocusJump.js';
 
 // 断食・空腹の時間。
@@ -89,6 +95,32 @@ export default function Fasting({ onGo, focus, onFocusDone }) {
             <p>{shape.note.replace(/\*\*/g, '')}</p>
           </div>
         ))}
+      </section>
+
+      <section className="block" id="fasting-allowed">
+        <div className="block-head">
+          <h2>空腹の時間中でも食べてよいとされるもの</h2>
+        </div>
+        <p className="muted small">{FASTING_ALLOWED_NOTE.replace(/\*\*/g, '')}</p>
+        <ul className="flags">
+          {fastingAllowedViews().map((item) => (
+            <li key={item.id} id={`allowed-${item.id}`}>
+              <strong>
+                {item.name}
+                {item.clash && <span className="badge-review">　ほかの出典とぶつかる</span>}
+              </strong>
+              {item.views.map((line) => (
+                <span key={line} className="muted small">
+                  {line}
+                </span>
+              ))}
+            </li>
+          ))}
+        </ul>
+        <p>{FASTING_ALLOWED_CLASH_NOTE}</p>
+        <button type="button" className="ghost" onClick={() => onGo('protein', 'protein-elimination')}>
+          乳製品をやめてみる側を読む
+        </button>
       </section>
 
       <section className="block" id="fasting-breakfast">

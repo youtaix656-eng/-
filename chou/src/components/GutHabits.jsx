@@ -11,6 +11,15 @@ import {
   HABIT_SOURCE,
 } from '../data/gutHabits.js';
 import { fiberViews, FIBER_NOTE, withinSourceFiberConflict } from '../lib/conflicts.js';
+import {
+  ALCOHOL_GUT,
+  ALCOHOL_GUIDE,
+  ALCOHOL_CORRECTIONS,
+  ALCOHOL_UNVERIFIED,
+  ALCOHOL_PRECHECKS,
+  ALCOHOL_PRECHECK_WARNING,
+  ALCOHOL_SOURCE,
+} from '../data/alcohol.js';
 import useFocusJump from './useFocusJump.js';
 
 // 胃腸の習慣。
@@ -20,6 +29,9 @@ import useFocusJump from './useFocusJump.js';
 export default function GutHabits({ onGo, focus, onFocusDone }) {
   useFocusJump(focus, onFocusDone);
   const [checked, setChecked] = useState([]);
+  const [drink, setDrink] = useState([]);
+  const toggleDrink = (id) =>
+    setDrink((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleCheck = (id) =>
     setChecked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
@@ -136,6 +148,69 @@ export default function GutHabits({ onGo, focus, onFocusDone }) {
         </ul>
         <p className="muted small">{WEAK_STOMACH_AVOID.body}</p>
         <p>{WEAK_STOMACH_AVOID.note.replace(/\*\*/g, '')}</p>
+      </section>
+
+      <section className="block" id="habit-alcohol">
+        <div className="block-head">
+          <h2>お酒と腸</h2>
+        </div>
+        <p className="muted small">
+          別の出典（飲酒の科学）から、<strong>腸に関わるところだけ</strong>を並べています。
+          酒の強さ・肝臓・筋トレの話は、腸のアプリでは扱いません。
+        </p>
+        <ul className="flags">
+          {ALCOHOL_GUT.map((item) => (
+            <li key={item.id} id={`alc-${item.id}`}>
+              <strong>{item.title}</strong>
+              <span className="muted small">{item.body}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="cand" id="alcohol-guide">
+          <div className="cand-head">
+            <strong>{ALCOHOL_GUIDE.title}</strong>
+          </div>
+          <p className="muted small">{ALCOHOL_GUIDE.said}</p>
+          <p>{ALCOHOL_GUIDE.note.replace(/\*\*/g, '')}</p>
+        </div>
+        {ALCOHOL_CORRECTIONS.map((item) => (
+          <div key={item.id} className="cand" id={`acorrection-${item.id}`}>
+            <div className="cand-head">
+              <strong>{item.title}</strong>
+            </div>
+            <p className="muted small">出典：{item.claim}</p>
+            <p>{item.correction.replace(/\*\*/g, '')}</p>
+          </div>
+        ))}
+        <ul className="flags">
+          {ALCOHOL_UNVERIFIED.map((item) => (
+            <li key={item.id} id={`aunv-${item.id}`}>
+              <strong>{item.title}</strong>
+              <span className="muted small">出典：{item.claim}</span>
+              <span className="muted small">{item.note.replace(/\*\*/g, '')}</span>
+              <span className="badge-review">※要確認</span>
+            </li>
+          ))}
+        </ul>
+        <h3>当てはまるものはありますか</h3>
+        {ALCOHOL_PRECHECKS.map((item) => (
+          <label key={item.id} className="mark">
+            <input type="checkbox" checked={drink.includes(item.id)} onChange={() => toggleDrink(item.id)} />
+            <span>{item.label}</span>
+          </label>
+        ))}
+        {drink.length > 0 && (
+          <div className="notice" id="alcohol-precheck-warning">
+            <p>{ALCOHOL_PRECHECK_WARNING.replace(/\*\*/g, '')}</p>
+            <button type="button" className="ghost" onClick={() => onGo('redflags', 'flag-list')}>
+              受診の目安を見る
+            </button>
+          </div>
+        )}
+        <p className="muted small" id="alcohol-source">
+          出典：{ALCOHOL_SOURCE.text}
+          {ALCOHOL_SOURCE.check && ' ※要確認'}
+        </p>
       </section>
 
       <section className="block" id="habit-corrections">

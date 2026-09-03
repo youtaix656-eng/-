@@ -737,6 +737,58 @@ export const TERMS = [
       { type: 'system', view: 'fasting', targetId: 'funv-sixteen', label: '裏が取れていない主張として読む' },
     ],
   },
+  {
+    id: 'term-gastrocolic',
+    title: '胃結腸反射',
+    reading: 'いけっちょうはんしゃ',
+    aliases: [{ name: '食べると便意が来る', reading: 'たべるとべんいがくる' }],
+    description:
+      '食べものが胃に入ると大腸が動きはじめる、とされる反応です。朝食のあとに便意が来やすいのはこのためだと説明されます。ただし、朝に出ないことが「腸が悪い」という意味にはなりません——夜勤や交代勤務の人は、朝に時間を作れないことがあります。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'morning', targetId: 'morning-traits', label: '朝のリズムをひらく' },
+      { type: 'system', view: 'morning', targetId: 'mcorrection-barometer', label: '決めつけないための訂正を読む' },
+    ],
+  },
+  {
+    id: 'term-scfa-group',
+    title: '短鎖脂肪酸（酪酸・酢酸・プロピオン酸）',
+    reading: 'たんさしぼうさんさんしゅ',
+    aliases: [],
+    description:
+      '腸内細菌が食物繊維を発酵して作るとされる物質のまとまりです。このうち酪酸は大腸を動かすとされ、朝のリズムの話にも出てきます。作れるのは酪酸菌だけだと紹介されます。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'butyrate', targetId: 'butyrate-short-chain', label: '酪酸菌の画面で読む' },
+      { type: 'page', view: 'morning', targetId: 'trait-flora', label: '朝のリズムで読む' },
+    ],
+  },
+  {
+    id: 'term-ultra-processed',
+    title: '超加工食品',
+    reading: 'ちょうかこうしょくひん',
+    aliases: [],
+    description:
+      '工場で強く加工された食品を指す呼び名です。「猛毒」と名指しされる文脈でよく使われますが、範囲の決め方は研究によって違い、同じ言葉でも指すものが変わります。このアプリは食べものに良い・悪いの札を貼らず、食べたものを採点もしません。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'scared', targetId: 'scared-foods', label: '名指しされた食べものを読む' },
+      { type: 'system', view: 'scared', targetId: 'scorrection-poison_food', label: '「猛毒」と呼ばない理由を読む' },
+    ],
+  },
+  {
+    id: 'term-alcohol-unit',
+    title: '純アルコール',
+    reading: 'じゅんあるこーる',
+    aliases: [{ name: 'お酒の量の目安', reading: 'おさけのりょうのめやす' }],
+    description:
+      'お酒に含まれるアルコールそのものの重さのことです。厚生労働省が「節度ある適度な飲酒」として約20グラム程度を示していると紹介されています（ビール中瓶1本、日本酒1合、ワイングラス2〜3杯くらい）。このアプリは飲んだ量を計算しません——数字を入れると、守れた・守れなかったの話になります。',
+    descriptionStatus: 'needs_review',
+    destinations: [
+      { type: 'page', view: 'habits', targetId: 'alcohol-guide', label: '胃腸の習慣で読む' },
+      { type: 'question', view: 'home', targetId: 'rec-meal', label: '飲んだ日を記録する' },
+    ],
+  },
 ];
 
 /** 目次に出す画面（飛び先の入口）。**画面を足したらここにも足す** */
@@ -881,5 +933,25 @@ export const SCREENS = [
       'このアプリは断食を勧めていません。やめどきを先に置き、出典のやり方・そのままにできない主張・裏が取れていない主張を並べた画面です。日数も時間も数えません。',
     descriptionStatus: 'verified',
     destinations: [{ type: 'page', view: 'fasting', targetId: 'fasting-stop', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-morning',
+    title: '朝のリズムの画面',
+    reading: 'あさのりずむのがめん',
+    aliases: [],
+    description:
+      '朝の排便について、出典が挙げる特徴とやってみることを並べた画面です。「出なくても自分を責めない」を先に置いています。当てはまった数は数えません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'morning', targetId: 'morning-traits', label: 'ひらく' }],
+  },
+  {
+    id: 'screen-scared',
+    title: '名指しされた食べものの画面',
+    reading: 'なざしされたたべもののがめん',
+    aliases: [{ name: '猛毒食品と言われるもの', reading: 'もうどくしょくひんといわれるもの' }],
+    description:
+      '「猛毒」「食べるな」と名指しされることの多い食べものを、そう名指しされているという形で並べた画面です。このアプリは食べものに札を貼りません。訂正を一覧より先に置いています。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'scared', targetId: 'scared-corrections', label: 'ひらく' }],
   },
 ];
