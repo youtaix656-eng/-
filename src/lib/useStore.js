@@ -519,7 +519,19 @@ export function useStore() {
       // していたが、常に最新の状態に同期する方針を優先してここに含めることにした
       // （マージは各自身のタイムスタンプで新しい方を丸ごと採用＝mergeResumeState参照）。
       const resumeState = await storage.loadResumeState();
-      const localSnapshot = { srs, history, memos, links, examResults, settings, bookmarks, ...resumeState, session };
+      // 用語集（目次・索引）の候補フロー実行時データも、quizProgress等と同じ理由で
+      // ReactのstoreではなくIndexedDBから直接読む（Toc.jsxがローカルstateで完結させているため）。
+      const [glossaryExtra, glossaryRemovedIds, tocCandidates, tocHistory, flashcardSrs] = await Promise.all([
+        storage.loadGlossaryExtra(),
+        storage.loadGlossaryRemovedIds(),
+        storage.loadTocCandidates(),
+        storage.loadTocHistory(),
+        storage.loadFlashcardSrs(),
+      ]);
+      const localSnapshot = {
+        srs, history, memos, links, examResults, settings, bookmarks, ...resumeState, session,
+        glossaryExtra, glossaryRemovedIds, tocCandidates, tocHistory, flashcardSrs,
+      };
       let merged = localSnapshot;
       let pulled = false;
       if (remoteText) {
@@ -550,6 +562,11 @@ export function useStore() {
           storage.saveExamProgress(merged.examProgress),
           storage.saveReviewProgress(merged.reviewProgress),
           storage.saveAudioProgress(merged.audioProgress),
+          storage.saveGlossaryExtra(merged.glossaryExtra),
+          storage.saveGlossaryRemovedIds(merged.glossaryRemovedIds),
+          storage.saveTocCandidates(merged.tocCandidates),
+          storage.saveTocHistory(merged.tocHistory),
+          storage.saveFlashcardSrsRaw(merged.flashcardSrs),
         ]);
         setCloudAutoSyncToast((n) => n + 1);
       }

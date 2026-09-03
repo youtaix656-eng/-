@@ -12,6 +12,8 @@
 // フォールバックする。
 
 import { idbGet, idbSet, idbSetMany, idbDelete, idbGetAll, isIdbSupported } from './db.js';
+import { loadFlashcardSrs, saveFlashcardSrsRaw } from './flashcardSrs.js';
+export { loadFlashcardSrs, saveFlashcardSrsRaw };
 
 export const KEYS = {
   questions: 'shinkyu:questions',
@@ -50,6 +52,7 @@ export const KEYS = {
   glossaryRemovedIds: 'shinkyu:glossaryRemovedIds', // 用語集：削除候補が承認され非表示になった項目ID（本体データは書き換えられないため、隠すIDだけ持つ）
   tocCandidates: 'shinkyu:tocCandidates', // 用語集：レビュー待ち・却下済みの追加/削除候補
   tocHistory: 'shinkyu:tocHistory', // 用語集：候補の採否履歴（undoLastTocAdditionsの参照元）
+  logicalDupDismissed: 'shinkyu:logicalDupDismissed', // 問題ツール「誤りチェック」：論点の被り候補（questionSchema.jsのfindLogicalDuplicates）のうち、目視確認済みとして再表示しないグループキーの配列
 };
 
 const useIdb = isIdbSupported();
@@ -239,6 +242,11 @@ export const saveTocCandidates = (v) => write(KEYS.tocCandidates, v);
 export const loadTocHistory = () => read(KEYS.tocHistory, []);
 export const saveTocHistory = (v) => write(KEYS.tocHistory, v);
 
+// ---- 問題ツール「誤りチェック」：論点の被り候補の確認済みグループ ----
+// logicalDupDismissed = string[]（findLogicalDuplicatesが返すgroup.keyの配列）
+export const loadLogicalDupDismissed = () => read(KEYS.logicalDupDismissed, []);
+export const saveLogicalDupDismissed = (v) => write(KEYS.logicalDupDismissed, v);
+
 // ---- 読み取れなかったページ・問題の控え ----
 // unread = [{ id, source, page, detail, at }]
 export const loadUnread = () => read(KEYS.unread, []);
@@ -371,6 +379,7 @@ const DEFAULT_SETTINGS = {
   coverageThinThreshold: null, // 網羅マップ「手薄」の全科目共通しきい値（null=科目ごとの自動目安/既定値）
   coverageRichThreshold: null, // 網羅マップ「充実」の全科目共通しきい値（null=科目ごとの自動目安/既定値）
   reminder: { enabled: false, time: '07:00', lastNotified: '' }, // 毎日の学習リマインド通知
+  a11y: { fontScale: 1, reduceMotion: false, highContrast: false }, // アクセシビリティ（文字の大きさ・低モーション・高コントラスト）
   // ボイスクローン（音声学習の読み上げ声）。APIキー本体は含まない（voiceCloneSecretへ別保存）。
   voiceClone: { enabled: false, voiceId: '', voiceName: '' },
   // ポモドーロタイマー（全画面上部）
@@ -425,6 +434,17 @@ export async function exportAll() {
     examProgress: await loadExamProgress(),
     audioProgress: await loadAudioProgress(),
     session: await loadSession(),
+    // 用語集（目次・索引）：候補フローで承認された実行時追加分・削除・候補・履歴。
+    // 使い込むほど増える実データ（本体データglossaryTerms.jsの再生成では復元できない）なので、
+    // 問題バンクとは違いバックアップ・QR・クラウド同期の対象に含める。
+    glossaryExtra: await loadGlossaryExtra(),
+    glossaryRemovedIds: await loadGlossaryRemovedIds(),
+    tocCandidates: await loadTocCandidates(),
+    tocHistory: await loadTocHistory(),
+    // 経穴カードのSRS（lib/flashcardSrs.js）。一問一答の本体SRS（KEYS.srs）とは別データ。
+    // 元々idbGet/idbSetを直接使う独立実装のため、バックアップ・QR・クラウド自動同期の
+    // どこにも含まれていなかった（実際に確認して見つかったバグ、2026-09-03修正）。
+    flashcardSrs: await loadFlashcardSrs(),
   };
 }
 
@@ -452,6 +472,11 @@ export async function importAll(data) {
   if (data.examProgress && typeof data.examProgress === 'object') await saveExamProgress(data.examProgress);
   if (data.audioProgress && typeof data.audioProgress === 'object') await saveAudioProgress(data.audioProgress);
   if (data.session && typeof data.session === 'object') await saveSession(data.session);
+  if (Array.isArray(data.glossaryExtra)) await saveGlossaryExtra(data.glossaryExtra);
+  if (Array.isArray(data.glossaryRemovedIds)) await saveGlossaryRemovedIds(data.glossaryRemovedIds);
+  if (Array.isArray(data.tocCandidates)) await saveTocCandidates(data.tocCandidates);
+  if (Array.isArray(data.tocHistory)) await saveTocHistory(data.tocHistory);
+  if (data.flashcardSrs && typeof data.flashcardSrs === 'object') await saveFlashcardSrsRaw(data.flashcardSrs);
 }
 
 // ---- 「前回の続きから」（一問一答・復習・模試・音声）のまとめ読み込み ----

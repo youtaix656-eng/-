@@ -91,6 +91,45 @@ export default function WeeklyJournal({ store, onNavigate }) {
     setTimeout(() => setSaved(false), 1500);
   };
 
+  const escapeHtml = (s) =>
+    String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 印刷（PDF化）：MistakeNote.jsxと同じ「別タブに白背景の印刷用HTMLを開いて自動でwindow.print()」方式。
+  // アプリ本体は黒背景×白文字のテーマだが、紙に印刷する時は白背景×黒文字のほうが読みやすく
+  // インクの節約にもなるため、CSS変数の反転（index.cssの@media print）とは別に専用HTMLを組み立てる。
+  const printJournal = () => {
+    const weakTagsHtml = report.weakTags.length
+      ? `<div class="sec"><b>今週の弱点テーマ</b><br>${report.weakTags
+          .map((t) => `${t.roundCount >= 2 ? '🔥 ' : ''}${escapeHtml(t.tag)}（誤答${t.wrong}）`)
+          .join('　')}</div>`
+      : '';
+    const notesHtml = [{ k: thisWeekKey, n: { note: draft } }, ...pastWeeks.map((k) => ({ k, n: notes[k] }))]
+      .filter((e) => e.n && e.n.note)
+      .map((e) => `<div class="item"><div class="head">${escapeHtml(formatWeekLabel(e.k))}</div><div>${escapeHtml(e.n.note)}</div></div>`)
+      .join('');
+    const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>週次の弱点ジャーナル</title>
+      <style>
+        body{font-family:-apple-system,'Hiragino Kaku Gothic ProN',sans-serif;color:#111;margin:24px;line-height:1.7;}
+        h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:6px;}
+        .meta{color:#666;font-size:12px;margin-bottom:16px;}
+        .sec{margin:10px 0;font-size:13px;}
+        .item{border:1px solid #ccc;border-radius:8px;padding:10px 12px;margin-bottom:8px;page-break-inside:avoid;}
+        .head{font-size:12px;color:#444;font-weight:700;margin-bottom:4px;}
+      </style></head><body>
+      <h1>週次の弱点ジャーナル</h1>
+      <div class="meta">今週：${escapeHtml(formatWeekLabel(thisWeekKey))} ／ 解答${report.total}問・正答率${formatPercent(report.accuracy)}</div>
+      ${weakTagsHtml}
+      <div class="sec"><b>方針の記録</b></div>
+      ${notesHtml || '<p>まだ記録がありません。</p>'}
+      <script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
   return (
     <div className="view">
       <h2 className="view-title">週次の弱点ジャーナル</h2>
@@ -198,6 +237,7 @@ export default function WeeklyJournal({ store, onNavigate }) {
       <div className="ana-jump">
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('analytics')}>📈 分析へ戻る</button>
         <button className="btn ghost sm" onClick={() => onNavigate && onNavigate('review')}>🔁 間違えた問題へ</button>
+        <button className="btn ghost sm" onClick={printJournal}>🖨️ 印刷する</button>
       </div>
     </div>
   );

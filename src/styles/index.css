@@ -45,6 +45,58 @@
   box-sizing: border-box;
 }
 
+/* ---- アクセシビリティ設定（Settings.jsxの「アクセシビリティ」） ---- */
+/* 低モーション：アニメーション・トランジションを最小限にする */
+.app.reduce-motion,
+.app.reduce-motion * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+/* 高コントラスト：薄いグレーの文字・枠線を白へ寄せる（背景は元々黒×白基調のためこの2つが主対象） */
+.app.high-contrast {
+  --text-sub: #ffffff;
+  --text-mute: #ffffff;
+  --border: #ffffff;
+}
+
+/* ---- 印刷（間違いノート・週次の弱点ジャーナル・合格ロードマップ等）----
+   アプリ本体は黒背景×白文字だが、そのまま印刷すると紙・インクの無駄になるため
+   印刷時だけCSS変数を白背景×黒文字へ反転する（各コンポーネントの色指定の多くが
+   var(--bg)/var(--text)等を参照しているため、変数を上書きするだけで大部分に効く）。 */
+@media print {
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f2f2f2;
+    --card: #ffffff;
+    --border: #999999;
+    --text: #000000;
+    --text-sub: #222222;
+    --text-mute: #444444;
+    --navy: #ffffff;
+    --navy-dark: #ffffff;
+  }
+  body, .app {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .app {
+    max-width: 100% !important;
+    padding-bottom: 0 !important;
+  }
+  .bottom-nav,
+  .roadmap-bar,
+  .mini-player,
+  .toast,
+  .reminder-banner,
+  .app-header,
+  .no-print {
+    display: none !important;
+  }
+}
+
 html,
 body {
   margin: 0;

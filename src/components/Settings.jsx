@@ -240,6 +240,52 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         )}
       </div>
 
+      {/* ===== アクセシビリティ ===== */}
+      <div className="section-label">アクセシビリティ</div>
+      <div className="card">
+        <label className="section-label" style={{ marginTop: 0 }}>文字の大きさ</label>
+        <div className="chip-row">
+          {[
+            { v: 1, label: '標準' },
+            { v: 1.15, label: '大きめ' },
+            { v: 1.3, label: '特大' },
+          ].map((opt) => (
+            <button
+              key={opt.v}
+              className={`chip ${(settings.a11y?.fontScale ?? 1) === opt.v ? 'active' : ''}`}
+              onClick={() => updateSettings({ a11y: { ...(settings.a11y || {}), fontScale: opt.v } })}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <div className="hint" style={{ marginBottom: 10 }}>
+          画面全体を拡大表示します（ブラウザ・端末によっては効果が無い場合があります）。
+        </div>
+        <label className="switch-row">
+          <input
+            type="checkbox"
+            checked={!!settings.a11y?.reduceMotion}
+            onChange={(e) => updateSettings({ a11y: { ...(settings.a11y || {}), reduceMotion: e.target.checked } })}
+          />
+          <span>
+            アニメーションを減らす
+            <small>画面切り替え・演出のアニメーションを最小限にします。</small>
+          </span>
+        </label>
+        <label className="switch-row" style={{ marginTop: 6 }}>
+          <input
+            type="checkbox"
+            checked={!!settings.a11y?.highContrast}
+            onChange={(e) => updateSettings({ a11y: { ...(settings.a11y || {}), highContrast: e.target.checked } })}
+          />
+          <span>
+            コントラストを上げる
+            <small>薄いグレーの文字・枠線を白に近づけて見やすくします。</small>
+          </span>
+        </label>
+      </div>
+
       {/* ===== QRで別端末へ受け渡し ===== */}
       <div className="section-label">QRで別端末へ受け渡し</div>
       <SyncQR store={store} onToast={onToast} />

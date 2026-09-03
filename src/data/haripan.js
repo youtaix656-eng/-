@@ -157,10 +157,21 @@ export function harioPomoEncourage(setCount) {
 // stalledDays（#6）：復習が何日ゼロに戻せていないか（reviewZeroLog.jsのdaysSinceLastZero）。
 //   既存の「毎日のリマインド通知」（settings.reminder）に相乗りさせる形で拡張した
 //   （復習専用の別リマインド設定は作らない＝同じ機能を2か所に持たない）。
-export function haripanReminder(examDate, dueCount = 0, stalledDays = null) {
+export function haripanReminder(examDate, dueCount = 0, stalledDays = null, examStalledDays = null) {
   const left = daysUntil(examDate);
   const tail = left != null && left >= 0 ? `本番まであと${left}日だ。` : '';
   const due = dueCount > 0 ? `復習が${dueCount}問たまってるぞ。` : '';
   const stalled = stalledDays != null && stalledDays >= 3 ? `復習が${stalledDays}日ゼロに戻せてないぞ。今日は復習優先だ。` : '';
-  return `よう、ハリオだ。${tail}${due}${stalled}今日も一問からいくぞ。`;
+  const examStall = examStalledDays != null && examStalledDays >= 14 ? `本番同形式の模試も${examStalledDays}日やってないな。今週末は模試をやろう。` : '';
+  return `よう、ハリオだ。${tail}${due}${stalled}${examStall}今日も一問からいくぞ。`;
+}
+
+// 直近の本番同形式の模試（午前/午後/通し）から何日経過しているか。未実施ならnull
+// （examResults.mode: 'am'|'pm'|'full'|'strong'|'weak'|'pick'のうち本番同形式の3つだけを対象にする。
+//   得意/苦手/選択式は配分が本番と異なるため「合否判定は非対象」＝ここでも数えない）。
+export function daysSinceLastMockExam(examResults, now = Date.now()) {
+  const mocks = (examResults || []).filter((r) => r && ['am', 'pm', 'full'].includes(r.mode));
+  if (mocks.length === 0) return null;
+  const latest = Math.max(...mocks.map((r) => r.at || 0));
+  return Math.floor((now - latest) / (24 * 60 * 60 * 1000));
 }
