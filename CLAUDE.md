@@ -1861,6 +1861,80 @@ APIキー無しで今日から使えること・端末内保存を崩さない�
   ジャンプ、候補の追加する/しない、クイック追加フォーム）はPlaywright QAで確認する
   （このアプリにコンポーネントレンダリングのテスト基盤（jsdom等）が無いため）。
 
+## 「やったほうがいいことベスト18」から実装した分（2026-09-03追加）
+ユーザーに「このアプリのためにやったほうがいいことベスト18」を聞かれ、既存機能と重複しないか
+grep調査した上で13件を提案・そのうち11件（過去問PDF等の素材が要る2件＝総合問題の実データ投入・
+図問題の拡充は除く）をユーザー指定で実装したもの。
+- **論点の被り候補41件をアプリ内で確認できるように**（`QuestionTools.jsx`の誤りチェックタブ）。
+  `npm run validate`のCLI出力にしか出ていなかった`src/lib/questionSchema.js`の
+  `findLogicalDuplicates`をそのまま再利用し、一覧表示＋「確認済みにする」ボタンを追加。
+  確認済みのグループキーは`storage.js`の`logicalDupDismissed`キーに保存し、次回以降その
+  グループを再表示しない（新しい判定ロジックは作らず、既存の検証ロジックをUIに出しただけ）。
+- **用語集（`glossaryTerms.js`）を14件→20件に拡張**。郄穴・八会穴・五兪穴・奇経八脈・表裏・
+  虚実の6件を追加（既存の要穴の説明文が既に触れていた郄穴・八会穴・五兪穴を用語として独立させ、
+  要穴側にも相互のsystem destinationを追加）。いずれも十分に確立した教科書的事実のため
+  `descriptionStatus: 'verified'`で人が直接データファイルに書いた（候補フロー経由ではない）。
+- **アクセシビリティ設定**（`Settings.jsx`）：`settings.a11y`（`fontScale`/`reduceMotion`/
+  `highContrast`）を新設。文字の大きさは`.app`ルートへのCSS `zoom`で全体拡大（435箇所ある
+  px固定の`font-size`指定を個別に書き換えるのは非現実的なため、`html`の`font-size`変更では
+  効果が限定的と判断し、レイアウトごと拡大する`zoom`を採用。Chromium/Safari16.4+で有効、
+  Firefoxでは効果なしという既知の制約がある）。低モーションは`.app.reduce-motion`で
+  `animation-duration`/`transition-duration`を実質0にする。ハイコントラストは
+  `--text-sub`/`--text-mute`/`--border`を白へ寄せる（元々黒背景×白文字なのでこの3変数が主対象）。
+- **印刷機能**：`src/styles/index.css`に`@media print`を追加し、`:root`の配色変数を
+  白背景×黒文字へ反転（各コンポーネントの多くが`var(--bg)`等を参照しているため変数上書きだけで
+  広く効く）。下部ナビ・ロードマップバー・ミニプレーヤー・トースト・ヘッダーは`display:none`
+  （`.no-print`クラスでも個別に隠せる）。加えて、`MistakeNote.jsx`に既にあった「別タブに白背景の
+  印刷用HTMLを開いて`window.print()`」方式を`WeeklyJournal.jsx`にも展開（今週の集計＋方針の記録を
+  印刷）。**この「別タブ方式」と「`@media print`によるCSS変数反転」は独立した two-layer**——
+  印刷ボタンが無い画面でもCtrl+Pで最低限読める見た目になる、という位置づけ。
+- **フラッシュカードの読み上げ**（`Flashcards.jsx`）：`window.speechSynthesis`を直接使う
+  最小実装（AudioMode.jsxのような連続再生・一時停止の状態管理は持たない単発読み上げ）。
+  声・速度・高さ・発音補正辞書（`settings.voiceURI`/`speechRate`/`speechPitch`/
+  `pronunciationFixes`）は音声学習と共通の設定値をそのまま再利用する。
+- **オフライン初回起動時のフォールバック画面**（`public/sw.js`）：キャッシュが1件も無い状態で
+  オフラインになった時（＝一度もオンラインで開けていない端末）に返す応答を、プレーンテキストの
+  「オフラインです」から簡易な案内HTML（再読み込みボタンつき）に差し替えた。通常はここに来る前に
+  キャッシュ済みの`index.html`が返るため、ほとんどのユーザーは目にしない経路。
+- **`manifest.webmanifest`にshortcutsを追加**：ホーム画面アイコン長押しで「今日の復習」
+  「一問一答」「模試を始める」に直行できるようにした（`url: "./?view=review"`等）。
+  受け口は`App.jsx`の`initialViewFromUrl()`——**許可リストはVIEW_TITLESではなくNAV（下部ナビ6画面
+  のid）を使う**（VIEW_TITLESは見出し表示用の一覧で全画面を網羅しておらず、`journal`等が漏れて
+  いることを実装中に発見したため。不正な値・NAV外の値は既定の'home'にフォールバックする）。
+- **通知バリエーション**：既存の毎日リマインド（`haripanReminder`）に、本番同形式の模試
+  （午前/午後/通し）から14日以上経過している時の一言を追加。`haripan.js`に新規
+  `daysSinceLastMockExam(examResults)`を追加し、`haripanReminder`の第4引数として渡す
+  （第1〜3引数の意味・順序は変えていないため既存呼び出し・既存テストは無変更で通る）。
+- **用語集4キー（glossaryExtra/glossaryRemovedIds/tocCandidates/tocHistory）をバックアップ・
+  QR・WebRTC・クラウド自動同期の対象に含めた**（実装当初は意図的に対象外にしていたが、今回の
+  ユーザー指定で「実際に使い込まれて端末間で持ちたいニーズが出た」と判断）。`exportAll`/
+  `importAll`・`sync.js`の`buildSyncPayload`/`syncToBackup`（短縮キー`ge`/`gi`/`tc`/`th`）・
+  `progressMerge.js`の新規`mergeById`/`mergeIdSet`（examResults等と同じ「id単位でUNION、
+  同idはremote優先」パターン）・`useStore.js`の`runCloudSync`（quizProgress等と同じく
+  ReactのstoreではなくIndexedDBから直接読み書き、Toc.jsxがローカルstateで完結させているため）
+  の4箇所に配線。**既知の制約**：Toc.jsxは起動時に一度だけこれらを読み込みローカルstateで
+  保持するため、他端末からの同期で裏側のIndexedDBが更新されても、既にToc.jsxを開いたままの
+  画面には即座に反映されない（再度開き直すと反映される。quizProgress等の「続きから」データと
+  同じ制約）。
+- **経穴カードSRS（`lib/flashcardSrs.js`）をバックアップ・クラウド同期対象に含めた**：
+  このファイルは元々`idbGet`/`idbSet`を直接使う独立実装で、バックアップ・QR・クラウド自動同期の
+  どこにも登録されていなかった（実際に調査して見つけたバグ。一問一答の本体SRS(`KEYS.srs`)は
+  最初から対象だったのに、経穴カードだけ機種変更のたびに学習進捗が消えていた）。
+  `saveFlashcardSrsRaw(map)`を新規追加（`gradeFlashcard`のような1枚採点のロジックを経ずに
+  マップ全体を置き換える、復元・マージ結果の書き戻し専用）。マージは本体SRSと同じ形
+  （cardId単位・lastAnswered/dueが新しい方）なので既存の`mergeSrs`をそのまま再利用した。
+- **見送った項目**（過去問PDF等の素材が無いと着手できないためユーザーへ相談中）：
+  総合問題（`integratedQuestions.js`、`INTEGRATED_VERSION=0`のまま）の実データ投入、
+  図問題（`zumondaiQuestions.js`、サンプル5問のまま）の拡充、模試配分（`examBlueprint.js`）と
+  公式出題基準の突き合わせ（出典PDFが無いと照合できない）。
+- 検証：`node --test`（2414件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 600KB/700KB・CSS 95KB/110KB）はすべて通過。
+  Playwright QAで実機確認済み：アクセシビリティ設定（文字拡大・低モーションのクラス付与）・
+  用語集/フラッシュカード/問題ツールの新UI・`?view=review`/`?view=exam`のshortcutリンクが
+  正しい画面を開くこと・不正な`?view=`値がhomeへフォールバックすること。WeeklyJournal.jsxの
+  印刷ボタンはビルド成功のみ確認（既存のMistakeNote.jsxと同一パターンのため実機クリックまでは
+  行っていない）。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

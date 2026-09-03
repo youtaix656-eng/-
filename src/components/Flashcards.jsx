@@ -22,6 +22,7 @@ export default function Flashcards({ store, onNavigate, focusKeyword, onConsumeK
   const questions = store?.questions || [];
   const links = store?.links;
   const kwMeta = store?.kwMeta;
+  const settings = store?.settings || {};
   const [mode, setMode] = useState(KEIKETSU_MODE);
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -48,6 +49,11 @@ export default function Flashcards({ store, onNavigate, focusKeyword, onConsumeK
     setIdx(0);
     setFlipped(false);
   }, [mode, weakOnly]);
+
+  // カードを離れる・切り替える時は読み上げ中の音声を止める（前のカードの声が被らないように）
+  useEffect(() => {
+    return () => { if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel(); };
+  }, [idx, mode]);
 
   // 語呂合わせノートからの連携：指定キーワードに関連する問題の科目へ切り替える
   //   （openKeyword/ConnectedLearning.jsxと同じ「一定時間で自動消費」の型）。
@@ -102,6 +108,38 @@ export default function Flashcards({ store, onNavigate, focusKeyword, onConsumeK
     const next = await gradeFlashcard(card.id, correct);
     setCardSrs(next);
     go(1);
+  };
+
+  // 読み上げ（音声学習の発音補正辞書settings.pronunciationFixesを再利用。声・速度・高さも共通）。
+  // AudioMode.jsxとは独立の最小実装（フラッシュカードは単発の読み上げで、
+  // AudioMode.jsxのような連続再生・一時停止の状態管理までは必要としないため）。
+  const speakText = (text) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !text) return;
+    const fixes = settings.pronunciationFixes || {};
+    let t = text;
+    for (const term of Object.keys(fixes)) {
+      if (!term) continue;
+      t = t.split(term).join(fixes[term]);
+    }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = 'ja-JP';
+    u.rate = settings.speechRate || 1.0;
+    u.pitch = settings.speechPitch || 1.0;
+    if (settings.voiceURI) {
+      const voice = window.speechSynthesis.getVoices().find((v) => v.voiceURI === settings.voiceURI);
+      if (voice) u.voice = voice;
+    }
+    window.speechSynthesis.speak(u);
+  };
+
+  const speakCurrent = () => {
+    if (!card) return;
+    if (isKeiketsu) {
+      speakText(!flipped ? `${card.name}。${card.yomi}。` : `${card.name}。経絡は${card.meridian}。部位は${card.location}。主治は${card.shuji}。`);
+    } else {
+      speakText(!flipped ? card.question : `${card.choices[card.answer]}。${card.explanation || ''}`);
+    }
   };
 
   return (
@@ -230,6 +268,9 @@ export default function Flashcards({ store, onNavigate, focusKeyword, onConsumeK
             <button className="btn block" onClick={() => go(-1)}>← 前へ</button>
             <button className="btn block" onClick={() => setFlipped((f) => !f)}>🔄 裏返す</button>
             <button className="btn primary block" onClick={() => go(1)}>次へ →</button>
+          </div>
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button className="btn ghost block" onClick={speakCurrent}>🔊 読み上げる</button>
           </div>
         </>
       )}

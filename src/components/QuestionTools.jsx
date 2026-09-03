@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { GENERATORS, generateQuestions, generateVariants } from '../lib/generator.js';
 import { runAllChecks } from '../lib/checker.js';
+import { findLogicalDuplicates } from '../lib/questionSchema.js';
+import { loadLogicalDupDismissed, saveLogicalDupDismissed } from '../lib/storage.js';
 import { REFERENCES } from '../data/knowledgeBase.js';
 
 // 問題ツール：自動生成（KBテンプレート／既存問題の変形）と 誤りチェック（問題ドクター）
@@ -183,7 +185,25 @@ function Generate({ questions, appendQuestions, onToast }) {
 // ===== 誤りチェックタブ =====
 function Check({ questions, onToast }) {
   const [result, setResult] = useState(null);
+  const [dismissed, setDismissed] = useState([]);
   const byId = useMemo(() => Object.fromEntries(questions.map((q) => [q.id, q])), [questions]);
+
+  useEffect(() => {
+    loadLogicalDupDismissed().then((v) => setDismissed(Array.isArray(v) ? v : []));
+  }, []);
+
+  // 論点の被り候補（ヒューリスティック・誤検知はあり得るため常に「要目視」扱い）。
+  // scripts/validate-content.mjs のCLI出力と同じfindLogicalDuplicatesを再利用する（単一の正）。
+  const logicalDups = useMemo(() => findLogicalDuplicates(questions), [questions]);
+  const dismissedSet = useMemo(() => new Set(dismissed), [dismissed]);
+  const visibleDups = useMemo(() => logicalDups.filter((g) => !dismissedSet.has(g.key)), [logicalDups, dismissedSet]);
+
+  const dismissGroup = (key) => {
+    const next = [...dismissed, key];
+    setDismissed(next);
+    saveLogicalDupDismissed(next);
+    onToast('確認済みにしました');
+  };
 
   const run = () => {
     const r = runAllChecks(questions);
@@ -202,6 +222,37 @@ function Check({ questions, onToast }) {
         <button className="btn primary block lg" onClick={run}>
           点検する
         </button>
+      </div>
+
+      <div className="section-label">
+        論点の被り候補（要目視・{visibleDups.length}件{dismissed.length > 0 ? `／確認済み${dismissed.length}件` : ''}）
+      </div>
+      <div className="card">
+        <p className="inline-note" style={{ marginBottom: visibleDups.length ? 10 : 0 }}>
+          同じ科目で「正解の文＋主要タグ」が一致する問題をヒューリスティックに拾った“見直し候補”です
+          （誤検知はあり得ます。同じ論点なら片方を削除・別論点なら問題ありません）。
+        </p>
+        {visibleDups.length === 0 ? (
+          <p className="inline-note" style={{ marginTop: 0 }}>候補はありません。</p>
+        ) : (
+          visibleDups.map((g) => (
+            <div className="list-item" key={g.key}>
+              <div className="li-subject">{g.ids.length}問が同じ論点の可能性</div>
+              {g.ids.map((id) => {
+                const q = byId[id];
+                return (
+                  <div className="li-q" key={id} style={{ marginTop: 4 }}>
+                    {id}
+                    {q ? `：${q.question || '（図の問題）'}` : '（収録なし）'}
+                  </div>
+                );
+              })}
+              <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => dismissGroup(g.key)}>
+                確認済みにする
+              </button>
+            </div>
+          ))
+        )}
       </div>
 
       {result && (

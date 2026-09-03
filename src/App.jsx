@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useStore } from './lib/useStore.js';
 import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import { daysUntil } from './lib/gamify.js';
-import { haripanReminder } from './data/haripan.js';
+import { haripanReminder, daysSinceLastMockExam } from './data/haripan.js';
 import { daysSinceLastZero } from './lib/reviewZeroLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
 // 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
@@ -146,9 +146,23 @@ function triggerDownload(content, filename, type) {
   URL.revokeObjectURL(url);
 }
 
+// PWAのホーム画面アイコン長押しショートカット（manifest.webmanifestのshortcuts）から
+// `?view=xxx` 付きで開かれた時に、その画面から起動する。
+// VIEW_TITLESは見出し表示用の一覧で全画面を網羅していない（journal等が漏れている）ため、
+// 許可リストにはできない。ショートカットの対象は下部ナビの6画面で十分なので、NAVのidだけを許可し、
+// 不正な値は既定の'home'にフォールバックする。
+function initialViewFromUrl() {
+  try {
+    const v = new URLSearchParams(window.location.search).get('view');
+    return v && NAV.some((n) => n.id === v) ? v : 'home';
+  } catch (e) {
+    return 'home';
+  }
+}
+
 export default function App() {
   const store = useStore();
-  const [view, setView] = useState('home');
+  const [view, setView] = useState(initialViewFromUrl);
   const [toast, setToast] = useState(null);
   const [importText, setImportText] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -305,7 +319,8 @@ export default function App() {
       const body = haripanReminder(
         store.settings.examDate,
         (store.dueReviewQuestions || []).length,
-        daysSinceLastZero(store.reviewZeroLog)
+        daysSinceLastZero(store.reviewZeroLog),
+        daysSinceLastMockExam(store.examResults)
       );
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -753,9 +768,17 @@ export default function App() {
   const headerTitle = () => VIEW_TITLES[view] || '鍼灸国試 対策アプリ';
 
   const pomoOn = !!(store.settings.pomodoro && store.settings.pomodoro.enabled);
+  const a11y = store.settings.a11y || {};
+  const fontScale = a11y.fontScale || 1;
+  const appClassName = [
+    'app',
+    pomoOn ? 'has-pomo' : '',
+    a11y.reduceMotion ? 'reduce-motion' : '',
+    a11y.highContrast ? 'high-contrast' : '',
+  ].filter(Boolean).join(' ');
 
   return (
-    <div className={`app${pomoOn ? ' has-pomo' : ''}`}>
+    <div className={appClassName} style={fontScale !== 1 ? { zoom: fontScale } : undefined}>
       <Suspense fallback={null}>
         <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
       </Suspense>
