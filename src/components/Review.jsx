@@ -30,6 +30,7 @@ import { leechDwellDays } from '../lib/reviewDwell.js';
 import { daysSinceLastZero, zeroDaysSummary } from '../lib/reviewZeroLog.js';
 import { loadSnoozeLog, recordSnooze, isSnoozeHabit, SNOOZE_HABIT_THRESHOLD } from '../lib/snoozeLog.js';
 import { estimatedAnswerSeconds } from '../lib/bufferSession.js';
+import { buildCaseLinkMap, keepCasePairsAdjacentObjects } from '../lib/casePairs.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -98,7 +99,7 @@ function RelatedPanel({ q, questions, links }) {
 // 原問と派生（同じ過去問由来）を離す。id末尾の枝記号を除いた基幹idでバケット分割し、
 //   ラウンドロビンで並べて同一由来が隣り合わないようにする（Session.jsxと同じ考え方）。
 const baseId = (id) => String(id).replace(/[a-z]+$/i, '');
-function spaceByOrigin(qs) {
+function spaceByOriginRaw(qs) {
   if (qs.length < 3) return qs;
   const buckets = new Map();
   for (const q of qs) { const b = baseId(q.id); if (!buckets.has(b)) buckets.set(b, []); buckets.get(b).push(q); }
@@ -111,6 +112,13 @@ function spaceByOrigin(qs) {
     for (const l of lists) { if (l.length) { out.push(l.shift()); more = true; } }
   }
   return out;
+}
+// spaceByOriginRawの後に、症例の連問（原問＋「上記症例の続き」）を隣接させる
+// （原問と派生を離す処理とは逆方向の要求だが、対象が違うので競合しない——
+// 派生＝同じ過去問由来の一問一答、連問＝別の過去問設問だが同じ症例を参照するもの）。
+function spaceByOrigin(qs, linkOf, pairOf) {
+  const spaced = spaceByOriginRaw(qs);
+  return linkOf && pairOf ? keepCasePairsAdjacentObjects(spaced, linkOf, pairOf) : spaced;
 }
 
 export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quickStartCount, onConsumeQuickStart }) {
@@ -190,6 +198,9 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quick
     });
   }, [history]);
 
+  // 症例の連問（原問＋「上記症例の続き」）の対応表。必ず全体（questions）の元の収録順から
+  //   導出する——filterされた一部だけを渡すと、派生を読み飛ばして遡る処理が正しく働かない。
+  const casePairMap = useMemo(() => buildCaseLinkMap(questions), [questions]);
   // 復習対象プール（拡張版）：通常の復習対象（isInReview）に加え、マスター済みでも
   //   保持率が下がってきた問題を「念のため確認」として少数含む（reviewPool.jsを流用）。
   const extendedReviewPool = useMemo(() => reviewPoolFor(questions, srs), [questions, srs]);
@@ -281,7 +292,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quick
     if (!pool || pool.length === 0) return;
     missRef.current = [];
     masteredRef.current = [];
-    setOrder(spaceByOrigin(pool));
+    setOrder(spaceByOrigin(pool, casePairMap.linkOf, casePairMap.pairOf));
     setIdx(0);
     setSessionStats({ total: 0, correct: 0 });
     setStarted(true);
