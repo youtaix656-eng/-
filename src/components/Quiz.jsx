@@ -17,6 +17,7 @@ import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import {
   shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder,
 } from '../lib/sessionOrder.js';
+import { keepCasePairsAdjacent } from '../lib/casePairs.js';
 import { useMindmapData } from '../lib/mindmapDataLoader.js';
 import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { recommendNewPct } from '../lib/reviewPool.js';
@@ -47,7 +48,7 @@ function poolForSubject(questions, subject) {
 
 // 一問一答モード
 export default function Quiz({ store, initialSubject, initialQuestions, autoResume, onConsumeAutoResume, onConsumed, onOpenKeyword, onToast }) {
-  const { questions, memos, links, srs, history, recordAnswer, setMemo, setLink, bookmarks, toggleBookmark, settings, updateSettings, setNextDue } = store;
+  const { questions, memos, links, srs, history, recordAnswer, setMemo, setLink, bookmarks, toggleBookmark, settings, updateSettings, setNextDue, casePairMap } = store;
   // 出題基準の科目順（1〜14）で並べる。基準にない科目名（表記ゆれ等）は末尾に追加。
   const subjects = useMemo(() => {
     const present = getSubjects(questions);
@@ -169,7 +170,10 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
     setSessionPool(pool);
     if (doShuffle) {
       const byId = new Map(pool.map((q) => [q.id, q]));
-      setOrder(spaceById(shuffle(pool).map((q) => q.id)).map((id) => byId.get(id)));
+      // 「もう一度」の再シャッフルでも症例の連問（続き）が離れないよう、casePairMap
+      // （常に全体のquestionsから導出＝poolの並びに依存しない）で隣接を保つ。
+      const ids = keepCasePairsAdjacent(spaceById(shuffle(pool).map((q) => q.id)), casePairMap.linkOf, casePairMap.pairOf);
+      setOrder(ids.map((id) => byId.get(id)));
     } else {
       setOrder(pool);
     }
@@ -195,12 +199,12 @@ export default function Quiz({ store, initialSubject, initialQuestions, autoResu
       // ただしstartBuffer()のようにtargetがfilteredPool.lengthより小さいケースもあるため、
       // targetを無視せず必ずbuildOrderでtarget件に絞る（無視すると母集団全体が出題順になり、
       // バッファ計画の問題数が効かなくなるバグになる）。
-      return buildOrder(filteredPool, target);
+      return buildOrder(filteredPool, target, casePairMap);
     }
     const ratio = newPct / 100;
-    if (ratio >= 1) return buildNewOnlyOrder(filteredPool, target, srs);
-    if (ratio <= 0) return buildReviewOnlyOrder(filteredPool, target, srs);
-    return batch > 0 ? buildMixedOrder(filteredPool, target, ratio, srs) : buildMixedNoRepeatOrder(filteredPool, target, ratio, srs);
+    if (ratio >= 1) return buildNewOnlyOrder(filteredPool, target, srs, casePairMap);
+    if (ratio <= 0) return buildReviewOnlyOrder(filteredPool, target, srs, casePairMap);
+    return batch > 0 ? buildMixedOrder(filteredPool, target, ratio, srs, casePairMap) : buildMixedNoRepeatOrder(filteredPool, target, ratio, srs, casePairMap);
   };
   const startBuffer = (bufferPlan) => {
     const ids = buildIdsForTarget(bufferPlan.baseTaskQuestionCount);

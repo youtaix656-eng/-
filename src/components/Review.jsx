@@ -30,7 +30,7 @@ import { leechDwellDays } from '../lib/reviewDwell.js';
 import { daysSinceLastZero, zeroDaysSummary } from '../lib/reviewZeroLog.js';
 import { loadSnoozeLog, recordSnooze, isSnoozeHabit, SNOOZE_HABIT_THRESHOLD } from '../lib/snoozeLog.js';
 import { estimatedAnswerSeconds } from '../lib/bufferSession.js';
-import { buildCaseLinkMap, keepCasePairsAdjacentObjects } from '../lib/casePairs.js';
+import { keepCasePairsAdjacentObjects } from '../lib/casePairs.js';
 
 // 出題順（#1 忘れそう順・#5 難問順）と一覧の並べ替え（#8）の選択肢
 const ORDER_MODES = [
@@ -126,7 +126,7 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quick
     questions, dueReviewQuestions, reviewQuestions, history,
     memos, links, recordAnswer, setMemo, setLink, srs, GRADES,
     bookmarks, toggleBookmark, removeFromReview, setNextDue, session,
-    resetAllReviewDue, reviewZeroLog,
+    resetAllReviewDue, reviewZeroLog, casePairMap,
   } = store;
 
   const [started, setStarted] = useState(false);
@@ -198,9 +198,8 @@ export default function Review({ store, onToast, onOpenKeyword, onGoAudio, quick
     });
   }, [history]);
 
-  // 症例の連問（原問＋「上記症例の続き」）の対応表。必ず全体（questions）の元の収録順から
-  //   導出する——filterされた一部だけを渡すと、派生を読み飛ばして遡る処理が正しく働かない。
-  const casePairMap = useMemo(() => buildCaseLinkMap(questions), [questions]);
+  // 症例の連問（原問＋「上記症例の続き」）の対応表はstore.casePairMapを使う（useStore.jsが
+  //   常に全体のquestionsから導出する単一の正。ここで作り直すと二重計算になる）。
   // 復習対象プール（拡張版）：通常の復習対象（isInReview）に加え、マスター済みでも
   //   保持率が下がってきた問題を「念のため確認」として少数含む（reviewPool.jsを流用）。
   const extendedReviewPool = useMemo(() => reviewPoolFor(questions, srs), [questions, srs]);

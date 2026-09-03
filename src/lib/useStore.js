@@ -1104,6 +1104,10 @@ export function useStore() {
     questions,
     srs,
     history,
+    // 症例の連問（続き）対応表。単一の正＝常に全体の元の収録順（questions）から導出する。
+    //   誤答復習・○の見直し等の並べ替えられた（元の収録順を保っていない）部分プールから
+    //   個別に作り直すと、無関係な2問を誤って連問と誤検出しうるため、必ずこれを使い回す。
+    casePairMap,
     memos,
     bookmarks,
     toggleBookmark,
