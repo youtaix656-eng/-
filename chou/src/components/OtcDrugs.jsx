@@ -17,6 +17,7 @@ import {
   MAGNESIUM_SOURCE,
 } from '../data/magnesium.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 市販薬とのつきあい方。
 // **この画面はいちばん慎重に作ってある**——出典の「猛毒」「ヤブ医者」という言い方を持ち込むと、
@@ -199,6 +200,7 @@ export default function OtcDrugs({ onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{OTC_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

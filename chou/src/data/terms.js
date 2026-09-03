@@ -1007,6 +1007,16 @@ export const SCREENS = [
     destinations: [{ type: 'page', view: 'ibs', targetId: 'ibs-exclusion', label: 'ひらく' }],
   },
   {
+    id: 'screen-digest',
+    title: 'まとめて見る画面',
+    reading: 'まとめてみるがめん',
+    aliases: [{ name: '横断のまとめ', reading: 'おうだんのまとめ' }],
+    description:
+      '素材ごとに散らばっていた 訂正・裏が取れていない主張・食い違い・扱わないこと・出典 を、横に並べて見る画面です。中身はそれぞれの画面から毎回集めているだけで、まとめ専用の一覧は持ちません。',
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'page', view: 'digest', targetId: 'digest-cross', label: 'ひらく' }],
+  },
+  {
     id: 'screen-scared',
     title: '名指しされた食べものの画面',
     reading: 'なざしされたたべもののがめん',

@@ -23,6 +23,14 @@ export default function Know({ onGo, focus, onFocusDone }) {
           </button>
         </li>
         <li>
+          <button type="button" onClick={() => onGo('digest')}>
+            <strong>まとめて見る</strong>
+            <span className="muted small">
+              訂正・裏が取れていない主張・食い違い・扱わないこと・出典を、素材をまたいで横に並べます。
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" onClick={() => onGo('ibs')}>
             <strong>過敏性腸症候群のこと</strong>
             <span className="muted small">

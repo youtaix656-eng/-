@@ -25,6 +25,7 @@ import {
   MEAL_GAP_CONFLICT_NOTE,
 } from '../lib/conflicts.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 過敏性腸症候群そのものの画面。
 //
@@ -297,6 +298,7 @@ export default function Ibs({ onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{IBS_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

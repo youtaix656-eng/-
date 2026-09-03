@@ -13,6 +13,7 @@ import {
 } from '../data/prebiotics.js';
 import { prebioticViews, prebioticConflicts, PREBIOTIC_VS_FODMAP_NOTE } from '../lib/conflicts.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 善玉菌の餌（プレバイオティクス）。
 //
@@ -201,6 +202,7 @@ export default function Prebiotics({ store, focus, onFocusDone, onGo }) {
         <br />
         最終確認：{PREBIOTIC_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

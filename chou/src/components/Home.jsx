@@ -11,6 +11,7 @@ import {
   GUT_CARE_NOTE,
 } from '../lib/homeTopics.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 export default function Home({ store, onGo, focus, onFocusDone }) {
   useFocusJump(focus, onFocusDone);
@@ -143,6 +144,7 @@ export default function Home({ store, onGo, focus, onFocusDone }) {
           途切れた日が「怠けた日」に見えないようにしています。
         </p>
       </section>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

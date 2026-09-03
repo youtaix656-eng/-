@@ -41,6 +41,17 @@ import {
 import { OTC_KINDS, OTC_CORRECTIONS, OTC_UNVERIFIED } from './otcDrugs.js';
 import { IBS_OUT_OF_SCOPE } from './ibs.js';
 import {
+  SCOPE_NOTES as DIGEST_SCOPE_NOTES,
+  crossTopics as digestCrossTopics,
+  allConflictTopics as digestConflictTopics,
+  DIGEST_NOTE,
+  CONFLICTS_NOTE,
+  CROSS_NOTE,
+  SCOPE_NOTE as DIGEST_SCOPE_NOTE,
+  SOURCES_NOTE,
+  BREAKDOWN_NOTE,
+} from '../lib/digest.js';
+import {
   HARMFUL_HABITS,
   HELPFUL_HABITS,
   WEAK_STOMACH_AVOID,
@@ -111,6 +122,7 @@ export const TOC_GROUPS = [
   { id: 'scale', label: 'ものさし' },
   { id: 'flag', label: '受診の目安' },
   { id: 'ibs', label: '過敏性腸症候群' },
+  { id: 'digest', label: 'まとめて見る' },
   { id: 'food', label: '食材' },
   { id: 'combine', label: '食べ合わせ' },
   { id: 'care', label: '整腸剤・調味料' },
@@ -1186,6 +1198,126 @@ function withGroup(list, group) {
  *   `userTerms` は候補から「追加する」で入ったもの、`removedIds` は「削除する」で外したもの。
  *   **どちらも端末の中だけ**で、元データのファイルは書き換えない。
  */
+/**
+ * 横断のまとめから。**まとめ専用の手書きの一覧を持たない**——
+ * `lib/digest.js` が元データから毎回導いたものを、そのまま目次へ流す。
+ *
+ * 過敏性腸症候群の「このアプリが引き受けないところ」は `fromIbs()` が既に出しているので、
+ * ここでは出さない（同じ中身を2件並べない）。
+ */
+function fromDigest() {
+  const sections = [
+    {
+      key: 'top',
+      title: 'まとめて見る（横断）',
+      reading: 'まとめてみるおうだん',
+      targetId: 'digest-cross',
+      description: DIGEST_NOTE,
+    },
+    {
+      key: 'cross',
+      title: '素材をまたいで出てくる話',
+      reading: 'そざいをまたいでてでくるはなし',
+      targetId: 'digest-cross',
+      description: CROSS_NOTE,
+    },
+    {
+      key: 'conflicts',
+      title: '両方そのまま見せているところ',
+      reading: 'りょうほうそのままみせているところ',
+      targetId: 'digest-conflicts',
+      description: CONFLICTS_NOTE,
+    },
+    {
+      key: 'corrections',
+      title: 'このアプリが訂正しているところ',
+      reading: 'このあぷりがていせいしているところ',
+      targetId: 'digest-corrections',
+      description: '出典の言い分は消さずに並べたうえで、そのままにできないところに訂正を添えています。',
+    },
+    {
+      key: 'unverified',
+      title: '裏が取れていない主張のまとめ',
+      reading: 'うらがとれていないしゅちょうのまとめ',
+      targetId: 'digest-unverified',
+      description: '隠さずに並べたうえで、1件ずつ「確かめられていない」と添えてあります。計算にも判定にも使いません。',
+    },
+    {
+      key: 'scope',
+      title: 'このアプリが扱わないことのまとめ',
+      reading: 'このあぷりがあつかわないことのまとめ',
+      targetId: 'digest-scope',
+      description: DIGEST_SCOPE_NOTE,
+    },
+    {
+      key: 'breakdown',
+      title: '素材ごとの内訳',
+      reading: 'そざいごとのうちわけ',
+      targetId: 'digest-breakdown',
+      description: BREAKDOWN_NOTE,
+    },
+    {
+      key: 'sources',
+      title: '出典の一覧',
+      reading: 'しゅってんのいちらん',
+      targetId: 'digest-sources',
+      description: SOURCES_NOTE,
+    },
+  ].map((sec) => ({
+    id: `toc-digest-${sec.key}`,
+    title: sec.title,
+    reading: sec.reading,
+    group: 'digest',
+    aliases: [],
+    description: sec.description.replace(/\*\*/g, ''),
+    descriptionStatus: 'verified',
+    destinations: [{ type: 'system', view: 'digest', targetId: sec.targetId, label: '読む' }],
+  }));
+
+  const topics = digestCrossTopics().map((topic) => ({
+    id: `toc-digest-topic-${topic.id}`,
+    title: topic.title,
+    reading: topic.reading,
+    group: 'digest',
+    aliases: [],
+    description: `${topic.lead.replace(/\*\*/g, '')} ${topic.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'digest', targetId: `digest-topic-${topic.id}`, label: '読む' },
+    ],
+  }));
+
+  const conflicts = digestConflictTopics().map((item) => ({
+    id: `toc-digest-conflict-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'digest',
+    aliases: [],
+    description: item.note.replace(/\*\*/g, ''),
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'digest', targetId: `digest-conflict-${item.id}`, label: 'まとめで読む' },
+      { type: 'page', view: item.view, targetId: item.targetId, label: '元の画面で読む' },
+    ],
+  }));
+
+  const scope = DIGEST_SCOPE_NOTES.filter((item) => item.id !== 'ibs').map((item) => ({
+    id: `toc-digest-scope-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'digest',
+    aliases: [],
+    description: item.body.replace(/\*\*/g, ''),
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'digest', targetId: `digest-scope-${item.id}`, label: 'まとめで読む' },
+      { type: 'page', view: item.view, targetId: item.targetId, label: '元の画面で読む' },
+    ],
+  }));
+
+  return [...sections, ...topics, ...conflicts, ...scope];
+}
+
 export function buildTocEntries(state = {}) {
   const userTerms = Array.isArray(state.userTerms) ? state.userTerms : [];
   const removed = new Set(Array.isArray(state.removedIds) ? state.removedIds : []);
@@ -1208,6 +1340,7 @@ export function buildTocEntries(state = {}) {
     ...fromMorning(),
     ...fromScared(),
     ...fromIbs(),
+    ...fromDigest(),
     ...withGroup(userTerms, 'user'),
   ];
   const seen = new Set();

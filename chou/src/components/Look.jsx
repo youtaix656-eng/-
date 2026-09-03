@@ -23,6 +23,7 @@ import {
   lifeCounts,
   MIN_FOOD_DAYS,
 } from '../lib/stats.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // ふりかえり。**この画面がいちばん壊しやすい。**
 // 「たまねぎ → 腹痛」と矢印で結んだ瞬間に、根拠のない食事指導になる。
@@ -280,6 +281,7 @@ export default function Look({ store, onGo, focus, onFocusDone }) {
           </section>
         </>
       )}
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

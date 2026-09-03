@@ -34,6 +34,7 @@ import {
   IBS_UNVERIFIED,
 } from '../src/data/ibs.js';
 import { GUT_CARE_TOPICS } from '../src/lib/homeTopics.js';
+import { CONFLICT_TOPICS, SCOPE_NOTES, crossTopics } from '../src/lib/digest.js';
 import { TERMS, SCREENS } from '../src/data/terms.js';
 import { BRISTOL } from '../src/data/scales.js';
 import { RED_FLAGS } from '../src/data/redFlags.js';
@@ -385,7 +386,13 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
       fromScaredCount +
       fromIbsCount +
       // ホームの「あなたに向いた腸活」に並べているまとまり（1件足せば目次も増える）
-      GUT_CARE_TOPICS.length,
+      GUT_CARE_TOPICS.length +
+      // 横断のまとめから来るぶん（節8件＋素材をまたぐ話＋食い違い＋扱わないこと。
+      // 過敏性腸症候群の「引き受けないところ」は fromIbs が出しているので1件引く）
+      8 +
+      crossTopics().length +
+      CONFLICT_TOPICS.length +
+      (SCOPE_NOTES.length - 1),
   );
   // 元データを増やせば目次も増える（書き写していない証拠）
   const source = src('data/toc.js');

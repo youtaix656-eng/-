@@ -19,6 +19,7 @@ import {
   FASTING_ALLOWED_CLASH_NOTE,
 } from '../lib/conflicts.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 断食・空腹の時間。
 // **このアプリで扱っている題材の中でいちばん危ない。**
@@ -216,6 +217,7 @@ export default function Fasting({ onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{FASTING_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { proteinViews, PROTEIN_NOTE, dairyViews, DAIRY_NOTE } from '../lib/confl
 import { progressOf, progressLine, finished, TARGET_BY_ID, RESTORE_NOTE } from '../lib/elimination.js';
 import { todayKey, formatShort } from '../lib/dates.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // タンパク質と腸。
 // **グラム数を計算しない・割合を採点しない**のがこの画面でいちばん大事な所
@@ -264,6 +265,7 @@ export default function Protein({ store, onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{PROTEIN_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

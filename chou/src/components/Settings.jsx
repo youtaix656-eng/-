@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { recordedTotal } from '../lib/stats.js';
 import { todayKey } from '../lib/dates.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 設定・書き出し。
 // **消す操作には必ず確認を出し、何が消えるかを全部書く。**
@@ -18,7 +19,7 @@ const THEMES = [
   { id: 'dark', label: '暗い（夜の記録に）' },
 ];
 
-export default function Settings({ store, focus, onFocusDone }) {
+export default function Settings({ store, focus, onFocusDone, onGo }) {
   useFocusJump(focus, onFocusDone);
   const fileRef = useRef(null);
   const [message, setMessage] = useState('');
@@ -152,6 +153,7 @@ export default function Settings({ store, focus, onFocusDone }) {
         </p>
         <p>つらいとき・気になることがあるときは、記録の有無に関わらず医療機関に相談してください。</p>
       </div>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

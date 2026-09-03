@@ -14,6 +14,7 @@ import {
   BUTYRATE_SOURCE,
 } from '../data/butyrate.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 酪酸菌と短鎖脂肪酸。
 // **はたらきは「そう説明されている」までで止める**——ここを断定に寄せると、
@@ -194,6 +195,7 @@ export default function Butyrate({ onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{BUTYRATE_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

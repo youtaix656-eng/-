@@ -19,6 +19,7 @@ import { conflictFoods, CONFLICT_NOTE } from '../lib/conflicts.js';
 import { emptyDay } from '../lib/days.js';
 import { todayKey } from '../lib/dates.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 食べ合わせ（アダムスキー式）。
 //
@@ -320,6 +321,7 @@ export default function Combine({ store, focus, onFocusDone, onGo }) {
         <br />
         最終確認：{ADAMSKI_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
 import { trialProgress, trialLine, isRegistered, othersThan } from '../lib/probiotic.js';
 import { todayKey, formatKey } from '../lib/dates.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 整腸剤。
 //
@@ -243,6 +244,7 @@ export default function Probiotics({ store, focus, onFocusDone, onGo }) {
         <br />
         最終確認：{PROBIOTIC_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

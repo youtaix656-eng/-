@@ -13,6 +13,7 @@ import {
 } from '../data/cleanup.js';
 import { fermentViews, FERMENT_NOTE } from '../lib/conflicts.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 腸のお掃除（5つ）。
 //
@@ -198,6 +199,7 @@ export default function Cleanup({ store, focus, onFocusDone, onGo }) {
         <br />
         最終確認：{CLEANUP_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

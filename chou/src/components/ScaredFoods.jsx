@@ -11,6 +11,7 @@ import {
 } from '../data/scaredFoods.js';
 import { tsukemonoViews, TSUKEMONO_NOTE } from '../lib/conflicts.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 名指しされた食べもの。
 // **薬を「猛毒」と呼ばないと決めたのと同じ線を、食べものにも引く**（README 決まり26）。
@@ -161,6 +162,7 @@ export default function ScaredFoods({ onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{SCARED_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

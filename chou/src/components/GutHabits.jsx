@@ -21,6 +21,7 @@ import {
   ALCOHOL_SOURCE,
 } from '../data/alcohol.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 胃腸の習慣。
 // **倍率を「自分がそうなる確率」と読ませない**のがこの画面でいちばん大事な所。
@@ -267,6 +268,7 @@ export default function GutHabits({ onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{HABIT_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

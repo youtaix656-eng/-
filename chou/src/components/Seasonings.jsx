@@ -7,13 +7,14 @@ import {
   SEASONING_SOURCE,
 } from '../data/seasonings.js';
 import { useFocusJump } from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 調味料の選び方。
 //
 // **「腸によい／悪い」を言い切らない。** 出せるのは「買うときに表示のどこを見るか」まで。
 // 値段の話をしない（本物＝高い、と読ませない）。替えた数を採点しない。
 
-export default function Seasonings({ store, focus, onFocusDone }) {
+export default function Seasonings({ store, focus, onFocusDone, onGo }) {
   useFocusJump(focus, onFocusDone);
   const done = SEASONINGS.filter((s) => store.seasonings[s.id] === 'changed').length;
 
@@ -85,6 +86,7 @@ export default function Seasonings({ store, focus, onFocusDone }) {
         <br />
         最終確認：{SEASONING_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

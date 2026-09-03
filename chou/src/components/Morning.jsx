@@ -10,6 +10,7 @@ import {
 } from '../data/morning.js';
 import { breakfastViews, BREAKFAST_NOTE } from '../lib/conflicts.js';
 import useFocusJump from './useFocusJump.js';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 朝のリズムと排便。
 // **出典の4つめ「出なくても自分を責めない」を、いちばん上に出す**——
@@ -146,6 +147,7 @@ export default function Morning({ onGo, focus, onFocusDone }) {
         <br />
         最終確認日：{MORNING_SOURCE.checkedOn}
       </p>
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }
