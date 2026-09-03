@@ -8,6 +8,7 @@ import {
   IBS_APPROACHES,
   SIBO_POINTS,
   SIBO_NOTE,
+  IBS_OUT_OF_SCOPE,
   SELF_CARE,
   SELF_CARE_NOTE,
   IBS_CORRECTIONS,
@@ -160,6 +161,17 @@ export default function Ibs({ onGo, focus, onFocusDone }) {
           ))}
         </ul>
         <p>{SIBO_NOTE.replace(/\*\*/g, '')}</p>
+      </section>
+
+      <section className="block" id="ibs-scope">
+        <div className="block-head">
+          <h2>{IBS_OUT_OF_SCOPE.title}</h2>
+        </div>
+        <p className="muted small">{IBS_OUT_OF_SCOPE.body.replace(/\*\*/g, '')}</p>
+        <p>{IBS_OUT_OF_SCOPE.note.replace(/\*\*/g, '')}</p>
+        <button type="button" className="ghost" onClick={() => onGo('redflags', 'flag-list')}>
+          受診の目安を見る
+        </button>
       </section>
 
       <section className="block" id="ibs-mealgap">

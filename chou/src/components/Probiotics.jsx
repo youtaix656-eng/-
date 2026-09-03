@@ -8,6 +8,7 @@ import {
   PROBIOTIC_PRECHECKS,
   PROBIOTIC_PRECHECK_WARNING,
   NO_INTERACTION_CHECK,
+  SUPPLEMENT_SCOPE_NOTE,
   TRIAL_NOTE,
   PROBIOTIC_FAQ,
   PROBIOTIC_SOURCE,
@@ -178,6 +179,13 @@ export default function Probiotics({ store, focus, onFocusDone, onGo }) {
         <div className="notice">
           <p>{NO_INTERACTION_CHECK}</p>
         </div>
+      </section>
+
+      <section className="block" id="probiotic-scope">
+        <div className="block-head">
+          <h2>サプリの話で、このアプリが引き受けるところ</h2>
+        </div>
+        <p>{SUPPLEMENT_SCOPE_NOTE.replace(/\*\*/g, '')}</p>
       </section>
 
       <section className="block" id="probiotic-faq">

@@ -58,6 +58,7 @@ import {
 import {
   SHORT_CHAIN,
   BUTYRATE_ROLES,
+  BUTYRATE_RUMORS,
   WITHDRAWN,
   BUTYRATE_CORRECTIONS,
   BUTYRATE_UNVERIFIED,
@@ -281,6 +282,7 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
   const fromButyrateCount =
     SHORT_CHAIN.length +
     BUTYRATE_ROLES.length +
+    BUTYRATE_RUMORS.length +
     WITHDRAWN.length +
     BUTYRATE_CORRECTIONS.length +
     BUTYRATE_UNVERIFIED.length;
@@ -348,6 +350,8 @@ test('tocDerivedFromSourceData — 目次は元データから導く（目次専
     NAMED_FOODS.length + 1 + SCARED_CORRECTIONS.length + SCARED_UNVERIFIED.length;
   // 過敏性腸症候群から来るぶん（＋「検査で異常が出ないこと」の1件）
   const fromIbsCount =
+    1 +
+    // 「このアプリが引き受けないところ」の1件
     1 +
     IBS_TYPES.length +
     IBS_PITFALLS.length +

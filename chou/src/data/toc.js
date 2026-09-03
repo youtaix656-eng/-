@@ -33,11 +33,13 @@ import {
 import {
   SHORT_CHAIN,
   BUTYRATE_ROLES,
+  BUTYRATE_RUMORS,
   WITHDRAWN,
   BUTYRATE_CORRECTIONS,
   BUTYRATE_UNVERIFIED,
 } from './butyrate.js';
 import { OTC_KINDS, OTC_CORRECTIONS, OTC_UNVERIFIED } from './otcDrugs.js';
+import { IBS_OUT_OF_SCOPE } from './ibs.js';
 import {
   HARMFUL_HABITS,
   HELPFUL_HABITS,
@@ -255,7 +257,7 @@ function fromCare() {
     reading: b.reading,
     group: 'care',
     aliases: [],
-    description: `出典では${b.where}に住み着きやすいとされています。${b.note}`,
+    description: `出典では${b.where}に住み着きやすいとされています。${b.note.replace(/\*\*/g, '')}`,
     descriptionStatus: 'needs_review',
     destinations: [{ type: 'page', view: 'probiotics', targetId: `bacteria-${b.id}`, label: '一覧で見る' }],
   }));
@@ -265,7 +267,7 @@ function fromCare() {
     reading: p.reading,
     group: 'care',
     aliases: [],
-    description: `出典が挙げている整腸剤のひとつ。${p.note} このアプリはどれかを勧めません。`,
+    description: `出典が挙げている整腸剤のひとつ。${p.note.replace(/\*\*/g, '')} このアプリはどれかを勧めません。`,
     descriptionStatus: 'needs_review',
     destinations: [
       { type: 'page', view: 'probiotics', targetId: `product-${p.id}`, label: '並べて見る' },
@@ -503,7 +505,7 @@ function fromButyrate() {
     reading: item.reading,
     group: 'butyrate',
     aliases: [{ name: '短鎖脂肪酸', reading: 'たんさしぼうさん' }],
-    description: `${item.note} 出典が名前を挙げている短鎖脂肪酸のひとつです。`,
+    description: `${item.note.replace(/\*\*/g, '')} 出典が名前を挙げている短鎖脂肪酸のひとつです。`,
     descriptionStatus: 'needs_review',
     destinations: [
       { type: 'page', view: 'butyrate', targetId: `scfa-${item.id}`, label: '読む' },
@@ -516,7 +518,7 @@ function fromButyrate() {
     reading: role.reading,
     group: 'butyrate',
     aliases: [],
-    description: [role.body, role.note].filter(Boolean).join(' '),
+    description: [role.body, role.note].filter(Boolean).join(' ').replace(/\*\*/g, ''),
     descriptionStatus: 'needs_review',
     destinations: [{ type: 'page', view: 'butyrate', targetId: `brole-${role.id}`, label: '読む' }],
   }));
@@ -557,7 +559,20 @@ function fromButyrate() {
     ],
   }));
   // 芽胞は用語（`term-spore`）が単一の正なのでここでは作らない（題がぶつかる）
-  return [...scfa, ...roles, ...withdrawn, ...fixes, ...claims];
+  const rumors = BUTYRATE_RUMORS.map((item) => ({
+    id: `toc-brumor-${item.id}`,
+    title: item.title,
+    reading: item.reading,
+    group: 'butyrate',
+    aliases: [],
+    description: `うわさ：${item.rumor}。${item.said} ${item.note.replace(/\*\*/g, '')}`,
+    descriptionStatus: 'verified',
+    destinations: [
+      { type: 'system', view: 'butyrate', targetId: `brumor-${item.id}`, label: '読む' },
+    ],
+  }));
+  return [
+    ...rumors,...scfa, ...roles, ...withdrawn, ...fixes, ...claims];
 }
 
 /**
@@ -1059,7 +1074,29 @@ function fromIbs() {
       { type: 'system', view: 'ibs', targetId: `iunv-${item.id}`, label: '裏が取れていない主張として読む' },
     ],
   }));
-  return [...exclusion, ...types, ...pitfalls, ...approaches, ...sibo, ...self, ...fixes, ...claims];
+  const scope = [
+    {
+      id: 'toc-ibs-scope',
+      title: IBS_OUT_OF_SCOPE.title,
+      reading: IBS_OUT_OF_SCOPE.reading,
+      group: 'ibs',
+      aliases: [],
+      description: `${IBS_OUT_OF_SCOPE.body.replace(/\*\*/g, '')} ${IBS_OUT_OF_SCOPE.note.replace(/\*\*/g, '')}`,
+      descriptionStatus: 'verified',
+      destinations: [{ type: 'system', view: 'ibs', targetId: 'ibs-scope', label: '読む' }],
+    },
+  ];
+  return [
+    ...exclusion,
+    ...types,
+    ...pitfalls,
+    ...approaches,
+    ...sibo,
+    ...scope,
+    ...self,
+    ...fixes,
+    ...claims,
+  ];
 }
 
 /**

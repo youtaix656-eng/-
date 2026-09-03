@@ -4,6 +4,8 @@ import {
   SPORE,
   BUTYRATE_ROLES,
   WITHDRAWN,
+  BUTYRATE_RUMORS,
+  BUTYRATE_RUMORS_NOTE,
   BUTYRATE_CORRECTIONS,
   BUTYRATE_UNVERIFIED,
   BUTYRATE_PRECHECKS,
@@ -102,6 +104,23 @@ export default function Butyrate({ onGo, focus, onFocusDone }) {
             <p className="muted small">広まった説：{item.claim}</p>
             <p>{item.withdrawn}</p>
             <p className="muted small">{item.note}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="block" id="butyrate-rumors">
+        <div className="block-head">
+          <h2>出回っているうわさと、出典の説明</h2>
+        </div>
+        <p className="muted small">{BUTYRATE_RUMORS_NOTE.replace(/\*\*/g, '')}</p>
+        {BUTYRATE_RUMORS.map((item) => (
+          <div key={item.id} className="cand" id={`brumor-${item.id}`}>
+            <div className="cand-head">
+              <strong>{item.title}</strong>
+            </div>
+            <p className="muted small">うわさ：{item.rumor}</p>
+            <p className="muted small">出典の説明：{item.said}</p>
+            <p>{item.note.replace(/\*\*/g, '')}</p>
           </div>
         ))}
       </section>

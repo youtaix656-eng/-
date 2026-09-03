@@ -17,10 +17,14 @@ import {
   PROBIOTIC_UNVERIFIED,
   PROBIOTIC_FAQ,
   PROBIOTIC_PRECHECKS,
+  SUPPLEMENT_SCOPE_NOTE,
 } from '../src/data/probiotics.js';
+import { IBS_OUT_OF_SCOPE, IBS_CORRECTIONS, IBS_UNVERIFIED } from '../src/data/ibs.js';
 import {
   SHORT_CHAIN,
   BUTYRATE_ROLES,
+  BUTYRATE_RUMORS,
+  BUTYRATE_RUMORS_NOTE,
   WITHDRAWN,
   BUTYRATE_CORRECTIONS,
   BUTYRATE_UNVERIFIED,
@@ -176,4 +180,72 @@ test('目次からも辿れる（ホームにある id を指す）', () => {
       assert.match(screen, /id=\{`home-\$\{topic\.id\}`\}/, target);
     }
   }
+});
+
+// ───────── 2026-09-03 追加ぶん（決まり66・67の運用が実際に効いているか） ─────────
+
+test('酪酸菌の情報を足すと、ホームの酪酸菌まとめにも自動で出る', () => {
+  const butyrate = GUT_CARE_TOPICS.find((t) => t.id === 'butyrate');
+  const s = butyrateSummary();
+  // 元データに足したはたらきが、まとめの件数へそのまま反映される
+  assert.equal(s.counts.roles, BUTYRATE_ROLES.length);
+  assert.ok(BUTYRATE_ROLES.length >= 10, 'はたらきが増えていない');
+  const rows = butyrate.rows();
+  assert.match(rows[0].lines.join(' '), new RegExp(`はたらき ${BUTYRATE_ROLES.length}`));
+  // 取り下げた説は、増えたあとも落ちない
+  const titles = rows.map((r) => r.title);
+  for (const w of WITHDRAWN) assert.ok(titles.includes(w.title), w.title);
+});
+
+test('整腸剤の情報を足すと、ホームの整腸剤の内訳にも自動で出る', () => {
+  const home = probioticHome(empty, {});
+  assert.equal(home.counts.bacteria, BACTERIA.length);
+  assert.equal(home.counts.products, PRODUCTS.length);
+  assert.equal(home.counts.corrections, PROBIOTIC_CORRECTIONS.length);
+  assert.equal(home.counts.unverified, PROBIOTIC_UNVERIFIED.length);
+  // 順位・がん治療についての訂正が入っている
+  const byId = Object.fromEntries(PROBIOTIC_CORRECTIONS.map((c) => [c.id, c]));
+  assert.ok(byId.ranking, '順位についての訂正が無い');
+  assert.match(byId.ranking.correction, /順位を付けません/);
+  assert.ok(byId.chemo, 'がん治療についての訂正が無い');
+  assert.match(byId.chemo.correction, /主治医/);
+  assert.match(byId.chemo.correction, /要確認/);
+});
+
+test('うわさの打ち消しを、逆向きの断定に読み替えない', () => {
+  assert.ok(BUTYRATE_RUMORS.length >= 1);
+  const byId = Object.fromEntries(BUTYRATE_RUMORS.map((r) => [r.id, r]));
+  assert.ok(byId.fusobacterium, 'フソバクテリウムのうわさが無い');
+  assert.match(byId.fusobacterium.note, /読み替えません/);
+  assert.match(byId.fusobacterium.note, /「原因ではない」と「防げる」/);
+  assert.match(BUTYRATE_RUMORS_NOTE, /反対のことが確かめられたわけではありません/);
+  // 「がんを抑える」とアプリ自身が書いていないこと（行で数える）
+  const own = (codeOf('data/butyrate.js') + '\n' + codeOf('components/Butyrate.jsx'))
+    .split('\n')
+    .filter((line) => /がんを(抑|防)/.test(line));
+  for (const line of own) {
+    assert.match(line, /claim:|書きません|書かない|採りません|読み替えません|防げると確かめられた/, line);
+  }
+});
+
+test('腸カンジダ・重金属のデトックスは扱わないと書く', () => {
+  assert.match(IBS_OUT_OF_SCOPE.body, /扱いません/);
+  assert.match(IBS_OUT_OF_SCOPE.note, /好転反応/);
+  assert.match(IBS_OUT_OF_SCOPE.note, /医療機関で相談/);
+  const byId = Object.fromEntries(IBS_CORRECTIONS.map((c) => [c.id, c]));
+  assert.ok(byId.detox, 'デトックスについての訂正が無い');
+  assert.ok(byId.money_talk, '金額についての訂正が無い');
+  assert.match(byId.money_talk.correction, /お金の話でどちらかを選ばせません/);
+  assert.ok(byId.time_never, '「時間は解決しない」への訂正が無い');
+  assert.ok(byId.all_from_nutrition, '原因を絞り込むことへの訂正が無い');
+  // 期間を約束しない
+  const byUnv = Object.fromEntries(IBS_UNVERIFIED.map((i) => [i.id, i]));
+  assert.ok(byUnv.five_years);
+  assert.match(byUnv.five_years.note, /期間を約束しません/);
+});
+
+test('サプリの話で引き受ける範囲を、はっきり書く', () => {
+  assert.match(SUPPLEMENT_SCOPE_NOTE, /引き受けるのは/);
+  assert.match(SUPPLEMENT_SCOPE_NOTE, /ほかの栄養素は、量も飲み方も扱いません/);
+  assert.match(SUPPLEMENT_SCOPE_NOTE, /腎臓/);
 });

@@ -343,6 +343,7 @@ test('目次からも辿れる（画面にある id を指す）', () => {
     [/^help-/, /id=\{`help-\$\{/],
     [/^hcorrection-/, /id=\{`hcorrection-\$\{/],
     [/^hunv-/, /id=\{`hunv-\$\{/],
+    [/^brumor-/, /id=\{`brumor-\$\{/],
     [/^alc-/, /id=\{`alc-\$\{/],
     [/^acorrection-/, /id=\{`acorrection-\$\{/],
     [/^aunv-/, /id=\{`aunv-\$\{/],
