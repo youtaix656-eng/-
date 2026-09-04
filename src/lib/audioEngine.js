@@ -24,7 +24,7 @@ let state = {
 };
 
 let plan = []; // [{ steps:[{phase, say?, wait?(ms), waitGap?:true|'cap2'}], display }]
-const settings = { rate: 1, pitch: 1, gapSeconds: 2, voice: null, loop: false, cloneVoice: null };
+const settings = { rate: 1, pitch: 1, gapSeconds: 2, nextGapSeconds: 1, voice: null, loop: false, cloneVoice: null };
 // cloneVoice: { apiKey, voiceId } | null。設定されていればブラウザのspeechSynthesisの
 // 代わりにボイスクローン（BYOK・ElevenLabs）で読み上げる（AudioMode.jsxのトグルで切替）。
 
@@ -172,6 +172,8 @@ async function playOne(item, signal) {
       const g = step.waitGap === 'cap2' ? Math.min(settings.gapSeconds, 2) : settings.gapSeconds;
       await wait(g * 1000, signal);
     }
+    // 解答・解説を読み終えてから次の問題へ移るまでの間（規定の時間で自動的に次へ進む）。
+    if (step.waitNextGap) await wait(settings.nextGapSeconds * 1000, signal);
   }
 }
 

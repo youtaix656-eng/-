@@ -419,16 +419,20 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     let base;
     if (source === 'review') {
       base = customReviewIds ? questions.filter((q) => customReviewIds.includes(q.id)) : reviewPool;
+      // 「誤った問題」モード中でも科目でさらに絞り込める（要望：科目選択＋誤った問題の組み合わせ）。
+      if (filterSubject) base = base.filter((q) => q.subject === filterSubject);
     } else if (source === 'tagged') base = taggedQuestions;
     else base = questions;
     if (shuffleOn) base = shuffle(base);
     if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
+  // 解答・解説を読み終えてから次の問題へ進むまでの間（秒）。「規定の時間がたったら次へ」の間隔。
+  const [nextGap, setNextGap] = useState(settings.nextGapSeconds ?? 1);
   const [voices, setVoices] = useState([]);
   const [tagOpen, setTagOpen] = useState(false);
   const [tagInput, setTagInput] = useState('');
@@ -475,12 +479,12 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       steps.push({ phase: K, say: `用語。${item.keyword}。` });
       steps.push({ phase: G, waitGap: true });
       steps.push({ phase: A, say: item.text });
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     if (item.kind === 'summary') {
       steps.push({ phase: N, say: item.text });
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     if (item.kind === 'compare') {
@@ -489,7 +493,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       steps.push({ phase: G, waitGap: 'cap2' });
       steps.push({ phase: A, say: `${(c.members || []).join('。 ')}。` });
       if (c.note) steps.push({ phase: A, say: `ポイント。${c.note}` });
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     if (item.kind === 'number') {
@@ -497,7 +501,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       steps.push({ phase: K, say: `数字。${n.topic}。` });
       steps.push({ phase: G, waitGap: 'cap2' });
       steps.push({ phase: A, say: `${n.value}。${n.note || ''}` });
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     if (item.kind === 'cloze') {
@@ -508,7 +512,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       steps.push({ phase: Q, say: `穴埋め。${blanked}。○○に入るのは何でしょう。` });
       steps.push({ phase: G, waitGap: true });
       steps.push({ phase: A, say: `答えは、${ans}。` });
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     if (item.kind === 'choices') {
@@ -520,7 +524,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       steps.push({ phase: Q, say: t });
       steps.push({ phase: G, waitGap: true });
       steps.push({ phase: A, say: answerText(cq) });
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     // 通常の問題（暗記カード：表＝問題〈4択の選択肢も任意〉／裏＝答え）
@@ -544,12 +548,12 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
 
     if (readSide === 'front') {
       steps.push(...front);
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     if (readSide === 'back') {
       steps.push(...back);
-      steps.push({ wait: 700 });
+      steps.push({ waitNextGap: true });
       return steps;
     }
     // 表面・裏面（両方）
@@ -573,7 +577,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       steps.push({ waitGap: true });
       steps.push({ say: `問題は、${questionText(q)}` });
     }
-    steps.push({ wait: 700 });
+    steps.push({ waitNextGap: true });
     return steps;
   };
   // 読み上げ文にだけ手動補正辞書を適用（画面表示のテキストには影響しない）
@@ -625,6 +629,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 再生設定をエンジンへ反映（再生中でも即時）
   useEffect(() => { engine.configure({ rate }); }, [rate]);
   useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);
+  useEffect(() => { engine.configure({ nextGapSeconds: nextGap }); }, [nextGap]);
   useEffect(() => { engine.configure({ loop }); }, [loop]);
   useEffect(() => { engine.configure({ voice: selectedVoice(), pitch: settings.speechPitch || 1 }); }, [voices, settings.voiceURI, settings.speechPitch]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -675,8 +680,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
 
   const togglePlay = () => {
     if (!playing) {
-      updateSettings({ speechRate: rate, gapSeconds: gap });
-      engine.configure({ rate, gapSeconds: gap, loop, voice: selectedVoice(), pitch: settings.speechPitch || 1 });
+      updateSettings({ speechRate: rate, gapSeconds: gap, nextGapSeconds: nextGap });
+      engine.configure({ rate, gapSeconds: gap, nextGapSeconds: nextGap, loop, voice: selectedVoice(), pitch: settings.speechPitch || 1 });
       engine.setSleep(sleepMin);
     }
     engine.toggle();
@@ -722,6 +727,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     setFilterGenre(ns.genre);
     setFilterKeyword(ns.keyword);
     setFilterRound(ns.round);
+    // 「誤った問題」モード中に科目だけを選んだ／変えた場合は、そのモードを維持したまま
+    // 科目でさらに絞り込む（ジャンル・キーワード・回を同時に選んだ時は、従来通り
+    // 通常の検索モードに切り替える＝そこまでは要望の対象外）。
+    const onlySubjectTouched = 'subject' in patch && !ns.genre && !ns.keyword && !ns.round;
+    if (source === 'review' && onlySubjectTouched) return;
     setSource(ns.subject || ns.genre || ns.keyword || ns.round || bookmarkOnly || minRisk > 0 || minWrong > 0 || recentOnly ? 'filter' : 'all');
   };
   const clearFilter = () => {
@@ -958,12 +968,13 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       </div>
 
       {source === 'review' && (() => {
-        const n = customReviewIds ? customReviewIds.length : reviewPool.length;
+        const reviewBase = customReviewIds ? questions.filter((q) => customReviewIds.includes(q.id)) : reviewPool;
+        const n = filterSubject ? reviewBase.filter((q) => q.subject === filterSubject).length : reviewBase.length;
         return (
           <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--surface-2)' }}>
             {n > 0
-              ? `🔁 「間違えた問題」を読み上げ中（${n}問${customReviewIds ? '・復習画面の絞り込み条件を反映' : ''}）。上の検索で条件を選ぶと通常の読み上げに戻ります。`
-              : '🔁 「間違えた問題」を読もうとしましたが、復習対象が0問でした。上の検索で条件を選ぶと通常の読み上げに戻ります。'}
+              ? `🔁 「間違えた問題」を読み上げ中（${n}問${customReviewIds ? '・復習画面の絞り込み条件を反映' : ''}${filterSubject ? `・科目「${filterSubject}」に絞り込み中` : ''}）。上のジャンル・キーワード・回を選ぶと通常の読み上げに戻ります（科目だけは選んだまま「誤った問題」を続けられます）。`
+              : `🔁 「間違えた問題」を読もうとしましたが、${filterSubject ? `科目「${filterSubject}」では` : ''}この条件では0問でした。${filterSubject ? '科目の絞り込みを外すか、' : ''}上のジャンル・キーワード・回を選ぶと通常の読み上げに戻ります。`}
           </div>
         );
       })()}
@@ -1356,6 +1367,17 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 <span className="range-val">{gap}秒</span>
               </div>
               <div className="hint">解答を思い出す時間として使えます。</div>
+            </div>
+            <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
+              <label>解答・解説のあと、次の問題まで待つ時間（秒）</label>
+              <div className="range-row">
+                <input
+                  type="range" min="0" max="15" step="1" value={nextGap}
+                  onChange={(e) => { const v = Number(e.target.value); setNextGap(v); updateSettings({ nextGapSeconds: v }); }}
+                />
+                <span className="range-val">{nextGap}秒</span>
+              </div>
+              <div className="hint">規定の時間がたつと自動で次の問題へ進みます（ボタン操作は不要です）。</div>
             </div>
           </div>
 
