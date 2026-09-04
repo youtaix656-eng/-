@@ -43,6 +43,7 @@ export default function QuestionCard({
   const [memoOpen, setMemoOpen] = useState(false);
   const [memoText, setMemoText] = useState(memo || '');
   const [askType, setAskType] = useState(false); // 間違いの型を尋ねている最中
+  const [justPickedType, setJustPickedType] = useState(null); // 型を選んだ直後、次へ進む前に一言見せる（#11）
   const [confirmMismatch, setConfirmMismatch] = useState(false); // 客観的には不正解なのに「○完璧」を押した時の確認（#1）
   const [moreOpen, setMoreOpen] = useState(false); // 「もっと」（メモ・連結）の開閉
   const [addedKw, setAddedKw] = useState([]); // この問題で精緻化として追加した語（✓表示用）
@@ -154,11 +155,17 @@ export default function QuestionCard({
     else onNext?.();
   };
 
-  // 間違いの型を記録して次へ（#9）
+  // 間違いの型を記録して次へ（#9）。選んだ結果がどう活かされるか一瞬見せてから進む
+  //   （即座に次の問題へ切り替わり、選択が何につながったのか分からない、という指摘への対応）。
   const pickType = (type) => {
     if (type) onMissType?.(question.id, type);
     setAskType(false);
-    onNext?.();
+    if (type) {
+      setJustPickedType(MISS_TYPES.find((t) => t.id === type) || null);
+      setTimeout(() => { setJustPickedType(null); onNext?.(); }, 900);
+    } else {
+      onNext?.();
+    }
   };
 
   // 暗記カード：選択せずに「裏（答え）」をめくる
@@ -267,6 +274,14 @@ export default function QuestionCard({
           </button>
         ) : null;
       })()}
+
+      {/* 図表が必要そうな文面なのに画像・図が登録されていない設問への注意
+          （「図の赤点で示す部位」等、図が無いと正誤判断できない問題を静かに見過ごさないため）。 */}
+      {!question.image && !question.figure && /[図写真]/.test(question.question || '') && (
+        <div className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
+          ⚠ この設問は図・写真に言及していますが、画像が登録されていません。この問題は判断せず、あとで報告してください。
+        </div>
+      )}
 
       {/* 図の拡大表示（#17） */}
       {zoom && (question.image || question.figure) && (
@@ -488,7 +503,11 @@ export default function QuestionCard({
 
           {/* ○△✕ の自己評価（毎問）。△✕は自動で復習に入ります。 */}
           {selfGrade ? (
-            askType ? (
+            justPickedType ? (
+              <div className="grade-section" style={{ textAlign: 'center' }}>
+                <div className="grade-label">✓ 「{justPickedType.label}」で記録しました（{justPickedType.hint}）</div>
+              </div>
+            ) : askType ? (
               <div className="grade-section">
                 <div className="grade-label">どんな間違いでしたか？（型を記録して復習に活かします）</div>
                 <div className="misstype-row">

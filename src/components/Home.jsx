@@ -518,7 +518,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           </div>
           {isStalled && (
             <p className="inline-note" style={{ color: 'var(--wrong)' }}>
-              ⚠ 復習が{stalledDays}日、一度もゼロに戻せていません。今日は新規を減らして復習を優先しましょう（#3）。
+              ⚠ 復習が{stalledDays}日、一度もゼロに戻せていません。今日は新規を減らして復習を優先しましょう。
             </p>
           )}
           <div className="chip-row" style={{ marginTop: 6 }}>

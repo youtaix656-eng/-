@@ -857,6 +857,13 @@ export function useStore() {
     }));
   }, []);
 
+  // 「リストから外す」の取り消し（誤タップ対策）。呼び出し側（Review.jsx）が外す直前の
+  // srs[questionId]を控えておき、そのままここへ渡して丸ごと戻す（差分計算はしない）。
+  const restoreReviewState = useCallback((questionId, prevState) => {
+    if (!prevState) return;
+    setSrs((prev) => ({ ...prev, [questionId]: prevState }));
+  }, []);
+
   // この問題だけ次回期限を指定ミリ秒だけ先送りする（スヌーズ・誤答理由別の間隔調整で共用）
   const setNextDue = useCallback((questionId, delayMs) => {
     setSrs((prev) => ({
@@ -1171,6 +1178,7 @@ export function useStore() {
     recordAnswer,
     resetAllReviewDue,
     removeFromReview,
+    restoreReviewState,
     setNextDue,
     setMemo,
     setLink,

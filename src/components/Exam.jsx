@@ -34,7 +34,7 @@ const PRACTICE_COUNT = 90;
 const MODES = [
   { id: 'am', label: '午前', emoji: '🌅', desc: '専門基礎科目 90問（本番同形式・時間制限あり）' },
   { id: 'pm', label: '午後', emoji: '🌇', desc: '専門科目 90問（本番同形式・時間制限あり）' },
-  { id: 'full', label: '午前+午後 通し', emoji: '🏃', desc: '本番同様に午前90問→休憩→午後90問を通しで（#21）' },
+  { id: 'full', label: '午前+午後 通し', emoji: '🏃', desc: '本番同様に午前90問→休憩→午後90問を通しで' },
   { id: 'strong', label: '得意な問題', emoji: '💪', desc: '得意なジャンル・キーワードを中心に最大90問' },
   { id: 'weak', label: '苦手な問題', emoji: '🎯', desc: '苦手なジャンル・キーワードを中心に最大90問' },
   { id: 'pick', label: '選択式', emoji: '🔍', desc: '科目・ジャンル・キーワードを選んで最大90問' },
@@ -557,9 +557,9 @@ export default function Exam({ store, onNavigate }) {
         {lowRoundsSlots.length > 0 && (
           <p className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
             ⚠ {lowRoundsSlots.map((a) => `${a.note}（あと${a.roundsPossible}回ぶん）`).join('・')}
-            は収録数が少なく、使い回しなしで組める模試の回数が限られています（#12・#13）。
+            は収録数が少なく、使い回しなしで組める模試の回数が限られています。
             {onNavigate && (
-              <>　<button className="btn ghost sm" onClick={() => onNavigate('coverage')}>網羅マップで確認する（#20）</button></>
+              <>　<button className="btn ghost sm" onClick={() => onNavigate('coverage')}>網羅マップで確認する</button></>
             )}
           </p>
         )}
@@ -635,9 +635,9 @@ export default function Exam({ store, onNavigate }) {
         {lowRoundsSlots.length > 0 && (
           <p className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
             ⚠ {lowRoundsSlots.map((a) => `${a.note}（あと${a.roundsPossible}回ぶん）`).join('・')}
-            は収録数が少なく、使い回しなしで組める模試の回数が限られています（#12・#13）。
+            は収録数が少なく、使い回しなしで組める模試の回数が限られています。
             {onNavigate && (
-              <>　<button className="btn ghost sm" onClick={() => onNavigate('coverage')}>網羅マップで確認する（#20）</button></>
+              <>　<button className="btn ghost sm" onClick={() => onNavigate('coverage')}>網羅マップで確認する</button></>
             )}
           </p>
         )}
@@ -963,7 +963,7 @@ export default function Exam({ store, onNavigate }) {
 
         {showPassLine && !passed && shortOfPass > 0 && (
           <p className="inline-note">
-            あと{shortOfPass}問正解していれば合格ラインでした（#25）。
+            あと{shortOfPass}問正解していれば合格ラインでした。
           </p>
         )}
         {streakOk && (

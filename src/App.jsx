@@ -508,7 +508,9 @@ export default function App() {
     );
   }
 
-  const reviewCount = store.reviewQuestions.length;
+  // 復習の総数（reviewQuestions）だと常に「99+」に張り付いて達成感が無いという指摘のため、
+  // 下部ナビのバッジは「今日やるべき件数」（期限が来ているものだけ）に限定する。
+  const reviewCount = store.dueReviewQuestions.length;
   const needBackup =
     (store.settings.answersSinceBackup || 0) >= (store.settings.backupReminderEvery || 50);
   // #22：学習セッション（10・60・300・900）を実際に解いている最中はバナーを出さない

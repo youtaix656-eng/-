@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   leechSince, leechDwellDays, leechList, leechBySubject,
   firstWrongAt, reviewDwellBySubject, resolvedLeechEvents, resolvedLeechesSince,
-  reviewDwellByMissType,
+  reviewDwellByMissType, leechListToCsv,
 } from '../src/lib/reviewDwell.js';
 import { LEECH_THRESHOLD, MASTER_STREAK, emptyState } from '../src/lib/srs.js';
 
@@ -155,6 +155,18 @@ test('reviewDwellByMissType: 誤答理由（型）別の平均滞留日数', () 
   assert.equal(rows[0].type, 'careless');
   assert.equal(rows[0].avgDays, 15);
   assert.equal(rows[0].count, 2);
+});
+
+test('leechListToCsv: 科目・問題文・滞留日数のCSVを作る', () => {
+  const list = [
+    { question: { subject: '解剖学', question: '心臓の弁は？' }, dwellDays: 10 },
+    { question: { subject: '生理学', question: 'カンマ,を含む問題文' }, dwellDays: null },
+  ];
+  const csv = leechListToCsv(list);
+  const lines = csv.split('\n');
+  assert.equal(lines[0], '科目,問題文,滞留日数');
+  assert.equal(lines[1], '解剖学,心臓の弁は？,10');
+  assert.equal(lines[2], '生理学,"カンマ,を含む問題文",');
 });
 
 test('reviewDwellByMissType: マスター済み・型未記録は対象外', () => {

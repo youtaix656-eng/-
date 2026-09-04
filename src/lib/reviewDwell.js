@@ -31,6 +31,20 @@ export function leechList(questions, srs, history, now = Date.now()) {
     .sort((a, b) => (b.dwellDays || 0) - (a.dwellDays || 0));
 }
 
+function escCsv(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// 要注意リストのCSV書き出し（設定画面のCSV群と同じパターン）。listはleechList()の返り値。
+export function leechListToCsv(list) {
+  const header = ['科目', '問題文', '滞留日数'];
+  const rows = list.map(({ question: q, dwellDays }) => [
+    q.subject || '', q.question || '（図の問題）', dwellDays ?? '',
+  ].map(escCsv).join(','));
+  return [header.join(','), ...rows].join('\n');
+}
+
 // 要注意の科目別内訳（#11）。
 export function leechBySubject(questions, srs) {
   const counts = {};
