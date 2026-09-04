@@ -2423,6 +2423,97 @@ grep調査したところ、**要望の大半（科目選択・誤った問題�
   （`1 / 6`→`2 / 6`）が正しく進むこと／次の問題まで待つ時間のスライダーが表示されること。
   コンソールエラー0件。
 
+## 復習（Review.jsx）を学習（10・60・300・900）並みに拡張（2026-09-04追加）
+ユーザーに「復習の機能について、学習(10・60・300・900)と比べてもっと良くできる機能」を
+最大30個尋ねられ、一覧化→ユーザー確認→実装の順で進める既存ルールに従って提案・
+そのうち29件（1〜30のうち3番「3分の2バッファ術」を除く全件）をユーザー指定で実装したもの。
+- **#1・#5：前へ／次へナビゲーション＋二重記録防止**：出題中に「← 前の問題」「次の問題 →」を
+  追加し、Session.jsxと同じ`recordedIds`パターン（このセッションで実際に記録した問題idの配列）を
+  導入。`handleAnswered`は既に記録済みのidなら何もしない（no-op）、`handleNext`は解答済みの
+  位置を飛ばして次の未解答位置まで進む。見直し中の問題には「📝 解答済みです」の注記を出す。
+- **#2：○にした問題の見直し・高速回転**：Session.jsx・Quiz.jsxと同じ`useMaruReview.js`＋
+  `MaruReviewCard.jsx`をReview.jsxでも共用（extendedReviewPoolを対象プールに）。
+  新しい仕組みは作らず、既存の共有フック・共有コンポーネントをそのまま再利用した。
+- **#4：もう一度（同じ順を保持）**：`startWith(pool, opts)`に`opts.label`（セッション種別）・
+  `opts.forcedFast`・`opts.preserveOrder`を追加。`preserveOrder:true`の時は原問/派生を離す
+  ための並べ替え（`spaceByOriginRaw`のバケット分割）をスキップし、渡された配列の順序を
+  そのまま使う（症例連問の隣接だけは`keepCasePairsAdjacentObjects`で維持）——○の見直し等の
+  優先順位（うっかり○が先頭）を再計算で崩さないため。完了画面に「🔁 もう一度（同じ◯問・同じ順）」
+  ボタンを追加し、完了時点の`order`配列をそのまま渡し直す。
+- **#6：○×問題の正解ラベル修正**：誤答一覧で`正解 ${q.answer===0?'○':'✕'}`のように
+  「正解 」接頭辞を付けるよう修正（Session.jsxで先に直したのと同じ根本原因のバグが
+  Review.jsxにも残っていた）。
+- **#7：ジャンル絞り込みUI**：`src/lib/reviewOrder.js`の`filterReview`に`genre`パラメータを
+  追加（既定は空文字で後方互換）。科目チップの下にジャンルのセレクトを追加。
+- **#8：誤答理由（型）別のワンタップ開始**：誤答理由チップに▶ボタンを追加
+  （`quickStartMissType(typeId)`）。弱点タグの「▶で即復習」と同じUIパターン。
+- **#9：要注意（リーチ）だけの高速周回**：`leechOnlyPool`（要注意問題を滞留日数の長い順に
+  ソート）を追加し、`startLeechFast()`が`forcedFast:true, preserveOrder:true`で開始する。
+- **#10：忘却リスク上位を先頭固定する表示オプション**：`pinRiskTop`チェックボックス。
+  選んだ並び順（`orderMode`）とは別に、忘却リスク70%以上の問題を一覧・出題の先頭へ固定する
+  `applyPinRiskTop`を追加（既存の並び替えロジックは変えず、後段で並べ替えるだけ）。
+- **#11：今日の目標をリング＋進捗バーで**：Session.jsxと同じ`.progress`バーをリングの下に追加
+  （表示形式を合わせただけで、目標計算ロジック=`reviewGoal.js`は変更なし）。
+- **#12・#15・#16：完了画面に誤答理由・要注意の状況カードを追加**：直近の誤答理由トレンド
+  （既存`missTypeTrend`）・今週解消できた要注意件数（`reviewDwell.js`の既存`resolvedLeechesSince`）・
+  誤答理由ごとの平均滞留日数（新規`reviewDwellByMissType`、`reviewDwellBySubject`の「科目別」を
+  「型別」に変えたもの）をまとめて表示。
+- **#13：一時停止**：出題中に「⏸ 一時停止して後で続ける」ボタンを追加。1問ごとの自動保存
+  （既存の`storage.saveReviewProgress`）をそのまま使うので、開始画面の「前回の続きから」で
+  再開できる（新しい保存の仕組みは作っていない）。
+- **#14：スヌーズ済み問題の一覧・まとめて解除**：`snoozeLog`のキー一覧から先送り中の問題を
+  折りたたみ一覧で表示し、「まとめて解除」で全問の`setNextDue(id, 0)`を呼ぶ。
+- **#17：「念のため確認」を除外する絞り込み**：`excludeNagame`チェックボックス。
+  `dueReviewQuestions`は元々`isInReview`のみ（念のためを含まない）なので、既定の
+  「今日の復習」ボタンには影響せず、他の絞り込みと組み合わせた時だけ効く設計にした
+  （`filtering`の条件に含めず、両方の分岐に`applyExcludeNagame`を後がけする形で実装）。
+- **#18・#25：語呂合わせノートとの連携**：弱点タグに登録済みの語呂合わせ（`kwMeta[tag].mnemonic`）
+  があればその場に表示し、無ければ「📔 語呂合わせを登録」ボタンでMnemonicNotebook.jsxへ
+  ワンタップ遷移（`App.jsx`の`focusMnemonicKeyword`/`openMnemonicKeyword`、既存の
+  `focusFlashcardKeyword`と同じ「一度だけ消費する中継state」パターン）。MnemonicNotebook.jsx側は
+  `focusKeyword`/`onConsumeFocusKeyword`を受け取り、未登録なら追加フォームにキーワードを
+  プリセットし、登録済みならその場で編集モードへ入る。
+- **#19・#20・#21・#22・#24・#29：確認のみ・変更なし**（既に満たされていたことをgrep・
+  コード読解で確認した）：
+  - #19（原問と派生を離す仕組み）：`spaceByOrigin`が全ての開始経路で既に一貫して適用済み。
+  - #20（音声復習への絞り込み条件伝搬）：`onGoAudio`に渡す`shownList`は既に全フィルタ条件
+    （科目・ジャンル・タグ・回・ブックマーク・忘却リスク・誤答回数・誤答理由の型）を
+    反映済みのid配列なので、これ以上渡す条件は無かった。
+  - #21（完了画面のジャンル別正答率の並び順統一）：Review.jsx・Session.jsxとも既に
+    `genreBreakdown.js`の`buildGenreBreakdown`を共用済み。
+  - #22（もう一度での誤答理由別間隔調整の再適用）：`onMissType`はQuestionCard側の
+    ボタン操作のたびに呼ばれる仕組みなので、もう一度で再演習した問題でも同じ経路で効く。
+  - #24（自己説明ステップの条件）：Review.jsxは元々`whyPrompt`を常時渡しており、
+    Session.jsxとは独立に機能している（学習側が持たない機能なので「同条件」という
+    前提自体が誤りだった。Review側はそのままでよい）。
+  - #29（誤答理由フィルタと科目フィルタの併用）：`filterReview`は元から両方を
+    同時に受け取れる設計だった（`subjects`・`missType`は独立したAND条件）。
+- **#23：カレンダー連携の強化**：`Calendar.jsx`の日別詳細に、科目別滞留日数
+  （`reviewDwell.js`の既存`reviewDwellBySubject`）から最も滞留が長い科目を1件添えるように。
+- **#26・#27：知識グラフ・フラッシュカードへの相互リンク**：出題中の問題カードの下に
+  「🕸️ 知識グラフで見る」（`onOpenGraphConcept`、`conceptsOf(current, links)[0]`を渡す）・
+  「🃏 カードで見る」（`onOpenFlashcardKeyword`、`curTags[0]`を渡す）を追加。
+  どちらも`App.jsx`の既存の中継関数（`openGraphConcept`/`openFlashcardKeyword`）を
+  そのまま再利用（新しいジャンプの仕組みは作っていない）。
+- **#28：復習セッションの経過時間表示**：出題中のヘッダーに`⏱ 分:秒`を追加
+  （`sessionStartRef`＋1秒ごとのtick。`started`かつ出題中のみタイマーを回す）。
+- **#30：完了画面の演出統一**：見出しをSession.jsxの`doneTitle`と同じ考え方で
+  `${sessionLabel} 完了！`（ラベル無しの通常復習は従来通り「復習完了」）に、
+  全問○の時の終了ボタン文言を「復習リストに戻る」→「🏠 終了する」に統一。
+- テストは`test/reviewDwell.test.mjs`（`reviewDwellByMissType`2件追加）・
+  `test/reviewOrder.test.mjs`（`filterReview`のジャンル絞り込み1件追加）。
+  `node --test`（2610件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 612KB/700KB）はすべて通過。
+  Playwright QAで実機確認済み：IndexedDBへ直接`srs`/`history`/`missTypes`を注入して
+  要注意8問・誤答2問（ケアレス型の記録つき）・○採点履歴3問を再現し、
+  「要注意だけ高速周回」「○にした問題をふりかえる」「ジャンル」「念のため確認を除外」
+  「忘却リスク上位固定」の各UIが表示されること、要注意だけ高速周回を開始すると
+  タイマーに種別ラベル・経過時間が表示され前へ/次へで位置が正しく進むこと、
+  前へ戻ると「解答済み」注記が出ること、一時停止すると「前回の続きから」で
+  再開できる状態に戻ること、誤答理由「ケアレス」の▶から即開始した回を全問○で終えると
+  完了画面の見出しが「誤答理由「ケアレス」 完了！」になり「もう一度（同じ◯問・同じ順）」
+  ボタンが出ることを確認。コンソールエラー0件。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

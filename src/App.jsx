@@ -171,6 +171,7 @@ export default function App() {
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [focusFlashcardKeyword, setFocusFlashcardKeyword] = useState(null);
+  const [focusMnemonicKeyword, setFocusMnemonicKeyword] = useState(null);
   const [ocrInitialImage, setOcrInitialImage] = useState(null);
   const [focusGraphConcept, setFocusGraphConcept] = useState(null);
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
@@ -402,6 +403,11 @@ export default function App() {
     setFocusFlashcardKeyword(kw);
     setView('flashcards');
   };
+  // 復習画面の弱点タグ→語呂合わせノートへの「その場登録」導線（openFlashcardKeywordと同じ型）。
+  const openMnemonicKeyword = (kw) => {
+    setFocusMnemonicKeyword(kw);
+    setView('mnemonics');
+  };
   // 連結学習→知識グラフへの連携（同じく「一度だけ消費」の型）。
   const openGraphConcept = (concept) => {
     setFocusGraphConcept(concept);
@@ -576,6 +582,9 @@ export default function App() {
             }}
             quickStartCount={reviewQuickStart}
             onConsumeQuickStart={() => setReviewQuickStart(null)}
+            onOpenGraphConcept={openGraphConcept}
+            onOpenFlashcardKeyword={openFlashcardKeyword}
+            onOpenMnemonicKeyword={openMnemonicKeyword}
           />
         );
       case 'audio':
@@ -706,7 +715,14 @@ export default function App() {
         return <KeizetsuPageImages onToast={showToast} onNavigate={setView} onSendToOcr={sendPhotoToOcr} />;
       case 'mnemonics':
         return (
-          <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} onOpenFlashcard={openFlashcardKeyword} />
+          <MnemonicNotebook
+            store={store}
+            onToast={showToast}
+            onNavigate={setView}
+            onOpenFlashcard={openFlashcardKeyword}
+            focusKeyword={focusMnemonicKeyword}
+            onConsumeFocusKeyword={() => setFocusMnemonicKeyword(null)}
+          />
         );
       case 'mnemonicquiz':
         return <MnemonicQuiz store={store} onNavigate={setView} />;

@@ -3,6 +3,7 @@
 //   「いつからその状態か」は history（解答履歴）を辿って求める。
 
 import { LEECH_THRESHOLD, MASTER_STREAK, isLeech, isInReview } from './srs.js';
+import { latestMissType } from './missTypes.js';
 
 // 指定の問題が、誤答回数がLEECH_THRESHOLDに達した瞬間（＝要注意になった瞬間）のatを返す。
 //   history上で追跡できない（それ以前からの持ち越しデータ等）場合はnull。
@@ -104,4 +105,24 @@ export function resolvedLeechEvents(history) {
 
 export function resolvedLeechesSince(history, sinceMs) {
   return resolvedLeechEvents(history).filter((e) => e.at >= sinceMs).length;
+}
+
+// 現在まだ復習対象（isInReview）である問題の、直近の誤答理由（型）別の平均滞留日数。
+//   reviewDwellBySubjectの「科目別」を「型別」に変えたもの（型の記録が無い問題は対象外）。
+export function reviewDwellByMissType(questions, srs, history, missTypes, now = Date.now()) {
+  const byType = {};
+  for (const q of questions) {
+    if (!isInReview(srs[q.id])) continue;
+    const type = latestMissType(missTypes?.[q.id])?.type;
+    if (!type) continue;
+    const since = firstWrongAt(q.id, history);
+    if (since == null) continue;
+    const days = (now - since) / (24 * 60 * 60 * 1000);
+    if (!byType[type]) byType[type] = { sum: 0, count: 0 };
+    byType[type].sum += days;
+    byType[type].count += 1;
+  }
+  return Object.entries(byType)
+    .map(([type, v]) => ({ type, avgDays: Math.round(v.sum / v.count), count: v.count }))
+    .sort((a, b) => b.avgDays - a.avgDays);
 }

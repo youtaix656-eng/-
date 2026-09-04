@@ -33,6 +33,15 @@ test('filterReview: 科目・タグ・検索で絞り込み', () => {
   assert.deepEqual(filterReview(qs, { subject: '循環器', term: '骨折', links: {} }).map((q) => q.id), []);
 });
 
+test('filterReview: ジャンルで絞り込み（#7）', () => {
+  const qs = [
+    { id: 'a', subject: '循環器', genre: '心疾患', tags: [], question: 'a' },
+    { id: 'b', subject: '循環器', genre: '血管疾患', tags: [], question: 'b' },
+  ];
+  assert.deepEqual(filterReview(qs, { genre: '心疾患', links: {} }).map((q) => q.id), ['a']);
+  assert.deepEqual(filterReview(qs, { links: {} }).map((q) => q.id), ['a', 'b']);
+});
+
 test('filterReview: 誤答理由の型で絞り込み', () => {
   const qs = [
     { id: 'a', subject: '循環器', tags: [], question: 'a' },
