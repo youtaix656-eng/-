@@ -68,3 +68,12 @@ test('isNowBestTime: bestが無ければnull', () => {
   const now = new Date(atHour(8));
   assert.equal(isNowBestTime(history, { minSample: 10, now }), null);
 });
+
+test('isNowBestTime: 相対的にbestでも正答率が半分未満なら「高い傾向」とは言わずnull', () => {
+  const history = [
+    ...Array.from({ length: 12 }, (_, i) => ({ at: atHour(8), correct: i < 3 })), // 朝：3/12＝25%
+    ...Array.from({ length: 12 }, (_, i) => ({ at: atHour(14), correct: i < 1 })), // 昼：1/12＝8%
+  ];
+  const now = new Date(atHour(9));
+  assert.equal(isNowBestTime(history, { minSample: 10, now }), null);
+});

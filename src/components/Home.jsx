@@ -5,10 +5,10 @@ import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { isNowBestTime } from '../lib/timeOfDay.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
-import { loadQuizProgress, clearQuizProgress, loadSyncMeta } from '../lib/storage.js';
+import { loadQuizProgress, clearQuizProgress, loadSyncMeta, loadExamProgress, clearExamProgress } from '../lib/storage.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import { maruStatusList, excludeMastered, maruSubjectBreakdown, lastMaruReviewAt } from '../lib/maruPool.js';
-import { phaseForDate, upcomingPhaseChange, parseMixRatio } from '../data/roadmapPhases.js';
+import { phaseForDate, upcomingPhaseChange, parseMixRatio, ROADMAP_PHASES } from '../data/roadmapPhases.js';
 import { zeroDaysSummary, daysSinceLastZero } from '../lib/reviewZeroLog.js';
 import { reviewDailyGoal } from '../lib/reviewGoal.js';
 import { leechList } from '../lib/reviewDwell.js';
@@ -106,6 +106,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   // 科目バランス警告（Analytics.jsx）と連携：特定科目だけ極端に低いままなら、
   // 分析画面を開かなくてもホームで気づけるようにする。
   const balanceWarning = useMemo(() => subjectBalanceWarning(history, questions), [history, questions]);
+  // 「今日集中すべき科目」と「科目バランスの偏り」が同じ科目を別々の理由で重複表示する
+  // ケースがあったため、バランス警告に既に出ている科目は集中すべき科目チップから外す
+  // （バランス警告の方がより具体的な指摘のため、そちらだけに任せる）。
+  const dedupedFocusSubjects = useMemo(() => {
+    if (!balanceWarning.hasWarning) return focusSubjects;
+    const weakNames = new Set(balanceWarning.weakSubjects.map((s) => s.subject));
+    return focusSubjects.filter((f) => !weakNames.has(f.subject.name));
+  }, [focusSubjects, balanceWarning]);
   const reviewCount = reviewQuestions.length;
   const dueCount = (dueReviewQuestions || []).length;
   const unreadCount = (unread || []).length;
@@ -174,9 +182,15 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     [history, dueCount]
   );
   const leeches = useMemo(() => leechList(reviewQuestions, srs, history), [reviewQuestions, srs, history]);
-  // #22：11月末（合格実力ゴール、CLAUDE.mdの学習スケジュールと同じ期限）までの残り日数
-  const NOV_END = new Date(new Date().getFullYear(), 10, 30, 23, 59, 59);
-  const daysToNovEnd = Math.max(0, Math.ceil((NOV_END.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+  // #22：仕上げ期（合格実力ゴール）までの残り日数。日付はここに書き写さず、単一の正である
+  //   ROADMAP_PHASES（kind:'goal'のフェーズ）のendから毎回導出する（重複ハードコードを防ぐ）。
+  const goalPhaseEnd = useMemo(() => {
+    const goal = ROADMAP_PHASES.find((p) => p.kind === 'goal');
+    return goal ? new Date(`${goal.end}T23:59:59`) : null;
+  }, []);
+  const daysToNovEnd = goalPhaseEnd
+    ? Math.max(0, Math.ceil((goalPhaseEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    : null;
   // #20・#21：ロードマップのフェーズ切り替わりが近いか／実際の消化比率とのズレ
   const phaseChangeSoon = useMemo(() => upcomingPhaseChange(todayStr, 7), [todayStr]);
   const ratioGap = useMemo(() => {
@@ -212,10 +226,26 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     };
   }, [history]);
 
-  const hasResume = sessionActive || quizResume;
+  // 模試の途中経過（続きから）。学習・一問一答と違い、Home以外に出す場所が無く
+  // Exam.jsxを開くまで気づけなかったため、同じ「前回の続きから」枠に加える。
+  const [examResume, setExamResume] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    loadExamProgress().then((p) => {
+      if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length) return;
+      const len = p.ids.length;
+      if ((p.idx || 0) >= len) return;
+      setExamResume({ idx: p.idx || 0, len, presetLabel: p.presetLabel || '' });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [history]);
+
+  const hasResume = sessionActive || quizResume || examResume;
 
   // 「前回の続きから」長押しで削除確認（誤タップでの消去を防ぐため、通常タップは今まで通り再開）
-  const [confirmDelete, setConfirmDelete] = useState(null); // 'session' | 'quiz' | null
+  const [confirmDelete, setConfirmDelete] = useState(null); // 'session' | 'quiz' | 'exam' | null
   const deleteSessionResume = () => {
     store.clearSession();
     setConfirmDelete(null);
@@ -225,11 +255,17 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     setQuizResume(null);
     setConfirmDelete(null);
   };
+  const deleteExamResume = () => {
+    clearExamProgress();
+    setExamResume(null);
+    setConfirmDelete(null);
+  };
   const sessionLongPress = useLongPress(() => setConfirmDelete('session'), () => onNavigate('session'));
   const quizLongPress = useLongPress(
     () => setConfirmDelete('quiz'),
     () => (onResumeQuiz ? onResumeQuiz() : onNavigate('quiz'))
   );
+  const examLongPress = useLongPress(() => setConfirmDelete('exam'), () => onNavigate('exam'));
 
   // 明日の最初の1タスク（学習セッション完了画面で決めたもの）をホームの一番上に固定表示
   const [nextTask, setNextTask] = useState(null);
@@ -295,9 +331,9 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
             ) : cloudSyncStatus.ok ? (
               `☁️ 最新の状態に同期済み（${timeAgoJa(cloudSyncStatus.at)}）`
             ) : cloudSyncStatus.needsRelogin ? (
-              '⚠️ 再ログインが必要です（タップして設定へ）'
+              '🔑 再ログインが必要です（タップして設定へ）'
             ) : longFailure ? (
-              `⚠️ ${timeAgoJa(lastSuccessfulSyncAt)}から同期できていません（タップして確認）`
+              `⏰ ${timeAgoJa(lastSuccessfulSyncAt)}から同期できていません（タップして確認）`
             ) : (
               `☁️ 同期に失敗しました（${timeAgoJa(cloudSyncStatus.at)}・自動で再試行します）`
             )}
@@ -349,18 +385,18 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
       )}
 
       {/* 今日集中すべき科目：残り日数×手薄度×直近正答率から自動レコメンド。次のタスクが決まっている日は出さない */}
-      {!nextTask && focusSubjects.length > 0 && (
+      {!nextTask && dedupedFocusSubjects.length > 0 && (
         <div className="card">
           <div className="section-label" style={{ marginTop: 0 }}>🎯 今日集中すべき科目</div>
           <div className="btn-row" style={{ flexWrap: 'wrap' }}>
-            {focusSubjects.map((f) => (
+            {dedupedFocusSubjects.map((f) => (
               <button
                 key={f.subject.id}
                 className="chip"
                 onClick={() => onStartSubjectQuiz?.(f.subject.name)}
               >
                 {f.subject.name}
-                <span className="inline-note" style={{ marginLeft: 4 }}>（{f.reason}）</span>
+                <span className="inline-note" style={{ marginLeft: 4, color: 'var(--warn, #e0a800)' }}>（{f.reason}）</span>
               </button>
             ))}
           </div>
@@ -417,7 +453,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
               <><br />⚠️ 選んだ答えは不正解なのに○にした「うっかり○」が<strong>{maruUncertainCount}問</strong>あります。優先的に見直しましょう。</>
             )}
           </p>
-          <button className="btn primary sm" onClick={() => onNavigate('session')}>学習画面の「○にした問題をふりかえる」へ</button>
+          {/* 一問一答（Quiz.jsx）にも同じ「○の見直し・高速回転」があるため、
+              普段どちらを使っているかHome側からは分からない。両方の入り口を出す。 */}
+          <div className="btn-row">
+            <button className="btn primary sm" onClick={() => onNavigate('session')}>学習画面で</button>
+            <button className="btn primary sm" onClick={() => onNavigate('quiz')}>一問一答で</button>
+          </div>
         </div>
       )}
 
@@ -481,11 +522,31 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
               </button>
             )
           )}
+          {examResume && (
+            confirmDelete === 'exam' ? (
+              <div className="resume-top-item resume-delete-confirm">
+                <span>この「続きから」を削除しますか？</span>
+                <div className="btn-row">
+                  <button className="btn danger sm" onClick={deleteExamResume}>はい</button>
+                  <button className="btn ghost sm" onClick={() => setConfirmDelete(null)}>いいえ</button>
+                </div>
+              </div>
+            ) : (
+              <button className="resume-top-item" {...examLongPress}>
+                <div className="rt-main">
+                  <span className="rt-ico">📝</span>
+                  <span className="rt-title">模擬試験{examResume.presetLabel ? `（${examResume.presetLabel}）` : ''}</span>
+                  <span className="rt-frac">{examResume.idx + 1}/{examResume.len}問</span>
+                </div>
+                <div className="rt-bar"><span style={{ width: `${((examResume.idx + 1) / examResume.len) * 100}%` }} /></div>
+              </button>
+            )
+          )}
         </div>
       )}
 
       {examLeft != null && examLeft >= 0 && (
-        <button className="exam-countdown" onClick={() => onNavigate('settings')}>
+        <button className="exam-countdown" onClick={() => onNavigate('calendar')}>
           <span className="ec-days">試験日まで残り <strong>{examLeft}</strong> 日！</span>
           <span className="ec-date">試験日 {formatExamDate(settings.examDate)}</span>
         </button>
@@ -538,7 +599,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <p className="inline-note" style={{ marginTop: 0 }}>
             {LEECH_THRESHOLD}回以上間違えている問題が <strong style={{ color: 'var(--wrong)' }}>{leeches.length}問</strong> あります。
             {leeches[0].dwellDays != null && <>最も長いものは要注意になってから<strong>{leeches[0].dwellDays}日</strong>経っています。</>}
-            <br />11月末（仕上げ期）まで残り{daysToNovEnd}日です。
+            {daysToNovEnd != null && <><br />仕上げ期まで残り{daysToNovEnd}日です。</>}
           </p>
           <button className="btn primary sm" onClick={() => onQuickReview?.({ ids: leeches.map((l) => l.question.id) })}>
             要注意だけ今すぐ解く
@@ -556,12 +617,19 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
             </p>
           )}
           {ratioGap && (
-            <p className="inline-note">
-              直近7日の実際の復習比率は約{ratioGap.actualReviewPct}%（今のフェーズの目安は復習{ratioGap.target.reviewPct}%）。
-              {Math.abs(ratioGap.gap) >= 15
-                ? (ratioGap.gap < 0 ? '目安より新規に寄っています。' : '目安より復習に寄っています。')
-                : '目安に近い配分で進められています。'}
-            </p>
+            <>
+              <p className="inline-note">
+                直近7日の実際の復習比率は約{ratioGap.actualReviewPct}%（今のフェーズの目安は復習{ratioGap.target.reviewPct}%）。
+                {Math.abs(ratioGap.gap) >= 15
+                  ? (ratioGap.gap < 0 ? '目安より新規に寄っています。' : '目安より復習に寄っています。')
+                  : '目安に近い配分で進められています。'}
+              </p>
+              {Math.abs(ratioGap.gap) >= 15 && (
+                <button className="btn ghost sm" onClick={() => onNavigate(ratioGap.gap < 0 ? 'review' : 'session')}>
+                  {ratioGap.gap < 0 ? '復習を増やす' : '学習（新規）を増やす'}
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -573,7 +641,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <p className="inline-note" style={{ marginTop: 0 }}>
             「{(forgettingPick.question.question || '（図の問題）').slice(0, 40)}」の保持率は約{Math.round(forgettingPick.retrievability * 100)}%まで下がってきています。
           </p>
-          <button className="btn ghost sm" onClick={() => onNavigate('review')}>復習画面で確認する</button>
+          {/* leechカードと同じ{ids}指定でReview.jsxを直接開始し、この1問だけへ実際に連れて行く
+              （以前は復習画面を開くだけで、指摘した当の問題までは連れて行けていなかった）。 */}
+          <button
+            className="btn ghost sm"
+            onClick={() => (onQuickReview ? onQuickReview({ ids: [forgettingPick.question.id] }) : onNavigate('review'))}
+          >
+            この問題を今すぐ復習する
+          </button>
         </div>
       )}
 
@@ -629,14 +704,20 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
         </button>
 
         {unvisitedFeature && (
-          <button
-            className="menu-item wide unvisited-feature-card"
-            onClick={() => onNavigate(unvisitedFeature.view)}
-          >
-            <span className="ico">✨</span>
-            <span className="title">まだ使ったことのない機能：{unvisitedFeature.title}</span>
-            <span className="desc">{unvisitedFeature.desc}</span>
-          </button>
+          <div className="menu-item wide unvisited-feature-card" style={{ display: 'block', cursor: 'default' }}>
+            <button
+              onClick={() => onNavigate(unvisitedFeature.view)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              <span className="ico">✨</span>
+              <span className="title">まだ使ったことのない機能：{unvisitedFeature.title}</span>
+              <span className="desc">{unvisitedFeature.desc}</span>
+            </button>
+            {/* 日替わり1件なので、見逃した機能は「全機能一覧」から探せることを添える */}
+            <button className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => onNavigate('features')}>
+              🔍 全機能一覧でまとめて探す
+            </button>
+          </div>
         )}
 
         <button className="menu-item wide featured roadmap-card" onClick={() => onNavigate('roadmap')}>
@@ -747,6 +828,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="ico">📖</span>
           <span className="title">目次</span>
           <span className="desc">取り込んだ問題を科目・キーワードで一覧。範囲を選んで演習。</span>
+        </button>
+
+        <button className="menu-item" onClick={() => onNavigate('glossary')}>
+          <span className="ico">📚</span>
+          <span className="title">用語集（目次・索引）</span>
+          <span className="desc">アプリ内の用語をあ〜ん順で索引化。タップで説明・関連画面へのリンクを表示。</span>
         </button>
 
         <button className="menu-item" onClick={() => onNavigate('review')}>

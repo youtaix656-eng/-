@@ -520,6 +520,11 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case 'home':
+      default:
+        // 未知のview（壊れたlastView等）はここへ落ちるが、以前はhomeと別々にpropsを
+        // 渡していたため、この経路だけonQuickReview・onGoAudioReview・installPrompt等が
+        // 欠けたまま劣化したHomeが描画されていた（チップを押しても何も起きない）。
+        // 同じ1つのJSXを両方のcaseで使うことで、以後この種のズレを起こさないようにする。
         return (
           <Home
             store={store}
@@ -604,7 +609,7 @@ export default function App() {
       case 'choicequiz':
         return <ChoiceQuiz store={store} onStartQuiz={startCustomQuiz} />;
       case 'dashboard':
-        return <Dashboard store={store} />;
+        return <Dashboard store={store} onNavigate={setView} />;
       case 'analytics':
         return <Analytics store={store} onNavigate={setView} onToast={showToast} />;
       case 'journal':
@@ -778,8 +783,6 @@ export default function App() {
             onNavigate={setView}
           />
         );
-      default:
-        return <Home store={store} onNavigate={setView} onJumpToRoadmapLevel={jumpToRoadmapLevel} onStartSubjectQuiz={startSubjectQuiz} />;
     }
   };
 

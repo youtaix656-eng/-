@@ -73,6 +73,7 @@ export default function Analytics({ store, onNavigate, onToast }) {
   if (history.length === 0) {
     return (
       <div className="view">
+        <h2 className="view-title">分析・攻略率・合格診断</h2>
         <div className="empty">
           <div className="ico">📈</div>
           <p>まだ解答データがありません。</p>
@@ -92,6 +93,7 @@ export default function Analytics({ store, onNavigate, onToast }) {
 
   return (
     <div className="view">
+      <h2 className="view-title">分析・攻略率・合格診断</h2>
       <InsightsSection store={store} />
 
       {/* ===== ㉑ 合格ラインまで何% ===== */}
@@ -295,7 +297,10 @@ export default function Analytics({ store, onNavigate, onToast }) {
         <>
           <div className="section-label">🕐 時間帯別の正答率</div>
           <div className="card">
-            {timeOfDay.best && (
+            {/* 他の時間帯"より"高いだけでは「高い傾向」と言い切れない（全帯が低調でも
+                一番マシな帯が選ばれてしまう）ため、絶対的にも半分以上のときだけ表示する
+                （isNowBestTime.jsのminAccuracyと同じ考え方）。 */}
+            {timeOfDay.best && timeOfDay.best.accuracy >= 0.5 && (
               <p className="inline-note" style={{ margin: '0 0 8px' }}>
                 あなたは<strong>{timeOfDay.best.label}</strong>の正答率が高い傾向です（{formatPercent(timeOfDay.best.accuracy)}）。
               </p>
