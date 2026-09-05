@@ -347,13 +347,80 @@ test('新しい画面はすべて App から開ける', () => {
   for (const view of ['diseases', 'breathing', 'ibscare', 'eatingout', 'flora', 'visits', 'periods']) {
     assert.match(app, new RegExp(`view === '${view}'`), `${view} が App に無い`);
   }
-  // しらべるからも辿れる
-  const know = src('components/Know.jsx');
+  // しらべるからも辿れる（一覧は data/knowMenu.js が単一の正）
+  const menu = src('data/knowMenu.js');
   for (const view of ['diseases', 'breathing', 'ibscare', 'eatingout', 'flora', 'visits', 'periods']) {
-    assert.match(know, new RegExp(`onGo\\('${view}'\\)`), `${view} へ行く道が無い`);
+    assert.match(menu, new RegExp(`view: '${view}'`), `${view} へ行く道が無い`);
   }
   // 部品が置いてある
   for (const name of ['Finder.jsx', 'ErrorBoundary.jsx', 'ScrollArrows.jsx', 'RedFlagLink.jsx']) {
     assert.ok(readdirSync(new URL('../src/components/', import.meta.url)).includes(name), name);
   }
+});
+
+// ───────────────────── しらべるの一覧（2026-09-05） ─────────────────────
+
+test('しらべるの一覧はデータから導く（画面に一覧を書かない）', async () => {
+  const { KNOW_ITEMS, KNOW_GROUPS, groupItems } = await import('../src/data/knowMenu.js');
+  const know = src('components/Know.jsx');
+  // 画面はデータを読んで並べるだけ（行き先を画面に書き写さない）
+  assert.match(know, /KNOW_ITEMS/);
+  assert.doesNotMatch(know, /onGo\('(diseases|fodmap|settings|ibs)'\)/);
+  // まとまりは4つで、並びが画面の並び
+  assert.equal(KNOW_GROUPS.length, 4);
+  assert.deepEqual(KNOW_GROUPS.map((g) => g.id), ['visit', 'tool', 'read', 'app']);
+  // 空のまとまりは出さない
+  assert.equal(groupItems([]).length, 0);
+  assert.equal(groupItems(KNOW_ITEMS).length, 4);
+});
+
+test('しらべるは1画面につき入口ひとつ・読みを手で持つ', async () => {
+  const { KNOW_ITEMS, KNOW_GROUPS } = await import('../src/data/knowMenu.js');
+  const groups = new Set(KNOW_GROUPS.map((g) => g.id));
+  const views = [];
+  for (const item of KNOW_ITEMS) {
+    assert.ok(item.id && item.title && item.desc, item.id);
+    assert.ok(groups.has(item.group), `${item.id}: 知らないまとまり`);
+    // **読みは手で持つ**（漢字の読みを機械が当てない。README 決まり11）
+    assert.ok(item.reading, `${item.id}: 読みが無い`);
+    assert.ok(!/[一-龠]/.test(item.reading), `${item.id}: 読みに漢字が残っている`);
+    // 行き先は「画面」か「外のリンク」のどちらか一方だけ
+    assert.ok(Boolean(item.view) !== Boolean(item.link), `${item.id}: 行き先が二重／無い`);
+    if (item.view) views.push(item.view);
+  }
+  // **同じ行き先を2か所に置かない**
+  assert.equal(new Set(views).size, views.length, '同じ画面への入口が2つある');
+  // ふだんの言い方（任意）。**新しい主張を作らない**——あるのは呼び名だけ
+  for (const item of KNOW_ITEMS) {
+    for (const word of item.keywords || []) {
+      assert.ok(word && !/[一-龠]{3,}/.test(word), `${item.id}: ${word}`);
+    }
+  }
+  // URL はデータに書かない（画面側が持つ）
+  const menu = src('data/knowMenu.js');
+  assert.doesNotMatch(menu, /https?:/);
+  assert.match(src('components/Know.jsx'), /const LINKS = \{/);
+});
+
+test('App が開ける画面は、ナビか しらべる のどちらかから必ず行ける', async () => {
+  const { KNOW_ITEMS } = await import('../src/data/knowMenu.js');
+  const app = src('App.jsx');
+  const views = [...app.matchAll(/view === '([a-z]+)'/g)].map((m) => m[1]);
+  // 下部ナビの5つと、常設バーの受診メモは別の道で行ける
+  const nav = new Set(['home', 'calendar', 'look', 'know', 'toc', 'visitnote']);
+  const inMenu = new Set(KNOW_ITEMS.map((i) => i.view));
+  for (const view of views) {
+    assert.ok(nav.has(view) || inMenu.has(view), `${view} へ行く道がどこにも無い`);
+  }
+  // 下部ナビは5つのまま（増やすときは列の数も一緒に直す）
+  assert.match(app, /gridTemplateColumns: `repeat\(\$\{NAV\.length\}, 1fr\)`/);
+});
+
+test('記録の道具は、カレンダーからも行ける', () => {
+  const cal = src('components/Calendar.jsx');
+  assert.match(cal, /id="cal-tools"/);
+  assert.match(cal, /onGo\('periods'\)/);
+  assert.match(cal, /onGo\('visits'\)/);
+  // **判定しないと必ず添える**
+  assert.match(cal, /症状の理由をアプリが決めることはありません/);
 });

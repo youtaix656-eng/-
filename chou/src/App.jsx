@@ -203,7 +203,8 @@ export default function App() {
         </div>
       )}
 
-      <nav className="nav">
+      {/* 列の数は NAV から出す。**5列の直書きにしない**——足したときに崩れる */}
+      <nav className="nav" style={{ gridTemplateColumns: `repeat(${NAV.length}, 1fr)` }}>
         {NAV.map((item) => (
           <button
             key={item.id}

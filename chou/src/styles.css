@@ -270,6 +270,7 @@ textarea { resize: vertical; }
   left: 0; right: 0; bottom: 0;
   height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 列の数は App.jsx が NAV の数から入れる（ここは足りない時の受け皿） */
   display: grid; grid-template-columns: repeat(5, 1fr);
   background: var(--paper);
   border-top: 1px solid var(--line-strong);
