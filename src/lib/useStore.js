@@ -7,6 +7,8 @@ import {
   applyGrade, applyAnswer, emptyState, isInReview, isDue, sortByPriority, GRADES, normalize, MASTER_STREAK,
   justBecameLeech, justResolvedLeech, resetDueForReview,
 } from './srs.js';
+import { buildCaseLinkMap, partnerOf } from './casePairs.js';
+import { applyQuestionPatches } from './questionPatches.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
 import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
@@ -345,6 +347,13 @@ export function useStore() {
           return out;
         });
         cfg.subjectTagsCleaned = true;
+        mutated = true;
+      }
+      // 問題文を変えずにchoices/explanation/figure等だけを直す訂正は増分方式に乗らないため、
+      // 起動のたびにここで上書きする（questionPatches.js参照）。
+      const patchedBaseQuestions = applyQuestionPatches(baseQuestions);
+      if (patchedBaseQuestions !== baseQuestions) {
+        baseQuestions = patchedBaseQuestions;
         mutated = true;
       }
       setQuestions(baseQuestions);
@@ -779,6 +788,10 @@ export function useStore() {
     });
   }, []);
 
+  // 症例の連問（原問＋「上記症例の続き」）の対応表。片方を間違えたら相方も
+  // 必ず復習対象へ入れる（recordAnswer参照）ために、全体の元の収録順から導出する。
+  const casePairMap = useMemo(() => buildCaseLinkMap(questions), [questions]);
+
   // 解答を記録（grade 省略時は正誤から自動判定）。復習ペース倍率（設定）を反映する。
   // 戻り値：この解答でリーチ（要注意）に突入／脱出した場合のみ 'became'|'resolved'、それ以外は null
   //   （Review.jsxがトースト表示に使う。実際の状態更新は従来どおりsetSrsのprevから安全に行い、
@@ -791,7 +804,23 @@ export function useStore() {
       grade != null
         ? applyGrade(srs[question.id], grade, now, { paceMultiplier })
         : applyAnswer(srs[question.id], correct, now, { paceMultiplier });
-    setSrs((prev) => ({ ...prev, [question.id]: nextState }));
+    setSrs((prev) => {
+      let next = { ...prev, [question.id]: nextState };
+      // 症例の連問：片方（または両方）を間違えたら、相方も必ず一緒に復習対象へ入れる
+      // （ユーザー指定。相方が未解答／マスター済みでも、期限を「今」にして復習対象化する）。
+      const isWrong = grade != null ? grade < 3 : !correct;
+      if (isWrong) {
+        const pid = partnerOf(question.id, casePairMap.linkOf, casePairMap.pairOf);
+        if (pid) {
+          const partnerState = normalize(prev[pid]);
+          next = {
+            ...next,
+            [pid]: { ...partnerState, wrongCount: Math.max(1, partnerState.wrongCount || 0), correctStreak: 0, due: now },
+          };
+        }
+      }
+      return next;
+    });
     let leechEvent = null;
     if (justBecameLeech(prevState, nextState)) leechEvent = 'became';
     else if (justResolvedLeech(prevState, nextState)) leechEvent = 'resolved';
@@ -813,7 +842,7 @@ export function useStore() {
       answersSinceBackup: (prev.answersSinceBackup || 0) + 1,
     }));
     return leechEvent;
-  }, [srs, paceMultiplier]);
+  }, [srs, paceMultiplier, casePairMap]);
 
   // 復習対象（isInReview）の期限をすべて「今」に揃える（G-16 全体の間隔リセット）
   const resetAllReviewDue = useCallback(() => {
@@ -826,6 +855,13 @@ export function useStore() {
       ...prev,
       [questionId]: { ...normalize(prev[questionId]), correctStreak: MASTER_STREAK, lastAnswered: Date.now() },
     }));
+  }, []);
+
+  // 「リストから外す」の取り消し（誤タップ対策）。呼び出し側（Review.jsx）が外す直前の
+  // srs[questionId]を控えておき、そのままここへ渡して丸ごと戻す（差分計算はしない）。
+  const restoreReviewState = useCallback((questionId, prevState) => {
+    if (!prevState) return;
+    setSrs((prev) => ({ ...prev, [questionId]: prevState }));
   }, []);
 
   // この問題だけ次回期限を指定ミリ秒だけ先送りする（スヌーズ・誤答理由別の間隔調整で共用）
@@ -1075,6 +1111,10 @@ export function useStore() {
     questions,
     srs,
     history,
+    // 症例の連問（続き）対応表。単一の正＝常に全体の元の収録順（questions）から導出する。
+    //   誤答復習・○の見直し等の並べ替えられた（元の収録順を保っていない）部分プールから
+    //   個別に作り直すと、無関係な2問を誤って連問と誤検出しうるため、必ずこれを使い回す。
+    casePairMap,
     memos,
     bookmarks,
     toggleBookmark,
@@ -1138,6 +1178,7 @@ export function useStore() {
     recordAnswer,
     resetAllReviewDue,
     removeFromReview,
+    restoreReviewState,
     setNextDue,
     setMemo,
     setLink,

@@ -35,6 +35,7 @@ export function filterReview(
   {
     subject = '',
     subjects = [],
+    genre = '',
     tag = '',
     term = '',
     links = {},
@@ -52,6 +53,7 @@ export function filterReview(
   return questions.filter((q) => {
     if (subject && q.subject !== subject) return false;
     if (subjects.length > 0 && !subjects.includes(q.subject)) return false;
+    if (genre && q.genre !== genre) return false;
     if (tag && !effectiveTags(q, links).includes(tag)) return false;
     if (term && !matchesSearch(q, term, links)) return false;
     if (round && !isSameRound(q.round, round)) return false;

@@ -171,6 +171,7 @@ export default function App() {
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [focusFlashcardKeyword, setFocusFlashcardKeyword] = useState(null);
+  const [focusMnemonicKeyword, setFocusMnemonicKeyword] = useState(null);
   const [ocrInitialImage, setOcrInitialImage] = useState(null);
   const [focusGraphConcept, setFocusGraphConcept] = useState(null);
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
@@ -402,6 +403,11 @@ export default function App() {
     setFocusFlashcardKeyword(kw);
     setView('flashcards');
   };
+  // 復習画面の弱点タグ→語呂合わせノートへの「その場登録」導線（openFlashcardKeywordと同じ型）。
+  const openMnemonicKeyword = (kw) => {
+    setFocusMnemonicKeyword(kw);
+    setView('mnemonics');
+  };
   // 連結学習→知識グラフへの連携（同じく「一度だけ消費」の型）。
   const openGraphConcept = (concept) => {
     setFocusGraphConcept(concept);
@@ -502,7 +508,9 @@ export default function App() {
     );
   }
 
-  const reviewCount = store.reviewQuestions.length;
+  // 復習の総数（reviewQuestions）だと常に「99+」に張り付いて達成感が無いという指摘のため、
+  // 下部ナビのバッジは「今日やるべき件数」（期限が来ているものだけ）に限定する。
+  const reviewCount = store.dueReviewQuestions.length;
   const needBackup =
     (store.settings.answersSinceBackup || 0) >= (store.settings.backupReminderEvery || 50);
   // #22：学習セッション（10・60・300・900）を実際に解いている最中はバナーを出さない
@@ -512,6 +520,11 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case 'home':
+      default:
+        // 未知のview（壊れたlastView等）はここへ落ちるが、以前はhomeと別々にpropsを
+        // 渡していたため、この経路だけonQuickReview・onGoAudioReview・installPrompt等が
+        // 欠けたまま劣化したHomeが描画されていた（チップを押しても何も起きない）。
+        // 同じ1つのJSXを両方のcaseで使うことで、以後この種のズレを起こさないようにする。
         return (
           <Home
             store={store}
@@ -576,6 +589,9 @@ export default function App() {
             }}
             quickStartCount={reviewQuickStart}
             onConsumeQuickStart={() => setReviewQuickStart(null)}
+            onOpenGraphConcept={openGraphConcept}
+            onOpenFlashcardKeyword={openFlashcardKeyword}
+            onOpenMnemonicKeyword={openMnemonicKeyword}
           />
         );
       case 'audio':
@@ -593,7 +609,7 @@ export default function App() {
       case 'choicequiz':
         return <ChoiceQuiz store={store} onStartQuiz={startCustomQuiz} />;
       case 'dashboard':
-        return <Dashboard store={store} />;
+        return <Dashboard store={store} onNavigate={setView} />;
       case 'analytics':
         return <Analytics store={store} onNavigate={setView} onToast={showToast} />;
       case 'journal':
@@ -706,7 +722,14 @@ export default function App() {
         return <KeizetsuPageImages onToast={showToast} onNavigate={setView} onSendToOcr={sendPhotoToOcr} />;
       case 'mnemonics':
         return (
-          <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} onOpenFlashcard={openFlashcardKeyword} />
+          <MnemonicNotebook
+            store={store}
+            onToast={showToast}
+            onNavigate={setView}
+            onOpenFlashcard={openFlashcardKeyword}
+            focusKeyword={focusMnemonicKeyword}
+            onConsumeFocusKeyword={() => setFocusMnemonicKeyword(null)}
+          />
         );
       case 'mnemonicquiz':
         return <MnemonicQuiz store={store} onNavigate={setView} />;
@@ -760,8 +783,6 @@ export default function App() {
             onNavigate={setView}
           />
         );
-      default:
-        return <Home store={store} onNavigate={setView} onJumpToRoadmapLevel={jumpToRoadmapLevel} onStartSubjectQuiz={startSubjectQuiz} />;
     }
   };
 

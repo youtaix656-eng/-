@@ -1081,6 +1081,16 @@ textarea {
   margin: 4px 0;
   line-height: 1.6;
 }
+/* ブックマーク／先送り／リストから外すの3ボタンが横並びで小さく押しづらいとの指摘への対応。
+   .btn.smは全画面共通のクラスなので、ここだけ広げる（グローバルには触らない）。 */
+.list-item .btn-row {
+  flex-wrap: wrap;
+}
+.list-item .btn-row .btn.ghost.sm {
+  min-height: 40px;
+  padding: 9px 12px;
+  flex: 1 1 auto;
+}
 .list-item .li-memo {
   font-size: 13px;
   color: var(--text-sub);
@@ -3542,8 +3552,10 @@ code.block {
 .compare-note { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
 
 /* ===== 間違いの型（#9） ===== */
-.misstype-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.misstype-btn { flex: 1; min-width: 90px; display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+/* 3件固定（勘違い/知識不足/ケアレス）。折り返すと最後の1件だけ次の行に単独で残り雑然と
+   見えるため、折り返さず横スクロールに統一する（狭い画面でも1行のまま） */
+.misstype-row { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+.misstype-btn { flex: 1 1 0; min-width: 100px; display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 .misstype-btn small { font-weight: 400; font-size: 10px; color: var(--text-mute); }
 .misstype-tag { margin-left: 6px; font-size: 10px; font-weight: 800; color: var(--accent); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; }
 

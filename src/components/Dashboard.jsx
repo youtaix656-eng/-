@@ -7,7 +7,10 @@ import {
 
 // 弱点分析ダッシュボード
 // 科目別正答率をグラフ表示し、苦手科目が一目でわかるようにする。
-export default function Dashboard({ store }) {
+// 「分析・攻略率・合格診断」（Analytics.jsx）にも似た内容（科目別の定着度・14日間の学習量）が
+// あるため、こちらは"生の正答率"だけを見せるシンプル版と位置づけ、詳しい分析への導線を出す
+// （画面統合はせず、役割を文言で明示することで重複感を解消する）。
+export default function Dashboard({ store, onNavigate }) {
   const { history, questions } = store;
   const overall = overallStats(history);
   const stats = subjectStats(history, questions);
@@ -36,7 +39,15 @@ export default function Dashboard({ store }) {
   return (
     <div className="view">
       <h2 className="view-title">弱点分析</h2>
-      <p className="view-desc">科目別の正答率です。数値の低い科目から復習しましょう。</p>
+      <p className="view-desc">
+        科目別の"生の"正答率です。数値の低い科目から復習しましょう。
+        定着度・攻略率・合格ラインまでの距離を含めた詳しい分析は
+        {onNavigate ? (
+          <button className="btn ghost sm" style={{ marginLeft: 6 }} onClick={() => onNavigate('analytics')}>
+            分析・攻略率・合格診断へ
+          </button>
+        ) : '「分析・攻略率・合格診断」'}
+      </p>
 
       <div className="tiles">
         <div className="tile">

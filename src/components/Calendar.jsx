@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { phaseForDate, phasesInMonth } from '../data/roadmapPhases.js';
 import { planStudySession, DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 import { isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
+import { reviewDwellBySubject } from '../lib/reviewDwell.js';
 
 // カレンダー：勉強や試験などの予定を入力・管理する。
 // 予定は store.schedule = [{ id, date, time, title, memo, kind }] に保存。
@@ -78,6 +79,9 @@ export default function Calendar({ store, onToast, onNavigate }) {
     }
     return map;
   }, [reviewQuestions, srs]);
+
+  // #23：科目別の滞留日数（未解消のまま復習対象に居続けている期間）。上位1件だけ日別詳細に添える。
+  const dwellBySubject = useMemo(() => reviewDwellBySubject(reviewQuestions, srs, history), [reviewQuestions, srs, history]);
 
   const byDate = useMemo(() => {
     const m = {};
@@ -267,6 +271,12 @@ export default function Calendar({ store, onToast, onNavigate }) {
             </span>
             <span className="event-chev">›</span>
           </button>
+        )}
+        {/* #23：滞留が長い科目を添える（selected===today相当の日にだけ意味があるが、常に参考として表示） */}
+        {reviewDueByDay[selected] > 0 && dwellBySubject.length > 0 && (
+          <p className="inline-note" style={{ marginTop: 4 }}>
+            滞留長め：{dwellBySubject[0].subject}（平均{dwellBySubject[0].avgDays}日・{dwellBySubject[0].count}問）
+          </p>
         )}
         {selectedEvents.length === 0 ? (
           <p className="inline-note">この日の予定はまだありません。</p>
