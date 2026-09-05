@@ -142,6 +142,23 @@ export default function Calendar({ store, onGo, focus, onFocusDone, openDate = '
         onOpenCombine={() => onGo('combine')}
         />
       </section>
+      <section className="block" id="cal-tools">
+        <div className="block-head">
+          <h2>記録の道具</h2>
+        </div>
+        <p className="muted small">
+          どれも印をつけるだけで、そこから症状の理由をアプリが決めることはありません。
+        </p>
+        <div className="row">
+          <button type="button" className="ghost" onClick={() => onGo('periods')}>
+            いつもと違う期間に印をつける
+          </button>
+          <button type="button" className="ghost" onClick={() => onGo('visits')}>
+            通院の予定・聞きたいこと
+          </button>
+        </div>
+      </section>
+
       <RedFlagLink onGo={onGo} />
     </div>
   );

@@ -227,7 +227,7 @@ test('どの画面からも受診の目安へ行ける', () => {
   const skip = new Set([
     'RedFlags.jsx', // 自分自身へは飛ばさない
     'RedFlagLink.jsx',
-    'Know.jsx', // 一覧の先頭が受診の目安そのもの
+    'Know.jsx', // 一覧の「受診のために」の先頭が受診の目安そのもの
     'Gut.jsx', 'Bristol.jsx', 'DayEditor.jsx', 'TermPanel.jsx', 'TocCandidates.jsx', // 画面の中の部品
     // 画面ではない共通部品（`view` を持たないので、ここに導線を置く相手がいない）
     'Finder.jsx', 'ScrollArrows.jsx',
@@ -242,8 +242,11 @@ test('どの画面からも受診の目安へ行ける', () => {
     const s = readFileSync(new URL(f, dir), 'utf8');
     assert.match(s, /<RedFlagLink onGo=\{onGo\} \/>/, `${f}: 受診の目安への導線が無い`);
   }
-  // Know は一覧の先頭で受診の目安へ行ける
-  assert.match(src('components/Know.jsx'), /onGo\('redflags'\)/);
+  // Know は一覧の「受診のために」から受診の目安へ行ける
+  // （一覧は data/knowMenu.js が単一の正なので、画面のソースではなくそちらを見る）
+  const menu = src('data/knowMenu.js');
+  assert.match(menu, /view: 'redflags'/);
+  assert.match(menu, /group: 'visit'/);
 });
 
 test('受診の目安の導線は、色でも件数でも判定しない', () => {
