@@ -80,6 +80,12 @@ function timeAgoJa(at) {
   return `${Math.floor(hour / 24)}日前`;
 }
 
+function fmtRemainTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 const SYNC_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
 
 export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz, onQuickReview, onGoAudioReview }) {
@@ -233,9 +239,19 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     let alive = true;
     loadExamProgress().then((p) => {
       if (!alive || !p || !Array.isArray(p.ids) || !p.ids.length) return;
-      const len = p.ids.length;
-      if ((p.idx || 0) >= len) return;
-      setExamResume({ idx: p.idx || 0, len, presetLabel: p.presetLabel || '' });
+      // 午前+午後 通しモードの午後フェーズ中は、保存されているidsが午後の90問だけなので
+      // 午前ぶん（amSnapshot）を足して180問中の通算位置を出す（そうしないと「45/90問」の
+      // ように見えて、実際は既に午前90問を終えていることが伝わらない）。
+      const amDone = p.fullPhase === 'pm' && p.amSnapshot?.order?.length ? p.amSnapshot.order.length : 0;
+      const idx = (p.idx || 0) + amDone;
+      const len = p.ids.length + amDone;
+      if (idx >= len) return;
+      setExamResume({
+        idx,
+        len,
+        presetLabel: p.presetLabel || '',
+        remain: p.timed ? p.remain || 0 : null,
+      });
     });
     return () => {
       alive = false;
@@ -536,7 +552,12 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
                 <div className="rt-main">
                   <span className="rt-ico">📝</span>
                   <span className="rt-title">模擬試験{examResume.presetLabel ? `（${examResume.presetLabel}）` : ''}</span>
-                  <span className="rt-frac">{examResume.idx + 1}/{examResume.len}問</span>
+                  <span className="rt-frac">
+                    {examResume.idx + 1}/{examResume.len}問
+                    {examResume.remain != null && examResume.remain > 0 && (
+                      <> ・残り{fmtRemainTime(examResume.remain)}</>
+                    )}
+                  </span>
                 </div>
                 <div className="rt-bar"><span style={{ width: `${((examResume.idx + 1) / examResume.len) * 100}%` }} /></div>
               </button>
