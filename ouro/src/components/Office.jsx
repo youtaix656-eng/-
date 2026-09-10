@@ -16,7 +16,7 @@ import { Card, SectionTitle, Empty } from './ui.jsx';
 import { buildPresence } from '../lib/presence.js';
 import {
   officeLayout, officeLine, officeLegend, seatCaption, runningSeconds,
-  SEAT_W, SEAT_H,
+  SEAT_W, SEAT_H, SEAT_LOOKS,
 } from '../lib/office.js';
 import { ROLE_GROUPS, roleById } from '../data/roles.js';
 import { useAllTasks } from './useAllTasks.js';
@@ -47,13 +47,25 @@ export default function Office({ store, go }) {
           いまの状態からその場で描いているので、
           <strong style={{ color: '#fff' }}>手が動いて見える人は、本当にAIが動いている人だけ</strong>です。
         </p>
+        {/* 凡例。**色だけに意味を持たせない**——印（記号）と名前と人数を必ず一緒に出す。
+            0人の状態も残す（色の見分け方そのものを読むための表なので、空箱ではない）。 */}
         <div className="chips" style={{ marginTop: 8 }}>
-          {legend.filter((l) => l.count > 0).map((l) => (
-            <span key={l.id} className="chip">
+          {legend.map((l) => (
+            <span
+              key={l.id}
+              className={`chip office-key${l.count ? '' : ' off'}`}
+              title={l.moving ? 'この色の席だけが動きます' : '動きません'}
+            >
+              <i className="office-dot" style={{ background: l.color }} aria-hidden="true" />
               {l.glyph} {l.name} {l.count}
             </span>
           ))}
         </div>
+        <p className="muted" style={{ fontSize: 11.5, marginBottom: 0 }}>
+          色は状態の色分けです。
+          <strong style={{ color: SEAT_LOOKS.running.color }}>緑＝いま手が動いている（実行中）</strong>
+          で、動くのはこの色の席だけ。ほかの色は止まっている理由の違いです。
+        </p>
       </Card>
 
       {layout.counted === 0 ? (
@@ -128,8 +140,8 @@ function Seat({ seat, onPick }) {
 
   return (
     <g
-      className={`office-seat office-${seat.motion}`}
-      style={{ animationDelay: delay }}
+      className={`office-seat office-${seat.motion}${seat.moving ? ' office-live' : ''}`}
+      style={{ animationDelay: delay, color: seat.color }}
       transform={`translate(${seat.x}, ${seat.y})`}
       onClick={onPick}
       role="button"
@@ -154,15 +166,28 @@ function Seat({ seat, onPick }) {
         fill="none" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.1" />
       <path className="office-arm office-arm-r" d={`M ${SEAT_W / 2 + 14} ${SEAT_H - 34} l 5 9`}
         fill="none" stroke="currentColor" strokeOpacity="0.7" strokeWidth="1.1" />
+      {/* 動いている印。**動いている席にだけ出す**——ここが点滅していたら、
+          本当にその人の手順が走っている（録画ではない）。 */}
+      {seat.moving && (
+        <circle className="office-live-dot" cx={SEAT_W / 2 + 20} cy={16} r="3"
+          fill="currentColor" />
+      )}
       {/* 名前 */}
       <text className="office-name" x={SEAT_W / 2} y={SEAT_H - 6} textAnchor="middle"
-        fill="currentColor" fillOpacity="0.65" fontSize="9">
+        fill="currentColor" fillOpacity={seat.moving ? 1 : 0.65} fontSize="9">
         {(seat.employee.shortName || seat.employee.name || '').slice(0, 5)}
       </text>
+      {/* 担当している仕事。**動いている人にだけ書く**（動いていない人に作業内容を書かない）。 */}
+      {seat.moving && seat.taskTitle && (
+        <text className="office-task" x={SEAT_W / 2} y={9} textAnchor="middle"
+          fill="currentColor" fillOpacity="0.8" fontSize="7.5">
+          {seat.taskTitle.slice(0, 9)}
+        </text>
+      )}
       {/* 状態の印（動いていない人にだけ出す＝動きの無い理由が読める） */}
       {!seat.moving && (
         <text x={cx - seat.x + 20} y={16} textAnchor="middle"
-          fill="currentColor" fillOpacity="0.5" fontSize="10">
+          fill="currentColor" fillOpacity="0.8" fontSize="10">
           {seat.state === 'waiting' ? '⚖' : seat.state === 'stopped' ? '⚠' : seat.state === 'held' ? '‖' : seat.state === 'queued' ? '…' : ''}
         </text>
       )}

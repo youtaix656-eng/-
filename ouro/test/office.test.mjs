@@ -4,7 +4,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import {
   officeLayout, officeLine, officeLegend, seatCaption, seatLook, phaseOf,
-  runningSeconds, SEAT_LOOKS, SEAT_W, SEAT_H, MAX_SEATS, PER_ROW,
+  runningSeconds, seatColor, SEAT_LOOKS, SEAT_W, SEAT_H, MAX_SEATS, PER_ROW,
 } from '../src/lib/office.js';
 import { PRESENCE_STATES, buildPresence } from '../src/lib/presence.js';
 import { ROLE_GROUPS, roleById } from '../src/data/roles.js';
@@ -200,4 +200,59 @@ test('席は線だけでなく面で押せる（指で押せる当たり判定�
   assert.match(seatFn, /onKeyDown/);
   assert.match(seatFn, /tabIndex=\{0\}/);
   assert.match(seatFn, /aria-label/);
+});
+
+// ── 状態の色分け（ユーザー指定・2026-09-10）──
+test('状態ごとに色が決まっていて、全部ちがう', () => {
+  for (const s of PRESENCE_STATES) {
+    const c = seatColor(s.id);
+    assert.match(c, /^#[0-9a-f]{6}$/i, `${s.id} に色が無い`);
+  }
+  const all = PRESENCE_STATES.map((s) => seatColor(s.id));
+  assert.equal(new Set(all).size, all.length, '同じ色の状態がある（見分けられない）');
+  // 知らない状態でも色を返す（行き止まりにしない）
+  assert.equal(seatColor('なにか'), SEAT_LOOKS.idle.color);
+});
+
+test('色だけに意味を持たせない（記号・名前・人数・動きも一緒に出す）', () => {
+  const legend = officeLegend(rowsOf(['a', 'running']));
+  const run = legend.find((l) => l.id === 'running');
+  assert.equal(run.color, seatColor('running'));
+  assert.ok(run.glyph, '凡例に記号が無い');
+  assert.ok(run.name, '凡例に名前が無い');
+  // 画面側でも、色見本と記号・名前・人数を並べている
+  assert.match(OFFICE_JSX, /office-dot/);
+  assert.match(OFFICE_JSX, /\{l\.glyph\} \{l\.name\} \{l\.count\}/);
+  // 動いていない席には印（記号）が出る＝色が見えなくても理由が読める
+  assert.match(OFFICE_JSX, /!seat\.moving && \(/);
+});
+
+test('席にも色が乗る・動いている席だけ濃くする', () => {
+  const rows = rowsOf(['a', 'running'], ['b', 'held']);
+  const seats = officeLayout(rows, groups, groupOf).islands.flatMap((i) => i.seats);
+  assert.equal(seats.find((s) => s.id === 'a').color, seatColor('running'));
+  assert.equal(seats.find((s) => s.id === 'b').color, seatColor('held'));
+  assert.match(OFFICE_JSX, /color: seat\.color/);
+  const office = CSS.slice(CSS.indexOf('.office-scroll'));
+  assert.ok(office.includes('.office-live '), '.office-live が無い');
+  assert.ok(office.includes('office-blink'), '動いている印の明滅が無い');
+});
+
+test('担当している仕事は、動いている席にだけ書く', () => {
+  const rows = rowsOf(
+    ['a', 'running', { task: { id: 't1', title: '3日で十万円の計画' } }],
+    ['b', 'held', { task: { id: 't2', title: '止めてある仕事' } }],
+  );
+  const seats = officeLayout(rows, groups, groupOf).islands.flatMap((i) => i.seats);
+  // 材料としては両方に入っている（画面側が moving で出し分ける）
+  assert.equal(seats.find((s) => s.id === 'b').taskTitle, '止めてある仕事');
+  assert.equal(seats.find((s) => s.id === 'a').taskTitle, '3日で十万円の計画');
+  // **動いていない人に作業内容を書かない**
+  assert.match(OFFICE_JSX, /\{seat\.moving && seat\.taskTitle && \(/);
+});
+
+test('動きを止めても、動いている席が分かる', () => {
+  const office = CSS.slice(CSS.indexOf('.office-scroll'));
+  const reduce = office.slice(office.indexOf('prefers-reduced-motion'));
+  assert.match(reduce, /office-live-dot/, '動きを止めると実行中が分からなくなる');
 });

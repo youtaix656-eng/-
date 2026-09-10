@@ -30,16 +30,25 @@ export const MAX_SEATS = 60;
  *  moving … 実際に手が動いているか。**ここが false のものを動かさない。**
  */
 export const SEAT_LOOKS = {
-  running: { motion: 'type', moving: true, label: '手を動かしています' },
-  queued: { motion: 'wait', moving: false, label: '自分の番を待っています' },
-  waiting: { motion: 'look', moving: false, label: 'あなたを待っています' },
-  held: { motion: 'still', moving: false, label: '止めてあります' },
-  stopped: { motion: 'still', moving: false, label: '途中で止まりました' },
-  idle: { motion: 'breathe', moving: false, label: '手あきです' },
+  running: { motion: 'type', moving: true, color: '#4ade80', label: '手を動かしています' },
+  queued: { motion: 'wait', moving: false, color: '#7dd3fc', label: '自分の番を待っています' },
+  waiting: { motion: 'look', moving: false, color: '#fbbf24', label: 'あなたを待っています' },
+  held: { motion: 'still', moving: false, color: '#c4b5fd', label: '止めてあります' },
+  stopped: { motion: 'still', moving: false, color: '#f87171', label: '途中で止まりました' },
+  idle: { motion: 'breathe', moving: false, color: '#8b8b8b', label: '手あきです' },
 };
 
 export function seatLook(state) {
   return SEAT_LOOKS[state] || SEAT_LOOKS.idle;
+}
+
+/**
+ * 状態の色。**色だけに意味を持たせない**——動き・印・文字も必ず一緒に出す
+ * （色が見分けにくい人に読めなくなる）。実行中だけを目立つ色にして、
+ * 止まっている状態は暗く落とす。
+ */
+export function seatColor(state) {
+  return seatLook(state).color;
 }
 
 /** 社員 id から決まる 0〜1 の値（**乱数を使わない**ので、描き直しても同じ）。 */
@@ -95,6 +104,10 @@ export function officeLayout(rows = [], groups = [], groupOf = () => 'knowledge'
           facing: row % 2 === 0 ? 'down' : 'up',
           motion: look.motion,
           moving: look.moving,
+          color: look.color,
+          // 担当している仕事の名前。**動いていない人の席には出さない**
+          //（画面側で moving を見て出し分ける。ここは材料を渡すだけ）。
+          taskTitle: (r.task && r.task.title) || '',
           phase: phaseOf(r.employee.id),
         };
       }),
@@ -129,6 +142,7 @@ export function officeLegend(rows = []) {
     glyph: s.glyph,
     count: counts[s.id] || 0,
     moving: seatLook(s.id).moving,
+    color: seatLook(s.id).color,
   }));
 }
 
