@@ -5,6 +5,7 @@ import { flashTo } from '../lib/focus.js';
 import { useFocusJump } from './useFocusJump.js';
 import TermPanel from './TermPanel.jsx';
 import TocCandidates from './TocCandidates.jsx';
+import RedFlagLink from './RedFlagLink.jsx';
 
 // 目次・索引。**目次専用の手書きの一覧を持たない**——`buildTocEntries` が元データから毎回作る。
 //
@@ -179,6 +180,7 @@ export default function TableOfContents({ store, focus, onFocusDone, onGo }) {
       )}
 
       {open && <TermPanel entry={open} onClose={() => setOpenId(null)} onGo={handleGo} />}
+      <RedFlagLink onGo={onGo} />
     </div>
   );
 }

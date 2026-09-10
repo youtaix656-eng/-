@@ -57,6 +57,12 @@ export function buildSyncPayload(data, { includeHistory = true, summarizeHistory
   if (data.examProgress) p.x = data.examProgress;
   if (data.audioProgress) p.a = data.audioProgress;
   if (data.session) p.n = data.session;
+  // 用語集（目次・索引）：候補フローで増える実データ（同梱データの再生成では復元できない）
+  if (Array.isArray(data.glossaryExtra) && data.glossaryExtra.length) p.ge = data.glossaryExtra;
+  if (Array.isArray(data.glossaryRemovedIds) && data.glossaryRemovedIds.length) p.gi = data.glossaryRemovedIds;
+  if (Array.isArray(data.tocCandidates) && data.tocCandidates.length) p.tc = data.tocCandidates;
+  if (Array.isArray(data.tocHistory) && data.tocHistory.length) p.th = data.tocHistory;
+  if (data.flashcardSrs && Object.keys(data.flashcardSrs).length) p.fc = data.flashcardSrs;
   return p;
 }
 
@@ -94,6 +100,11 @@ export function syncToBackup(p) {
   if (p.x) b.examProgress = p.x;
   if (p.a) b.audioProgress = p.a;
   if (p.n) b.session = p.n;
+  if (p.ge) b.glossaryExtra = p.ge;
+  if (p.gi) b.glossaryRemovedIds = p.gi;
+  if (p.tc) b.tocCandidates = p.tc;
+  if (p.th) b.tocHistory = p.th;
+  if (p.fc) b.flashcardSrs = p.fc;
   return b;
 }
 

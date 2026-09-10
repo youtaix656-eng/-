@@ -7,10 +7,28 @@
 //     「症状が無かった日」と読ませないため。
 //  3. **アプリが医療者へ送らない。** 作るのは文章まで。渡す相手は本人が選ぶ。
 
-import { BELLY_STEPS, BRISTOL_GROUPS, STOOL_MARKS } from '../data/scales.js';
+import {
+  BELLY_STEPS,
+  BRISTOL_GROUPS,
+  STOOL_MARKS,
+  LEVELS,
+  EXERCISE_STEPS,
+  SLEEP_STEPS,
+  POSTURE_STEPS,
+} from '../data/scales.js';
 import { formatKey } from './dates.js';
 import { hasRecord } from './days.js';
-import { fillOf, bellyCounts, bristolCounts, stoolPerDay, markDays, topFoods } from './stats.js';
+import {
+  fillOf,
+  bellyCounts,
+  bristolCounts,
+  stoolPerDay,
+  markDays,
+  topFoods,
+  lifeCounts,
+  otcCounts,
+} from './stats.js';
+import { OTC_KINDS } from '../data/otcDrugs.js';
 
 /** 「1日 1〜1回」と書かない（幅が無いときは幅で言わない） */
 export function perDayText(per) {
@@ -23,10 +41,14 @@ export const NOTE_PARTS = [
   { id: 'belly', label: 'お腹の調子' },
   { id: 'marks', label: '気になった項目（血が混じった・間に合わない感じ など）' },
   { id: 'foods', label: 'よく食べていたもの' },
+  { id: 'life', label: 'ストレス・体を動かしたか・睡眠・姿勢' },
+  { id: 'otc', label: '使った市販薬（下痢止め・痛み止めなど）' },
   { id: 'notes', label: 'ひとことメモ' },
 ];
 
-export const DEFAULT_PARTS = ['stool', 'belly', 'marks', 'notes'];
+// 市販薬は既定で入れる——**受診のときに必ず聞かれることで、本人が言い忘れやすい**ため
+// （出典も「飲んでいることを必ず伝える」と書いている）。記録が無ければ行ごと出ない。
+export const DEFAULT_PARTS = ['stool', 'belly', 'marks', 'otc', 'notes'];
 
 const markLabel = (id) => {
   const found = STOOL_MARKS.find((m) => m.id === id);
@@ -105,6 +127,56 @@ export function buildVisitNote(days, keys, parts = DEFAULT_PARTS) {
       lines.push(`　${foods.map((f) => `${f.food} ${f.days}日`).join(' / ')}`);
     }
     lines.push('');
+  }
+
+  if (on('life')) {
+    const life = lifeCounts(days, keys);
+    lines.push('■ 暮らしのこと（本人の感じ方）');
+    if (!life.stressDays && !life.exerciseDays && !life.sleepDays && !life.postureDays) {
+      lines.push('　記録なし');
+    } else {
+      if (life.stressDays) {
+        lines.push(
+          `　ストレス：${LEVELS.filter((l) => life.stress[l.id])
+            .map((l) => `${l.label} ${life.stress[l.id]}日`)
+            .join(' / ')}`,
+        );
+      }
+      if (life.exerciseDays) {
+        lines.push(
+          `　体を動かした：${EXERCISE_STEPS.filter((e) => life.exercise[e.id])
+            .map((e) => `${e.label} ${life.exercise[e.id]}日`)
+            .join(' / ')}`,
+        );
+      }
+      if (life.sleepDays) {
+        lines.push(
+          `　眠れたか：${SLEEP_STEPS.filter((e) => life.sleep[e.id])
+            .map((e) => `${e.label} ${life.sleep[e.id]}日`)
+            .join(' / ')}`,
+        );
+      }
+      if (life.postureDays) {
+        lines.push(
+          `　姿勢：${POSTURE_STEPS.filter((e) => life.posture[e.id])
+            .map((e) => `${e.label} ${life.posture[e.id]}日`)
+            .join(' / ')}`,
+        );
+      }
+    }
+    lines.push('');
+  }
+
+  if (on('otc')) {
+    const otc = otcCounts(days, keys);
+    if (otc.anyDays > 0) {
+      lines.push('■ 使った市販薬（本人の記録）');
+      for (const kind of OTC_KINDS) {
+        const n = otc.byKind[kind.id];
+        if (n) lines.push(`　${kind.name}：${n}日`);
+      }
+      lines.push('');
+    }
   }
 
   if (on('notes')) {

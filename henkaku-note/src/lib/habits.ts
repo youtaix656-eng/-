@@ -16,6 +16,8 @@ export interface HabitSeed {
   reading: string;
   criterion: string;
   note?: string;
+  /** 別の呼び名。目次で別名からも引けるようにする（data/toc.ts） */
+  aliases?: string[];
 }
 
 export const DEFAULT_HABIT_SEEDS: HabitSeed[] = [
@@ -47,6 +49,7 @@ export const DEFAULT_HABIT_SEEDS: HabitSeed[] = [
     step: 4,
     title: 'ゼロ・モーニングルーティン',
     reading: 'ぜろもーにんぐるーちん',
+    aliases: ['ゼロモーニング', '起きてすぐ動く'],
     criterion: '起きてから15〜20分以内に、学習または作業を始められた',
     note: '夜勤明けの日は「起床」が昼過ぎになることもある。時計ではなく“起きてから”で測る。',
   },
@@ -55,6 +58,7 @@ export const DEFAULT_HABIT_SEEDS: HabitSeed[] = [
     step: 5,
     title: '就寝ルール（シフト対応）',
     reading: 'しゅうしんるーる',
+    aliases: ['寝る時刻', '就寝目標'],
     criterion: 'その日の就寝目標時刻までに寝られた',
     note: '原典の「夜11時就寝」は夜勤と両立しないため、「終業から◯分以内」に置き換えている。休日は固定時刻。',
   },

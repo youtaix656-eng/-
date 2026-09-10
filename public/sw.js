@@ -13,6 +13,29 @@
 // 衝突しないよう、アプリ名を含めた分かりやすい名前にしている。
 const CACHE = 'shinkyu-exam-app-cache-v3';
 
+// まだ一度もオンラインで開いたことが無い端末でオフラインになった時だけ表示する案内ページ
+// （通常はここに来る前にキャッシュ済みのindex.htmlが返るため、ほとんどのユーザーは見ない）。
+const OFFLINE_FALLBACK_HTML = `<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>オフラインです - 鍼灸国試 対策アプリ</title>
+<style>
+  body{margin:0;background:#000;color:#fff;font-family:-apple-system,'Hiragino Kaku Gothic ProN','Hiragino Sans','Noto Sans JP',sans-serif;
+    display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;box-sizing:border-box;}
+  .box{max-width:360px;text-align:center;}
+  .ico{font-size:40px;margin-bottom:12px;}
+  h1{font-size:17px;margin:0 0 10px;}
+  p{font-size:13.5px;line-height:1.7;color:#ccc;margin:0 0 18px;}
+  button{background:#fff;color:#000;border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:600;}
+</style></head>
+<body>
+  <div class="box">
+    <div class="ico">📡</div>
+    <h1>オフラインです</h1>
+    <p>電波の届く場所で一度アプリを開くと、以後はオフラインでも使えるようになります。</p>
+    <button onclick="location.reload()">再読み込み</button>
+  </div>
+</body></html>`;
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
@@ -112,7 +135,14 @@ self.addEventListener('fetch', (event) => {
           const cached = (await cache.match(req)) || (await cache.match('./')) ||
             (await cache.match('index.html'));
           if (cached) return cached;
-          return new Response('オフラインです', { status: 503, statusText: 'offline' });
+          // まだ一度もオンラインで開けておらずキャッシュが無い状態でオフラインになった場合のみ、
+          // ここに到達する（初回訪問は必ずオンラインでの読み込みが必要）。プレーンテキストだと
+          // 素っ気ないため、簡易な案内ページを返す。
+          return new Response(OFFLINE_FALLBACK_HTML, {
+            status: 503,
+            statusText: 'offline',
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          });
         }
       })()
     );

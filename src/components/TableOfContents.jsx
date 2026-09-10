@@ -3,7 +3,7 @@ import { effectiveTags } from '../lib/query.js';
 
 // 目次：取り込んだ問題集を「科目 → キーワード」で一覧化。
 //   タップでその範囲を出題（連結学習のキーワードとも連動）。
-export default function TableOfContents({ store, onStartQuiz, onOpenKeyword }) {
+export default function TableOfContents({ store, onStartQuiz, onOpenKeyword, onNavigate }) {
   const { questions, links } = store;
   const [open, setOpen] = useState({});
 
@@ -83,6 +83,10 @@ export default function TableOfContents({ store, onStartQuiz, onOpenKeyword }) {
       {questions.length === 0 && (
         <p className="inline-note">まだ問題がありません。「問題を取り込む」から追加しましょう。</p>
       )}
+
+      <button className="btn ghost block" style={{ marginTop: 14 }} onClick={() => onNavigate && onNavigate('glossary')}>
+        📖 用語集（あ〜ん索引・説明つき）へ
+      </button>
     </div>
   );
 }

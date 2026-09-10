@@ -6,6 +6,7 @@ import {
 import { formatDateJa } from '../lib/date';
 import { MONK_DAYS, MONK_PERIOD_NOTE } from '../lib/monkMode';
 import type { AppState } from '../types';
+import { ANCHORS } from '../data/anchors';
 
 /**
  * 実践期間（区切り）とストリーク。
@@ -76,7 +77,7 @@ export default function CycleCard({ state, today }: { state: AppState; today: st
 
   const p = progress!;
   return (
-    <div className="card">
+    <div className="card" id={ANCHORS.cycle}>
       <div className="row">
         <h3 style={{ margin: 0, flex: 1 }}>🌅 {p.dayNumber}日目 <span className="muted small">/ 全{p.lengthDays}日</span></h3>
         <span className="tag">{formatDateJa(p.endDate)}まで</span>

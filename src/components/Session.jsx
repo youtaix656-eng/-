@@ -45,7 +45,7 @@ function poolFor(questions, subject) {
 // 出題順の組み立ては src/lib/sessionOrder.js に集約（Quiz.jsxと共用）。
 
 export default function Session({ store, onToast, onOpenKeyword, onGoReview, onGoAudio, onGoAnalytics }) {
-  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded, setNextDue, examResults } = store;
+  const { questions, srs, history, session, startSession, updateSession, clearSession, memos, setMemo, links, setLink, recordAnswer, settings, updateSettings, bookmarks, toggleBookmark, loaded, setNextDue, examResults, casePairMap } = store;
   // 完了画面の弱点分析（まぎらわしい対比）用データ。完了画面に到達した時だけ遅延読み込みする
   // （起動時バンドルから約14万字ぶんを外すため。mindmapDataLoader.jsが単一の正）。
   const mindmapData = useMindmapData(!!(session && session.pos >= session.target));
@@ -229,28 +229,28 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       ids = opts.ids;
     } else if (!opts.allowSeen) {
       if (ratio >= 1) {
-        ids = buildNewOnlyOrder(pool, target, srs);
+        ids = buildNewOnlyOrder(pool, target, srs, casePairMap);
         if (ids.length === 0) {
           onToast?.('新規問題がありません（この条件はすべて解き終えています）。割合を下げて復習するか、条件を変えてください');
           return;
         }
       } else if (ratio <= 0) {
-        ids = buildReviewOnlyOrder(pool, target, srs);
+        ids = buildReviewOnlyOrder(pool, target, srs, casePairMap);
         if (ids.length === 0) {
           onToast?.('復習が必要な問題がありません（まだ間違えた問題がないか、復習対象がありません）。割合を上げて新規を混ぜるか、条件を変えてください');
           return;
         }
       } else {
-        ids = buildMixedNoRepeatOrder(pool, target, ratio, srs);
+        ids = buildMixedNoRepeatOrder(pool, target, ratio, srs, casePairMap);
         if (ids.length === 0) {
           onToast?.('この割合・条件に合う新規・復習問題がありません。割合や条件を変えてください');
           return;
         }
       }
     } else if (ratio >= 1) {
-      ids = buildOrder(pool, target);
+      ids = buildOrder(pool, target, casePairMap);
     } else {
-      ids = buildMixedOrder(pool, target, ratio, srs);
+      ids = buildMixedOrder(pool, target, ratio, srs, casePairMap);
     }
     // 該当数が指定問数に満たない場合は、その問数だけで1セッションとする
     const effTarget = Math.min(target, ids.length);
@@ -258,7 +258,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     setShowAllGenres(false);
     startSession({
       subject: subj, label: opts.label, ids, pos: 0, target: effTarget, requestedTarget: target,
-      round, fast: useFast, newRatio: ratio, startedAt: Date.now(),
+      round, fast: useFast, newRatio: ratio, startedAt: Date.now(), recordedIds: [],
       ...(opts.buffer ? { buffer: opts.buffer } : {}),
     });
     setShowBreak(false);
@@ -279,6 +279,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const recordCurrent = (correct, grade, selfKind, objectiveCorrect) => {
     const cur = byId[session.ids[session.pos]];
     if (!cur) return;
+    // 「← 前の問題」で解答済みの問題まで戻り、もう一度選んで自己採点しても、
+    //   同じ問題を二重に記録しない（SRS・履歴・リーチ判定・selfKindCountsが
+    //   上書きされて数字が狂うのを防ぐ）。見直し自体は自由にでき、advance()側で
+    //   元いた最先端の位置へ戻す。
+    if ((session.recordedIds || []).includes(cur.id)) return;
     // ○の見直し／○の高速回転セッションはsourceに印を付ける（#4・#12・#14。
     //   「最後にいつふりかえったか」「今日この仕上げをやったか」をhistoryだけから追跡できるように）。
     const isMaruSession = session.label === '○の見直し' || session.label === '○の高速回転';
@@ -298,9 +303,15 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       const existing = memos[cur.id] || '';
       if (!existing.includes(tag)) setMemo(cur.id, existing ? `${existing} / ${tag}` : tag);
     }
+    updateSession({ recordedIds: [...(session.recordedIds || []), cur.id] });
   };
+  // 次の未解答の位置へ進める。「← 前の問題」で解答済みの問題まで戻ってから完了した場合は
+  //   pos+1へは進めず、まだ解答していない最初の位置（＝もといた最先端）まで一気に戻す
+  //   （そうしないと、見直しのたびにセッションの進み具合が手前に巻き戻ってしまう）。
   const advance = () => {
-    const newPos = session.pos + 1;
+    const recorded = new Set(session.recordedIds || []);
+    let newPos = session.pos + 1;
+    while (newPos < session.target && recorded.has(session.ids[newPos])) newPos++;
     updateSession({ pos: newPos });
     if (newPos < session.target && newPos % SET_SIZE === 0) setShowBreak(true);
   };
@@ -711,7 +722,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
               {wrongEntries.map(({ q, selfKind }) => (
                 <li key={q.id}>
                   <span className={`wl-mark ${selfKind === 'sankaku' ? 'sankaku' : 'batsu'}`}>{selfKind === 'sankaku' ? '△' : '✕'}</span>
-                  <span className="wl-ans">{q.type === 'ox' ? (q.answer === 0 ? '○' : '✕') : `正解 ${q.answer + 1}`}</span>
+                  <span className="wl-ans">{q.type === 'ox' ? `正解 ${q.answer === 0 ? '○' : '✕'}` : `正解 ${q.answer + 1}`}</span>
                   <span className="wl-q">{q.question}</span>
                 </li>
               ))}
@@ -732,8 +743,31 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             )}
             {isStandardSession && requested >= 900 ? (
               <button className="btn primary" onClick={() => begin(900, { subject: session.subject, round: (session.round || 1) + 1, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true })}>2周目を開始</button>
-            ) : (
+            ) : isStandardSession ? (
               <button className="btn primary" onClick={() => begin(requested, { subject: session.subject, fast: session.fast, newRatio: session.newRatio, pool: poolFor(questions, session.subject), allowSeen: true, label: session.label })}>もう一度</button>
+            ) : (
+              // 誤答復習・○の見直し／高速回転・バッファ枠は、科目全体ではなく
+              // 「このセッションで実際に出題した問題」だけを再演習する（poolFor(questions, subject)に
+              // 差し替えると、無関係な新問を解いただけなのに「誤答復習完了！」等の見出しが
+              // そのまま出てしまい、弱点を確認したと誤認させるバグになる）。
+              <button
+                className="btn primary"
+                onClick={() => {
+                  const curatedPool = (session.ids || []).map((id) => byId[id]).filter(Boolean);
+                  // ○の見直し／高速回転は、開始時と同じく「うっかり○を先頭に、古い順」の並びを
+                  // 保つため再シャッフルしない（idsをそのまま渡す＝begin()内のbuildOrderを経由しない）。
+                  // それ以外（誤答復習・バッファ枠）は開始時から毎回シャッフルしていたので、
+                  // もう一度でも同じくpoolだけ渡して再シャッフルさせる。
+                  const isMaruLabel = session.label === '○の見直し' || session.label === '○の高速回転';
+                  begin(curatedPool.length, {
+                    pool: curatedPool, subject: session.subject, fast: session.fast, newRatio: session.newRatio,
+                    allowSeen: true, label: session.label,
+                    ...(isMaruLabel ? { ids: curatedPool.map((q) => q.id) } : {}),
+                  });
+                }}
+              >
+                もう一度
+              </button>
             )}
           </div>
           <button className="btn ghost block" style={{ marginTop: 10 }} onClick={() => clearSession()}>終了する</button>
@@ -823,6 +857,8 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const canGoPrev = session.pos > 0;
   const canGoNext = session.pos < session.target - 1;
   const goToPos = (pos) => updateSession({ pos: Math.max(0, Math.min(session.target - 1, pos)) });
+  // 「← 前の問題」で解答済みの問題まで戻って見返しているか（記録は上書きされない旨を伝える）
+  const isReviewingAnswered = (session.recordedIds || []).includes(current.id);
   return (
     <div className="view">
       <div className="sess-topbar">
@@ -841,6 +877,11 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       </div>
       {harioReminder && (
         <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{harioReminder}」</p>
+      )}
+      {isReviewingAnswered && (
+        <p className="inline-note" style={{ textAlign: 'center' }}>
+          📝 この問題はすでに解答済みです（見直し用に表示中。もう一度答えても記録は上書きされません）
+        </p>
       )}
       {session.fast ? (
         <FastCard key={current.id + '@' + session.pos} question={current} onGraded={answeredFast} GRADES={GRADES} />

@@ -97,6 +97,8 @@ export interface EffectStage {
   id: string;
   fromDays: number;
   title: string;
+  /** 目次の読み（漢字を含むなら必須。**自動推定しない**） */
+  reading: string;
   reported: string[];
   note?: string;
 }
@@ -106,6 +108,7 @@ export const EFFECT_STAGES: EffectStage[] = [
     id: 'session',
     fromDays: 1,
     title: '1回のセッション',
+    reading: '',
     reported: [
       '副交感神経が優位になり、心拍数・血圧が下がってリラックスする',
       'ストレスホルモン（コルチゾール）の分泌が一時的に下がる',
@@ -116,18 +119,21 @@ export const EFFECT_STAGES: EffectStage[] = [
     id: 'weeks',
     fromDays: 14,
     title: '数週間',
+    reading: 'すうしゅうかん',
     reported: ['不安感の軽減', '睡眠の質の向上'],
   },
   {
     id: 'months',
     fromDays: 30,
     title: '1〜2ヶ月',
+    reading: '',
     reported: ['ストレス耐性の向上', '感情の起伏が穏やかになる'],
   },
   {
     id: 'mbsr8w',
     fromDays: 56,
     title: '8週間（MBSRの研究水準）',
+    reading: '',
     reported: ['8週間程度の継続的なマインドフルネス瞑想で、灰白質密度に変化が見られたというMRI研究の報告がある'],
     note: 'Harvard/MGH などの報告として紹介されているもの。一次資料は未確認（※要確認）。',
   },
@@ -135,6 +141,7 @@ export const EFFECT_STAGES: EffectStage[] = [
     id: 'long',
     fromDays: 90,
     title: '数ヶ月〜1年',
+    reading: 'すうかげつからいちねん',
     reported: ['前頭前野の活動の変化', '扁桃体（恐怖・不安の中枢）の反応の低下'],
     note: '報告のある研究がある、という水準の話です。個人差があります。',
   },

@@ -13,6 +13,7 @@ import { summarizeMeals, pauseAdvice } from '../lib/fasting';
 import { weeklyMonk, bodyReminder, isolationWarning } from '../lib/monkMode';
 import { summarizeRoutine } from '../lib/morningRoutine';
 import type { AppState } from '../types';
+import { ANCHORS } from '../data/anchors';
 
 interface Props {
   state: AppState;
@@ -74,7 +75,7 @@ export default function WeeklyReviewView({ state, anchor, today, onSelectDay }: 
 
   return (
     <div className="stack">
-      <div className="card">
+      <div className="card" id={ANCHORS.weekly}>
         <div className="cal-head">
           <button type="button" className="icon-btn" aria-label="前の週" onClick={() => setWeekStart(addDays(weekStart, -7))}>‹</button>
           <span className="cal-title">{formatWeekRangeJa(weekStart)}</span>

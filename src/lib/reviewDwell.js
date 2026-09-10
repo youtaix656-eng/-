@@ -3,6 +3,7 @@
 //   「いつからその状態か」は history（解答履歴）を辿って求める。
 
 import { LEECH_THRESHOLD, MASTER_STREAK, isLeech, isInReview } from './srs.js';
+import { latestMissType } from './missTypes.js';
 
 // 指定の問題が、誤答回数がLEECH_THRESHOLDに達した瞬間（＝要注意になった瞬間）のatを返す。
 //   history上で追跡できない（それ以前からの持ち越しデータ等）場合はnull。
@@ -28,6 +29,20 @@ export function leechList(questions, srs, history, now = Date.now()) {
     .filter((q) => isLeech(srs[q.id]))
     .map((q) => ({ question: q, dwellDays: leechDwellDays(q.id, history, now) }))
     .sort((a, b) => (b.dwellDays || 0) - (a.dwellDays || 0));
+}
+
+function escCsv(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// 要注意リストのCSV書き出し（設定画面のCSV群と同じパターン）。listはleechList()の返り値。
+export function leechListToCsv(list) {
+  const header = ['科目', '問題文', '滞留日数'];
+  const rows = list.map(({ question: q, dwellDays }) => [
+    q.subject || '', q.question || '（図の問題）', dwellDays ?? '',
+  ].map(escCsv).join(','));
+  return [header.join(','), ...rows].join('\n');
 }
 
 // 要注意の科目別内訳（#11）。
@@ -104,4 +119,24 @@ export function resolvedLeechEvents(history) {
 
 export function resolvedLeechesSince(history, sinceMs) {
   return resolvedLeechEvents(history).filter((e) => e.at >= sinceMs).length;
+}
+
+// 現在まだ復習対象（isInReview）である問題の、直近の誤答理由（型）別の平均滞留日数。
+//   reviewDwellBySubjectの「科目別」を「型別」に変えたもの（型の記録が無い問題は対象外）。
+export function reviewDwellByMissType(questions, srs, history, missTypes, now = Date.now()) {
+  const byType = {};
+  for (const q of questions) {
+    if (!isInReview(srs[q.id])) continue;
+    const type = latestMissType(missTypes?.[q.id])?.type;
+    if (!type) continue;
+    const since = firstWrongAt(q.id, history);
+    if (since == null) continue;
+    const days = (now - since) / (24 * 60 * 60 * 1000);
+    if (!byType[type]) byType[type] = { sum: 0, count: 0 };
+    byType[type].sum += days;
+    byType[type].count += 1;
+  }
+  return Object.entries(byType)
+    .map(([type, v]) => ({ type, avgDays: Math.round(v.sum / v.count), count: v.count }))
+    .sort((a, b) => b.avgDays - a.avgDays);
 }

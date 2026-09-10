@@ -109,7 +109,7 @@ export default function CoverageMap({ store, onStartSubject, onNavigate, onToast
         </div>
         <div className="tile">
           <div className="num">{Math.round(summary.fillRatio * 100)}%</div>
-          <div className="lbl">充足率（#8）</div>
+          <div className="lbl">充足率</div>
         </div>
       </div>
 
@@ -121,7 +121,7 @@ export default function CoverageMap({ store, onStartSubject, onNavigate, onToast
 
       {qualityAlerts.length > 0 && (
         <div className="card" style={{ borderLeft: '4px solid var(--warn, #e0a800)' }}>
-          <div className="section-label" style={{ marginTop: 0 }}>⚠️ 追加した問題の正答率が極端です（#21）</div>
+          <div className="section-label" style={{ marginTop: 0 }}>⚠️ 追加した問題の正答率が極端です</div>
           <p className="inline-note" style={{ marginTop: 0 }}>
             新しく追加したバッチのうち、十分に解かれているのに正答率が0%または100%のものがあります。
             問題や正解の設定に誤りがないか確認してください。
@@ -151,7 +151,7 @@ export default function CoverageMap({ store, onStartSubject, onNavigate, onToast
           )}
           {phase && (phase.id === 'p1' || phase.id === 'p2') && (summary.none.length > 0 || summary.thin.length > 0) && (
             <p className="inline-note" style={{ marginTop: 4 }}>
-              🗺️ 今は「{phase.label}」の期間です（#25）。この期間のうちに上の科目を埋めておきましょう。
+              🗺️ 今は「{phase.label}」の期間です。この期間のうちに上の科目を埋めておきましょう。
             </p>
           )}
 
@@ -171,11 +171,11 @@ export default function CoverageMap({ store, onStartSubject, onNavigate, onToast
 
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn ghost sm" onClick={() => copyText(thinSubjectsText(rows), onToast, '手薄科目の内訳をコピーしました')}>
-              📋 手薄科目の内訳をコピー（#9）
+              📋 手薄科目の内訳をコピー
             </button>
             {todo[0] && (
               <button className="btn ghost sm" onClick={() => copyText(requestTemplate(todo[0].subject), onToast, '依頼文をコピーしました')}>
-                📝 「{todo[0].subject}」の依頼文をコピー（#10）
+                📝 「{todo[0].subject}」の依頼文をコピー
               </button>
             )}
           </div>

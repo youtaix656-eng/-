@@ -73,6 +73,21 @@ function pickNewerByOwnTimestamp(local, remote, timeKey = 'at') {
   return rt > lt ? remote : local;
 }
 
+// 用語集（目次・索引）：id単位でUNIONする配列（追記型データ。同一idが両方にあれば
+// remote側で上書きする——examResults等の既存の「idでUNION」パターンと同じ考え方）。
+export function mergeById(local, remote) {
+  const byId = new Map();
+  for (const e of [...(local || []), ...(remote || [])]) {
+    if (e && e.id != null) byId.set(e.id, e);
+  }
+  return [...byId.values()];
+}
+
+// 用語集：削除承認済みidの配列。片方の端末で削除承認されていればUNIONで消えたままにする。
+export function mergeIdSet(local, remote) {
+  return [...new Set([...(local || []), ...(remote || [])])];
+}
+
 export function mergeResumeState(local, remote) {
   const l = local || {};
   const r = remote || {};
@@ -104,7 +119,12 @@ export function progressChanged(local, merged) {
     JSON.stringify(m.examProgress) !== JSON.stringify(l.examProgress) ||
     JSON.stringify(m.reviewProgress) !== JSON.stringify(l.reviewProgress) ||
     JSON.stringify(m.audioProgress) !== JSON.stringify(l.audioProgress) ||
-    JSON.stringify(m.session) !== JSON.stringify(l.session)
+    JSON.stringify(m.session) !== JSON.stringify(l.session) ||
+    JSON.stringify(m.glossaryExtra) !== JSON.stringify(l.glossaryExtra) ||
+    JSON.stringify(m.glossaryRemovedIds) !== JSON.stringify(l.glossaryRemovedIds) ||
+    JSON.stringify(m.tocCandidates) !== JSON.stringify(l.tocCandidates) ||
+    JSON.stringify(m.tocHistory) !== JSON.stringify(l.tocHistory) ||
+    JSON.stringify(m.flashcardSrs) !== JSON.stringify(l.flashcardSrs)
   );
 }
 
@@ -127,5 +147,13 @@ export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdated
     // 一問一答・模試・復習・音声・学習セッションの「続きから」。ユーザー指定により
     // クラウド自動同期の対象に含める（各自身のタイムスタンプで新しい方をまるごと採用）。
     ...mergeResumeState(local, remote),
+    // 用語集（目次・索引）：候補フローで増える実データ。id単位でUNION（追記型）。
+    glossaryExtra: mergeById(local?.glossaryExtra, remote?.glossaryExtra),
+    glossaryRemovedIds: mergeIdSet(local?.glossaryRemovedIds, remote?.glossaryRemovedIds),
+    tocCandidates: mergeById(local?.tocCandidates, remote?.tocCandidates),
+    tocHistory: mergeById(local?.tocHistory, remote?.tocHistory),
+    // 経穴カードのSRS：一問一答の本体SRSと同じ形（cardId単位、lastAnswered/dueが新しい方）なので
+    // mergeSrsをそのまま再利用する。
+    flashcardSrs: mergeSrs(local?.flashcardSrs, remote?.flashcardSrs),
   };
 }

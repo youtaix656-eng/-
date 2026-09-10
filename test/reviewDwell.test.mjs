@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   leechSince, leechDwellDays, leechList, leechBySubject,
   firstWrongAt, reviewDwellBySubject, resolvedLeechEvents, resolvedLeechesSince,
+  reviewDwellByMissType, leechListToCsv,
 } from '../src/lib/reviewDwell.js';
 import { LEECH_THRESHOLD, MASTER_STREAK, emptyState } from '../src/lib/srs.js';
 
@@ -128,4 +129,51 @@ test('resolvedLeechesSince: 基準時刻以降のイベント数だけ数える'
   ];
   assert.equal(resolvedLeechesSince(history, Date.now() + 1), 0);
   assert.equal(resolvedLeechesSince(history, start), 1);
+});
+
+test('reviewDwellByMissType: 誤答理由（型）別の平均滞留日数', () => {
+  const now = Date.now();
+  const q1 = { id: 'q1', subject: 'A' };
+  const q2 = { id: 'q2', subject: 'A' };
+  const q3 = { id: 'q3', subject: 'A' }; // 型の記録なし
+  const srs = {
+    q1: { ...emptyState(), wrongCount: 1, correctStreak: 0 },
+    q2: { ...emptyState(), wrongCount: 1, correctStreak: 0 },
+    q3: { ...emptyState(), wrongCount: 1, correctStreak: 0 },
+  };
+  const history = [
+    { questionId: 'q1', correct: false, at: now - 10 * DAY },
+    { questionId: 'q2', correct: false, at: now - 20 * DAY },
+    { questionId: 'q3', correct: false, at: now - 30 * DAY },
+  ];
+  const missTypes = {
+    q1: [{ type: 'careless', at: now - 10 * DAY }],
+    q2: [{ type: 'careless', at: now - 20 * DAY }],
+  };
+  const rows = reviewDwellByMissType([q1, q2, q3], srs, history, missTypes, now);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].type, 'careless');
+  assert.equal(rows[0].avgDays, 15);
+  assert.equal(rows[0].count, 2);
+});
+
+test('leechListToCsv: 科目・問題文・滞留日数のCSVを作る', () => {
+  const list = [
+    { question: { subject: '解剖学', question: '心臓の弁は？' }, dwellDays: 10 },
+    { question: { subject: '生理学', question: 'カンマ,を含む問題文' }, dwellDays: null },
+  ];
+  const csv = leechListToCsv(list);
+  const lines = csv.split('\n');
+  assert.equal(lines[0], '科目,問題文,滞留日数');
+  assert.equal(lines[1], '解剖学,心臓の弁は？,10');
+  assert.equal(lines[2], '生理学,"カンマ,を含む問題文",');
+});
+
+test('reviewDwellByMissType: マスター済み・型未記録は対象外', () => {
+  const now = Date.now();
+  const q1 = { id: 'q1', subject: 'A' };
+  const srs = { q1: { ...emptyState(), wrongCount: 1, correctStreak: MASTER_STREAK } };
+  const history = [{ questionId: 'q1', correct: false, at: now - 10 * DAY }];
+  const missTypes = { q1: [{ type: 'careless', at: now - 10 * DAY }] };
+  assert.deepEqual(reviewDwellByMissType([q1], srs, history, missTypes, now), []);
 });

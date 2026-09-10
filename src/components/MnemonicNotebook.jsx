@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { buildMnemonicEntries } from '../lib/mnemonicEntries.js';
 
@@ -7,7 +7,7 @@ import { buildMnemonicEntries } from '../lib/mnemonicEntries.js';
 //   ふりがな：kwMetaのreading（手入力で確定した読みのみ表示。自動推定は誤読の恐れがあるため行わない）に、
 //   lib/yomi.js の TERM_READINGS（既知の専門用語の読み）をフォールバックとして使う。
 //   一覧の組み立ては lib/mnemonicEntries.js（MnemonicQuiz.jsxと共用）。
-export default function MnemonicNotebook({ store, onToast, onNavigate, onOpenFlashcard }) {
+export default function MnemonicNotebook({ store, onToast, onNavigate, onOpenFlashcard, focusKeyword, onConsumeFocusKeyword }) {
   const { kwMeta, setKeywordMeta, questions, links } = store;
 
   const entries = useMemo(() => buildMnemonicEntries(kwMeta, questions, links), [kwMeta, questions, links]);
@@ -31,6 +31,21 @@ export default function MnemonicNotebook({ store, onToast, onNavigate, onOpenFla
   const [newKw, setNewKw] = useState('');
   const [newMnemonic, setNewMnemonic] = useState('');
   const [newReading, setNewReading] = useState('');
+
+  // 復習画面の弱点タグから「その場登録」で来た場合、追加フォームにキーワードを入れておく
+  // （既に登録済みならそちらの編集を促す。二重登録にならないようにする）。
+  useEffect(() => {
+    if (!focusKeyword) return;
+    if (kwMeta[focusKeyword]) {
+      startEdit(focusKeyword, kwMeta[focusKeyword].mnemonic, kwMeta[focusKeyword].reading);
+      onToast?.(`「${focusKeyword}」は登録済みです。内容を編集できます`);
+    } else {
+      setNewKw(focusKeyword);
+      onToast?.(`「${focusKeyword}」の語呂合わせを登録しましょう`);
+    }
+    onConsumeFocusKeyword?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKeyword]);
 
   const startEdit = (keyword, mnemonic, reading) => {
     setEditing(keyword);

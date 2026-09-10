@@ -45,6 +45,58 @@
   box-sizing: border-box;
 }
 
+/* ---- アクセシビリティ設定（Settings.jsxの「アクセシビリティ」） ---- */
+/* 低モーション：アニメーション・トランジションを最小限にする */
+.app.reduce-motion,
+.app.reduce-motion * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+/* 高コントラスト：薄いグレーの文字・枠線を白へ寄せる（背景は元々黒×白基調のためこの2つが主対象） */
+.app.high-contrast {
+  --text-sub: #ffffff;
+  --text-mute: #ffffff;
+  --border: #ffffff;
+}
+
+/* ---- 印刷（間違いノート・週次の弱点ジャーナル・合格ロードマップ等）----
+   アプリ本体は黒背景×白文字だが、そのまま印刷すると紙・インクの無駄になるため
+   印刷時だけCSS変数を白背景×黒文字へ反転する（各コンポーネントの色指定の多くが
+   var(--bg)/var(--text)等を参照しているため、変数を上書きするだけで大部分に効く）。 */
+@media print {
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f2f2f2;
+    --card: #ffffff;
+    --border: #999999;
+    --text: #000000;
+    --text-sub: #222222;
+    --text-mute: #444444;
+    --navy: #ffffff;
+    --navy-dark: #ffffff;
+  }
+  body, .app {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .app {
+    max-width: 100% !important;
+    padding-bottom: 0 !important;
+  }
+  .bottom-nav,
+  .roadmap-bar,
+  .mini-player,
+  .toast,
+  .reminder-banner,
+  .app-header,
+  .no-print {
+    display: none !important;
+  }
+}
+
 html,
 body {
   margin: 0;
@@ -1028,6 +1080,16 @@ textarea {
   font-weight: 600;
   margin: 4px 0;
   line-height: 1.6;
+}
+/* ブックマーク／先送り／リストから外すの3ボタンが横並びで小さく押しづらいとの指摘への対応。
+   .btn.smは全画面共通のクラスなので、ここだけ広げる（グローバルには触らない）。 */
+.list-item .btn-row {
+  flex-wrap: wrap;
+}
+.list-item .btn-row .btn.ghost.sm {
+  min-height: 40px;
+  padding: 9px 12px;
+  flex: 1 1 auto;
 }
 .list-item .li-memo {
   font-size: 13px;
@@ -3490,8 +3552,10 @@ code.block {
 .compare-note { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
 
 /* ===== 間違いの型（#9） ===== */
-.misstype-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.misstype-btn { flex: 1; min-width: 90px; display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+/* 3件固定（勘違い/知識不足/ケアレス）。折り返すと最後の1件だけ次の行に単独で残り雑然と
+   見えるため、折り返さず横スクロールに統一する（狭い画面でも1行のまま） */
+.misstype-row { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+.misstype-btn { flex: 1 1 0; min-width: 100px; display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 .misstype-btn small { font-weight: 400; font-size: 10px; color: var(--text-mute); }
 .misstype-tag { margin-left: 6px; font-size: 10px; font-weight: 800; color: var(--accent); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; }
 
@@ -3672,3 +3736,22 @@ code.block {
 .kz-freq-cool { background: #fef9c3; color: #854d0e; }
 .kz-freq-none { background: #f1f5f9; color: #64748b; }
 .kz-tb-section .kz-page-body { padding: 0 16px 16px; }
+
+/* ── 用語集（目次・索引） ─────────────────────────── */
+[data-flash] { animation: toc-flash 1.9s ease-out; }
+@keyframes toc-flash {
+  from { background: rgba(55, 182, 204, 0.22); }
+  to { background: transparent; }
+}
+.toc-section-label { font-size: 13px; font-weight: 700; opacity: 0.7; margin: 14px 0 6px; }
+.toc-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.toc-chip { display: inline-flex; align-items: center; gap: 6px; }
+.toc-chip .toc-chip-sub { font-size: 11px; opacity: 0.65; }
+.toc-panel { margin-top: 10px; }
+.toc-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.toc-panel-title { font-size: 17px; font-weight: 700; }
+.toc-panel-reading { font-size: 12px; opacity: 0.6; margin-left: 6px; }
+.toc-dest-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.toc-candidate-row { display: flex; flex-direction: column; gap: 6px; }
+.toc-candidate-errors { color: var(--wrong); font-size: 12px; }
+.toc-history-row { font-size: 12px; opacity: 0.75; padding: 4px 0; border-bottom: 1px solid rgba(128,128,128,0.15); }

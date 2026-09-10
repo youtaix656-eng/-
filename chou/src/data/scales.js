@@ -28,6 +28,58 @@ export const LEVELS = [
 
 export const LEVEL_BY_ID = Object.fromEntries(LEVELS.map((s) => [s.id, s]));
 
+/**
+ * 体を動かしたか。**時間や歩数を数えない**——「何分やれば効く」という基準が手元に無いので、
+ * 自分の感じ方の段だけを残す（出典が挙げる「消化管が働きにくくなる3つの原因」のひとつ）。
+ */
+export const EXERCISE_STEPS = [
+  { id: 'none', label: 'していない', order: 0 },
+  { id: 'little', label: 'すこし動いた', order: 1 },
+  { id: 'some', label: 'まあまあ動いた', order: 2 },
+  { id: 'much', label: 'しっかり動いた', order: 3 },
+];
+
+export const EXERCISE_BY_ID = Object.fromEntries(EXERCISE_STEPS.map((s) => [s.id, s]));
+
+/** ストレス。痛み・張りと同じ4段を使いまわす（段を増やして迷わせない） */
+export const STRESS_LEVELS = LEVELS;
+
+/**
+ * 眠れたか。**時間を数えない**——「何時間で足りる」という基準が手元に無いのと、
+ * 時計の数字より「どう眠れたか」のほうが本人にしか分からないため。
+ */
+export const SLEEP_STEPS = [
+  { id: 'bad', label: 'よく眠れなかった', order: 0 },
+  { id: 'so', label: 'まあまあ', order: 1 },
+  { id: 'good', label: 'よく眠れた', order: 2 },
+];
+
+export const SLEEP_BY_ID = Object.fromEntries(SLEEP_STEPS.map((s) => [s.id, s]));
+
+/**
+ * 姿勢。**採点しない**——出典自身が「ずっと保てなくてよい。気づいたら伸ばす」と言っている。
+ */
+export const POSTURE_STEPS = [
+  { id: 'slouched', label: '前かがみが多かった', order: 0 },
+  { id: 'noticed', label: '気づいて伸ばした', order: 1 },
+  { id: 'kept', label: 'だいたい保てた', order: 2 },
+];
+
+export const POSTURE_BY_ID = Object.fromEntries(POSTURE_STEPS.map((s) => [s.id, s]));
+
+/**
+ * 水分。**「1日◯リットル」という目安を持たない**（README 決まり4。手元に無い基準）。
+ * 数えるのは量ではなく、その日の自分の感じ方の段だけ。
+ * 水分を制限するように言われている持病がある人は、量を変える前に医師に聞く。
+ */
+export const WATER_STEPS = [
+  { id: 'little', label: 'あまり飲めなかった', order: 0 },
+  { id: 'usual', label: 'いつもくらい', order: 1 },
+  { id: 'more', label: 'いつもより多め', order: 2 },
+];
+
+export const WATER_BY_ID = Object.fromEntries(WATER_STEPS.map((s) => [s.id, s]));
+
 /** ブリストルスケール（7段階）。説明は医療の言い方に寄せ、からかう言葉を入れない。
  * `reading` は目次・索引のためのもの（**手で書く。漢字の読みを機械が当てない**）。 */
 export const BRISTOL = [

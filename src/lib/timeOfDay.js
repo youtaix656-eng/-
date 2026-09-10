@@ -48,8 +48,11 @@ export function hourlyPerformance(history = [], { minSample = 10 } = {}) {
 
 // 「今」が自分の最も正答率が高い時間帯に当たっているか（Home.jsxの学習導線に使う）。
 //   単一の正：時間帯の判定はbucketOfだけを経由する（Home.jsx側で境界時刻を再実装しない）。
-export function isNowBestTime(history = [], { minSample = 10, now = new Date() } = {}) {
+//   minAccuracy：他の時間帯より相対的に高いだけでは「集中しやすい時間帯」と言い切れない
+//   （全時間帯が低調な人でも一番マシな帯が選ばれてしまう）。絶対的にも半分以上正解できて
+//   いる帯だけを対象にする（半分未満を「高い傾向」と言うのは実態と逆のメッセージになるため）。
+export function isNowBestTime(history = [], { minSample = 10, minAccuracy = 0.5, now = new Date() } = {}) {
   const { best } = hourlyPerformance(history, { minSample });
-  if (!best) return null;
+  if (!best || best.accuracy < minAccuracy) return null;
   return bucketOf(now.getHours()) === best.id ? best : null;
 }

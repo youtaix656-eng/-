@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useStore } from './lib/useStore.js';
 import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import { daysUntil } from './lib/gamify.js';
-import { haripanReminder } from './data/haripan.js';
+import { haripanReminder, daysSinceLastMockExam } from './data/haripan.js';
 import { daysSinceLastZero } from './lib/reviewZeroLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
 // 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
@@ -43,6 +43,7 @@ const Experiences = lazy(() => import('./components/Experiences.jsx'));
 const MindMap = lazy(() => import('./components/MindMap.jsx'));
 const PastExamTrends = lazy(() => import('./components/PastExamTrends.jsx'));
 const TableOfContents = lazy(() => import('./components/TableOfContents.jsx'));
+const Toc = lazy(() => import('./components/Toc.jsx'));
 const UnreadPages = lazy(() => import('./components/UnreadPages.jsx'));
 const MistakeNote = lazy(() => import('./components/MistakeNote.jsx'));
 const Roadmap = lazy(() => import('./components/Roadmap.jsx'));
@@ -131,6 +132,7 @@ const VIEW_TITLES = {
   cognitivetraining: '認知特性トレーニング',
   g100guide: 'G-100 1〜100周ガイド',
   toc: '目次',
+  glossary: '用語集（目次・索引）',
   settings: '設定',
 };
 
@@ -144,9 +146,23 @@ function triggerDownload(content, filename, type) {
   URL.revokeObjectURL(url);
 }
 
+// PWAのホーム画面アイコン長押しショートカット（manifest.webmanifestのshortcuts）から
+// `?view=xxx` 付きで開かれた時に、その画面から起動する。
+// VIEW_TITLESは見出し表示用の一覧で全画面を網羅していない（journal等が漏れている）ため、
+// 許可リストにはできない。ショートカットの対象は下部ナビの6画面で十分なので、NAVのidだけを許可し、
+// 不正な値は既定の'home'にフォールバックする。
+function initialViewFromUrl() {
+  try {
+    const v = new URLSearchParams(window.location.search).get('view');
+    return v && NAV.some((n) => n.id === v) ? v : 'home';
+  } catch (e) {
+    return 'home';
+  }
+}
+
 export default function App() {
   const store = useStore();
-  const [view, setView] = useState('home');
+  const [view, setView] = useState(initialViewFromUrl);
   const [toast, setToast] = useState(null);
   const [importText, setImportText] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -155,6 +171,7 @@ export default function App() {
   const [quizAutoResume, setQuizAutoResume] = useState(false);
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [focusFlashcardKeyword, setFocusFlashcardKeyword] = useState(null);
+  const [focusMnemonicKeyword, setFocusMnemonicKeyword] = useState(null);
   const [ocrInitialImage, setOcrInitialImage] = useState(null);
   const [focusGraphConcept, setFocusGraphConcept] = useState(null);
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
@@ -303,7 +320,8 @@ export default function App() {
       const body = haripanReminder(
         store.settings.examDate,
         (store.dueReviewQuestions || []).length,
-        daysSinceLastZero(store.reviewZeroLog)
+        daysSinceLastZero(store.reviewZeroLog),
+        daysSinceLastMockExam(store.examResults)
       );
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -384,6 +402,11 @@ export default function App() {
   const openFlashcardKeyword = (kw) => {
     setFocusFlashcardKeyword(kw);
     setView('flashcards');
+  };
+  // 復習画面の弱点タグ→語呂合わせノートへの「その場登録」導線（openFlashcardKeywordと同じ型）。
+  const openMnemonicKeyword = (kw) => {
+    setFocusMnemonicKeyword(kw);
+    setView('mnemonics');
   };
   // 連結学習→知識グラフへの連携（同じく「一度だけ消費」の型）。
   const openGraphConcept = (concept) => {
@@ -485,7 +508,9 @@ export default function App() {
     );
   }
 
-  const reviewCount = store.reviewQuestions.length;
+  // 復習の総数（reviewQuestions）だと常に「99+」に張り付いて達成感が無いという指摘のため、
+  // 下部ナビのバッジは「今日やるべき件数」（期限が来ているものだけ）に限定する。
+  const reviewCount = store.dueReviewQuestions.length;
   const needBackup =
     (store.settings.answersSinceBackup || 0) >= (store.settings.backupReminderEvery || 50);
   // #22：学習セッション（10・60・300・900）を実際に解いている最中はバナーを出さない
@@ -495,6 +520,11 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case 'home':
+      default:
+        // 未知のview（壊れたlastView等）はここへ落ちるが、以前はhomeと別々にpropsを
+        // 渡していたため、この経路だけonQuickReview・onGoAudioReview・installPrompt等が
+        // 欠けたまま劣化したHomeが描画されていた（チップを押しても何も起きない）。
+        // 同じ1つのJSXを両方のcaseで使うことで、以後この種のズレを起こさないようにする。
         return (
           <Home
             store={store}
@@ -559,6 +589,9 @@ export default function App() {
             }}
             quickStartCount={reviewQuickStart}
             onConsumeQuickStart={() => setReviewQuickStart(null)}
+            onOpenGraphConcept={openGraphConcept}
+            onOpenFlashcardKeyword={openFlashcardKeyword}
+            onOpenMnemonicKeyword={openMnemonicKeyword}
           />
         );
       case 'audio':
@@ -576,7 +609,7 @@ export default function App() {
       case 'choicequiz':
         return <ChoiceQuiz store={store} onStartQuiz={startCustomQuiz} />;
       case 'dashboard':
-        return <Dashboard store={store} />;
+        return <Dashboard store={store} onNavigate={setView} />;
       case 'analytics':
         return <Analytics store={store} onNavigate={setView} onToast={showToast} />;
       case 'journal':
@@ -689,7 +722,14 @@ export default function App() {
         return <KeizetsuPageImages onToast={showToast} onNavigate={setView} onSendToOcr={sendPhotoToOcr} />;
       case 'mnemonics':
         return (
-          <MnemonicNotebook store={store} onToast={showToast} onNavigate={setView} onOpenFlashcard={openFlashcardKeyword} />
+          <MnemonicNotebook
+            store={store}
+            onToast={showToast}
+            onNavigate={setView}
+            onOpenFlashcard={openFlashcardKeyword}
+            focusKeyword={focusMnemonicKeyword}
+            onConsumeFocusKeyword={() => setFocusMnemonicKeyword(null)}
+          />
         );
       case 'mnemonicquiz':
         return <MnemonicQuiz store={store} onNavigate={setView} />;
@@ -709,7 +749,19 @@ export default function App() {
       case 'g100guide':
         return <G100Guide store={store} onNavigate={setView} />;
       case 'toc':
-        return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} />;
+        return <TableOfContents store={store} onStartQuiz={startCustomQuiz} onOpenKeyword={openKeyword} onNavigate={setView} />;
+      case 'glossary':
+        return (
+          <Toc
+            store={store}
+            onToast={showToast}
+            onNavigate={setView}
+            onOpenKeyword={openKeyword}
+            onOpenGraphConcept={openGraphConcept}
+            onOpenFlashcardKeyword={openFlashcardKeyword}
+            onStartCustomQuiz={startCustomQuiz}
+          />
+        );
       case 'connect':
         return (
           <ConnectedLearning
@@ -731,17 +783,23 @@ export default function App() {
             onNavigate={setView}
           />
         );
-      default:
-        return <Home store={store} onNavigate={setView} onJumpToRoadmapLevel={jumpToRoadmapLevel} onStartSubjectQuiz={startSubjectQuiz} />;
     }
   };
 
   const headerTitle = () => VIEW_TITLES[view] || '鍼灸国試 対策アプリ';
 
   const pomoOn = !!(store.settings.pomodoro && store.settings.pomodoro.enabled);
+  const a11y = store.settings.a11y || {};
+  const fontScale = a11y.fontScale || 1;
+  const appClassName = [
+    'app',
+    pomoOn ? 'has-pomo' : '',
+    a11y.reduceMotion ? 'reduce-motion' : '',
+    a11y.highContrast ? 'high-contrast' : '',
+  ].filter(Boolean).join(' ');
 
   return (
-    <div className={`app${pomoOn ? ' has-pomo' : ''}`}>
+    <div className={appClassName} style={fontScale !== 1 ? { zoom: fontScale } : undefined}>
       <Suspense fallback={null}>
         <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
       </Suspense>

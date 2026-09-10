@@ -113,6 +113,31 @@ function LegSanriBlank() {
   );
 }
 
+// 投球動作の4局面（早期コッキング期・後期コッキング期・加速期・フォロースルー期）を
+// 簡略化した棒人間で並べた模式図。関節角度は厳密な計測値ではなく、各局面の
+// 見分け（腕の位置・向き）が分かる程度の簡略表現。赤い線＝投球側の上肢。
+function PitchingPhases() {
+  const pose = (cx, handDx, handDy, label) => (
+    <g key={label}>
+      <circle cx={cx} cy="34" r="11" fill="#fde9d9" stroke="#334155" strokeWidth="1.3" />
+      <line x1={cx} y1="45" x2={cx} y2="100" stroke="#334155" strokeWidth="3" strokeLinecap="round" />
+      <line x1={cx - 13} y1="128" x2={cx} y2="100" stroke="#334155" strokeWidth="3" strokeLinecap="round" />
+      <line x1={cx + 13} y1="128" x2={cx} y2="100" stroke="#334155" strokeWidth="3" strokeLinecap="round" />
+      <line x1={cx} y1="55" x2={cx + handDx} y2={55 + handDy} stroke="#ef4444" strokeWidth="3.5" strokeLinecap="round" />
+      <circle cx={cx + handDx} cy={55 + handDy} r="4" fill="#ef4444" />
+      <text x={cx} y="145" textAnchor="middle" fontSize="9.5" fill="#0f172a">{label}</text>
+    </g>
+  );
+  return (
+    <Frame title="投球動作の4局面（模式図・簡略化）" viewBox="0 0 240 155">
+      {pose(28, -8, -30, '早期コッキング')}
+      {pose(88, -30, -8, '後期コッキング')}
+      {pose(148, 34, -10, '加速期')}
+      {pose(208, 30, 26, 'フォロースルー')}
+    </Frame>
+  );
+}
+
 export const FIGURES = {
   spine: Spine,
   heart: Heart,
@@ -120,6 +145,7 @@ export const FIGURES = {
   'leg-sanri': LegSanri,
   'hand-goukoku-blank': HandGoukokuBlank,
   'leg-sanri-blank': LegSanriBlank,
+  'pitching-phases': PitchingPhases,
 };
 
 // キーから図コンポーネントを返す（無ければ null）

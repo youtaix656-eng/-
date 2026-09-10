@@ -35,24 +35,33 @@ export interface Plan {
   /** 段階の順番。null は並列の選択肢（週末だけ） */
   step: number | null;
   caution?: string;
+  /** 目次の読み（漢字を含むなら必須。**自動推定しない**） */
+  reading?: string;
+  /** 別の呼び名。目次で別名からも引けるようにする（data/toc.ts） */
+  aliases?: string[];
 }
 
 export const PLANS: Plan[] = [
   {
     id: 'three',
     label: '1日3食のまま',
+    reading: '',
     summary: '時間と量だけ見る段階。まずは食べ終わりの時刻と、腹八分目を記録するところから。',
     step: 0,
   },
   {
     id: 'two',
     label: '朝を抜く（1日2食）',
+    reading: 'あさをぬく',
+    aliases: ['朝食抜き', '1日2食'],
     summary: '出典が「まずここから」としている段階。水・お茶・コーヒーは飲んでよい（砂糖とミルクは入れない）。',
     step: 1,
   },
   {
     id: 'one',
     label: '1日1食',
+    reading: '',
+    aliases: ['一日一食', 'ワンミール'],
     summary: '2食に慣れてから。**その1食は腹八分目に抑える**（1食にしたぶんドカ食いをすると、かえって胃に負担がかかる）。',
     step: 2,
     caution: '出典も「1日1食にしたからといって、いくらでも食べていいわけではない」と繰り返し書いています。',
@@ -60,6 +69,7 @@ export const PLANS: Plan[] = [
   {
     id: 'weekend',
     label: '週末だけ整える',
+    reading: 'しゅうまつだけととのえる',
     summary: '会食や接待で平日は難しい人向けに、出典が挙げている選び方。休みの日だけ食事を軽くする。',
     step: null,
   },
@@ -136,12 +146,12 @@ export const FULLNESS_OPTIONS = [
 
 /** 始める前に確認すること。1つでも当てはまるなら、まず医師に相談してから */
 export const PRECHECKS = [
-  { id: 'blood_sugar', label: '血糖に関わる持病がある（糖尿病・低血糖など）' },
-  { id: 'medication', label: '食事の時間に関わる薬を飲んでいる' },
-  { id: 'pregnant', label: '妊娠中・授乳中' },
-  { id: 'growing', label: '成長期にあたる' },
-  { id: 'eating_disorder', label: '摂食障害の経験がある、または食事のことを考えすぎてしまう' },
-  { id: 'underweight', label: '体重が少なめ、または最近減り続けている' },
+  { id: 'blood_sugar', label: '血糖に関わる持病がある（糖尿病・低血糖など）', reading: 'けっとうにかかわるじびょう' },
+  { id: 'medication', label: '食事の時間に関わる薬を飲んでいる', reading: 'しょくじのじかんにかかわるくすり' },
+  { id: 'pregnant', label: '妊娠中・授乳中', reading: 'にんしんちゅうじゅにゅうちゅう' },
+  { id: 'growing', label: '成長期にあたる', reading: 'せいちょうき' },
+  { id: 'eating_disorder', label: '摂食障害の経験がある、または食事のことを考えすぎてしまう', reading: 'せっしょくしょうがいのけいけん' },
+  { id: 'underweight', label: '体重が少なめ、または最近減り続けている', reading: 'たいじゅうがすくなめ' },
 ];
 
 export const PRECHECK_NOTICE =
@@ -150,12 +160,12 @@ export const PRECHECK_NOTICE =
 
 /** 止めどきのサイン。出典の「辛い・苦しいと感じないようにする」を具体的にしたもの */
 export const STOP_SIGNS = [
-  { id: 'dizzy', label: 'ふらつく・めまいがする' },
-  { id: 'foggy', label: '頭がぼんやりして集中できない' },
-  { id: 'low_mood', label: '気分が落ち込む・いらいらする' },
-  { id: 'obsessed', label: '食べ物のことばかり考えてしまう' },
-  { id: 'losing', label: '体重が減り続けている' },
-  { id: 'daily_life', label: '仕事や勉強に支障が出ている' },
+  { id: 'dizzy', label: 'ふらつく・めまいがする', reading: 'ふらつくめまいがする' },
+  { id: 'foggy', label: '頭がぼんやりして集中できない', reading: 'あたまがぼんやりする' },
+  { id: 'low_mood', label: '気分が落ち込む・いらいらする', reading: 'きぶんがおちこむ' },
+  { id: 'obsessed', label: '食べ物のことばかり考えてしまう', reading: 'たべもののことばかりかんがえる' },
+  { id: 'losing', label: '体重が減り続けている', reading: 'たいじゅうがへりつづける' },
+  { id: 'daily_life', label: '仕事や勉強に支障が出ている', reading: 'しごとやべんきょうにししょうがでる' },
 ];
 
 export const STOP_SIGN_MAP = Object.fromEntries(STOP_SIGNS.map((s) => [s.id, s]));
@@ -269,26 +279,36 @@ export function summarizeMeals(records: (DayRecord | undefined)[], settings: Set
 export const UNVERIFIED_CLAIMS = [
   {
     id: 'detox',
+    short: '断食で毒を排泄する',
+    reading: 'だんじきでどくをはいせつする',
     claim: '断食で脳から食品添加物・重金属・農薬などの毒を排泄でき、頭がクリアになる',
     note: '「毒を排泄する」という説明の裏は取れていません。空腹の時間で集中しやすいと感じる人はいますが、毒が抜けるからだとは言えません。',
   },
   {
     id: 'marathon',
+    short: '消化はフルマラソン相当',
+    reading: 'しょうかはふるまらそんそうとう',
     claim: '1食ぶんの消化に、フルマラソンを走った後に相当するエネルギーを使う',
     note: 'この比較の裏は取れていません。消化にエネルギーを使うこと自体は知られていますが、数字はそのまま受け取らないでください。',
   },
   {
     id: 'meat',
+    short: '肉は腸内で腐敗する',
+    reading: 'にくはちょうないでふはいする',
     claim: '肉は腸内で腐敗してアンモニアを発生させ、炎症やがんの原因になる',
     note: '争いのある主張です。食べる量を見直すのは構いませんが、この説明を理由に食品を断つ前に、確かな情報を確認してください。',
   },
   {
     id: 'milk',
+    short: '牛乳のカゼインに発がん性',
+    reading: 'ぎゅうにゅうのかぜいん',
     claim: '牛乳のカゼインに発がん性があり、飲むほど骨粗しょう症・骨折が増える',
     note: '争いのある主張です。持病がある場合や、栄養が偏る心配がある場合は、自己判断ではなく医師・管理栄養士に相談してください。',
   },
   {
     id: 'weight',
+    short: '1日1食でも痩せすぎない',
+    reading: '',
     claim: '1日1食にしても体は適応するので、痩せすぎることはない',
     note: '個人差があります。体重が減り続ける場合は「適応の途中」と考えず、いったん戻してください。',
   },

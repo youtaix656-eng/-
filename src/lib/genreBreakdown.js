@@ -9,5 +9,10 @@ export function buildGenreBreakdown(pairs) {
     byGenre[g].total += 1;
     if (correct) byGenre[g].correct += 1;
   }
-  return Object.entries(byGenre).sort((x, y) => (x[1].correct / x[1].total) - (y[1].correct / y[1].total));
+  // 並び順はラプラススムージング（(correct+1)/(total+2)）の昇順にする。全科目セッション等では
+  // ほとんどのジャンルがn=1になりがちで、素の正答率だけで並べると「たまたま1問外しただけ」の
+  // ジャンルが0%として最上位（最も苦手扱い）に来てしまう。表示する数値（正答率・件数）自体は
+  // 素のcorrect/totalのまま変えない。
+  const smoothed = (s) => (s.correct + 1) / (s.total + 2);
+  return Object.entries(byGenre).sort((x, y) => smoothed(x[1]) - smoothed(y[1]));
 }

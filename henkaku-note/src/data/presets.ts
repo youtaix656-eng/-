@@ -9,6 +9,8 @@ import type { Habit } from '../types/index.js';
 export interface KnowledgeSource {
   id: string;
   label: string;
+  /** 目次の読み（漢字を含むなら必須。**自動推定しない**） */
+  reading: string;
   /** どこから来た内容か。あとから「これは誰が言ったことか」を追えるようにする */
   origin: string;
   receivedAt: string;
@@ -19,6 +21,7 @@ export interface KnowledgeSource {
 export const MEDITATION_SOURCE: KnowledgeSource = {
   id: 'meditation-2026-08',
   label: '瞑想の効果（要約）',
+  reading: 'めいそうのこうか',
   origin: '動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
   receivedAt: '2026-08-21',
   caution:
@@ -29,6 +32,7 @@ export const MEDITATION_SOURCE: KnowledgeSource = {
 export const CONDITION_SOURCE: KnowledgeSource = {
   id: 'saikou-no-taichou-2026-08',
   label: '最高の体調（鈴木祐）の解説',
+  reading: 'さいこうのたいちょう',
   origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
   receivedAt: '2026-08-30',
   caution:
@@ -39,6 +43,7 @@ export const CONDITION_SOURCE: KnowledgeSource = {
 export const MEAL_SOURCE: KnowledgeSource = {
   id: 'chou-shoushoku-2026-09',
   label: 'できる男は超小食（解説）',
+  reading: 'できるおとこはちょうしょうしょく',
   origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
   receivedAt: '2026-09-02',
   caution:
@@ -50,6 +55,7 @@ export const MEAL_SOURCE: KnowledgeSource = {
 export const MONK_SOURCE: KnowledgeSource = {
   id: 'monk-mode-2026-09',
   label: 'モンクモード（海外式）',
+  reading: 'もんくもーど',
   origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
   receivedAt: '2026-09-02',
   caution:
@@ -60,6 +66,7 @@ export const MONK_SOURCE: KnowledgeSource = {
 export const ROUTINE_SOURCE: KnowledgeSource = {
   id: 'morning-routine-2026-09',
   label: '人生を変えるモーニングメソッド（解説）',
+  reading: 'じんせいをかえるもーにんぐめそっど',
   origin: '解説動画の内容を本人がまとめた要約（このアプリの利用者が入力）',
   receivedAt: '2026-09-02',
   caution:

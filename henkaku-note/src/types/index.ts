@@ -249,4 +249,10 @@ export interface AppState {
    * 日・週・月で同じ仕組みを使い、3か所に別の実装を持たない。
    */
   threeRules?: Record<string, string[]>;
+  /**
+   * 目次（索引）の、端末内で足した項目・消した項目・候補・履歴。
+   * 形は lib/tocStore.ts の TocUserData（import すると型が循環するので unknown で持ち、
+   * 読み書きは normalizeTocData を必ず通す）。
+   */
+  toc?: unknown;
 }

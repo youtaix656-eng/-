@@ -6,6 +6,7 @@ import {
 import { hasAudioLink } from '../lib/audioLink';
 import { HABIT_PRESETS, MEDITATION_SOURCE, presetToHabit } from '../data/presets';
 import type { AppState, Habit } from '../types';
+import { ANCHORS } from '../data/anchors';
 
 interface Props {
   state: AppState;
@@ -90,7 +91,7 @@ export default function HabitsView({ state }: Props) {
 
   return (
     <div className="stack">
-      <div className="card">
+      <div className="card" id={ANCHORS.habitsList}>
         <h2>習慣</h2>
         <p className="small muted" style={{ margin: 0 }}>
           初期値は「ゴーストモード」の7ステップです。あなたの生活に合わせて、書き換えても増やしても構いません。
@@ -102,7 +103,7 @@ export default function HabitsView({ state }: Props) {
         </button>
       </div>
 
-      <div className="card">
+      <div className="card" id={ANCHORS.habitPresets}>
         <h3>学んだことから足す</h3>
         <p className="small muted" style={{ margin: 0 }}>
           取り込んだ内容を、そのまま習慣にできます。効果の断定はせず、注意点も一緒に持ちます。

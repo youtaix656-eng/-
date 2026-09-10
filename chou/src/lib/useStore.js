@@ -16,15 +16,32 @@ import {
   undoLastTocAdditions,
   setVerified,
 } from './tocCandidates.js';
+import { emptyProbiotic, normalizeProbiotic } from './probiotic.js';
+import { normalizeEliminations, normalizeElimination, canStart, running } from './elimination.js';
 import { emptyDay, normalizeDays, normalizeDay, newId } from './days.js';
-import { todayKey } from './dates.js';
+import { normalizePeriods, normalizePeriod } from './periods.js';
+import { normalizeVisits, normalizeVisit } from './visits.js';
+import { normalizeErrors, makeEntry, addEntry } from './errorLog.js';
+import { todayKey, shiftKey } from './dates.js';
 
 const EMPTY = {
   days: {},
   foodResults: {},
-  settings: { theme: 'auto' },
+  // 見た目・読みやすさ。**既定はいまと同じ**（足した項目で見た目が勝手に変わらない）
+  settings: { theme: 'auto', textSize: 'normal', reduceMotion: false, contrast: 'normal', speak: false, voiceInput: false },
   // 目次まわり。**候補は本体（userTerms）とは別に持つ**——「追加する」を押すまで目次に出さない
   ...emptyTocState(),
+  // 整腸剤（飲んでいるもの1つ）と、調味料の棚おろし
+  probiotic: emptyProbiotic(),
+  seasonings: {},
+  // ためしにやめてみた期間（小麦・乳製品など）。**同時に走るのは1件だけ**
+  eliminations: [],
+  // いつもと違う期間の印（旅行・薬が変わった…）。**印だけで、判定はしない**
+  periods: [],
+  // 通院の予定・聞きたいこと・受診のあと。**通知は鳴らさない**
+  visits: [],
+  // 端末内のエラー（外へ送らない）
+  errors: [],
 };
 
 /** 消したものを戻せる時間 */
@@ -39,6 +56,12 @@ function hydrate(raw) {
     userTerms: Array.isArray(raw.userTerms) ? raw.userTerms.filter((t) => t && t.id && t.title) : [],
     removedIds: Array.isArray(raw.removedIds) ? raw.removedIds.filter((id) => typeof id === 'string') : [],
     tocHistory: Array.isArray(raw.tocHistory) ? raw.tocHistory.filter((h) => h && h.id) : [],
+    probiotic: normalizeProbiotic(raw.probiotic),
+    seasonings: raw.seasonings && typeof raw.seasonings === 'object' ? { ...raw.seasonings } : {},
+    eliminations: normalizeEliminations(raw.eliminations),
+    periods: normalizePeriods(raw.periods),
+    visits: normalizeVisits(raw.visits),
+    errors: normalizeErrors(raw.errors),
   };
 }
 
@@ -130,6 +153,42 @@ export function useStore() {
     [updateDay],
   );
 
+  /** たべものの時刻・中身をあとから直す（お通じと同じように直せるようにする） */
+  const updateMeal = useCallback(
+    (date, id, patch) => {
+      updateDay(date, (day) => ({
+        ...day,
+        meals: day.meals.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+      }));
+    },
+    [updateDay],
+  );
+
+  /**
+   * 前の日をひな形にする（提案4）。**自動では入れない**——押した時だけ、
+   * 段の項目だけを写す。お通じ・たべもの・ひとことは日ごとに違うので写さない。
+   */
+  const copyPreviousDay = useCallback(
+    (date) => {
+      const prevKey = shiftKey(date, -1);
+      const prev = state.days[prevKey];
+      if (!prev) return false;
+      updateDay(date, (day) => ({
+        ...day,
+        belly: day.belly || prev.belly,
+        pain: day.pain || prev.pain,
+        bloat: day.bloat || prev.bloat,
+        stress: day.stress || prev.stress,
+        exercise: day.exercise || prev.exercise,
+        sleep: day.sleep || prev.sleep,
+        posture: day.posture || prev.posture,
+        water: day.water || prev.water,
+      }));
+      return true;
+    },
+    [state.days, updateDay],
+  );
+
   const removeMeal = useCallback(
     (date, id) => {
       let removed = null;
@@ -169,6 +228,51 @@ export function useStore() {
       if (!result || next[name] === result) delete next[name];
       else next[name] = result;
       return { ...prev, foodResults: next };
+    });
+  }, []);
+
+  /** 飲んでいる整腸剤（1つだけ）。**効いたかは記録しない**——残すのは何をいつから、まで */
+  const setProbiotic = useCallback((patch) => {
+    setState((prev) => ({ ...prev, probiotic: normalizeProbiotic({ ...prev.probiotic, ...patch }) }));
+  }, []);
+
+  /**
+   * ためしにやめてみるのを始める。**2つ同時には始めない**——どちらが効いたのか
+   * 分からなくなるため。断るだけで、**勝手に入れ替えない**（`canStart` を見て返す）。
+   */
+  const startElimination = useCallback((targetId, startedOn) => {
+    const check = canStart(state.eliminations, targetId);
+    if (!check.ok) return check;
+    const entry = normalizeElimination({ targetId, startedOn: startedOn || todayKey() });
+    if (!entry) return { ok: false, reason: '始める日が正しくありません。' };
+    setState((prev) => ({ ...prev, eliminations: [...prev.eliminations, entry] }));
+    return { ok: true, reason: '' };
+  }, [state.eliminations]);
+
+  /** 終える。**採点しない**——終えた日とひとことだけを残す */
+  const endElimination = useCallback((id, endedOn, note) => {
+    setState((prev) => ({
+      ...prev,
+      eliminations: prev.eliminations.map((e) =>
+        e.id === id
+          ? normalizeElimination({ ...e, endedOn: endedOn || todayKey(), note: note === undefined ? e.note : note })
+          : e,
+      ).filter(Boolean),
+    }));
+  }, []);
+
+  /** 消す（作った記録は必ず消せるようにする） */
+  const removeElimination = useCallback((id) => {
+    setState((prev) => ({ ...prev, eliminations: prev.eliminations.filter((e) => e.id !== id) }));
+  }, []);
+
+  /** 調味料の棚おろし。**採点しない**——押した本人の答えを残すだけ */
+  const setSeasoning = useCallback((id, choice) => {
+    setState((prev) => {
+      const next = { ...prev.seasonings };
+      if (!choice || next[id] === choice) delete next[id];
+      else next[id] = choice;
+      return { ...prev, seasonings: next };
     });
   }, []);
 
@@ -224,6 +328,109 @@ export function useStore() {
     [state],
   );
 
+  // ── いつもと違う期間の印（提案6）。**印だけで、症状の理由を決めない** ──
+  const addPeriod = useCallback((raw) => {
+    const entry = normalizePeriod({ ...raw, id: newId('p') });
+    if (!entry) return false;
+    setState((prev) => ({ ...prev, periods: normalizePeriods([...prev.periods, entry]) }));
+    return true;
+  }, []);
+
+  const updatePeriod = useCallback((id, patch) => {
+    setState((prev) => ({
+      ...prev,
+      periods: normalizePeriods(prev.periods.map((p) => (p.id === id ? { ...p, ...patch } : p))),
+    }));
+  }, []);
+
+  const removePeriod = useCallback(
+    (id) => {
+      setState((prev) => {
+        const back = prev.periods.find((p) => p.id === id);
+        if (!back) return prev;
+        offerUndo('いつもと違う期間の印を1件消しました', () =>
+          setState((cur) => ({ ...cur, periods: normalizePeriods([...cur.periods, back]) })),
+        );
+        return { ...prev, periods: prev.periods.filter((p) => p.id !== id) };
+      });
+    },
+    [offerUndo],
+  );
+
+  // ── 通院（提案14〜16）。**通知は鳴らさない**（サーバーを持たないので約束できない） ──
+  const addVisit = useCallback((raw) => {
+    const entry = normalizeVisit({ ...raw, id: newId('v') });
+    if (!entry) return false;
+    setState((prev) => ({ ...prev, visits: normalizeVisits([...prev.visits, entry]) }));
+    return true;
+  }, []);
+
+  const updateVisit = useCallback((id, patch) => {
+    setState((prev) => ({
+      ...prev,
+      visits: normalizeVisits(
+        prev.visits.map((v) => (v.id === id ? { ...v, ...(typeof patch === 'function' ? patch(v) : patch) } : v)),
+      ),
+    }));
+  }, []);
+
+  const removeVisit = useCallback(
+    (id) => {
+      setState((prev) => {
+        const back = prev.visits.find((v) => v.id === id);
+        if (!back) return prev;
+        offerUndo('通院の記録を1件消しました', () =>
+          setState((cur) => ({ ...cur, visits: normalizeVisits([...cur.visits, back]) })),
+        );
+        return { ...prev, visits: prev.visits.filter((v) => v.id !== id) };
+      });
+    },
+    [offerUndo],
+  );
+
+  /** 聞きたいこと。**採点も並べ替えもしない**（書いた順のまま） */
+  const addQuestion = useCallback(
+    (visitId, text) => {
+      updateVisit(visitId, (v) => ({
+        ...v,
+        questions: [...v.questions, { id: newId('q'), text, asked: false }],
+      }));
+    },
+    [updateVisit],
+  );
+
+  const toggleQuestion = useCallback(
+    (visitId, questionId) => {
+      updateVisit(visitId, (v) => ({
+        ...v,
+        questions: v.questions.map((q) => (q.id === questionId ? { ...q, asked: !q.asked } : q)),
+      }));
+    },
+    [updateVisit],
+  );
+
+  const removeQuestion = useCallback(
+    (visitId, questionId) => {
+      updateVisit(visitId, (v) => ({ ...v, questions: v.questions.filter((q) => q.id !== questionId) }));
+    },
+    [updateVisit],
+  );
+
+  // ── 端末内のエラー（外へ送らない） ──
+  const logError = useCallback((where, error) => {
+    const entry = makeEntry({
+      where,
+      message: error && error.message ? error.message : String(error || ''),
+      detail: error && error.stack ? String(error.stack).split('\n').slice(1, 3).join(' ') : '',
+    });
+    if (!entry) return;
+    setState((prev) => ({ ...prev, errors: addEntry(prev.errors, entry) }));
+  }, []);
+
+  const clearErrors = useCallback(() => {
+    setState((prev) => ({ ...prev, errors: [] }));
+  }, []);
+
   const clearAll = useCallback(() => {
     clear();
     setState(hydrate(EMPTY));
@@ -241,6 +448,11 @@ export function useStore() {
       settings: state.settings,
       userTerms: state.userTerms,
       removedIds: state.removedIds,
+      probiotic: state.probiotic,
+      seasonings: state.seasonings,
+      eliminations: state.eliminations,
+      periods: state.periods,
+      visits: state.visits,
     }),
     [state],
   );
@@ -274,6 +486,15 @@ export function useStore() {
           ),
         ],
         removedIds: [...new Set([...prev.removedIds, ...(Array.isArray(raw.removedIds) ? raw.removedIds : [])])],
+        // **今あるものを消さない**——同じ id はこちらを残す
+        periods: normalizePeriods([
+          ...prev.periods,
+          ...normalizePeriods(raw.periods).filter((p) => !prev.periods.some((mine) => mine.id === p.id)),
+        ]),
+        visits: normalizeVisits([
+          ...prev.visits,
+          ...normalizeVisits(raw.visits).filter((v) => !prev.visits.some((mine) => mine.id === v.id)),
+        ]),
       };
     });
     return { ok: true, added, updated };
@@ -290,10 +511,29 @@ export function useStore() {
     updateStool,
     removeStool,
     addMeal,
+    updateMeal,
     removeMeal,
+    copyPreviousDay,
     removeDay,
     setFoodResult,
     setSettings,
+    setProbiotic,
+    setSeasoning,
+    startElimination,
+    endElimination,
+    removeElimination,
+    addPeriod,
+    updatePeriod,
+    removePeriod,
+    addVisit,
+    updateVisit,
+    removeVisit,
+    addQuestion,
+    toggleQuestion,
+    removeQuestion,
+    logError,
+    clearErrors,
+    runningElimination: running(state.eliminations),
     addTocCandidate,
     acceptTocCandidate,
     rejectTocCandidate,

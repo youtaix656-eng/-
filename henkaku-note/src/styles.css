@@ -248,7 +248,7 @@ input[type='time'] { font-family: var(--mono); }
   left: 0; right: 0; bottom: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   background: rgba(16, 20, 43, 0.96);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
@@ -286,3 +286,44 @@ input[type='time'] { font-family: var(--mono); }
   margin-left: 6px;
 }
 .cond-body .section-title { margin-top: 2px; }
+
+/* ---- 目次・索引 ---- */
+.toc-item {
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  background: rgba(16, 20, 43, 0.55); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 10px 12px; cursor: pointer;
+  color: var(--paper); font-family: var(--sans);
+}
+.toc-item:hover { border-color: var(--indigo); }
+.toc-title { font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.toc-sub, .toc-alias { font-size: 0.78rem; color: var(--mist); }
+.toc-alias { font-style: italic; }
+
+.toc-panel {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(16, 20, 43, 0.72); padding: 12px;
+  overflow-y: auto;
+}
+.toc-panel > .card { width: 100%; max-width: var(--max-w); margin-bottom: 84px; }
+
+.link-btn {
+  background: none; border: 0; padding: 0 4px; cursor: pointer;
+  color: var(--dawn); font-family: var(--sans); font-size: inherit; text-decoration: underline;
+}
+
+/* 目次から運んだ先を一時的に光らせる。
+   **印は class ではなく属性で付ける**（開閉で className が書き直されても消えないため） */
+[data-flash] {
+  outline: 2px solid var(--dawn);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+  animation: toc-flash 1.9s ease-out;
+}
+@keyframes toc-flash {
+  0% { background: rgba(232, 163, 61, 0.28); }
+  100% { background: transparent; }
+}
+
+/* 飛び先が固定ヘッダー・ナビに隠れないように（rem で持つ。px 決め打ちだと文字を大きくした時に隠れる） */
+[id^='anchor-'], [id^='toc-row-'] { scroll-margin-top: 4.5rem; scroll-margin-bottom: 6rem; }

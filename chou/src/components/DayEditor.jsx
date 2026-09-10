@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
-import { BELLY_STEPS, LEVELS, STOOL_MARKS } from '../data/scales.js';
-import { nowTime } from '../lib/dates.js';
+import React, { useRef, useState } from 'react';
+import {
+  BELLY_STEPS,
+  LEVELS,
+  EXERCISE_STEPS,
+  SLEEP_STEPS,
+  POSTURE_STEPS,
+  WATER_STEPS,
+  STOOL_MARKS,
+} from '../data/scales.js';
+import { OTC_KINDS } from '../data/otcDrugs.js';
+import { nowTime, shiftKey } from '../lib/dates.js';
 import { flagMarksOf } from '../lib/days.js';
+import { canListen, listenOnce, VOICE_HELP } from '../lib/voice.js';
 import BristolPicker from './Bristol.jsx';
 
 // 1日ぶんの入力。**ホームの「きょう」とカレンダーの日別の両方でこれを使う**
@@ -30,6 +40,36 @@ function Choice({ label, options, value, onChange, name, id }) {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * 声で入れる（提案30）。**既定オフのオプトイン**で、設定でONにした時だけ出る。
+ * 使えない端末では出さない（押しても何も起きないボタンを作らない）。
+ */
+function VoiceButton({ on, onText, onError }) {
+  const [listening, setListening] = useState(false);
+  const ref = useRef(null);
+  if (!on || !canListen()) return null;
+  const start = () => {
+    if (listening) {
+      if (ref.current) ref.current.stop();
+      return;
+    }
+    setListening(true);
+    ref.current = listenOnce({
+      onText,
+      onError: (msg) => {
+        setListening(false);
+        if (onError) onError(msg);
+      },
+      onEnd: () => setListening(false),
+    });
+  };
+  return (
+    <button type="button" className="ghost small" onClick={start} aria-pressed={listening}>
+      {listening ? '聞いています（押すと止める）' : '声で入れる'}
+    </button>
   );
 }
 
@@ -70,9 +110,13 @@ function StoolRow({ stool, onChange, onRemove }) {
   );
 }
 
-export default function DayEditor({ date, day, store, suggestions = [], onOpenRedFlags }) {
+export default function DayEditor({ date, day, store, suggestions = [], onOpenRedFlags, onOpenCombine }) {
   const [mealText, setMealText] = useState('');
+  const [voiceError, setVoiceError] = useState('');
+  const [copied, setCopied] = useState('');
   const flags = flagMarksOf(day);
+  const voiceOn = Boolean(store.settings.voiceInput);
+  const hasPrev = Boolean(store.days[shiftKey(date, -1)]);
 
   const addMeal = () => {
     const text = mealText.trim();
@@ -83,6 +127,22 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
 
   return (
     <div className="day-editor">
+      {hasPrev && (
+        <div className="row" id="rec-copy">
+          <button
+            type="button"
+            className="ghost small"
+            onClick={() => {
+              const ok = store.copyPreviousDay(date);
+              setCopied(ok ? '前の日の段を写しました（空いていたところだけ）。そのまま直せます。' : '');
+            }}
+          >
+            前の日をひな形にする
+          </button>
+          {copied && <span className="muted small">{copied}</span>}
+        </div>
+      )}
+
       <Choice
         id="rec-belly"
         name="belly"
@@ -131,7 +191,7 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         )}
       </section>
 
-      <div className="two">
+      <div className="two" id="rec-pain">
         <Choice
           name="pain"
           label="痛み"
@@ -148,13 +208,111 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         />
       </div>
 
+      <div className="two" id="rec-life">
+        <Choice
+          name="stress"
+          label="ストレス"
+          options={LEVELS}
+          value={day.stress}
+          onChange={(v) => store.updateDay(date, { stress: v })}
+        />
+        <Choice
+          name="exercise"
+          label="体を動かした"
+          options={EXERCISE_STEPS}
+          value={day.exercise}
+          onChange={(v) => store.updateDay(date, { exercise: v })}
+        />
+      </div>
+
+      <div className="two" id="rec-body">
+        <Choice
+          name="sleep"
+          label="眠れたか"
+          options={SLEEP_STEPS}
+          value={day.sleep}
+          onChange={(v) => store.updateDay(date, { sleep: v })}
+        />
+        <Choice
+          name="posture"
+          label="姿勢"
+          options={POSTURE_STEPS}
+          value={day.posture}
+          onChange={(v) => store.updateDay(date, { posture: v })}
+        />
+      </div>
+
+      <div className="two" id="rec-water">
+        <Choice
+          name="water"
+          label="水分"
+          options={WATER_STEPS}
+          value={day.water}
+          onChange={(v) => store.updateDay(date, { water: v })}
+        />
+        <div className="choice">
+          <div className="choice-label">目安は持ちません</div>
+          <p className="muted small">
+            「1日◯リットル」という数字はこのアプリでは持ちません。自分のいつもとの差だけを残します。
+            水分を制限するように言われている持病があるときは、量を変える前に医師に聞いてください。
+          </p>
+        </div>
+      </div>
+
+      {store.probiotic && store.probiotic.name && (
+        <section className="block" id="rec-probiotic">
+          <label className="mark">
+            <input
+              type="checkbox"
+              checked={day.probiotic}
+              onChange={() => store.updateDay(date, { probiotic: !day.probiotic })}
+            />
+            <span>整腸剤を飲んだ（{store.probiotic.name}）</span>
+          </label>
+        </section>
+      )}
+
+      <section className="block" id="rec-otc">
+        <div className="block-head">
+          <h2>使った市販薬</h2>
+        </div>
+        <p className="muted small">
+          飲んだ・貼ったものに印をつけます。<strong>良し悪しは判定しません。</strong>
+          受診のときに聞かれることなので、受診メモにそのまま出せます。
+        </p>
+        {OTC_KINDS.map((kind) => (
+          <label key={kind.id} className="mark">
+            <input
+              type="checkbox"
+              checked={day.otc.includes(kind.id)}
+              onChange={() =>
+                store.updateDay(date, {
+                  otc: day.otc.includes(kind.id)
+                    ? day.otc.filter((id) => id !== kind.id)
+                    : [...day.otc, kind.id],
+                })
+              }
+            />
+            <span>{kind.name}</span>
+          </label>
+        ))}
+      </section>
+
       <section className="block" id="rec-meal">
         <div className="block-head">
           <h2>たべたもの</h2>
         </div>
         {day.meals.map((meal) => (
           <div key={meal.id} className="meal">
-            <span className="meal-at">{meal.at || '—'}</span>
+            {/* 時刻はあとから直せる（お通じと同じように） */}
+            <label className="time-field">
+              <span className="sr-only">{meal.text} の時刻</span>
+              <input
+                type="time"
+                value={meal.at || ''}
+                onChange={(e) => store.updateMeal(date, meal.id, { at: e.target.value })}
+              />
+            </label>
             <span className="meal-text">{meal.text}</span>
             <button type="button" className="ghost small" onClick={() => store.removeMeal(date, meal.id)}>
               消す
@@ -178,7 +336,14 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
           <button type="button" className="solid" onClick={addMeal}>
             足す
           </button>
+          <VoiceButton
+            on={voiceOn}
+            onText={(text) => setMealText((cur) => (cur ? `${cur}、${text}` : text))}
+            onError={setVoiceError}
+          />
         </div>
+        {voiceOn && <p className="muted small">{VOICE_HELP}</p>}
+        {voiceError && <p className="muted small">{voiceError}</p>}
         {suggestions.length > 0 && (
           <div className="suggest">
             <span className="muted">よく書いたもの：</span>
@@ -197,6 +362,11 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
         <p className="muted small">
           区切りは「、」やスペースでざっくり数えています。書き方によっては拾えないものがあります。
         </p>
+        {day.meals.length > 0 && onOpenCombine && (
+          <button type="button" className="ghost small" onClick={onOpenCombine}>
+            この日の食べ合わせを見る
+          </button>
+        )}
       </section>
 
       <section className="block" id="rec-note">
@@ -209,6 +379,11 @@ export default function DayEditor({ date, day, store, suggestions = [], onOpenRe
           value={day.note}
           placeholder="会議の前から痛い、など"
           onChange={(e) => store.updateDay(date, { note: e.target.value })}
+        />
+        <VoiceButton
+          on={voiceOn}
+          onText={(text) => store.updateDay(date, { note: day.note ? `${day.note} ${text}` : text })}
+          onError={setVoiceError}
         />
       </section>
     </div>

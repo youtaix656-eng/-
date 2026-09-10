@@ -13,6 +13,12 @@ export async function loadFlashcardSrs() {
   try { return (await idbGet(KEY)) || {}; } catch (e) { return {}; }
 }
 
+// バックアップ・QR・クラウド自動同期からの復元・マージ結果の書き戻し専用
+// （gradeFlashcardのような「1枚分の採点」ロジックを経ずに、マップ全体を丸ごと置き換える）。
+export async function saveFlashcardSrsRaw(map) {
+  try { await idbSet(KEY, map || {}); } catch (e) { /* noop */ }
+}
+
 export async function gradeFlashcard(cardId, correct) {
   const all = await loadFlashcardSrs();
   const next = { ...all, [cardId]: applyAnswer(all[cardId], correct) };

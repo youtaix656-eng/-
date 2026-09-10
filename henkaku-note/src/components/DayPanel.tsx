@@ -15,6 +15,7 @@ import { getThree } from '../lib/threeRules';
 import { SLEEP_CRITERIA, durationVerdict, judgeSleepQuality, emptySleepQuality } from '../lib/sleepQuality';
 import { BEDTIME_MINDSET_NOTE, hoursUntilWake, sleepPhrase } from '../lib/morningRoutine';
 import type { AppState } from '../types';
+import { ANCHORS } from '../data/anchors';
 
 interface Props {
   state: AppState;
@@ -152,7 +153,7 @@ function SleepQualityBlock({ state, date }: { state: AppState; date: string }) {
   const num = (v: number | null) => (v === null ? '' : String(v));
 
   return (
-    <div className="stack" style={{ gap: 8 }}>
+    <div className="stack" style={{ gap: 8 }} id={ANCHORS.sleepQuality}>
       <hr className="divider" />
       <button type="button" className="btn slim ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         {open ? '眠りの質を閉じる' : '眠りの質を記録する'}
@@ -260,9 +261,10 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
         ) : null}
       </div>
 
-      <MorningRoutineCard state={state} date={date} today={today} />
+      <div id={ANCHORS.routine}><MorningRoutineCard state={state} date={date} today={today} /></div>
 
       <ThreeRules
+        anchorId={ANCHORS.threeRulesDay}
         state={state}
         scope="day"
         date={date}
@@ -272,7 +274,7 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
         upperLabel="今週の3つ"
       />
 
-      <div className="card">
+      <div className="card" id={ANCHORS.habits}>
         <h3>今日の習慣</h3>
         {habits.length === 0 ? (
           <p className="small muted" style={{ margin: 0 }}>この日に有効な習慣がありません。「習慣」画面で追加できます。</p>
@@ -303,11 +305,11 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
         )}
       </div>
 
-      <ConditionCard state={state} date={date} />
+      <div id={ANCHORS.condition}><ConditionCard state={state} date={date} /></div>
 
-      <MealCard state={state} date={date} today={today} />
+      <div id={ANCHORS.meal}><MealCard state={state} date={date} today={today} /></div>
 
-      <MonkModeCard state={state} date={date} today={today} />
+      <div id={ANCHORS.monk}><MonkModeCard state={state} date={date} today={today} /></div>
 
       {suggestions.length > 0 && (
         <div className="card">
@@ -324,12 +326,12 @@ export default function DayPanel({ state, date, today, onOpenWeekly }: Props) {
       )}
 
       {state.habits.some((h) => h.id === MEDITATION_HABIT_ID && h.archivedAt === null) && (
-        <MeditationCard state={state} date={date} canRunTimer={date === today} />
+        <div id={ANCHORS.meditation}><MeditationCard state={state} date={date} canRunTimer={date === today} /></div>
       )}
 
-      <BedtimeCard state={state} date={date} />
+      <div id={ANCHORS.bedtime}><BedtimeCard state={state} date={date} /></div>
 
-      <div className="card paper">
+      <div className="card paper" id={ANCHORS.note}>
         <h3>学び・振り返り</h3>
         <textarea
           maxLength={NOTE_MAX}
