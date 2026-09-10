@@ -117,6 +117,7 @@ AI社員に仕事を依頼すると、社員どうしで引き継ぎながら仕
 | 98 | 用語をタップして詳細パネル（※要確認バッジ・飛び先ボタン） | `Toc.jsx` の `TermPanel` |
 | 99 | 飛び先へ運んで光らせる（画面をまたぐ） | `lib/focus.js` / `useFocusJump.js` |
 | 100 | 目次への追加・削除の候補（押すまで本体に書かない・取り消せる） | `lib/tocCandidates.js` |
+| 101 | オフィスの様子（席の絵。動くのは本当にAIが動いている社員だけ） | `lib/office.js` / `Office.jsx` |
 
 設計の全体像（アーキテクチャ・DBスキーマ・API・拡張時の注意点）は
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。

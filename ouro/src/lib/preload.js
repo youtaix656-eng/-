@@ -22,6 +22,7 @@ export const LOADERS = {
   funnel: () => import('../components/Funnel.jsx'),
   studio: () => import('../components/Studio.jsx'),
   kits: () => import('../components/Kits.jsx'),
+  office: () => import('../components/Office.jsx'),
   ventures: () => import('../components/Ventures.jsx'),
   venture: () => import('../components/Ventures.jsx'),
   rules: () => import('../components/Rules.jsx'),
