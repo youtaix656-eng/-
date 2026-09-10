@@ -160,9 +160,23 @@ jobs:
         run: npm run build
         working-directory: chou
 
+      # クンダリーニトラッカー（Vite + React + TypeScript / PWA）を /kundalini サブパスへビルドし、
+      # 同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (クンダリーニトラッカー)
+        run: npm ci
+        working-directory: kundalini
+
+      - name: Test (クンダリーニトラッカー)
+        run: npm test
+        working-directory: kundalini
+
+      - name: Build (クンダリーニトラッカー / /kundalini)
+        run: npm run build
+        working-directory: kundalini
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai dist/chou
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai dist/chou dist/kundalini
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
@@ -172,6 +186,7 @@ jobs:
           cp -r shikaku-lab/dist dist/shikaku-lab
           cp -r maai/dist dist/maai
           cp -r chou/dist dist/chou
+          cp -r kundalini/dist dist/kundalini
           touch dist/.nojekyll
 
       - name: Upload artifact
