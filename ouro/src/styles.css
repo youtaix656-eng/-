@@ -1731,3 +1731,111 @@ select {
 @media (prefers-reduced-motion: reduce) {
   [data-flash] { animation: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6); }
 }
+
+/* オフィスの様子（`components/Office.jsx`）。
+   **動きは CSS だけでやる**——18人ぶんを毎フレーム React で描き直すと重い。
+   **`will-change`／`backdrop-filter` は付けない**（新項目19。合成レイヤーを増やさない）。
+   動くのは「本当にAIが動いている席」だけで、他は止まっている。 */
+.office-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.office-floor {
+  color: #fff;
+  display: block;
+  max-width: 100%;
+  height: auto;
+  /* 名前・仕事名がはみ出しても切り落とさない */
+  overflow: visible;
+}
+
+/* 凡例の色見本。**色だけに意味を持たせない**——記号と名前と人数を必ず並べる。 */
+.office-key { display: inline-flex; align-items: center; gap: 5px; }
+.office-key.off { opacity: 0.45; }
+.office-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.office-seat {
+  cursor: pointer;
+  outline: none;
+}
+
+.office-seat:focus-visible .office-head {
+  stroke-opacity: 1;
+  stroke-width: 2;
+}
+
+/* 手を動かしている（＝AIが実行中）。腕を上下させ、画面と印を明滅させる。
+   **この動きが出るのは本当に実行中の席だけ**——止まっている席には出さない。 */
+.office-type .office-arm-l { animation: office-key 0.42s ease-in-out infinite; transform-origin: center; }
+.office-type .office-arm-r { animation: office-key 0.42s ease-in-out infinite 0.21s; transform-origin: center; }
+.office-type .office-mon { animation: office-glow 1.6s ease-in-out infinite; }
+.office-type .office-head { animation: office-nod 1.9s ease-in-out infinite; transform-origin: center; }
+
+/* 動いている席は、線も名前も濃く出す（色が見分けにくくても分かるように）。 */
+.office-live .office-head,
+.office-live .office-body,
+.office-live .office-arm { stroke-opacity: 1; stroke-width: 1.5; }
+.office-live-dot { animation: office-blink 1.1s ease-in-out infinite; }
+
+/* 手あき＝ゆっくり呼吸するだけ（動いてはいるが、作業ではないと分かる速さ） */
+.office-breathe .office-body { animation: office-breathe 4.2s ease-in-out infinite; transform-origin: center; }
+
+/* 順番待ち＝ごくわずかに揺れる */
+.office-wait .office-head { animation: office-sway 3.4s ease-in-out infinite; transform-origin: center; }
+
+/* あなた待ち＝こちらを見上げたまま止まる（動かさない） */
+.office-look .office-head { stroke-opacity: 1; }
+
+/* 保留・止まっている＝完全に止める */
+.office-still .office-head,
+.office-still .office-body,
+.office-still .office-arm { stroke-opacity: 0.55; }
+
+@keyframes office-key {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.6px); }
+}
+
+@keyframes office-glow {
+  0%, 100% { stroke-opacity: 0.35; }
+  50% { stroke-opacity: 0.9; }
+}
+
+@keyframes office-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.8px); }
+}
+
+@keyframes office-nod {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(0.9px); }
+}
+
+@keyframes office-blink {
+  0%, 100% { fill-opacity: 1; }
+  50% { fill-opacity: 0.25; }
+}
+
+@keyframes office-sway {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+
+/* **動きを止めたい人のために止める。** 席と印はそのまま読める。 */
+@media (prefers-reduced-motion: reduce) {
+  .office-seat *,
+  .office-seat {
+    animation: none !important;
+  }
+  .office-type .office-mon { stroke-opacity: 0.9; }
+  /* 動きを止めても「動いている席」が分かるように、印は濃いまま残す。 */
+  .office-live-dot { fill-opacity: 1; }
+}

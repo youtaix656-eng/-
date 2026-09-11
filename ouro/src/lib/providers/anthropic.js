@@ -13,7 +13,9 @@ export const anthropicProvider = {
   id: 'anthropic',
   name: 'Claude',
   needsKey: true,
-  keyHelpUrl: 'https://console.anthropic.com/settings/keys',
+  // 2026-09-10 確認：console.anthropic.com は platform.claude.com へ 301 で飛ぶ。
+  // 飛べはするが、**古い宛先を置いたままにしない**（モデル id と同じ線・項目107）。
+  keyHelpUrl: 'https://platform.claude.com/settings/keys',
   desc: 'Web検索・PDF読み取りに対応。調査系の社員と相性が良い。',
   models: [
     { id: 'claude-opus-5', label: 'Opus 5（最上位）', inputPer1M: 5, outputPer1M: 25, tier: 'high' },
