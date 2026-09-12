@@ -188,9 +188,23 @@ jobs:
         run: npm run build
         working-directory: earpomo
 
+      # 体調カルテ（自分の体の不調と対応策の記録 / Vite + React + TypeScript / PWA）を
+      # /taicho-karte サブパスへビルドし、同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (体調カルテ)
+        run: npm ci
+        working-directory: taicho-karte
+
+      - name: Test (体調カルテ)
+        run: npm test
+        working-directory: taicho-karte
+
+      - name: Build (体調カルテ / /taicho-karte)
+        run: npm run build
+        working-directory: taicho-karte
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai dist/chou dist/kundalini dist/earpomo
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai dist/chou dist/kundalini dist/earpomo dist/taicho-karte
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
@@ -202,6 +216,7 @@ jobs:
           cp -r chou/dist dist/chou
           cp -r kundalini/dist dist/kundalini
           cp -r earpomo/dist dist/earpomo
+          cp -r taicho-karte/dist dist/taicho-karte
           touch dist/.nojekyll
 
       - name: Upload artifact

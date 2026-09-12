@@ -245,6 +245,7 @@ main への push で `.github/workflows/deploy.yml` が同じ Pages 成果物に
 | `chou/` | `/chou` | 腸（ちょう。お腹の悩み・腸活。IBS 中心。お腹の記録を、受診のときに渡せる形にする。Vite + React JSX・端末内保存のみ）。詳細は `chou/README.md` |
 | `kundalini/` | `/kundalini` | クンダリーニトラッカー（オナ禁の継続日数とチャクラレベル＝象徴的な区切りの記録。衝動時の冷却タイマー・呼吸ガイド。Vite + React TypeScript・PWA・端末内保存のみ）。詳細は `kundalini/README.md` |
 | `earpomo/` | `/earpomo` | EarPomo（イヤホン専用・黒背景のみの、静かなポモドーロタイマー。自分の曲をバックグラウンド再生しながら集中する。スケジュール手入力→カレンダー連携・記録（統計）。Vite + React TypeScript・PWA・端末内保存のみ）。詳細は `earpomo/README.md` |
+| `taicho-karte/` | `/taicho-karte` | 体調カルテ（私の体調管理アプリ。自分の体の不調（部位・VAS・タイミング・左右・専門用語メモ）と、試した対応策とその効果（4段階）を蓄積する個人用の記録。腰痛ナビとは役割が違い主観的な自己記録に特化。Vite + React + TypeScript・PWA・端末内保存のみ）。詳細は `taicho-karte/README.md` |
 
 
 腰痛ナビの要点だけ再掲：判定は**タグ経由**（`src/data/schema.js` の `TAG_VOCABULARY` が単一の正）、
@@ -1767,6 +1768,7 @@ kundalini と同じくルートの `npm test` の再帰探索には拾われな�
   | 腸（ちょう） | https://youtaix656-eng.github.io/-/chou |
 | クンダリーニトラッカー | https://youtaix656-eng.github.io/-/kundalini |
 | EarPomo | https://youtaix656-eng.github.io/-/earpomo |
+| 体調カルテ | https://youtaix656-eng.github.io/-/taicho-karte |
 - 読みやすい写真を使う。
 
 ## 継続して意識する開発方針（ユーザー指定・重要）
