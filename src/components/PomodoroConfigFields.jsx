@@ -177,6 +177,11 @@ export function PomodoroConfigFields({ cfg, setCfg }) {
         </div>
       )}
       <label className="pomo-switch" style={{ marginTop: 6 }}>
+        <input type="checkbox" checked={cfg.vibrateEnabled !== false} onChange={(e) => setCfg({ vibrateEnabled: e.target.checked })} />
+        <span>フェーズ切り替え時（勉強終了・休憩終了）に振動する</span>
+      </label>
+      <p className="pomo-hint">※ 振動はAndroid系のブラウザのみ対応です。iPhone（Safari）やパソコンのブラウザでは振動しません（ブラウザ側の制約で、この設定では直せません）。</p>
+      <label className="pomo-switch" style={{ marginTop: 6 }}>
         <input type="checkbox" checked={!!cfg.wakeLock} onChange={(e) => setCfg({ wakeLock: e.target.checked })} />
         <span>実行中は画面を暗くしない（対応端末のみ）</span>
       </label>

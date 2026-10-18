@@ -477,7 +477,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate, insta
       onToast?.(msg);
       setAnnounce(msg);
       if (cfg.beepEnabled !== false && !suppressSound) beep(1, toneFreq(cfg, 'break'), volume, onBeepBlocked);
-      vibrate([120]);
+      if (cfg.vibrateEnabled !== false) vibrate([120]);
       if (document.hidden) document.title = `⏰終了しました - ${originalTitleRef.current}`;
       return;
     }
@@ -497,7 +497,7 @@ export default function Pomodoro({ store, onToast, activeView, onNavigate, insta
     setAnnounce(msg);
     notify('ポモドーロ', msg);
     if (cfg.beepEnabled !== false && !suppressSound) beep(2, last.to === 'study' ? toneFreq(cfg, 'study') : toneFreq(cfg, 'break'), volume, onBeepBlocked);
-    vibrate([200, 80, 200]);
+    if (cfg.vibrateEnabled !== false) vibrate([200, 80, 200]);
     if (document.hidden) document.title = `⏰終了しました - ${originalTitleRef.current}`;
     if (last.wasStudy) setFocusPrompt(true); // 勉強フェーズが終わった直後：集中できたか聞く
   }, [cfg, tag, onToast, refreshStats, activeView, onBeepBlocked]);
