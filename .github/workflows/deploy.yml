@@ -174,9 +174,23 @@ jobs:
         run: npm run build
         working-directory: kundalini
 
+      # EarPomo（イヤホン専用・黒背景のポモドーロタイマー / Vite + React + TypeScript / PWA）を
+      # /earpomo サブパスへビルドし、同じ Pages 成果物に同梱する（既存アプリは維持したまま追加）。
+      - name: Install dependencies (EarPomo)
+        run: npm ci
+        working-directory: earpomo
+
+      - name: Test (EarPomo)
+        run: npm test
+        working-directory: earpomo
+
+      - name: Build (EarPomo / /earpomo)
+        run: npm run build
+        working-directory: earpomo
+
       - name: Assemble Pages output
         run: |
-          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai dist/chou dist/kundalini
+          rm -rf dist/rirakuru dist/sleep-tracker dist/youtsu-navi dist/henkaku-note dist/ouro dist/kagami dist/shikaku-lab dist/maai dist/chou dist/kundalini dist/earpomo
           cp -r rirakuru-app/out dist/rirakuru
           cp -r sleep-tracker/dist dist/sleep-tracker
           cp -r youtsu-navi/dist dist/youtsu-navi
@@ -187,6 +201,7 @@ jobs:
           cp -r maai/dist dist/maai
           cp -r chou/dist dist/chou
           cp -r kundalini/dist dist/kundalini
+          cp -r earpomo/dist dist/earpomo
           touch dist/.nojekyll
 
       - name: Upload artifact

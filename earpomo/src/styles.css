@@ -1,0 +1,238 @@
+/* EarPomo
+   ─────────────────────────────────────────────
+   ⚠ 背景は #000000 固定。ダーク／ライトの切り替えも配色の変更も持たない。
+   ⚠ 色を持たない（すべて R=G=B の灰色）。装飾（グラデーション・影・光彩）も持たない。
+   ⚠ アイコンは線画（Icons.tsx）、絵は線画（BreakIllustration.tsx）。画像ファイルを持たない。 */
+
+:root {
+  --bg: #000000;
+  --card: #0d0d0d;
+  --line: #222222;
+  --track: #2a2a2a;
+  --text: #ffffff;
+  --sub: #888888;
+  --mute: #555555;
+  --faint: #444444;
+  --max-w: 480px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  min-height: 100%;
+}
+
+body {
+  color: var(--text);
+  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, input { font: inherit; color: inherit; }
+button { background: none; border: none; padding: 0; cursor: pointer; }
+button:disabled { cursor: default; opacity: .4; }
+
+.app {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 20px calc(84px + env(safe-area-inset-bottom));
+  min-height: 100vh;
+  background: var(--bg);
+}
+.main { padding-top: 8px; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+h2.view-title { font-size: 15px; font-weight: 500; margin: 22px 0 6px; letter-spacing: .06em; }
+h3.label, .label {
+  font-size: 11px; font-weight: 400; color: var(--mute);
+  letter-spacing: .14em; margin: 26px 0 6px; text-transform: uppercase;
+}
+.quiet { color: var(--mute); font-size: 12.5px; line-height: 1.7; margin: 8px 0; }
+.quiet.inline { display: block; font-size: 11.5px; color: var(--mute); margin: 0; }
+.quiet.center { text-align: center; padding-top: 40vh; }
+
+/* ── リンク・ボタン ────────────────────── */
+.link { color: var(--sub); font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 0; }
+.link.faint { color: var(--mute); }
+.link.tag { color: var(--sub); }
+.btn {
+  border: 1px solid var(--text); border-radius: 999px; padding: 7px 18px; font-size: 13px; color: var(--text);
+}
+.btn.ghost { border-color: var(--line); color: var(--sub); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.icon-btn { color: var(--sub); padding: 8px; display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; }
+.icon-btn.corner { position: absolute; right: 6px; top: 6px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.chip { border: 1px solid var(--line); color: var(--sub); border-radius: 999px; padding: 3px 12px; font-size: 12px; }
+.dashed {
+  width: 100%; border: 1px dashed var(--faint); border-radius: 10px; padding: 12px; color: var(--sub);
+  display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; margin: 14px 0 4px;
+}
+
+/* ── タブ ──────────────────────────────── */
+.tabs { display: flex; gap: 8px; margin: 12px 0 6px; }
+.tab {
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 16px; font-size: 13px; color: var(--sub);
+}
+.tab.on { border-color: var(--text); color: var(--text); }
+
+/* ── 行（設定・一覧） ─────────────────── */
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows.nested { margin: 4px 0 8px 12px; }
+.rows.compact .row-item { padding: 6px 0; }
+.row-item {
+  border-bottom: 1px solid var(--line);
+  padding: 4px 0;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  position: relative;
+}
+.row-item .name { flex: 1; font-size: 14px; }
+.row-item .val { color: var(--sub); font-size: 13px; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 2px; }
+.row-btn {
+  flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  text-align: left; padding: 10px 0; min-height: 44px; width: 100%;
+}
+.row-btn .name { flex: 1; }
+.row-item.sched .band { width: 3px; height: 26px; background: var(--faint); border-radius: 2px; }
+.form-rows label, .form label { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 8px 0; font-size: 14px; }
+.form label { padding: 6px 0; }
+input[type="text"], input:not([type]), input[type="date"], input[type="time"] {
+  background: transparent; border: none; border-bottom: 1px solid var(--line); color: var(--text);
+  padding: 6px 0; text-align: right; min-width: 0; flex: 1; max-width: 60%; font-size: 14px;
+  color-scheme: dark;
+}
+input::placeholder { color: var(--faint); }
+input[type="checkbox"] {
+  appearance: none; width: 40px; height: 22px; border: 1px solid var(--sub); border-radius: 999px; position: relative; flex: 0 0 auto;
+}
+input[type="checkbox"]::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--sub);
+  transition: transform .15s;
+}
+input[type="checkbox"]:checked { border-color: var(--text); }
+input[type="checkbox"]:checked::after { background: var(--text); transform: translateX(18px); }
+input[type="checkbox"]:disabled { opacity: .35; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 14px; width: 100%; }
+.slider-row { display: flex; align-items: center; gap: 12px; }
+input[type="range"] { flex: 1; accent-color: #ffffff; }
+.stepper { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 0 10px; justify-content: center; }
+.stepper .cur { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+.tag-edit { width: 100%; padding: 6px 0; }
+.tag-edit input { width: 100%; max-width: 100%; text-align: left; }
+
+.sub-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; }
+.sub-head .title { flex: 1; font-size: 15px; font-weight: 500; }
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 10px 0; position: relative;
+}
+
+/* ── タイマー ──────────────────────────── */
+.timer { display: flex; flex-direction: column; align-items: center; padding: 34px 0 10px; text-align: center; }
+.timer .phase { font-size: 12px; color: var(--sub); letter-spacing: .12em; margin-bottom: 22px; }
+.ring { position: relative; display: grid; place-items: center; }
+.ring svg { position: absolute; inset: 0; }
+.ring-track { stroke: var(--track); }
+.ring-fill { stroke: var(--text); transition: stroke-dashoffset .5s linear; }
+.ring.dim .ring-fill { stroke: var(--sub); }
+.ring-inner { position: relative; display: flex; flex-direction: column; align-items: center; }
+.time {
+  font-size: 64px; font-weight: 200; letter-spacing: .02em; line-height: 1;
+  font-variant-numeric: tabular-nums; font-family: 'Helvetica Neue', 'Inter', system-ui, sans-serif;
+}
+.time.sm { font-size: 44px; color: var(--sub); }
+.timer.paused .time, .timer.paused .dots { opacity: .45; }
+.pos { font-size: 11px; color: var(--mute); letter-spacing: .12em; margin-top: 6px; }
+.dots { display: flex; gap: 12px; margin-top: 30px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--track); }
+.dot.on { background: var(--text); }
+.dot.cur { background: transparent; border: 1px solid var(--sub); }
+.controls { display: flex; align-items: center; gap: 34px; margin: 36px 0 10px; }
+.ctl { display: grid; place-items: center; color: var(--sub); border-radius: 50%; }
+.ctl.side { width: 44px; height: 44px; }
+.ctl.side.on { color: var(--text); }
+.ctl.main { width: 64px; height: 64px; border: 1px solid var(--text); color: var(--text); }
+.preset-name { color: var(--mute); font-size: 12px; margin-top: 26px; letter-spacing: .04em; }
+.tagline { margin-top: 14px; width: 100%; }
+
+.timer.break { padding-top: 34px; }
+.timer.break .phase { color: var(--sub); }
+.illust-wrap { color: var(--sub); margin: 28px 0 8px; }
+.illust { display: block; }
+.zzz { font-size: 13px; font-family: system-ui, sans-serif; }
+.zzz.sm { font-size: 10px; }
+.zzz.xs { font-size: 8px; }
+.tips { list-style: none; padding: 0; margin: 6px 0 24px; display: flex; flex-direction: column; gap: 10px; color: var(--sub); font-size: 13px; }
+.tips li { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.timer.break .ctl.side { margin-bottom: 8px; }
+
+/* ── 記録 ──────────────────────────────── */
+.big-stat { text-align: center; padding: 26px 0 10px; }
+.big-stat .label { margin: 0 0 4px; }
+.big-stat .value { font-size: 52px; font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.big-stat .value .u { font-size: 16px; color: var(--sub); margin-left: 6px; font-weight: 300; }
+.stat-row { display: flex; gap: 10px; margin: 10px 0; }
+.stat { flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center; background: var(--card); }
+.stat .v { font-size: 24px; font-weight: 300; font-variant-numeric: tabular-nums; }
+.stat .v .u { font-size: 12px; color: var(--sub); margin-left: 3px; }
+.stat .k { font-size: 11px; color: var(--mute); }
+.week-chart { display: flex; gap: 8px; align-items: flex-end; height: 130px; padding: 6px 0 0; }
+.week-chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.week-chart .bar-area { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.week-chart .bar { width: 100%; background: var(--track); border-radius: 3px 3px 0 0; min-height: 0; }
+.week-chart .col.today .bar { background: var(--text); }
+.week-chart .wd { font-size: 11px; color: var(--mute); margin-top: 6px; }
+.week-chart .dt { font-size: 10px; color: var(--faint); }
+.week-chart .col.today .wd, .week-chart .col.today .dt { color: var(--text); }
+
+/* ── カレンダー ─────────────────────────── */
+.card.exam { text-align: center; padding: 16px 14px 10px; }
+.exam-head { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.exam-date { color: var(--sub); font-size: 12px; }
+.exam-left { margin-top: 6px; }
+.exam-left .n { font-size: 46px; font-weight: 200; font-variant-numeric: tabular-nums; }
+.exam-left .u { font-size: 14px; color: var(--sub); margin-left: 4px; }
+.month-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 4px; }
+.month { font-size: 14px; letter-spacing: .04em; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-wd { text-align: center; font-size: 11px; color: var(--mute); padding: 4px 0; }
+.cal-day {
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1px solid transparent; color: var(--sub); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.cal-day.empty { border: none; }
+.cal-day.today { color: var(--text); }
+.cal-day.sel { border-color: var(--text); color: var(--text); }
+.cal-day .marks { display: flex; gap: 2px; height: 4px; margin-top: 1px; }
+.cal-day .mark { width: 4px; height: 4px; border-radius: 50%; background: var(--sub); display: block; }
+.cal-day .mark.exam { border-radius: 0; }
+
+/* ── 下部タブ ──────────────────────────── */
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  background: var(--bg); border-top: 1px solid var(--line);
+  display: flex; justify-content: space-around; align-items: center;
+  max-width: var(--max-w); margin: 0 auto;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+}
+.nav-btn { color: var(--mute); padding: 10px 14px; display: grid; place-items: center; }
+.nav-btn.on { color: var(--text); }
+
+.hp-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-fill, input[type="checkbox"]::after { transition: none; }
+}
+@media print {
+  .bottom-nav { display: none; }
+}
