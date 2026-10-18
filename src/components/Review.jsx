@@ -434,6 +434,11 @@ export default function Review({
     const pool = sortReview(filterReview(extendedReviewPool, { missType: typeId, missTypes, links }), orderMode, { srs, history, links });
     startWith(batch > 0 ? pool.slice(0, batch) : pool, { label: `誤答理由「${missTypeLabel(typeId)}」` });
   };
+  // 誤答理由（型）ごとに、そのまま音声学習の「間違えた問題を読み上げる」へ渡す
+  const audioMissType = (typeId) => {
+    const pool = sortReview(filterReview(extendedReviewPool, { missType: typeId, missTypes, links }), orderMode, { srs, history, links });
+    onGoAudio?.(pool.map((q) => q.id));
+  };
 
   // #9：要注意（リーチ）だけを高速周回モードで
   const startLeechFast = () => startWith(leechOnlyPool, { label: '要注意だけ高速周回', forcedFast: true, preserveOrder: true });
@@ -742,6 +747,16 @@ export default function Review({
         {leechOnlyPool.length > 0 && (
           <button className="btn danger block lg" style={{ marginBottom: 10 }} onClick={startLeechFast}>
             ⚠️ 要注意だけ高速周回（{LEECH_THRESHOLD}回以上の誤答・{leechOnlyPool.length}問）
+          </button>
+        )}
+        {/* 要注意だけを音声学習の「間違えた問題を読み上げる」へそのまま渡す（目を使わず聞くだけで片づける） */}
+        {leechOnlyPool.length > 0 && onGoAudio && (
+          <button
+            className="btn ghost sm"
+            style={{ marginBottom: 10 }}
+            onClick={() => onGoAudio(leechOnlyPool.map((q) => q.id))}
+          >
+            🎧 要注意だけ音声で聞く（{leechOnlyPool.length}問）
           </button>
         )}
 
@@ -1073,6 +1088,9 @@ export default function Review({
                 {t.label}
               </button>
               <button className="weak-chip-go" onClick={() => quickStartMissType(t.id)} aria-label={`${t.label}を即復習`}>▶</button>
+              {onGoAudio && (
+                <button className="weak-chip-go" onClick={() => audioMissType(t.id)} aria-label={`${t.label}を音声で聞く`}>🎧</button>
+              )}
             </span>
           ))}
         </div>

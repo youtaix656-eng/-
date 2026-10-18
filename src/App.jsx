@@ -602,6 +602,7 @@ export default function App() {
             reviewPreset={audioReview}
             onConsumePreset={() => setAudioReview(false)}
             onNavigate={setView}
+            onOpenFlashcardKeyword={openFlashcardKeyword}
           />
         );
       case 'exam':

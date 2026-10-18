@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   overallStats,
   subjectStats,
@@ -17,6 +17,7 @@ import { computeBadges } from '../lib/gamify.js';
 import { buildProgressSummary, buildProgressReportHtml } from '../lib/progressReport.js';
 import { hourlyPerformance } from '../lib/timeOfDay.js';
 import { maruStatusList, maruSubjectBreakdown } from '../lib/maruPool.js';
+import { loadAudioReviewLog, audioReviewCountSince } from '../lib/audioReviewLog.js';
 import InsightsSection from './InsightsSection.jsx';
 
 // 分析・攻略率・合格者診断（⑯⑱㉑㉒）
@@ -27,6 +28,10 @@ export default function Analytics({ store, onNavigate, onToast }) {
     () => computeBadges(history, srs, questions, examResults, isInReview, MATURE_INTERVAL),
     [history, srs, questions, examResults]
   );
+  // 🎧 音声だけでの復習（AudioMode.jsxの件数チップ・新規問題チップの実施ログ）
+  const [audioReviewLog, setAudioReviewLog] = useState([]);
+  useEffect(() => { loadAudioReviewLog().then(setAudioReviewLog); }, []);
+  const audioReviewCount30d = useMemo(() => audioReviewCountSince(audioReviewLog), [audioReviewLog]);
 
   const printProgressReport = () => {
     const summary = buildProgressSummary({ history, questions, srs, examResults });
@@ -95,6 +100,12 @@ export default function Analytics({ store, onNavigate, onToast }) {
     <div className="view">
       <h2 className="view-title">分析・攻略率・合格診断</h2>
       <InsightsSection store={store} />
+
+      {audioReviewCount30d > 0 && (
+        <div className="card">
+          🎧 音声だけでの復習（直近30日）：<strong>{audioReviewCount30d}回</strong>
+        </div>
+      )}
 
       {/* ===== ㉑ 合格ラインまで何% ===== */}
       <div className="section-label">🎯 合格ライン診断</div>

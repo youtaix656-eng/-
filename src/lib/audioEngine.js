@@ -21,6 +21,7 @@ let state = {
   hasPlan: false,
   display: null,
   planSig: null,
+  finished: false, // 繰り返しオフで最後まで自動的に読み終えた直後だけtrue（再生・スキップ等で即false）
 };
 
 let plan = []; // [{ steps:[{phase, say?, wait?(ms), waitGap?:true|'cap2'}], display }]
@@ -152,6 +153,7 @@ export function load(newPlan, { sig = null, startIndex = 0 } = {}) {
     display: plan[i]?.display || null,
     phase: 'question',
     started: false,
+    finished: false,
   });
 }
 
@@ -198,7 +200,7 @@ async function runFrom(start) {
     }
     if (!settings.loop && i >= plan.length && running) {
       stop();
-      emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false });
+      emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true });
     }
   } catch (e) {
     if (e.name !== 'AbortError') console.warn('audio engine error', e);
@@ -210,7 +212,7 @@ export function play() {
   requestWakeLock();
   initVisibility();
   startKeepAlive();
-  emit({ started: true });
+  emit({ started: true, finished: false });
   const start = state.index < plan.length ? state.index : 0;
   runFrom(start);
 }
@@ -235,13 +237,13 @@ export function skip(delta) {
   const wasPlaying = running;
   stop();
   const n = Math.max(0, Math.min(plan.length - 1, state.index + delta));
-  emit({ index: n, phase: 'question', display: plan[n]?.display || null });
+  emit({ index: n, phase: 'question', display: plan[n]?.display || null, finished: false });
   if (wasPlaying) setTimeout(() => runFrom(n), 120);
 }
 
 export function resetToStart() {
   stop();
-  emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false });
+  emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: false });
 }
 
 export function setSleep(min) {

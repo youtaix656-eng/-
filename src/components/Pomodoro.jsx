@@ -20,6 +20,7 @@ import {
   hasNotificationTrigger, scheduleTimestampNotification, cancelTimestampNotification,
   tryRegisterPeriodicSync, backgroundCapabilities,
 } from '../lib/pomoBackground.js';
+import { beep, vibrate } from '../lib/sound.js';
 
 // 設定パネル（プリセット・分数・音・統計のUI一式）はここでだけlazy importする。
 // Pomodoro自体はApp.jsxの常時マウント対象（下部ナビ以外で唯一の例外）なので、
@@ -58,53 +59,6 @@ const LEADER_SETTLE_MS = 500; // 起動直後の復元処理だけ、他タブ�
 const RESTORED_TIMEOUT_MS = 3000; // 復元処理が固まった場合の保険（表示だけは出す）
 const PERSIST_INTERVAL_TICKS = 10; // 実行中の秒だけの保存間隔（毎秒書き込みしない）
 const BREAK_TIPS = ['👀 遠くを見て目を休めましょう', '🧘 肩を軽く回してみましょう', '💧 水分をとりましょう', '🚶 少し立って伸びをしましょう'];
-
-let audioBlockWarned = false; // 自動再生ブロックの警告は1ページ生存中に1回だけで十分
-
-function beep(times = 1, freq = 880, volumePct = 100, onBlocked) {
-  if (volumePct <= 0) return;
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    // 音量100%時の最大振幅。以前は0.3で控えめだったため、ユーザー指定で0.7へ引き上げた
-    // （音割れしない範囲＝1.0未満を保ちつつ、はっきり気づける大きさにする）。
-    const peakGain = Math.max(0.0001, 0.7 * Math.min(100, volumePct) / 100);
-    let t = ctx.currentTime;
-    for (let i = 0; i < times; i++) {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.frequency.value = freq;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(peakGain, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
-      o.start(t);
-      o.stop(t + 0.26);
-      t += 0.34;
-    }
-    // 鳴らし終わったらcloseする。開けっぱなしのAudioContextが積み重なると
-    // ブラウザ側の上限に達しうるため。
-    const totalMs = (t - ctx.currentTime) * 1000 + 100;
-    setTimeout(() => {
-      // ユーザー操作を伴わない自動再生はブラウザにブロックされることがある（resumeしても
-      // suspendedのまま）。気づけるよう一度だけ知らせる。
-      if (ctx.state === 'suspended' && !audioBlockWarned) {
-        audioBlockWarned = true;
-        onBlocked?.();
-      }
-      ctx.close().catch(() => {});
-    }, totalMs);
-  } catch (e) {
-    /* noop */
-  }
-}
-
-function vibrate(pattern) {
-  try { navigator.vibrate?.(pattern); } catch (e) { /* noop */ }
-}
 
 function notify(title, body) {
   try {
