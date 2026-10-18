@@ -1311,6 +1311,8 @@ code.block {
 .sess-target:active { transform: scale(0.98); }
 .sess-target-n { font-size: 24px; font-weight: 800; color: var(--navy-light); }
 .sess-target-l { font-size: 11px; color: var(--text-sub); font-weight: 600; text-align: center; }
+.sess-target.active { border-color: var(--accent); background: var(--surface-2); }
+.sess-target.active .sess-target-n { color: var(--accent); }
 .sess-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .sess-topbar-sub { font-size: 13px; font-weight: 700; color: var(--text); }
 .sess-topbar-frac { font-size: 12.5px; color: var(--text-sub); font-variant-numeric: tabular-nums; }

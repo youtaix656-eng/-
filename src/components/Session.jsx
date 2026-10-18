@@ -27,6 +27,7 @@ import { useMaruReview } from '../lib/useMaruReview.js';
 import MaruReviewCard from './MaruReviewCard.jsx';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { loadReviewZeroLog, daysSinceLastZero } from '../lib/reviewZeroLog.js';
+import { SESSION_TARGETS as TARGETS, sessionTargetLabel } from '../lib/sessionTargets.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -34,7 +35,6 @@ const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => 
 //   60問＝1セット（休憩の区切り） / 300問＝1日の基本目標 / 900問＝1周
 //   1問ごとに位置を自動保存し、アプリを閉じても「続きから」再開できる。
 const SET_SIZE = 60;
-const TARGETS = [10, 60, 300, 900];
 
 function poolFor(questions, subject) {
   if (subject === 'all') return questions;
@@ -473,9 +473,7 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
                 disabled={startDisabled}
               >
                 <span className="sess-target-n">{t}</span>
-                <span className="sess-target-l">
-                  {t === 10 ? 'すきま時間' : t === 60 ? '1セット（区切り）' : t === 300 ? '1日の目標' : '1周（周回）'}
-                </span>
+                <span className="sess-target-l">{sessionTargetLabel(t)}</span>
               </button>
             ))}
           </div>

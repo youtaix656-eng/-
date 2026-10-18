@@ -13,6 +13,7 @@ import { reviewPoolFor, buildWeaknessSummary, weaknessSummaryToText, recommendNe
 import { studyStreak } from '../lib/stats.js';
 import { normalize, MASTER_STREAK, isLeech as isLeechState } from '../lib/srs.js';
 import { riskOf } from '../lib/reviewOrder.js';
+import { SESSION_TARGETS, sessionTargetLabel } from '../lib/sessionTargets.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { loadNextTask } from '../lib/nextTask.js';
@@ -150,6 +151,9 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const [selectedKeyword, setSelectedKeyword] = useState('');
   // 復習画面の絞り込み条件から渡された問題idだけに絞る場合に使う（未指定なら通常の復習プール全体）
   const [customReviewIds, setCustomReviewIds] = useState(null);
+  // 「間違えた問題を読み上げる」で、学習(10・60・300・900)と同じ目安件数に区切る場合に使う
+  // （nullは「すべて」＝従来どおり対象プール全体を読み上げる）。
+  const [reviewTarget, setReviewTarget] = useState(null);
 
   // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
   const [filterSubject, setFilterSubject] = useState('');
@@ -425,9 +429,13 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     else base = questions;
     if (shuffleOn) base = shuffle(base);
     if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
+    // 「間違えた問題を読み上げる」の件数しぼり込み（10・60・300・900）。復習対象は学習の
+    // 「すべて復習」モード（buildReviewOnlyOrder）と同じ考え方で、足りなければ繰り返さず
+    // そこで終わる（周回して埋めない）。
+    if (source === 'review' && reviewTarget) base = base.slice(0, reviewTarget);
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, reviewTarget]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
@@ -758,6 +766,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     setBookmarkOnly(next);
     setSource(next || filterSubject || filterGenre || filterKeyword || filterRound ? 'filter' : 'all');
   };
+  // 「間違えた問題を読み上げる」の件数しぼり込み（同じ値を再タップで「すべて」に戻す）
+  const changeReviewTarget = (t) => { rebuildStop(); setReviewTarget((cur) => (cur === t ? null : t)); };
   const changeKeyword = (kw) => { rebuildStop(); setSelectedKeyword(kw); };
   const toggleChain = () => { rebuildStop(); setChain((v) => !v); };
   const toggleSummary = () => { rebuildStop(); setSummary((v) => !v); };
@@ -970,11 +980,41 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       {source === 'review' && (() => {
         const reviewBase = customReviewIds ? questions.filter((q) => customReviewIds.includes(q.id)) : reviewPool;
         const n = filterSubject ? reviewBase.filter((q) => q.subject === filterSubject).length : reviewBase.length;
+        const playCount = reviewTarget ? Math.min(n, reviewTarget) : n;
         return (
           <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--surface-2)' }}>
             {n > 0
-              ? `🔁 「間違えた問題」を読み上げ中（${n}問${customReviewIds ? '・復習画面の絞り込み条件を反映' : ''}${filterSubject ? `・科目「${filterSubject}」に絞り込み中` : ''}）。上のジャンル・キーワード・回を選ぶと通常の読み上げに戻ります（科目だけは選んだまま「誤った問題」を続けられます）。`
+              ? `🔁 「間違えた問題」を読み上げ中（対象${n}問${reviewTarget ? `・今回は${playCount}問だけ` : ''}${customReviewIds ? '・復習画面の絞り込み条件を反映' : ''}${filterSubject ? `・科目「${filterSubject}」に絞り込み中` : ''}）。上のジャンル・キーワード・回を選ぶと通常の読み上げに戻ります（科目だけは選んだまま「誤った問題」を続けられます）。`
               : `🔁 「間違えた問題」を読もうとしましたが、${filterSubject ? `科目「${filterSubject}」では` : ''}この条件では0問でした。${filterSubject ? '科目の絞り込みを外すか、' : ''}上のジャンル・キーワード・回を選ぶと通常の読み上げに戻ります。`}
+            {n > 0 && (
+              <>
+                <label className="section-label" style={{ marginTop: 10 }}>今回はどれだけ読みますか？</label>
+                <div className="sess-targets">
+                  {SESSION_TARGETS.map((t) => (
+                    <button
+                      key={t}
+                      className={`sess-target ${reviewTarget === t ? 'active' : ''}`}
+                      onClick={() => changeReviewTarget(t)}
+                    >
+                      <span className="sess-target-n">{t}</span>
+                      <span className="sess-target-l">{sessionTargetLabel(t)}</span>
+                    </button>
+                  ))}
+                  <button
+                    className={`sess-target ${!reviewTarget ? 'active' : ''}`}
+                    onClick={() => changeReviewTarget(null)}
+                  >
+                    <span className="sess-target-n">すべて</span>
+                    <span className="sess-target-l">{n}問</span>
+                  </button>
+                </div>
+                {reviewTarget && reviewTarget > n && (
+                  <p className="inline-note" style={{ marginTop: 6 }}>
+                    対象は{n}問しかないため、{reviewTarget}問には届かずそこで終わります（繰り返しはしません）。
+                  </p>
+                )}
+              </>
+            )}
           </div>
         );
       })()}
