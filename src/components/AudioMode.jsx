@@ -23,8 +23,10 @@ import { isVoiceCommandSupported, parseVoiceCommand, listenOnce } from '../lib/v
 import { detectHeadphoneHint } from '../lib/headphones.js';
 import {
   loadAudioReviewLog, recordAudioReviewStart, recordAudioReviewFinish,
-  completionRateByTarget, topCombos,
+  completionRateByTarget, topCombos, recentCombo, previousFinish,
 } from '../lib/audioReviewLog.js';
+import { loadMissTypes, latestMissType, missTypeLabel } from '../lib/missTypes.js';
+import { isNowBestTime } from '../lib/timeOfDay.js';
 
 // 連結モード（検索窓の下に並ぶ10項目）。id=0 は通常（全部順に読む）。
 const MODES = [
@@ -163,7 +165,17 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // （settings.lastAudioReviewTarget、未指定ならnull＝従来どおり毎回「すべて」から）。
   const [reviewTarget, setReviewTarget] = useState(() => settings.lastAudioReviewTarget ?? null);
   // 「もう一度（同じ件数で別の問題を）」で、対象プールの何件目から切り出すか（周回オフセット）。
-  const [reviewOffset, setReviewOffset] = useState(0);
+  // アプリを閉じて開き直した後も続きの束から始められるよう覚えておく（新規#10）。
+  const [reviewOffset, setReviewOffset] = useState(() => settings.lastAudioReviewOffset ?? 0);
+  // reviewOffsetを変える操作は必ずこれを通して設定へ覚えておく（新規#10。setReviewOffsetを
+  // 直接呼ぶとその場では動くが、閉じて開き直した時に前回の続きへ戻れなくなる）。
+  const setReviewOffsetPersist = (updater) => {
+    setReviewOffset((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      updateSettings({ lastAudioReviewOffset: next });
+      return next;
+    });
+  };
   // 「まだ解いていない問題だけ」（検索フィルタ側に件数チップを使い回す）
   const [newOnly, setNewOnly] = useState(false);
   // 忘却リスクを「しきい値以上」ではなく「リスク上位◯件」で選ぶ時の件数（nullなら未使用）
@@ -195,6 +207,16 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const [audioLog, setAudioLog] = useState([]);
   useEffect(() => { loadAudioReviewLog().then(setAudioLog); }, []);
   useEffect(() => { detectHeadphoneHint().then(setHeadphoneHint); }, []);
+  // 誤答理由（型）の分類データ（終了時の型別の件数読み上げに使う。新規#2。
+  // ここでは新しく分類せず、Review.jsx等で過去に記録済みの分類を読むだけ）。
+  const [missTypes, setMissTypes] = useState({});
+  useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
+  // 🎵 束の「プレイリスト」（新規#3）。{target, subject}の配列。現在の束が終わったら次へ進む。
+  const [playlistQueue, setPlaylistQueue] = useState([]);
+  // 🎙️ 声コマンドの言い回しを自分で登録する辞書（新規#7）。[{word, type, kind}]。
+  const voiceCommandWords = settings.voiceCommandWords || [];
+  const [vcWord, setVcWord] = useState('');
+  const [vcKind, setVcKind] = useState('maru');
 
   // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
   const [filterSubject, setFilterSubject] = useState('');
@@ -758,7 +780,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     setMode(0);
     setSource('review');
     setCustomReviewIds(null);
-    setReviewOffset(0);
+    setReviewOffsetPersist(0);
     requeuedRef.current = false;
     setSessionGradedCount(0);
     setSessionWrong([]);
@@ -797,7 +819,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const togglePlay = () => {
     if (!playing) {
       // 🎧 イヤホン接続時だけ自動再生する設定がONの時、確認できていなければ止める
-      if (headphoneOnly && headphoneHint !== true && !settings.audioHeadphoneConfirmed) {
+      // 改善案i3：確認済みはその日のうちだけ覚えておく（毎回チェックしなくてよいように）。
+      if (headphoneOnly && headphoneHint !== true && settings.audioHeadphoneConfirmedDate !== dateKey()) {
         onToast?.('🎧 イヤホンの接続を確認できませんでした。イヤホンをつないでから、下の「イヤホンを付けています」にチェックしてください。');
         return;
       }
@@ -821,16 +844,19 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // プラン構造を変える操作は停止（署名が変わればエンジンが先頭から読み直す）
   const rebuildStop = () => engine.stop();
 
-  // 60問区切りで自動的にひと休み（Session.jsxの60問区切りの休憩と同じ考え方、#12）
+  // 60問区切りで自動的にひと休み（Session.jsxの60問区切りの休憩と同じ考え方、#12）。
+  // 件数チップを使っていない「すべて」でも、長時間になりがちなので同じく60問ごとに休憩を挟む
+  // （改善案i5。以前は件数チップを使っている時だけだった）。
   const BREAK_EVERY = 60;
   useEffect(() => {
-    if (!playing || !batchTarget) return;
+    if (!playing) return;
+    if (!(source === 'review' || (source === 'filter' && newOnly))) return;
     if (total > BREAK_EVERY && (index + 1) % BREAK_EVERY === 0 && index + 1 < total && breakNotifiedRef.current !== index) {
       breakNotifiedRef.current = index;
       engine.stop();
       onToast?.(`✋ ${BREAK_EVERY}問区切りです。ひと休みしましょう（▶で続きから再生できます）`);
     }
-  }, [index, playing, total, batchTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [index, playing, total, source, newOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 🔔 考える時間（間）の前後に短い合図音（#8）
   const prevPhaseForBeepRef = useRef(null);
@@ -848,16 +874,18 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   }, [index, vibrateTickOn, playing]);
 
   // 🎙️ 声で自己採点・操作（#9・#22）。正解・解説の読み上げが終わったタイミングで一度だけ聞き取る。
+  // 「全部できた」（新規#9）は残りをまとめて○にしてそこで終える。
   useEffect(() => {
     if (!voiceControlOn || !current || phase !== PHASES.ANSWER) return;
     const handle = listenOnce({
       onResult: (text) => {
-        const cmd = parseVoiceCommand(text);
+        const cmd = parseVoiceCommand(text, voiceCommandWords);
         if (!cmd) return;
         if (cmd.type === 'grade') gradeCurrent(cmd.kind);
         else if (cmd.type === 'nav' && cmd.kind === 'next') skip(1);
         else if (cmd.type === 'nav' && cmd.kind === 'prev') skip(-1);
         else if (cmd.type === 'nav' && cmd.kind === 'stop') engine.stop();
+        else if (cmd.type === 'nav' && cmd.kind === 'allDone') gradeRestAsMaru();
       },
       onError: () => {},
     });
@@ -866,7 +894,9 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   }, [phase, voiceControlOn, current?.id]);
 
   // 件数チップで区切った束を最後まで読み終えたら、声で知らせ・実施ログに記録し、
-  // 「間違えた問題だけもう一度」がONなら自動でもう一度だけ回す（#14・#15・#17・#19・#20）
+  // 「間違えた問題だけもう一度」がONなら自動でもう一度だけ回す（#14・#15・#17・#19・#20）。
+  // 前回との正答率比較（新規#1）・誤答理由（型）別の件数（新規#2）・プレイリストの次の束への
+  // 自動進行（新規#3）もここでまとめて行う。
   const prevFinishedRef = useRef(false);
   useEffect(() => {
     const justFinished = snap.finished && !prevFinishedRef.current;
@@ -878,12 +908,35 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     const gradedN = sessionGradedCount;
     const wrongN = sessionWrong.length;
     const accuracyPct = gradedN > 0 ? Math.round(((gradedN - wrongN) / gradedN) * 100) : null;
+    const subj = filterSubject || null;
+    // 新規#1：同じ件数・同じ科目の直前の完了実績と比較する（記録前のログを見る）。
+    const prev = previousFinish(audioLog, { target: batchTarget, subject: subj });
+    let accuracyLine = '';
+    if (accuracyPct != null) {
+      accuracyLine = `自己採点した${gradedN}問のうち、正答率はおよそ${accuracyPct}パーセントです。`;
+      if (prev) {
+        const diff = accuracyPct - prev.accuracyPct;
+        if (diff > 0) accuracyLine += `前回よりおよそ${diff}ポイント上がりました。`;
+        else if (diff < 0) accuracyLine += `前回よりおよそ${Math.abs(diff)}ポイント下がりました。`;
+        else accuracyLine += '前回と同じくらいです。';
+      }
+    }
+    // 新規#2：誤答理由（型）の内訳（Review.jsx等で過去に分類済みのものだけを集計。ここで新しく分類はしない）。
+    const typeCounts = new Map();
+    sessionWrong.forEach((q) => {
+      const t = latestMissType(missTypes[q.id])?.type;
+      if (t) typeCounts.set(t, (typeCounts.get(t) || 0) + 1);
+    });
+    let typeLine = '';
+    if (typeCounts.size > 0) {
+      typeLine = [...typeCounts.entries()].map(([t, c]) => `${missTypeLabel(t)}が${c}問`).join('、') + 'でした。';
+    }
     cancelSpeech();
     const msg = accuracyPct != null
-      ? `おつかれさまでした。${n}問、終わりました。自己採点した${gradedN}問のうち、正答率はおよそ${accuracyPct}パーセントです。`
+      ? `おつかれさまでした。${n}問、終わりました。${accuracyLine}${typeLine}`
       : `おつかれさまでした。${n}問、終わりました。`;
     speak(msg, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
-    recordAudioReviewFinish({ target: batchTarget, subject: filterSubject || null, n, graded: gradedN, wrong: wrongN }).then(setAudioLog);
+    recordAudioReviewFinish({ target: batchTarget, subject: subj, n, graded: gradedN, wrong: wrongN }).then(setAudioLog);
     if (autoRequeueWrongOn && wrongN > 0 && !requeuedRef.current && source === 'review') {
       requeuedRef.current = true;
       const ids = sessionWrong.map((q) => q.id);
@@ -893,6 +946,23 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         setReviewTarget(null);
         onToast?.(`🔁 △・✕にした${ids.length}問を、もう一度だけ読み上げます`);
       }, 400);
+      return;
+    }
+    // 新規#3：プレイリストに次の束が積まれていれば、休憩を挟まず自動で次へ進む。
+    if (playlistQueue.length > 0) {
+      const [nextItem, ...rest] = playlistQueue;
+      setTimeout(() => {
+        setPlaylistQueue(rest);
+        setCustomReviewIds(null);
+        setFilterSubject(nextItem.subject || '');
+        setReviewOffsetPersist(0);
+        setReviewTarget(nextItem.target);
+        setSessionGradedCount(0);
+        setSessionWrong([]);
+        requeuedRef.current = false;
+        onToast?.(`▶ 次の束へ進みます（${nextItem.subject || '全科目'}×${nextItem.target ?? 'すべて'}）`);
+        setTimeout(() => engine.play(), 300);
+      }, 600);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.finished]);
@@ -948,7 +1018,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     setMinWrong(0);
     setRecentOnly('');
     setReviewTarget(null);
-    setReviewOffset(0);
+    setReviewOffsetPersist(0);
     setSource('all');
   };
   const changeRecentOnly = (v) => {
@@ -968,7 +1038,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     rebuildStop();
     const next = !newOnly;
     setNewOnly(next);
-    setReviewOffset(0);
+    setReviewOffsetPersist(0);
     setSource(next || filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly ? 'filter' : 'all');
   };
   // 忘却リスクの選び方：しきい値（minRisk）と上位◯件（riskTopN）は同時に使わない
@@ -982,7 +1052,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 選んだ件数は次回も覚えておく（#1）。件数を変えたら「もう一度」のローテーションも0に戻す。
   const changeReviewTarget = (t) => {
     rebuildStop();
-    setReviewOffset(0);
+    setReviewOffsetPersist(0);
     setReviewTarget((cur) => {
       const next = cur === t ? null : t;
       updateSettings({ lastAudioReviewTarget: next });
@@ -992,7 +1062,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）
   const repeatWithNextBatch = () => {
     rebuildStop();
-    setReviewOffset((o) => o + (reviewTarget || 0));
+    setReviewOffsetPersist((o) => o + (reviewTarget || 0));
   };
   const changeKeyword = (kw) => { rebuildStop(); setSelectedKeyword(kw); };
   const toggleChain = () => { rebuildStop(); setChain((v) => !v); };
@@ -1015,6 +1085,16 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         ? '「△ あいまい」を記録（復習に追加）'
         : '「✕ できない」を記録（復習に追加）'
     );
+  };
+  // 声コマンド「全部できた」：今の問題から最後までをまとめて○にし、そこで終える（新規#9）。
+  // 長い移動中に最後まで聞き終えた時用。既に自己採点した問題も含めて◯を重ねるだけなので、
+  // 個別に採点していたものがあっても害はない（改めて正解扱いに書き直されるだけ）。
+  const gradeRestAsMaru = () => {
+    const remaining = builtPlan.slice(index).map((item) => item.display).filter((d) => d?.q);
+    remaining.forEach((d) => recordAnswer(d.q, true));
+    setSessionGradedCount((n) => n + remaining.length);
+    onToast?.(`○ 残り${remaining.length}問をまとめて記録しました`);
+    engine.finishNow();
   };
   const toggleCurrentBookmark = () => {
     const q = current;
@@ -1147,6 +1227,28 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
           ))}
         </div>
       )}
+      {/* 改善案i4：2回以上使った組み合わせがまだ無い時は、直近1回だけの組み合わせを薄く案内する
+          （「よく使う」ではないと分かるよう、chip ghostで控えめに表示） */}
+      {source !== 'review' && !(source === 'filter' && newOnly) && topCombos(audioLog).length === 0 && recentCombo(audioLog) && (
+        <div className="chip-row" style={{ marginBottom: 10 }}>
+          <span className="section-hint">直近の組み合わせ：</span>
+          {(() => {
+            const c = recentCombo(audioLog);
+            return (
+              <button
+                className="chip ghost"
+                onClick={() => {
+                  startReviewSource();
+                  if (c.subject) setFilterSubject(c.subject);
+                  setReviewTarget(c.target);
+                }}
+              >
+                {c.subject || '全科目'}×{c.target ?? 'すべて'}
+              </button>
+            );
+          })()}
+        </div>
+      )}
 
       {/* 上部の検索（科目名・ジャンル・キーワードでしぼり込む） */}
       <div className="card audio-search">
@@ -1264,7 +1366,9 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               : `🔁 「間違えた問題」を読もうとしましたが、${narrowedBy ? `${narrowedBy}では` : ''}この条件では0問でした。${narrowedBy ? '絞り込みを外すか、' : ''}上のキーワードを選ぶと通常の読み上げに戻ります。`}
             {n > 0 && (
               <>
-                <label className="section-label" style={{ marginTop: 10 }}>今回はどれだけ読みますか？（所要時間は目安）</label>
+                {/* 改善案i2：在庫件数を選ぶ前から目立たせる */}
+                <p style={{ margin: '8px 0 0', fontWeight: 700 }}>在庫：{n}問</p>
+                <label className="section-label" style={{ marginTop: 6 }}>今回はどれだけ読みますか？（所要時間は目安）</label>
                 <div className="sess-targets">
                   {SESSION_TARGETS.map((t) => {
                     const estSec = estimateAudioSeconds(Math.min(t, n), { rate, gapSeconds: gap, nextGapSeconds: nextGap });
@@ -1289,6 +1393,25 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                     <span className="sess-target-est">{formatEstimateMinutes(estimateAudioSeconds(n, { rate, gapSeconds: gap, nextGapSeconds: nextGap }))}</span>
                   </button>
                 </div>
+                {/* 新規#4：時間から件数を逆算して選ぶ（今の再生速度・間の設定から見積もる） */}
+                <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <label>時間から選ぶ（今の速度・間から件数を逆算）</label>
+                  <div className="chip-row" style={{ marginBottom: 0 }}>
+                    {[5, 10, 15, 20, 30].map((min) => (
+                      <button
+                        key={min}
+                        className="chip"
+                        onClick={() => {
+                          const perItem = 12 / Math.max(0.1, rate) + gap + nextGap;
+                          const count = Math.max(1, Math.min(n, Math.round((min * 60) / perItem)));
+                          changeReviewTarget(count);
+                        }}
+                      >
+                        {min}分
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {reviewTarget && reviewTarget > n && (
                   <p className="inline-note" style={{ marginTop: 6 }}>
                     対象は{n}問しかないため、{reviewTarget}問には届かずそこで終わります（繰り返しはしません）。
@@ -1298,6 +1421,34 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                   <p className="inline-note" style={{ marginTop: 6 }}>
                     💡 {reviewTarget ?? 'すべて'}はこれまで{rateInfo.starts}回中{rateInfo.finishes}回しか最後まで聞き終えていません。無理せずもう少し少ない件数にしてみては？
                   </p>
+                )}
+                {/* 新規#3：この束をプレイリストに積む（終わったら自動で次の束へ進む） */}
+                <button
+                  className="btn ghost sm"
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    setPlaylistQueue((q) => [...q, { target: reviewTarget, subject: filterSubject || null }]);
+                    onToast?.('🎵 プレイリストに積みました（今の束が終わると自動で次へ進みます）');
+                  }}
+                >
+                  🎵 この束をプレイリストに積む
+                </button>
+                {playlistQueue.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <p className="inline-note" style={{ margin: 0 }}>🎵 プレイリスト（{playlistQueue.length}件、今の束の後に続きます）：</p>
+                    <div className="chip-row" style={{ marginTop: 4 }}>
+                      {playlistQueue.map((it, i) => (
+                        <button
+                          key={i}
+                          className="chip"
+                          onClick={() => setPlaylistQueue((q) => q.filter((_, j) => j !== i))}
+                          title="タップで取り消し"
+                        >
+                          {it.subject || '全科目'}×{it.target ?? 'すべて'} ✕
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 {snap.finished && total > 0 && (
                   <div style={{ marginTop: 10 }}>
@@ -1323,6 +1474,17 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 )}
               </>
             )}
+          </div>
+        );
+      })()}
+
+      {/* 新規#6：時間帯別パフォーマンス分析（Analytics.jsx）と連携 */}
+      {(() => {
+        const best = isNowBestTime(history);
+        if (!best) return null;
+        return (
+          <div className="card" style={{ marginBottom: 10 }}>
+            🕐 今は集中しやすい時間帯です（{best.label}の正答率が高い傾向・{Math.round(best.accuracy * 100)}%）。
           </div>
         );
       })()}
@@ -1377,21 +1539,75 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
             <label className="autokw-row" style={{ marginTop: 6 }}>
               <input
                 type="checkbox"
-                checked={!!settings.audioHeadphoneConfirmed}
-                onChange={(e) => updateSettings({ audioHeadphoneConfirmed: e.target.checked })}
+                checked={settings.audioHeadphoneConfirmedDate === dateKey()}
+                onChange={(e) => updateSettings({ audioHeadphoneConfirmedDate: e.target.checked ? dateKey() : null })}
               />
-              <span>✓ イヤホンを付けています</span>
+              <span>✓ イヤホンを付けています（今日のうちは覚えておきます）</span>
             </label>
           )}
           <Opt
             on={voiceControlOn}
             onToggle={() => setVoiceControlOn((v) => !v)}
-            title="🎙️ 声で自己採点・操作する（○/△/✕・次へ/前へ/止めて）"
-            desc="正解・解説を読み終えたタイミングで一度だけ聞き取ります。この端末のブラウザの音声認識機能を使うため、認識のために音声データが音声認識サーバーへ送られる場合があります（端末内保存方針の明示的な例外）。スピーカー再生中はマイクに読み上げ自体が混ざり誤認識することがあるため、イヤホン使用がおすすめです。"
+            title="🎙️ 声で自己採点・操作する（○/△/✕・次へ/前へ/止めて/全部できた）"
+            desc="正解・解説を読み終えたタイミングで一度だけ聞き取ります。「全部できた」で残りをまとめて○にして終えられます。この端末のブラウザの音声認識機能を使うため、認識のために音声データが音声認識サーバーへ送られる場合があります（端末内保存方針の明示的な例外）。スピーカー再生中はマイクに読み上げ自体が混ざり誤認識することがあるため、イヤホン使用がおすすめです。"
             disabled={!isVoiceCommandSupported()}
           />
           {!isVoiceCommandSupported() && (
             <p className="inline-note">この端末・ブラウザは音声認識（SpeechRecognition）に対応していません。</p>
+          )}
+          {/* 改善案i1：合図音と声コマンドを組み合わせるとタイミングが分かりやすいことを案内 */}
+          {voiceControlOn && !beepOn && (
+            <p className="inline-note">💡 上の「合図音」も一緒にONにすると、聞き取るタイミング（答えが来た直後）が分かりやすくなります。</p>
+          )}
+          {/* 新規#7：声コマンドの言い回しを自分で登録する辞書 */}
+          {voiceControlOn && (
+            <div style={{ marginTop: 8 }}>
+              <div className="section-label" style={{ marginTop: 0 }}>🗣️ 自分の言い回しを登録する</div>
+              {voiceCommandWords.length > 0 && (
+                <ul className="pf-list" style={{ listStyle: 'none', padding: 0, margin: '0 0 8px' }}>
+                  {voiceCommandWords.map((w, i) => (
+                    <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                      <span>「{w.word}」→ {w.type === 'grade' ? { maru: '○', sankaku: '△', batsu: '✕' }[w.kind] : { next: '次へ', prev: '前へ', stop: '止めて', allDone: '全部できた' }[w.kind]}</span>
+                      <button
+                        className="btn ghost sm"
+                        onClick={() => updateSettings({ voiceCommandWords: voiceCommandWords.filter((_, j) => j !== i) })}
+                      >
+                        削除
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="kw-add" style={{ flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  value={vcWord}
+                  onChange={(e) => setVcWord(e.target.value)}
+                  placeholder="聞き取る言葉（例：分かった）"
+                />
+                <select value={vcKind} onChange={(e) => setVcKind(e.target.value)}>
+                  <option value="maru">○ できた</option>
+                  <option value="sankaku">△ あいまい</option>
+                  <option value="batsu">✕ できない</option>
+                  <option value="next">▶ 次へ</option>
+                  <option value="prev">◀ 前へ</option>
+                  <option value="stop">■ 止めて</option>
+                  <option value="allDone">全部できた</option>
+                </select>
+                <button
+                  className="btn sm primary"
+                  onClick={() => {
+                    const word = vcWord.trim();
+                    if (!word) return;
+                    const type = ['maru', 'sankaku', 'batsu'].includes(vcKind) ? 'grade' : 'nav';
+                    updateSettings({ voiceCommandWords: [...voiceCommandWords, { word, type, kind: vcKind }] });
+                    setVcWord('');
+                  }}
+                >
+                  追加
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

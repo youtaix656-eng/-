@@ -246,6 +246,13 @@ export function resetToStart() {
   emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: false });
 }
 
+// 声コマンド「全部できた」等で、残りを読まずにその場で「最後まで読み終えた」状態にする
+// （新規#9）。自然に最後まで読み終えた時と同じ emit にして、終了検知の効果をそのまま使う。
+export function finishNow() {
+  stop();
+  emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true });
+}
+
 export function setSleep(min) {
   clearSleep();
   if (running && min > 0) sleepTimer = setTimeout(() => stop(), min * 60 * 1000);

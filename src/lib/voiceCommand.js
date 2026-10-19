@@ -13,21 +13,32 @@ const GRADE_WORDS = {
   sankaku: ['さんかく', '△', 'あいまい', 'びみょう'],
   batsu: ['ばつ', '✕', 'バツ', 'できない', 'わからない'],
 };
+// 「全部できた」等は"できた"を含むためGRADE_WORDS.maruより先に判定する必要がある（新規#9）。
 const NAV_WORDS = {
+  allDone: ['全部できた', '残り全部', 'ぜんぶできた', 'もう全部できた', '全部わかった'],
   next: ['つぎ', '次へ', '次', 'ネクスト'],
   prev: ['まえ', '前へ', '前', 'もどって', '戻って'],
   stop: ['とめて', '止めて', 'ストップ', '停止'],
 };
 
 // 聞き取ったテキストから、自己採点（grade）か操作（nav）かを判定する。
+// customWordsは本人が登録した言い回し（settings.voiceCommandWords、新規#7）。
+// [{ word, type:'grade'|'nav', kind }] の形で、組み込みの言葉より先に判定する
+// （本人が「分かった」等を追加登録した時、組み込みの言葉とぶつかっても本人の登録を優先する）。
 // どれにも当たらなければnull（当たらなくても黙って無視するだけで、エラーにはしない）。
-export function parseVoiceCommand(text) {
+export function parseVoiceCommand(text, customWords = []) {
   const t = (text || '').trim();
   if (!t) return null;
+  for (const c of customWords || []) {
+    if (c.word && t.includes(c.word)) return { type: c.type, kind: c.kind };
+  }
+  // allDoneは「できた」を含む言い回しなのでGRADE_WORDSより先に判定する。
+  if (NAV_WORDS.allDone.some((w) => t.includes(w))) return { type: 'nav', kind: 'allDone' };
   for (const [kind, words] of Object.entries(GRADE_WORDS)) {
     if (words.some((w) => t.includes(w))) return { type: 'grade', kind };
   }
   for (const [kind, words] of Object.entries(NAV_WORDS)) {
+    if (kind === 'allDone') continue;
     if (words.some((w) => t.includes(w))) return { type: 'nav', kind };
   }
   return null;

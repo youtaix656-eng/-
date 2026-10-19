@@ -4,6 +4,7 @@ import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
 import { daysUntil } from './lib/gamify.js';
 import { haripanReminder, daysSinceLastMockExam } from './data/haripan.js';
 import { daysSinceLastZero } from './lib/reviewZeroLog.js';
+import { loadAudioReviewLog, daysSinceLastAudioReview } from './lib/audioReviewLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
 // 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
 import Home from './components/Home.jsx';
@@ -177,6 +178,10 @@ export default function App() {
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
+  // 音声だけでの復習（AudioMode.jsx）の実施ログ。毎日のリマインド通知に一言相乗りさせる
+  // ためだけに使う軽量な読み込み（新規#8。別のリマインド設定は作らない）。
+  const [audioReviewLog, setAudioReviewLog] = useState([]);
+  useEffect(() => { loadAudioReviewLog().then(setAudioReviewLog); }, []);
   // #18：Homeの「復習だけ◯問」からワンタップでReviewを自動開始するための中継。
   const [reviewQuickStart, setReviewQuickStart] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -321,7 +326,8 @@ export default function App() {
         store.settings.examDate,
         (store.dueReviewQuestions || []).length,
         daysSinceLastZero(store.reviewZeroLog),
-        daysSinceLastMockExam(store.examResults)
+        daysSinceLastMockExam(store.examResults),
+        daysSinceLastAudioReview(audioReviewLog)
       );
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {

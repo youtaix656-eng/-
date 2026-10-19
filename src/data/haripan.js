@@ -157,13 +157,18 @@ export function harioPomoEncourage(setCount) {
 // stalledDays（#6）：復習が何日ゼロに戻せていないか（reviewZeroLog.jsのdaysSinceLastZero）。
 //   既存の「毎日のリマインド通知」（settings.reminder）に相乗りさせる形で拡張した
 //   （復習専用の別リマインド設定は作らない＝同じ機能を2か所に持たない）。
-export function haripanReminder(examDate, dueCount = 0, stalledDays = null, examStalledDays = null) {
+// audioStalledDays（新規#8）：音声だけでの復習（AudioMode.jsxの件数チップ）を最後に
+// 完了してから何日経過したか（audioReviewLog.jsのdaysSinceLastAudioReview）。
+// 復習専用の別リマインドは作らず、既存の「毎日のリマインド通知」に一言相乗りさせる
+// （stalledDays・examStalledDaysと同じ考え方＝同じ機能を2か所に持たない）。
+export function haripanReminder(examDate, dueCount = 0, stalledDays = null, examStalledDays = null, audioStalledDays = null) {
   const left = daysUntil(examDate);
   const tail = left != null && left >= 0 ? `本番まであと${left}日だ。` : '';
   const due = dueCount > 0 ? `復習が${dueCount}問たまってるぞ。` : '';
   const stalled = stalledDays != null && stalledDays >= 3 ? `復習が${stalledDays}日ゼロに戻せてないぞ。今日は復習優先だ。` : '';
   const examStall = examStalledDays != null && examStalledDays >= 14 ? `本番同形式の模試も${examStalledDays}日やってないな。今週末は模試をやろう。` : '';
-  return `よう、ハリオだ。${tail}${due}${stalled}${examStall}今日も一問からいくぞ。`;
+  const audioStall = audioStalledDays != null && audioStalledDays >= 3 ? `耳だけの音声復習も${audioStalledDays}日やってないな。移動中にでも耳だけでどうだ。` : '';
+  return `よう、ハリオだ。${tail}${due}${stalled}${examStall}${audioStall}今日も一問からいくぞ。`;
 }
 
 // 直近の本番同形式の模試（午前/午後/通し）から何日経過しているか。未実施ならnull

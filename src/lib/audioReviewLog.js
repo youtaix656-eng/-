@@ -70,3 +70,32 @@ export function topCombos(log, limit = 3) {
       return { subject: subject || null, target: targetStr ? Number(targetStr) : null, count };
     });
 }
+
+// topCombosが0件（2回以上使った組み合わせがまだ無い）時に、直近1回だけの組み合わせを
+// 薄く案内するための代わり（改善案#4）。「よく使う」とは言えないことが伝わるよう、
+// 呼び出し側で別の見た目（薄い表示）にすること。
+export function recentCombo(log) {
+  const last = (log || []).find((e) => e.kind === 'start');
+  if (!last) return null;
+  return { subject: last.subject || null, target: last.target ?? null };
+}
+
+// 同じ件数(target)・同じ科目の直前の完了実績（終了時の正答率比較に使う、新規#1）。
+// 今回のrecordAudioReviewFinishを呼ぶ前のログに対して呼ぶこと（呼んだ後だと自分自身が
+// 「直前」として返ってしまう）。
+export function previousFinish(log, { target, subject }) {
+  const found = (log || []).find(
+    (e) => e.kind === 'finish' && e.target === target && (e.subject || null) === (subject || null)
+  );
+  if (!found || !found.graded) return null;
+  return { graded: found.graded, wrong: found.wrong, accuracyPct: Math.round(((found.graded - found.wrong) / found.graded) * 100) };
+}
+
+// 音声だけでの復習を最後に実施（完了）した日から何日経過したか。一度も無ければnull
+// （毎日のリマインド通知に相乗りさせる、新規#8と同じ考え方＝reviewZeroLog等と同じ形）。
+export function daysSinceLastAudioReview(log, now = Date.now()) {
+  const finishes = (log || []).filter((e) => e.kind === 'finish');
+  if (!finishes.length) return null;
+  const latest = Math.max(...finishes.map((e) => e.at || 0));
+  return Math.floor((now - latest) / (24 * 60 * 60 * 1000));
+}

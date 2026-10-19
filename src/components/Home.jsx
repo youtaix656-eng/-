@@ -10,6 +10,7 @@ import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import { maruStatusList, excludeMastered, maruSubjectBreakdown, lastMaruReviewAt } from '../lib/maruPool.js';
 import { phaseForDate, upcomingPhaseChange, parseMixRatio, ROADMAP_PHASES } from '../data/roadmapPhases.js';
 import { zeroDaysSummary, daysSinceLastZero } from '../lib/reviewZeroLog.js';
+import { loadAudioReviewLog } from '../lib/audioReviewLog.js';
 import { reviewDailyGoal } from '../lib/reviewGoal.js';
 import { leechList } from '../lib/reviewDwell.js';
 import { dailyForgettingPick } from '../lib/forgetting.js';
@@ -133,6 +134,14 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
   //   「今強化すべき機能ベスト3」を1件ずつ、消すまでずっと出し続ける（priorityFocus.js）。
   const [priorityDismissed, setPriorityDismissed] = useState([]);
   useEffect(() => { loadDismissedPriorityFocus().then(setPriorityDismissed); }, []);
+  // 🎧 音声で復習チップに「今日まだ◯問」を添える（新規#5）。実施ログに今日の完了（finish）が
+  // 1件も無ければ、音声だけでの復習をまだしていないとみなす。
+  const [audioReviewLog, setAudioReviewLog] = useState([]);
+  useEffect(() => { loadAudioReviewLog().then(setAudioReviewLog); }, []);
+  const doneAudioToday = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return audioReviewLog.some((e) => e.kind === 'finish' && e.at >= today.getTime());
+  }, [audioReviewLog]);
   const priorityFocus = useMemo(() => suggestPriorityFocus(priorityDismissed), [priorityDismissed]);
   const dismissPriority = (id) => {
     dismissPriorityFocus(id).then(setPriorityDismissed);
@@ -607,7 +616,9 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
             <button className="chip" onClick={() => onQuickReview?.(5)}>復習だけ5問</button>
             <button className="chip" onClick={() => onQuickReview?.(10)}>復習だけ10問</button>
             {onGoAudioReview && (
-              <button className="chip" onClick={onGoAudioReview}>🎧 音声で復習</button>
+              <button className="chip" onClick={onGoAudioReview}>
+                🎧 音声で復習{!doneAudioToday && dueReviewQuestions.length > 0 ? `（今日まだ${dueReviewQuestions.length}問）` : ''}
+              </button>
             )}
           </div>
         </div>

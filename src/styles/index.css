@@ -377,6 +377,10 @@ button {
   color: #fff;
   border-color: var(--navy);
 }
+.chip.ghost {
+  opacity: 0.6;
+  background: transparent;
+}
 .chip-row {
   display: flex;
   gap: 8px;

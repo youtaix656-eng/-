@@ -3117,6 +3117,77 @@ Android系のブラウザでしか実際には振動しない（アプリ側で�
   意図どおり再生がブロックされる**ことも、QA中に実際に踏んで確認した（バグではなく#23の
   ガード仕様どおりの動作）。
 
+## 音声学習の高速インプット・アウトプット強化・第2弾（2026-10-19追加）
+前バッチ（30項目）の完了後、ユーザーに改めて「ベスト10＋機能の改善案」を尋ねられ、
+前バッチと重複しないか確認した上で新規10項目＋改善案5項目を提案・**全15件の実装を
+ユーザーが承認**（「すべて追加」）したため実装した。
+**新規ファイルは増やさず、既存の`audioReviewLog.js`/`voiceCommand.js`/`haripan.js`への
+追加と、`AudioMode.jsx`/`Home.jsx`/`App.jsx`の変更で収めた。**
+- **新規#1（終了時に前回との正答率比較）**：`audioReviewLog.js`に`previousFinish(log,
+  {target, subject})`を追加（**記録前の`audioLog`に対して呼ぶこと**——呼んだ後だと
+  自分自身が「直前」として返ってしまう）。終了検知の読み上げに「前回よりおよそ◯ポイント
+  上がりました／下がりました」を追加。
+- **新規#2（誤答理由の型別件数を終了時に読む）**：新しい分類はせず、Review.jsx等で**過去に
+  記録済みの分類**（`missTypes.js`の`latestMissType`）だけを`sessionWrong`に対して集計する。
+  分類が無い問題は数えない（分類の有無を正直に反映する）。
+- **新規#3（束の「プレイリスト」）**：`playlistQueue`（`{target, subject}`の配列）。
+  「🎵 この束をプレイリストに積む」で追加、チップをタップで取り消し。束が終わったら
+  （終了検知の中で）休憩を挟まず次の束へ自動で進む（`autoRequeueWrongOn`の「もう一度」より
+  優先度は低く、`return`で先に処理を終えるため両方が同時に走ることはない）。
+- **新規#4（時間から件数を逆算）**：既存の「件数→所要時間の目安」（`estimateAudioSeconds`）を
+  逆に使い、選んだ分数から`Math.round(分×60÷1問あたりの見積秒数)`で件数を出して
+  `changeReviewTarget`に渡すだけ（新しい計算式は作らず、既存の見積もりの逆算）。
+- **新規#5（ホームに「今日まだ◯問」バッジ）**：`Home.jsx`が`audioReviewLog`を読み込み、
+  今日の`finish`記録が無ければ既存の「🎧 音声で復習」チップに件数を添える
+  （`store.dueReviewQuestions.length`をそのまま使う。新しい集計は作っていない）。
+- **新規#6（音声学習にも「集中しやすい時間帯」案内）**：既存の`timeOfDay.js`の
+  `isNowBestTime`をAudioMode.jsxからも呼ぶだけ（Home.jsxと全く同じ判定・同じ文言）。
+- **新規#7（声コマンドの言い回しを自分で登録）**：`settings.voiceCommandWords`
+  （`[{word, type, kind}]`）。`voiceCommand.js`の`parseVoiceCommand(text, customWords)`が
+  組み込みの言葉より先にcustomWordsを判定する（本人の登録が組み込みと衝突しても本人を優先）。
+- **新規#8（毎日のリマインドに音声復習の一言）**：`audioReviewLog.js`に
+  `daysSinceLastAudioReview(log, now)`を追加。`haripanReminder`の5番目の引数
+  `audioStalledDays`として渡し、3日以上やっていなければ一言追加する（既存の
+  `stalledDays`・`examStalledDays`と同じ考え方＝別のリマインド設定を作らない）。
+  `App.jsx`が`loadAudioReviewLog()`を読み込んでから渡す。
+- **新規#9（声コマンド「全部できた」で残りを一括○）**：`voiceCommand.js`の`NAV_WORDS`に
+  `allDone`を追加。**「全部できた」は"できた"（○）を含む文字列のため、GRADE_WORDSより
+  先に判定する**（`parseVoiceCommand`内でallDoneを最初にチェック。先にGRADE_WORDSを
+  見ると"できた"にひっかかって○判定になってしまう）。`AudioMode.jsx`の`gradeRestAsMaru`が
+  今の位置から最後までを一括で○にし、`audioEngine.js`に新設した`finishNow()`
+  （`stop()`＋`finished:true`のemit、自然に最後まで聞き終えた時と同じ状態にする）で
+  終了検知の効果（声での通知・実施ログ記録等）をそのまま発火させる。
+- **新規#10（もう一度のローテーション位置を閉じても覚える）**：`reviewOffset`の初期値を
+  `settings.lastAudioReviewOffset`から読み、変更する5箇所すべてを`setReviewOffsetPersist`
+  （状態更新と同時に`updateSettings`する薄いラッパー）経由に統一した。
+- **改善案i1（合図音と声コマンドの組み合わせを案内）**：声コマンドがONで合図音がOFFの時、
+  「合図音も一緒にONにすると聞き取るタイミングが分かりやすい」という一言を出すだけ
+  （新しい仕組みは無し）。
+- **改善案i2（在庫件数を選ぶ前から目立たせる）**：件数チップの上に太字で「在庫：◯問」を
+  常に表示する（以前は選んだ後の注記にしか出ていなかった）。
+- **改善案i3（イヤホン確認はその日のうちだけ覚える）**：`settings.audioHeadphoneConfirmed`
+  （真偽値）を`settings.audioHeadphoneConfirmedDate`（日付文字列、`dateKey()`と比較）に
+  変更。毎回チェックし直す必要がなくなる一方、日が変われば自然に外れる。
+- **改善案i4（よく使う組み合わせが無い時、直近1回を薄く案内）**：`audioReviewLog.js`に
+  `recentCombo(log)`を追加。`topCombos`が0件の時だけ`.chip.ghost`（新設CSS、薄い見た目）で
+  直近1回の組み合わせを案内する（「よく使う」とは言えないことが見た目で伝わるようにする）。
+- **改善案i5（60問区切りの休憩を「すべて」でも適用）**：以前は件数チップを使っている時
+  （`batchTarget`が真）だけだった休憩の判定を、`source==='review'`または
+  `source==='filter'&&newOnly`であれば「すべて」でも適用するよう条件を変更。
+- 検証：`node --test`（2660件、新規テスト11件追加）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 649KB/700KB・CSS 96KB/110KB）はすべて通過。
+  Playwright QAで実機確認済み：IndexedDBへ現在時刻を正答率が高い時間として注入し
+  「🕐 今は集中しやすい時間帯です」が表示されること、件数チップの上に「在庫：◯問」が
+  表示されること、「時間から選ぶ」チップが表示されること、「この束をプレイリストに積む」
+  →プレイリスト表示、声コマンドONで「自分の言い回しを登録する」フォームから言葉を
+  追加すると一覧に反映されること、合図音ONの案内文が出ること、イヤホン確認チェックボックスの
+  文言が「今日のうちは覚えておきます」に変わっていること、ホームの音声チップが正しく
+  レンダリングされること（バッジ非表示は、テスト用に注入した「今日のfinish記録」が
+  doneAudioToday判定を正しくtrueにしたための意図どおりの結果）を確認。コンソールエラー0件。
+  「全部できた」の声コマンド・終了時の正答率比較・誤答理由別集計は、実際の音声認識と
+  TTSの完了待ちを要するため単体テスト（parseVoiceCommand・previousFinish・
+  daysSinceLastAudioReview）で検証し、実機での発話確認までは行っていない。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
