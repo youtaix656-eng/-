@@ -10,7 +10,7 @@ import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { useMindmapData } from '../lib/mindmapDataLoader.js';
 import { buildKanaIndex } from '../lib/yomi.js';
 import { reviewPoolFor, buildWeaknessSummary, weaknessSummaryToText, recommendNewPct } from '../lib/reviewPool.js';
-import { studyStreak } from '../lib/stats.js';
+import { studyStreak, subjectBalanceWarning, formatPercent } from '../lib/stats.js';
 import { normalize, MASTER_STREAK, isLeech as isLeechState } from '../lib/srs.js';
 import { riskOf } from '../lib/reviewOrder.js';
 import { SESSION_TARGETS, sessionTargetLabel, estimateAudioSeconds, formatEstimateMinutes } from '../lib/sessionTargets.js';
@@ -23,10 +23,19 @@ import { isVoiceCommandSupported, parseVoiceCommand, listenOnce } from '../lib/v
 import { detectHeadphoneHint } from '../lib/headphones.js';
 import {
   loadAudioReviewLog, recordAudioReviewStart, recordAudioReviewFinish,
-  completionRateByTarget, topCombos, recentCombo, previousFinish,
+  completionRateByTarget, completionRateBySubject, topCombos, recentCombo, previousFinish, logToCsv,
 } from '../lib/audioReviewLog.js';
-import { loadMissTypes, latestMissType, missTypeLabel } from '../lib/missTypes.js';
+import { loadMissTypes, latestMissType, missTypeLabel, recordMissType, MISS_TYPES } from '../lib/missTypes.js';
 import { isNowBestTime } from '../lib/timeOfDay.js';
+import { buildCaseLinkMap, keepCasePairsAdjacentObjects } from '../lib/casePairs.js';
+import { dailyForgettingPick } from '../lib/forgetting.js';
+import { todayFocusSubjects } from '../lib/todayFocus.js';
+import { scopeCoverage } from '../data/examScope.js';
+import { daysUntil } from '../lib/gamify.js';
+import { loadSnoozeLog, snoozeCount } from '../lib/snoozeLog.js';
+import { loadContentSeedLog, recentlyAddedIds } from '../lib/contentSeedLog.js';
+import { conceptsOf } from '../lib/concepts.js';
+import { downloadFile } from '../lib/download.js';
 
 // 連結モード（検索窓の下に並ぶ10項目）。id=0 は通常（全部順に読む）。
 const MODES = [
@@ -79,8 +88,29 @@ function Opt({ on, onToggle, title, desc, disabled }) {
   );
 }
 
-export default function AudioMode({ store, onToast, reviewPreset, onConsumePreset, onNavigate, onOpenFlashcardKeyword }) {
-  const { questions, links, history, srs, settings, updateSettings, recordAnswer, setLink, bookmarks, toggleBookmark, voiceCloneApiKey } = store;
+// 複数科目を交互に（位置ごとに1件ずつ）混ぜる。科目ローテーション用。
+function roundRobinMerge(lists) {
+  const out = [];
+  let i = 0;
+  let any = lists.some((l) => l.length > 0);
+  while (any) {
+    any = false;
+    for (const l of lists) {
+      if (i < l.length) { out.push(l[i]); any = true; }
+    }
+    i += 1;
+  }
+  return out;
+}
+
+export default function AudioMode({
+  store, onToast, reviewPreset, onConsumePreset, onNavigate,
+  onOpenFlashcardKeyword, onOpenMnemonicKeyword, onOpenGraphConcept, onOpenGlossaryTerm,
+}) {
+  const {
+    questions, links, history, srs, settings, updateSettings, recordAnswer, setLink, bookmarks, toggleBookmark,
+    voiceCloneApiKey, kwMeta, examResults, reviewQuestions,
+  } = store;
   const voiceClone = settings.voiceClone || { enabled: false, voiceId: '', voiceName: '' };
   const cloneActive = !!(voiceClone.enabled && voiceClone.voiceId && voiceCloneApiKey);
 
@@ -119,6 +149,82 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     }).length,
     [questions, srs]
   );
+  // 症例の連問（casePairs.js）の隣接維持に使う対応表（元の収録順のquestionsから作る。
+  // Session/Quiz/Review.jsxと同じ単一の正。シャッフル・ローテーションで引き離されないように）。
+  const caseLinkMap = useMemo(() => buildCaseLinkMap(questions), [questions]);
+  const adjustCasePairs = (qs) => keepCasePairsAdjacentObjects(qs, caseLinkMap.linkOf, caseLinkMap.pairOf);
+
+  // 今日の1問（忘却予測の上位、Homeと同じ日替わりローテーション）
+  const forgettingPick = useMemo(() => dailyForgettingPick(questions, srs), [questions, srs]);
+
+  // 今日集中すべき科目（Review/Session/Homeと同じtodayFocus.jsを再利用。新しい判定は作らない）
+  const focusSubject = useMemo(() => {
+    const scope = scopeCoverage(questions, history);
+    const picks = todayFocusSubjects(scope, daysUntil(settings.examDate), { questions, limit: 1, examResults });
+    return picks[0] || null;
+  }, [questions, history, settings.examDate, examResults]);
+
+  // 科目バランスの偏り警告（Home/Analyticsと同じ判定）
+  const balanceWarning = useMemo(() => subjectBalanceWarning(history, questions), [history, questions]);
+
+  // 先送り（スヌーズ）記録（Review.jsxと同じ発生源）
+  const [snoozeLogState, setSnoozeLogState] = useState({});
+  useEffect(() => { loadSnoozeLog().then(setSnoozeLogState); }, []);
+
+  // コンテンツ更新ログ（「🆕 新着だけ」フィルタ用。直近14日に追加された問題id）
+  const [seedLog, setSeedLog] = useState([]);
+  useEffect(() => { loadContentSeedLog().then(setSeedLog); }, []);
+  const recentIds = useMemo(() => recentlyAddedIds(seedLog, Date.now() - 14 * 24 * 60 * 60 * 1000), [seedLog]);
+
+  // 本当に期限が来ている問題（isInReview）のid集合。reviewPoolとの差分が「念のため確認」
+  // （Review.jsxのnagameQuestionsと同じ考え方）。
+  const reviewIdSet = useMemo(() => new Set((reviewQuestions || []).map((q) => q.id)), [reviewQuestions]);
+  const [nagameOnly, setNagameOnly] = useState(false); // 🔎 念のため確認だけ
+  const [excludeNagame, setExcludeNagame] = useState(false); // 念のため確認を除外
+  const [snoozedOnly, setSnoozedOnly] = useState(false); // 😴 先送り中の問題だけ
+  const [excludeSnoozed, setExcludeSnoozed] = useState(false); // 先送り中の問題を除外
+  const applyNagameAndSnooze = (list) => {
+    let out = list;
+    if (nagameOnly) out = out.filter((q) => !reviewIdSet.has(q.id));
+    else if (excludeNagame) out = out.filter((q) => reviewIdSet.has(q.id));
+    if (snoozedOnly) out = out.filter((q) => snoozeCount(snoozeLogState, q.id) > 0);
+    else if (excludeSnoozed) out = out.filter((q) => !snoozeCount(snoozeLogState, q.id));
+    return out;
+  };
+
+  // 複数科目をバランスよく混ぜて読む「科目ローテーション」（2科目以上選ぶと単一科目選択より優先）
+  const [rotateSubjects, setRotateSubjects] = useState([]);
+
+  // 今日の目標（Mascot/Homeの全体の目標）。音声の自己採点もhistoryに積まれるため同じ計算で揃う。
+  const dailyGoalCount = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return history.filter((h) => h.at && h.at >= today.getTime()).length;
+  }, [history]);
+  const dailyGoalTarget = settings.dailyGoal ?? 300;
+  const effectiveDailyGoal = mood === 'tired' ? Math.max(20, Math.round(dailyGoalTarget * 0.5)) : dailyGoalTarget;
+
+  // このタブがバックグラウンドの間に束が終わっても知らせる、既定オフのオプトイン通知。
+  const [notifyOn, setNotifyOn] = useState(false);
+  const toggleNotify = async () => {
+    if (!notifyOn) {
+      if (typeof Notification === 'undefined') { onToast?.('この端末・ブラウザは通知に対応していません'); return; }
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { onToast?.('通知が許可されませんでした'); return; }
+    }
+    setNotifyOn((v) => !v);
+  };
+
+  // 選択肢の順番をシャッフルして読む（「いつも3番」のように位置で覚えてしまうのを防ぐ）
+  const [shuffleChoicesOn, setShuffleChoicesOn] = useState(false);
+  const shuffledChoicesFor = (q) => {
+    if (!shuffleChoicesOn || q.type === 'ox' || !Array.isArray(q.choices)) return { choices: q.choices, answerIdx: q.answer };
+    const order = shuffle(q.choices.map((_, i) => i));
+    return { choices: order.map((i) => q.choices[i]), answerIdx: order.indexOf(q.answer) };
+  };
+
+  // 読み間違いをその場で報告するミニフォーム（下の「読み方の手動補正」と同じ状態を使う）
+  const [pfQuickOpen, setPfQuickOpen] = useState(false);
+
   // 直近の学習セッション（10・60・300・900）で間違えた問題
   const lastSessionMisses = useMemo(() => {
     const session = store.session;
@@ -228,6 +334,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const [minWrong, setMinWrong] = useState(0);
   const [leechFirst, setLeechFirst] = useState(false); // リーチ（要注意）を優先して読む
   const [recentOnly, setRecentOnly] = useState(''); // ''|'today'|'week'：直近の誤答だけに絞る
+  const [recentOnlyFilter, setRecentOnlyFilter] = useState(false); // 🆕 新着だけ（直近14日に追加された問題）
   const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
   // 上の選択で段階的にしぼり込む（科目→ジャンル→キーワード）
   // 科目名は公式13科目（はり/きゅうは分割）＋実際に収録されている科目を合わせて表示。
@@ -235,10 +342,13 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     () => uniqJa([...SUBJECT_TAG_NAMES, ...questions.map((q) => q.subject)]),
     [questions]
   );
-  const afterSubject = useMemo(
-    () => (filterSubject ? questions.filter((q) => q.subject === filterSubject) : questions),
-    [questions, filterSubject]
-  );
+  const afterSubject = useMemo(() => {
+    // 複数科目を交互に混ぜて読む「科目ローテーション」（2科目以上選ぶと単一の科目選択より優先）。
+    if (rotateSubjects.length >= 2) {
+      return roundRobinMerge(rotateSubjects.map((s) => questions.filter((q) => q.subject === s)));
+    }
+    return filterSubject ? questions.filter((q) => q.subject === filterSubject) : questions;
+  }, [questions, filterSubject, rotateSubjects]);
   // ジャンル＝出題基準のカテゴリ（q.genre）。キーワード＝細かい語（タグ＋連結キーワード）。
   const genreOptions = useMemo(
     () => uniqJa(afterSubject.flatMap((q) => (q.genre ? [q.genre] : []))),
@@ -285,9 +395,10 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       pool = pool.filter((q) => Math.round(riskOf(q, srs) * 100) >= minRisk);
     }
     if (recentWrongIds) pool = pool.filter((q) => recentWrongIds.has(q.id));
+    if (recentOnlyFilter) pool = pool.filter((q) => recentIds.has(q.id));
     return pool;
-  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIds, minWrong, minRisk, riskTopN, srs, recentWrongIds]);
-  const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || newOnly || minWrong > 0 || minRisk > 0 || riskTopN || recentOnly);
+  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIds, minWrong, minRisk, riskTopN, srs, recentWrongIds, recentOnlyFilter, recentIds]);
+  const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || newOnly || minWrong > 0 || minRisk > 0 || riskTopN || recentOnly || recentOnlyFilter || rotateSubjects.length > 0);
 
   // 連結の工夫（プラン構造を変えるもの＝再構築が必要）
   const [chain, setChain] = useState(false); // #1 関連へ連鎖
@@ -331,9 +442,19 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     if (q.image) return '図を見て答える問題です。画面をご確認ください。';
     return '';
   };
+  // 図表が必要そうな文面なのに画像・図が登録されていない設問（QuestionCard.jsxの警告と同じ基準）。
+  // 音声だけでは判断できないので、読み上げにも注意を足し、自己採点を誤らせない。
+  const needsFigureWarning = (q) => !!q && !q.image && !q.figure && /[図写真]/.test(q.question || '');
   const answerText = (q) => {
     const correct = q.choices[q.answer];
     const label = q.type === 'ox' ? '正解は、' : `正解は、${q.answer + 1}番、`;
+    let t = `${label}${correct}。`;
+    if (q.explanation) t += ` 解説。${q.explanation}`;
+    return t;
+  };
+  const answerTextFor = (q, choices, answerIdx) => {
+    const correct = choices[answerIdx];
+    const label = q.type === 'ox' ? '正解は、' : `正解は、${answerIdx + 1}番、`;
     let t = `${label}${correct}。`;
     if (q.explanation) t += ` 解説。${q.explanation}`;
     return t;
@@ -497,6 +618,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       let base = filteredPool;
       if (shuffleOn) base = shuffle(base);
       if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
+      base = adjustCasePairs(base);
       // 「まだ解いていない問題だけ」に限っては、復習と同じ件数チップのUIを使い回せる。
       if (newOnly) {
         base = applyTarget(base);
@@ -528,17 +650,19 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       if (filterSubject) base = base.filter((q) => q.subject === filterSubject);
       if (filterGenre) base = base.filter((q) => q.genre === filterGenre);
       if (filterRound) base = base.filter((q) => isSameRound(q.round, filterRound));
+      base = applyNagameAndSnooze(base);
     } else if (source === 'tagged') base = taggedQuestions;
     else base = questions;
     if (shuffleOn) base = shuffle(base);
     if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
+    base = adjustCasePairs(base);
     if (source === 'review') {
       base = applyTarget(base);
       return withProgressAnnounce(base);
     }
     return base.map((q) => ({ kind: 'question', q }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
@@ -634,12 +758,14 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     if (item.kind === 'choices') {
       const cq = item.q;
       const subj2 = readSubject && cq.subject ? `${cq.subject}。` : '';
+      const sc2 = shuffledChoicesFor(cq);
       let t = `${subj2}問題。${questionText(cq)}。`;
-      if (cq.type !== 'ox') cq.choices.forEach((c, i) => { t += `${i + 1}番、${c}。`; });
+      if (needsFigureWarning(cq)) t = `注意。この問題は図を確認しないと判断できません。${t}`;
+      if (cq.type !== 'ox') sc2.choices.forEach((c, i) => { t += `${i + 1}番、${c}。`; });
       else t += '正しいか、誤りか。';
       steps.push({ phase: Q, say: t });
       steps.push({ phase: G, waitGap: true });
-      steps.push({ phase: A, say: answerText(cq) });
+      steps.push({ phase: A, say: answerTextFor(cq, sc2.choices, sc2.answerIdx) });
       steps.push({ waitNextGap: true });
       return steps;
     }
@@ -650,6 +776,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       const correct = sq.choices[sq.answer];
       const label = sq.type === 'ox' ? '正解は、' : `正解は、${sq.answer + 1}番、`;
       let t = `${label}${correct}。`;
+      if (needsFigureWarning(sq)) t = `注意。この問題は図が必要です。${t}`;
       const firstSentence = sq.explanation ? sq.explanation.split('。')[0] : '';
       if (firstSentence) t += ` ${firstSentence}。`;
       steps.push({ phase: A, say: t });
@@ -666,14 +793,20 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     }
     const subj = readSubject && q.subject ? `${q.subject}。` : '';
     let frontText = `${subj}問題。${questionText(q)}。`;
-    if (readChoices && q.type !== 'ox' && Array.isArray(q.choices)) {
-      q.choices.forEach((c, i) => { frontText += `${i + 1}番、${c}。`; });
+    if (needsFigureWarning(q)) frontText = `注意。この問題は図を確認しないと判断できません。${frontText}`;
+    const scFront = readChoices ? shuffledChoicesFor(q) : null;
+    if (scFront && q.type !== 'ox' && Array.isArray(q.choices)) {
+      scFront.choices.forEach((c, i) => { frontText += `${i + 1}番、${c}。`; });
     }
     front.push({ phase: Q, say: frontText });
     // 裏（答え）
     const back = [];
-    back.push({ phase: A, say: answerText(q) });
+    back.push({ phase: A, say: scFront ? answerTextFor(q, scFront.choices, scFront.answerIdx) : answerText(q) });
     if (item.note) back.push({ phase: N, say: `つながり。${item.note}` });
+    // 語呂合わせノート（kwMeta）に登録済みの語呂合わせがあれば、答えのあとに読む。
+    const mnemonicTag = effectiveTags(q, links)[0];
+    const mnemonicText = mnemonicTag && kwMeta[mnemonicTag]?.mnemonic;
+    if (mnemonicText) back.push({ phase: N, say: `語呂合わせ。${mnemonicText}` });
 
     if (readSide === 'front') {
       steps.push(...front);
@@ -715,7 +848,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, links, settings.pronunciationFixes] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
@@ -761,6 +894,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);
   useEffect(() => { engine.configure({ nextGapSeconds: nextGap }); }, [nextGap]);
   useEffect(() => { engine.configure({ loop }); }, [loop]);
+  // 🔋 Wake Lock（画面点灯の維持）をオフにできる設定（バッテリーを気にする人向け）
+  useEffect(() => { engine.configure({ wakeLockEnabled: settings.audioWakeLockOff !== true }); }, [settings.audioWakeLockOff]);
   useEffect(() => { engine.configure({ voice: selectedVoice(), pitch: settings.speechPitch || 1 }); }, [voices, settings.voiceURI, settings.speechPitch]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     engine.configure({ cloneVoice: cloneActive ? { apiKey: voiceCloneApiKey, voiceId: voiceClone.voiceId } : null });
@@ -800,6 +935,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
   const current = currentItem?.q;
   // 「今日の調子」がしんどい日は目標を自動で軽くする（Review.jsxと同じ考え方）
   const effectiveGoal = goal > 0 && mood === 'tired' ? Math.max(5, Math.round(goal * 0.5)) : goal;
+  const curTags = current ? effectiveTags(current, links) : [];
 
   // 今日の目標（問題数）に達したら1回だけ知らせる
   useEffect(() => {
@@ -816,6 +952,8 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
 
   // 件数チップ・まだ解いていない問題チップが対象にしている「束」の件数（なければnull＝すべて）
   const batchTarget = (source === 'review' || (source === 'filter' && newOnly)) ? reviewTarget : null;
+  // マスター到達件数の読み上げ（新規）：セッション開始時点のマスター済み累計を覚えておく
+  const masteredAtStartRef = useRef(null);
   const togglePlay = () => {
     if (!playing) {
       // 🎧 イヤホン接続時だけ自動再生する設定がONの時、確認できていなければ止める
@@ -830,7 +968,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
       breakNotifiedRef.current = -1;
       // 実施ログ（#19）：件数チップを使っている束の、最初の再生だけを「開始」として記録する
       if (!snap.started && (source === 'review' || (source === 'filter' && newOnly)) && total > 0) {
-        recordAudioReviewStart({ target: batchTarget, subject: filterSubject || null, n: total }).then(setAudioLog);
+        masteredAtStartRef.current = masteredCount;
+        recordAudioReviewStart({
+          target: batchTarget, subject: filterSubject || null,
+          genre: filterGenre || null, round: filterRound || null, n: total,
+        }).then(setAudioLog);
       }
     }
     engine.toggle();
@@ -909,8 +1051,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     const wrongN = sessionWrong.length;
     const accuracyPct = gradedN > 0 ? Math.round(((gradedN - wrongN) / gradedN) * 100) : null;
     const subj = filterSubject || null;
-    // 新規#1：同じ件数・同じ科目の直前の完了実績と比較する（記録前のログを見る）。
-    const prev = previousFinish(audioLog, { target: batchTarget, subject: subj });
+    const gen = filterGenre || null;
+    const rnd = filterRound || null;
+    // 新規#1：同じ件数・同じ科目（第2弾改善：ジャンル・回も一致した時だけ）の直前の完了実績と比較する
+    // （記録前のログを見る）。
+    const prev = previousFinish(audioLog, { target: batchTarget, subject: subj, genre: gen, round: rnd });
     let accuracyLine = '';
     if (accuracyPct != null) {
       accuracyLine = `自己採点した${gradedN}問のうち、正答率はおよそ${accuracyPct}パーセントです。`;
@@ -931,12 +1076,24 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     if (typeCounts.size > 0) {
       typeLine = [...typeCounts.entries()].map(([t, c]) => `${missTypeLabel(t)}が${c}問`).join('、') + 'でした。';
     }
+    // 要注意（リーチ）だった問題が今回何問含まれていたか
+    const leechWrongCount = sessionWrong.filter((q) => isLeechState(srs[q.id])).length;
+    const leechLine = leechWrongCount > 0 ? `このうち要注意だった問題は${leechWrongCount}問でした。` : '';
+    // マスター到達件数（セッション開始時点との差）
+    const masteredDelta = masteredAtStartRef.current != null ? Math.max(0, masteredCount - masteredAtStartRef.current) : 0;
+    const masteredLine = masteredDelta > 0 ? `このセッションで${masteredDelta}問がマスター済みになりました。` : '';
+    masteredAtStartRef.current = null;
+    // 聞き流しただけ（一度も自己採点していない）件数
+    const ungradedCount = Math.max(0, n - gradedN);
+    const ungradedLine = ungradedCount > 0 ? `${ungradedCount}問は聞くだけで、○△✕を付けていません。付けると記録に残ります。` : '';
     cancelSpeech();
-    const msg = accuracyPct != null
-      ? `おつかれさまでした。${n}問、終わりました。${accuracyLine}${typeLine}`
-      : `おつかれさまでした。${n}問、終わりました。`;
+    const msg = `おつかれさまでした。${n}問、終わりました。${accuracyLine}${typeLine}${leechLine}${masteredLine}${ungradedLine}`;
     speak(msg, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
-    recordAudioReviewFinish({ target: batchTarget, subject: subj, n, graded: gradedN, wrong: wrongN }).then(setAudioLog);
+    recordAudioReviewFinish({ target: batchTarget, subject: subj, genre: gen, round: rnd, n, graded: gradedN, wrong: wrongN }).then(setAudioLog);
+    // バックグラウンド時のローカル通知（既定オフのオプトイン。タブが生きている間だけ）。
+    if (notifyOn && typeof document !== 'undefined' && document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try { new Notification('音声学習', { body: `${n}問、終わりました。${accuracyPct != null ? `正答率約${accuracyPct}%` : ''}` }); } catch (e) { /* noop */ }
+    }
     if (autoRequeueWrongOn && wrongN > 0 && !requeuedRef.current && source === 'review') {
       requeuedRef.current = true;
       const ids = sessionWrong.map((q) => q.id);
@@ -1017,9 +1174,42 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     setRiskTopN(null);
     setMinWrong(0);
     setRecentOnly('');
+    setRecentOnlyFilter(false);
+    setRotateSubjects([]);
+    setNagameOnly(false);
+    setExcludeNagame(false);
+    setSnoozedOnly(false);
+    setExcludeSnoozed(false);
     setReviewTarget(null);
     setReviewOffsetPersist(0);
     setSource('all');
+  };
+  const toggleRecentOnlyFilter = () => {
+    rebuildStop();
+    const next = !recentOnlyFilter;
+    setRecentOnlyFilter(next);
+    setSource(next || filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || newOnly ? 'filter' : 'all');
+  };
+  const toggleRotateSubject = (s) => {
+    rebuildStop();
+    setRotateSubjects((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
+    setSource('filter');
+  };
+  const toggleNagameOnly = () => {
+    rebuildStop();
+    setNagameOnly((v) => { if (!v) setExcludeNagame(false); return !v; });
+  };
+  const toggleExcludeNagame = () => {
+    rebuildStop();
+    setExcludeNagame((v) => { if (!v) setNagameOnly(false); return !v; });
+  };
+  const toggleSnoozedOnly = () => {
+    rebuildStop();
+    setSnoozedOnly((v) => { if (!v) setExcludeSnoozed(false); return !v; });
+  };
+  const toggleExcludeSnoozed = () => {
+    rebuildStop();
+    setExcludeSnoozed((v) => { if (!v) setSnoozedOnly(false); return !v; });
   };
   const changeRecentOnly = (v) => {
     rebuildStop();
@@ -1060,10 +1250,26 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
     });
   };
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）
+  // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）。
+  // 前回との問題の重複率も見る（新規・模試の「前回の同モードとの問題重複率」と同じ考え方）。
+  const prevBatchIdsRef = useRef(null);
+  const justRepeatedRef = useRef(false);
   const repeatWithNextBatch = () => {
     rebuildStop();
+    prevBatchIdsRef.current = new Set(plan.filter((p) => p.kind === 'question' && p.q).map((p) => p.q.id));
+    justRepeatedRef.current = true;
     setReviewOffsetPersist((o) => o + (reviewTarget || 0));
   };
+  useEffect(() => {
+    if (!justRepeatedRef.current || !prevBatchIdsRef.current) return;
+    justRepeatedRef.current = false;
+    const newIds = plan.filter((p) => p.kind === 'question' && p.q).map((p) => p.q.id);
+    if (!newIds.length) return;
+    const overlap = newIds.filter((id) => prevBatchIdsRef.current.has(id)).length;
+    const pct = Math.round((overlap / newIds.length) * 100);
+    onToast?.(pct > 0 ? `🔁 前回との問題の重なり：約${pct}%` : '🔁 前回と重なる問題はありませんでした');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan]);
   const changeKeyword = (kw) => { rebuildStop(); setSelectedKeyword(kw); };
   const toggleChain = () => { rebuildStop(); setChain((v) => !v); };
   const toggleSummary = () => { rebuildStop(); setSummary((v) => !v); };
@@ -1187,6 +1393,41 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         </div>
       )}
 
+      {balanceWarning.hasWarning && (
+        <div className="card" style={{ borderLeft: '4px solid var(--wrong)' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>⚖️ 科目バランスの偏りに注意</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            他の科目は平均{formatPercent(balanceWarning.avgAccuracy)}前後で解けているのに、次の科目だけ極端に低いままです。
+          </p>
+          <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+            {balanceWarning.weakSubjects.map((s) => (
+              <button key={s.subject} className="chip" onClick={() => applyFilter({ subject: s.subject })}>
+                {s.subject}<span className="inline-note" style={{ marginLeft: 4 }}>（{formatPercent(s.accuracy)}）</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {focusSubject && source !== 'review' && (
+        <p className="inline-note" style={{ marginBottom: 10 }}>
+          🧭 たまには苦手分野の「{focusSubject.subject.name}」の読み上げにも挑戦してみましょう（{focusSubject.reason}）。
+          <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => applyFilter({ subject: focusSubject.subject.name })}>この科目にしぼる</button>
+        </p>
+      )}
+
+      {forgettingPick && (
+        <div className="card">
+          <div className="section-label" style={{ marginTop: 0 }}>🧠 忘れそうな1問</div>
+          <p className="inline-note" style={{ marginTop: 0 }}>
+            「{(forgettingPick.question.question || '（図の問題）').slice(0, 40)}」の保持率は約{Math.round(forgettingPick.retrievability * 100)}%まで下がってきています。
+          </p>
+          <button className="btn ghost sm" onClick={() => { startReviewSource(); setCustomReviewIds([forgettingPick.question.id]); }}>
+            🔊 この問題を今すぐ音声で確認する
+          </button>
+        </div>
+      )}
+
       {lastSessionMisses.length > 0 && (
         <button
           className="btn block"
@@ -1300,6 +1541,20 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
           <span>🆕 まだ解いていない問題だけ（下に件数チップが出ます）</span>
         </label>
         <label className="autokw-row" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={recentOnlyFilter} onChange={toggleRecentOnlyFilter} />
+          <span>🆕 新着だけ（直近14日でコンテンツ更新により追加された問題）</span>
+        </label>
+        <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
+          <label>複数科目をバランスよく混ぜて読む（2科目以上選ぶと単一の科目選択より優先）</label>
+          <div className="chip-row" style={{ marginBottom: 0 }}>
+            {subjectOptions.map((s) => (
+              <button key={s} className={`chip ${rotateSubjects.includes(s) ? 'active' : ''}`} onClick={() => toggleRotateSubject(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="autokw-row" style={{ marginTop: 6 }}>
           <input type="checkbox" checked={leechFirst} onChange={(e) => setLeechFirst(e.target.checked)} />
           <span>⚠️ リーチ（要注意）問題を優先して読む</span>
         </label>
@@ -1344,6 +1599,7 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
           if (filterSubject) reviewBase = reviewBase.filter((q) => q.subject === filterSubject);
           if (filterGenre) reviewBase = reviewBase.filter((q) => q.genre === filterGenre);
           if (filterRound) reviewBase = reviewBase.filter((q) => isSameRound(q.round, filterRound));
+          reviewBase = applyNagameAndSnooze(reviewBase);
           n = reviewBase.length;
         }
         const playCount = reviewTarget ? Math.min(n, reviewTarget) : n;
@@ -1368,6 +1624,26 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               <>
                 {/* 改善案i2：在庫件数を選ぶ前から目立たせる */}
                 <p style={{ margin: '8px 0 0', fontWeight: 700 }}>在庫：{n}問</p>
+                {!isNewOnlyMode && (
+                  <div style={{ marginTop: 6 }}>
+                    <label className="autokw-row">
+                      <input type="checkbox" checked={nagameOnly} onChange={toggleNagameOnly} />
+                      <span>🔎 念のため確認だけ（マスター済みだが保持率が下がった問題のみ）</span>
+                    </label>
+                    <label className="autokw-row">
+                      <input type="checkbox" checked={excludeNagame} onChange={toggleExcludeNagame} />
+                      <span>念のため確認を除外（本当に期限が来ている問題だけ）</span>
+                    </label>
+                    <label className="autokw-row">
+                      <input type="checkbox" checked={snoozedOnly} onChange={toggleSnoozedOnly} />
+                      <span>😴 先送り（スヌーズ）中の問題だけ</span>
+                    </label>
+                    <label className="autokw-row">
+                      <input type="checkbox" checked={excludeSnoozed} onChange={toggleExcludeSnoozed} />
+                      <span>先送り（スヌーズ）中の問題を除外</span>
+                    </label>
+                  </div>
+                )}
                 <label className="section-label" style={{ marginTop: 6 }}>今回はどれだけ読みますか？（所要時間は目安）</label>
                 <div className="sess-targets">
                   {SESSION_TARGETS.map((t) => {
@@ -1422,6 +1698,18 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                     💡 {reviewTarget ?? 'すべて'}はこれまで{rateInfo.starts}回中{rateInfo.finishes}回しか最後まで聞き終えていません。無理せずもう少し少ない件数にしてみては？
                   </p>
                 )}
+                {/* 完了率の科目別軸（件数の軸しかなかったものを科目でも見られるように） */}
+                {(() => {
+                  const subjRates = completionRateBySubject(audioLog);
+                  const key = filterSubject || '全科目';
+                  const r = subjRates[key];
+                  if (!r || r.starts < 3 || r.rate == null || r.rate >= 0.5) return null;
+                  return (
+                    <p className="inline-note" style={{ marginTop: 6 }}>
+                      💡 「{key}」はこれまで{r.starts}回中{r.finishes}回しか最後まで聞き終えていません。
+                    </p>
+                  );
+                })()}
                 {/* 新規#3：この束をプレイリストに積む（終わったら自動で次の束へ進む） */}
                 <button
                   className="btn ghost sm"
@@ -1432,6 +1720,14 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                   }}
                 >
                   🎵 この束をプレイリストに積む
+                </button>
+                {' '}
+                <button
+                  className="btn ghost sm"
+                  style={{ marginTop: 8 }}
+                  onClick={() => downloadFile(logToCsv(audioLog), 'shinkyu_audio_review_log.csv', 'text/csv')}
+                >
+                  📄 実施ログを書き出す（CSV）
                 </button>
                 {playlistQueue.length > 0 && (
                   <div style={{ marginTop: 8 }}>
@@ -1469,6 +1765,25 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                       >
                         🃏 今回の内容をFlashcardsで確認する
                       </button>
+                    )}
+                    {sessionWrong.filter((q) => !latestMissType(missTypes[q.id])).length > 0 && (
+                      <div style={{ marginTop: 10 }}>
+                        <div className="section-label" style={{ marginTop: 0 }}>
+                          この誤答、理由は？（未分類の{sessionWrong.filter((q) => !latestMissType(missTypes[q.id])).length}問）
+                        </div>
+                        {sessionWrong.filter((q) => !latestMissType(missTypes[q.id])).map((q) => (
+                          <div key={q.id} className="btn-row" style={{ flexWrap: 'wrap', marginBottom: 6, alignItems: 'center' }}>
+                            <span className="inline-note" style={{ marginRight: 6 }}>
+                              {(q.question || '（図の問題）').slice(0, 20)}…
+                            </span>
+                            {MISS_TYPES.map((t) => (
+                              <button key={t.id} className="chip" onClick={() => recordMissType(q.id, t.id).then(setMissTypes)}>
+                                {t.label}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
@@ -1545,6 +1860,20 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               <span>✓ イヤホンを付けています（今日のうちは覚えておきます）</span>
             </label>
           )}
+          <Opt
+            on={notifyOn}
+            onToggle={toggleNotify}
+            title="📣 タブを離れていても、束が終わったら通知で知らせる"
+            desc="この端末がこのタブを閉じずバックグラウンドにある間だけ通知します。アプリを閉じている時や画面OFF時は届きません（ブラウザの仕様）。既定オフで、ONにする時だけ通知の許可を求めます。"
+          />
+          <label className="autokw-row" style={{ marginTop: 6 }}>
+            <input
+              type="checkbox"
+              checked={settings.audioWakeLockOff === true}
+              onChange={(e) => updateSettings({ audioWakeLockOff: e.target.checked })}
+            />
+            <span>🔋 画面点灯の維持（Wake Lock）をオフにする（バッテリーを節約。再生中に画面が暗くなることがあります）</span>
+          </label>
           <Opt
             on={voiceControlOn}
             onToggle={() => setVoiceControlOn((v) => !v)}
@@ -1658,6 +1987,13 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
         <>
           {/* プレーヤー */}
           <div className="player">
+            {/* スクリーンリーダー向け：フェーズの切り替えを読み上げとは別に伝える */}
+            <div aria-live="polite" className="sr-only">
+              {phase === PHASES.QUESTION && '問題'}
+              {phase === PHASES.GAP && '考え中'}
+              {phase === PHASES.ANSWER && '正解と解説'}
+              {phase === PHASES.NOTE && 'まとめ'}
+            </div>
             {currentItem?.keyword && <div className="now-keyword">🔗 {currentItem.keyword}</div>}
             <div>
               <span className="now-phase">
@@ -1674,6 +2010,9 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                   {mood === 'tired' && goal > 0 && effectiveGoal < goal && '（少なめに調整中）'}
                 </span>
               )}
+              <span className="now-index" style={{ marginLeft: 8 }}>
+                📅 今日の目標 {dailyGoalCount}/{effectiveDailyGoal}問
+              </span>
             </div>
 
             <div className="now-subject">
@@ -1689,6 +2028,11 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                   : '')}
             </div>
             {current?.image && <img className="now-image" src={current.image} alt="問題の図" loading="lazy" />}
+            {current && needsFigureWarning(current) && (
+              <div className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
+                ⚠ この設問は図・写真に言及していますが、画像が登録されていません。この問題は判断せず、あとで報告してください。
+              </div>
+            )}
             <div className="now-text">
               {currentItem?.kind === 'flashcard'
                 ? `用語：${currentItem.keyword}`
@@ -1786,6 +2130,41 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                 ✓ ○/△/✕は今日の学習記録（マスコットの今日の目標）にも反映されます。
               </p>
             )}
+            {/* 語呂合わせノート（kwMeta）との連携：登録済みならその場で表示、無ければ登録導線 */}
+            {current && curTags[0] && (
+              kwMeta[curTags[0]]?.mnemonic ? (
+                <div className="card" style={{ marginTop: 8 }}>
+                  <div className="section-label" style={{ marginTop: 0 }}>📔 語呂合わせ</div>
+                  <p style={{ margin: 0 }}>{kwMeta[curTags[0]].mnemonic}</p>
+                </div>
+              ) : onOpenMnemonicKeyword ? (
+                <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onOpenMnemonicKeyword(curTags[0])}>
+                  📔 語呂合わせを登録
+                </button>
+              ) : null
+            )}
+            {/* 知識グラフ・フラッシュカード・用語集への相互リンク（Review.jsxと同じ既存の中継を再利用） */}
+            {current && (
+              <div className="btn-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                {onOpenGraphConcept && conceptsOf(current, links)[0] && (
+                  <button className="btn ghost sm" onClick={() => onOpenGraphConcept(conceptsOf(current, links)[0])}>🕸️ 知識グラフで見る</button>
+                )}
+                {onOpenFlashcardKeyword && curTags[0] && (
+                  <button className="btn ghost sm" onClick={() => onOpenFlashcardKeyword(curTags[0])}>🃏 カードで見る</button>
+                )}
+                {onOpenGlossaryTerm && curTags[0] && (
+                  <button className="btn ghost sm" onClick={() => onOpenGlossaryTerm(curTags[0])}>📖 用語集で見る</button>
+                )}
+                <button className="btn ghost sm" onClick={() => setPfQuickOpen((v) => !v)}>🔤 読み間違いを報告</button>
+              </div>
+            )}
+            {current && pfQuickOpen && (
+              <div className="kw-add" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                <input type="text" value={pfTerm} onChange={(e) => setPfTerm(e.target.value)} placeholder="誤って読まれた言葉" />
+                <input type="text" value={pfReading} onChange={(e) => setPfReading(e.target.value)} placeholder="正しい読み方（ひらがな）" />
+                <button className="btn sm primary" onClick={() => { addPronunciationFix(); setPfQuickOpen(false); }}>登録</button>
+              </div>
+            )}
             {current && tagOpen && (
               <div className="kw-add" style={{ marginTop: 8 }}>
                 <input
@@ -1845,6 +2224,14 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
               title="表（問題）で選択肢も読む（四択）"
               desc="四択の1〜4の選択肢も表面で読み上げます。本番と同じ形で耳から確認できます。"
             />
+            {(readChoices || mode === 6) && (
+              <Opt
+                on={shuffleChoicesOn}
+                onToggle={() => setShuffleChoicesOn((v) => !v)}
+                title="選択肢の順番をシャッフルして読む"
+                desc="「いつも3番が正解」のように位置で覚えてしまうのを防ぎます。読み上げる時だけ順番を入れ替え、正解の番号も読み替えます。"
+              />
+            )}
             <Opt
               on={recallMode}
               onToggle={() => setRecallMode((v) => !v)}
@@ -1956,6 +2343,13 @@ export default function AudioMode({ store, onToast, reviewPreset, onConsumePrese
                   />
                   <span>この声で読み上げる（オフ＝下の「声を選ぶ」を使用）</span>
                 </label>
+                {cloneActive && typeof navigator !== 'undefined' && navigator.connection &&
+                  (navigator.connection.saveData || /2g/.test(navigator.connection.effectiveType || '')) && (
+                  <p className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
+                    📶 データセーバー・低速回線が検出されました。自分の声（ボイスクローン）は読み上げのたびに通信が発生します。
+                    気になる場合は上の「この声で読み上げる」をオフにしてください。
+                  </p>
+                )}
               </>
             ) : (
               <p className="inline-note">

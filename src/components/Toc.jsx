@@ -28,6 +28,8 @@ export default function Toc({
   onOpenGraphConcept,
   onOpenFlashcardKeyword,
   onStartCustomQuiz,
+  focusKeyword,
+  onConsumeFocusKeyword,
 }) {
   const { questions } = store;
   const [loaded, setLoaded] = useState(false);
@@ -86,6 +88,23 @@ export default function Toc({
     setOpenTermId(action.openTermId);
     setActiveAnchor(action.anchor);
   };
+
+  // 他画面（音声学習等）からの「この用語を見る」導線。完全一致（本題・別名とも）で
+  // 見つかった時だけ開き、見つからなければ索引に留まって検索欄にその語を入れておく
+  // （見つからない目印を渡さない＝勝手に推測で結びつけない）。
+  useEffect(() => {
+    if (!focusKeyword || !loaded) return;
+    const match = entries.find((e) => e.title === focusKeyword);
+    if (match) {
+      openEntry(match);
+    } else {
+      setTab('index');
+      setQuery(focusKeyword);
+      onToast?.(`「${focusKeyword}」に一致する用語が見つかりませんでした。索引から探してみてください。`);
+    }
+    onConsumeFocusKeyword?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKeyword, loaded, entries]);
 
   const runDestination = (dest) => {
     const action = resolveDestination(dest);

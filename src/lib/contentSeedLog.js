@@ -45,3 +45,11 @@ export function latestSeedEntry(log) {
 export function seedEntriesSince(log, sinceMs) {
   return (log || []).filter((e) => e.at >= sinceMs);
 }
+
+// 基準時刻以降に追加された問題idの集合（音声学習の「🆕 新着だけ」フィルタ向け）。
+// 「まだ解いていない問題」とは別軸（新着でも既に解いた問題は含む）。
+export function recentlyAddedIds(log, sinceMs) {
+  const set = new Set();
+  for (const e of seedEntriesSince(log, sinceMs)) for (const id of e.ids || []) set.add(id);
+  return set;
+}

@@ -173,6 +173,7 @@ export default function App() {
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [focusFlashcardKeyword, setFocusFlashcardKeyword] = useState(null);
   const [focusMnemonicKeyword, setFocusMnemonicKeyword] = useState(null);
+  const [focusGlossaryTerm, setFocusGlossaryTerm] = useState(null);
   const [ocrInitialImage, setOcrInitialImage] = useState(null);
   const [focusGraphConcept, setFocusGraphConcept] = useState(null);
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
@@ -419,6 +420,12 @@ export default function App() {
     setFocusGraphConcept(concept);
     setView('kgraph');
   };
+  // 音声学習→用語集への連携（同じ「一度だけ消費」の型）。一致する用語が無ければ
+  // Toc.jsx側で索引のまま留まり、検索欄にその語を入れておく（見つからない目印を渡さない）。
+  const openGlossaryTerm = (kw) => {
+    setFocusGlossaryTerm(kw);
+    setView('glossary');
+  };
   const jumpToRoadmapLevel = (levelId) => {
     setFocusRoadmapLevel(levelId);
     setView('roadmap');
@@ -609,6 +616,9 @@ export default function App() {
             onConsumePreset={() => setAudioReview(false)}
             onNavigate={setView}
             onOpenFlashcardKeyword={openFlashcardKeyword}
+            onOpenMnemonicKeyword={openMnemonicKeyword}
+            onOpenGraphConcept={openGraphConcept}
+            onOpenGlossaryTerm={openGlossaryTerm}
           />
         );
       case 'exam':
@@ -767,6 +777,8 @@ export default function App() {
             onOpenGraphConcept={openGraphConcept}
             onOpenFlashcardKeyword={openFlashcardKeyword}
             onStartCustomQuiz={startCustomQuiz}
+            focusKeyword={focusGlossaryTerm}
+            onConsumeFocusKeyword={() => setFocusGlossaryTerm(null)}
           />
         );
       case 'connect':

@@ -25,7 +25,7 @@ let state = {
 };
 
 let plan = []; // [{ steps:[{phase, say?, wait?(ms), waitGap?:true|'cap2'}], display }]
-const settings = { rate: 1, pitch: 1, gapSeconds: 2, nextGapSeconds: 1, voice: null, loop: false, cloneVoice: null };
+const settings = { rate: 1, pitch: 1, gapSeconds: 2, nextGapSeconds: 1, voice: null, loop: false, cloneVoice: null, wakeLockEnabled: true };
 // cloneVoice: { apiKey, voiceId } | null。設定されていればブラウザのspeechSynthesisの
 // 代わりにボイスクローン（BYOK・ElevenLabs）で読み上げる（AudioMode.jsxのトグルで切替）。
 
@@ -90,6 +90,9 @@ function setupMediaSession() {
     navigator.mediaSession.setActionHandler('stop', () => stop());
     navigator.mediaSession.setActionHandler('nexttrack', () => skip(1));
     navigator.mediaSession.setActionHandler('previoustrack', () => skip(-1));
+    // イヤホン・外部機器の「早送り/早戻し」ボタンも次へ/前へに割り当てる（対応端末のみ）。
+    navigator.mediaSession.setActionHandler('seekforward', () => skip(1));
+    navigator.mediaSession.setActionHandler('seekbackward', () => skip(-1));
     navigator.mediaSession.playbackState = 'playing';
   } catch (e) {
     /* noop */
@@ -266,6 +269,7 @@ function clearSleep() {
 }
 
 async function requestWakeLock() {
+  if (!settings.wakeLockEnabled) return; // バッテリーを気にする人向けにオフにできる（設定）
   try {
     if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && !wakeLock) {
       wakeLock = await navigator.wakeLock.request('screen');

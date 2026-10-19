@@ -82,13 +82,59 @@ export function recentCombo(log) {
 
 // 同じ件数(target)・同じ科目の直前の完了実績（終了時の正答率比較に使う、新規#1）。
 // 今回のrecordAudioReviewFinishを呼ぶ前のログに対して呼ぶこと（呼んだ後だと自分自身が
-// 「直前」として返ってしまう）。
-export function previousFinish(log, { target, subject }) {
+// 「直前」として返ってしまう）。genre・roundも渡すと、それらも一致した時だけ比較対象にする
+// （第2弾改善：以前は科目一致だけだったため、ジャンル・回で絞った時は比較が効かなかった）。
+export function previousFinish(log, { target, subject, genre = null, round = null }) {
   const found = (log || []).find(
-    (e) => e.kind === 'finish' && e.target === target && (e.subject || null) === (subject || null)
+    (e) =>
+      e.kind === 'finish' &&
+      e.target === target &&
+      (e.subject || null) === (subject || null) &&
+      (e.genre || null) === (genre || null) &&
+      (e.round || null) === (round || null)
   );
   if (!found || !found.graded) return null;
   return { graded: found.graded, wrong: found.wrong, accuracyPct: Math.round(((found.graded - found.wrong) / found.graded) * 100) };
+}
+
+// 科目別の完了率（件数の軸しかなかった completionRateByTarget の科目版）。
+export function completionRateBySubject(log) {
+  const starts = new Map();
+  const finishes = new Map();
+  for (const e of log || []) {
+    const key = e.subject || '全科目';
+    if (e.kind === 'start') starts.set(key, (starts.get(key) || 0) + 1);
+    if (e.kind === 'finish') finishes.set(key, (finishes.get(key) || 0) + 1);
+  }
+  const out = {};
+  for (const [key, starts_] of starts) {
+    const fin = finishes.get(key) || 0;
+    out[key] = { starts: starts_, finishes: fin, rate: starts_ > 0 ? fin / starts_ : null };
+  }
+  return out;
+}
+
+function escCsv(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// 実施ログの書き出し（Review.jsxの要注意一覧CSVと同じパターン）。
+export function logToCsv(log) {
+  const header = ['種別', '日時', '件数', '科目', '自己採点数', '誤答数'];
+  const rows = (log || []).map((e) =>
+    [
+      e.kind === 'start' ? '開始' : '完了',
+      e.at ? new Date(e.at).toLocaleString('ja-JP') : '',
+      e.target == null ? 'すべて' : e.target,
+      e.subject || '全科目',
+      e.graded ?? '',
+      e.wrong ?? '',
+    ]
+      .map(escCsv)
+      .join(',')
+  );
+  return [header.join(','), ...rows].join('\n');
 }
 
 // 音声だけでの復習を最後に実施（完了）した日から何日経過したか。一度も無ければnull

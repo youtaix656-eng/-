@@ -3188,6 +3188,136 @@ Android系のブラウザでしか実際には振動しない（アプリ側で�
   TTSの完了待ちを要するため単体テスト（parseVoiceCommand・previousFinish・
   daysSinceLastAudioReview）で検証し、実機での発話確認までは行っていない。
 
+## 音声学習の高速インプット・アウトプット強化・第3弾（2026-10-19追加）
+前バッチ（30項目＋改善案5件）の完了後、ユーザーに「これら音声勉強の改善点を30こ探してください」と
+依頼され、第1弾・第2弾で実装済みの機能一式（モード・件数チップ・各種トグル・実施ログ・連携先等）と
+重複しないかAudioMode.jsx（2082行）・audioEngine.js・audioReviewLog.js・voiceCommand.js・
+headphones.js・sound.jsを全文読み、Review.jsx/Home.jsx/Analytics.jsx/App.jsxの連携状況も
+grep確認したうえで、本当に欠けていた30項目を提案・**ユーザーの「ては全て改善」（全て改善して
+ください、の意）で全件承認**を得て実装した。
+- **既存画面には実装済みなのに音声学習だけ抜けていた連携**：
+  1. **症例の連問（`lib/casePairs.js`）の隣接維持が無かった**——Session/Quiz/Review.jsxは
+     `buildCaseLinkMap`/`keepCasePairsAdjacentObjects`で連問を隣接させるが、AudioModeの
+     シャッフル・「もう一度」ローテーションはこの仕組みを一切呼んでいなかった。`caseLinkMap`
+     （`questions`全体から導出、他画面と同じ単一の正）を`adjustCasePairs()`として、
+     connected-learning以外の標準読み上げパス（review/tagged/all・filter）2箇所に適用した
+     （連結モード1〜10は意図的な並べ替えが設計の一部のため対象外）。
+  2. **図・写真が必要なのに画像が登録されていない設問の警告が無かった**（QuestionCard.jsxには
+     既にある）。`needsFigureWarning(q)`を追加し、画面表示（⚠バナー）と読み上げ本文
+     （「注意。この問題は図を確認しないと判断できません。」）の両方に適用（通常の前面・
+     「選択肢読み上げ」モード・「問題文を省略」の高速モードの3箇所）。
+  3. **「今日集中すべき科目」（`lib/todayFocus.js`）との連携が無かった**——Review/Session/Homeは
+     使っているがAudioModeだけ未連携。Review.jsxと全く同じ呼び出し（`scopeCoverage`＋
+     `todayFocusSubjects`）を移植し、声かけ＋「この科目にしぼる」ボタンを追加。
+  4. **科目バランス警告（`stats.subjectBalanceWarning`）との連携が無かった**——Home/Analyticsと
+     同じ判定・同じ表示パターンをそのまま追加。
+  5. **忘却予測「今日の1問」（`forgetting.dailyForgettingPick`、Homeが使用）を音声で確認する
+     ショートカットが無かった**——「🧠 忘れそうな1問」カードを追加し、`customReviewIds`で
+     その1問だけを読み上げる。
+  6. **語呂合わせノート（`kwMeta`）との連携が無かった**——登録済みなら正解のあとに読み上げ・
+     画面にも表示、未登録なら`onOpenMnemonicKeyword`（既存の中継、App.jsxには既にあったが
+     AudioModeへは未配線）で登録導線へ。
+  7. **知識グラフへのリンクが無かった**——Review.jsxの「🕸️ 知識グラフで見る」と同じボタンを
+     現在の問題カードに追加（`onOpenGraphConcept`、既存の中継を配線しただけ）。
+  8. **用語集（glossary）への深いリンクが無かった**——`App.jsx`に`openGlossaryTerm`（
+     `focusGlossaryTerm`＋`onConsumeFocusKeyword`の「一度だけ消費」の型、既存の
+     `openFlashcardKeyword`等と同じパターン）を新設し、`Toc.jsx`に`focusKeyword`/
+     `onConsumeFocusKeyword`propを追加。**完全一致（本題・別名とも）で見つかった時だけ開き、
+     見つからなければ索引に留まって検索欄にその語を入れておく**（見つからない目印を渡さない、
+     既存の用語集の方針どおり）。他画面の詳細アンカーのような「運んでハイライトする」までは
+     作っていない（用語の説明パネルを開くところまで）。
+- **復習の仕組みとの連携漏れ**：
+  9. **「念のため確認」だけに絞る／除外するトグルが無かった**（Review.jsxには逆の「除外」は
+     あるが、AudioModeはそもそも分離できなかった）。`store.reviewQuestions`（本当に期限が
+     来ている問題、Review.jsxの`nagameQuestions`と同じ考え方）との差分で判定する
+     `nagameOnly`/`excludeNagame`トグルを追加（排他）。
+  10. **スヌーズ中（先送り）の問題を除外／あえて含める選択肢が無かった**——`snoozedOnly`/
+      `excludeSnoozed`トグルを追加（nagameと同じ排他ペアのパターン）。
+  11. **誤答理由（型）が未分類の△・✕を、セッション終了後にその場で分類する導線が無かった**
+      （今までは読むだけで、記録する側の導線が無かった）。完了画面に、未分類の誤答を
+      一覧表示し`recordMissType`で直接分類できるワンタップボタンを追加。
+  12. **要注意（リーチ）だった問題が今回何問含まれていたかを終了時に知らせなかった**——
+      `isLeechState(srs[q.id])`で今回の誤答のうち要注意だった件数を数え、読み上げに追加。
+  13. **終了時の正答率比較（`previousFinish`）が科目一致だけだった**——ジャンル・回も
+      一致した時だけ比較対象にするよう`audioReviewLog.js`のスキーマ・関数を拡張
+      （`genre`/`round`を記録・比較に追加。既存呼び出しは省略可能なので後方互換）。
+  14. **週次の弱点ジャーナル（WeeklyJournal.jsx）に音声復習の実施が自動で載らなかった**——
+      既存の4つの自動追記チップ（手薄科目・復習停滞・要注意解消・弱点改善）と同じ形で
+      「今週は音声だけでの復習を◯回行った。」チップを追加（`audioReviewCountSince`を
+      そのまま再利用。新しい集計は作っていない）。
+  15. **カレンダーの日別詳細に「この日に音声学習をしたか」の印が無かった**——
+      `loadAudioReviewLog()`をCalendar.jsxからも独立して読み（AudioMode側のReact状態とは
+      別の発生源）、`finish`記録の日付集合と選択日を突き合わせて表示。
+- **音声ならではの改善**：
+  16. **選択肢読み上げで、選択肢の順番が常に収録順のまま**だった（「いつも3番」のように
+      位置で覚えてしまう恐れ）。`shuffledChoicesFor(q)`で選択肢の表示順と正解番号を一緒に
+      並べ替える（前面の読み上げと後面の正解アナウンスで同じ並びを使う。別々に並べ替えると
+      矛盾するため、1回の計算を両方で共有する設計にした）。
+  17. **読み間違いの報告に、毎回「用語」「読み」をゼロから入力する必要があった**——
+      どの語が誤読されたかをアプリ側では特定できないため「自動で埋める」ことはできないが、
+      現在の問題カードのその場にミニフォーム（既存の手動補正辞書と同じstate）を出し、
+      下までスクロールせず報告できるようにした（できないこと＝自動推定はせず、できること＝
+      フォームを近づけるだけに絞った）。
+  18. **複数科目を交互に混ぜて読む「科目ローテーション」が無かった**——単一科目選択の
+      `afterSubject`を、2科目以上選んだ時だけ`roundRobinMerge`で位置ごとに1件ずつ混ぜた
+      配列に差し替える（単一科目選択より優先、ジャンル・回・新規等の既存フィルタは
+      そのまま下流で効く設計）。
+  19. **終了時に「マスター済み（5連続○）に到達した件数」を知らせなかった**——セッション
+      開始時点の`masteredCount`を`masteredAtStartRef`に記録し、終了時との差分を読み上げる。
+  20. **「もう一度」で、前回との問題の重なり具合を示さなかった**（模試の「前回の同モードとの
+      問題重複率」と同じ考え方）。ローテーション直前の束のidを記憶し、新しい束が組まれた後に
+      重複率をトーストで表示する。
+  21. **セッション中、一度も自己採点しなかった（聞き流しただけの）問題数を終了時に伝えなかった**。
+- **負荷・アクセシビリティ・バックグラウンド**：
+  22. **Wake Lock（画面点灯の維持）をオフにできる設定が無かった**——`audioEngine.js`の
+      `requestWakeLock()`に`settings.wakeLockEnabled`のゲートを追加（1箇所で効くようにし、
+      呼び出し側の分岐は増やしていない）。既定はtrue（今までどおり常にON）。
+  23. **タブがバックグラウンドの間に束が終わっても知らせる手段が無かった**——ローカル通知
+      （Notification API、既定オフのオプトイン、EarPomo/Ouroと同じ「できないことをできる
+      ふりに書かない」設計。許可はONにする時だけ求める。`document.hidden`の時だけ発火）。
+  24. **イヤホンの物理ボタン（メディアセッションのseekforward/seekbackward）が次へ/前へに
+      割り当たっていなかった**（nexttrack/previoustrackのみ対応だった）。`audioEngine.js`の
+      `setupMediaSession`に2行追加しただけ。
+  25. **フェーズ切り替えをスクリーンリーダーに伝えるaria-live領域が無かった**——TTS前提の
+      作りで、視覚と聴覚の両方の補助が要る人への配慮が抜けていた。`.sr-only`（既存のCSS
+      クラス）で視覚的に隠した`aria-live="polite"`領域を追加。
+  26. **ボイスクローン（BYOK・ネットワーク使用）使用時、モバイル回線への配慮が無かった**——
+      `navigator.connection`（対応ブラウザのみ）の`saveData`/`effectiveType`を見て、
+      該当時は注意書きを出すだけ（勝手にオフにはしない。できることとできないことを
+      正直に書く既存方針どおり）。
+- **可視化・書き出し**：
+  27. **完了率（`completionRateByTarget`）が件数の軸しかなかった**——`completionRateBySubject`
+      を追加し、科目別の「最後まで聞き終えた割合」も同じ低完了率の注意文で表示。
+  28. **実施ログ（audioReviewLog）のCSV書き出しが無かった**——`logToCsv`を追加し、
+      Review.jsxの要注意一覧CSVと同じ`downloadFile`パターンで書き出しボタンを設置。
+  29. **コンテンツ更新で新しく追加された問題だけに絞る「🆕 新着だけ」フィルタが無かった**
+      （「まだ解いていない問題」とは別軸）。`contentSeedLog.js`に`recentlyAddedIds(log,
+      sinceMs)`を追加し、直近14日の追加分id集合で`filteredPool`を絞り込む。
+  30. **今日の目標（Mascot/Homeの全体の目標）の進捗が音声学習の画面内から見えなかった**——
+      Mascot.jsxと同じ計算式（`settings.dailyGoal`・今日の調子による軽減）をAudioMode内に
+      複製し、プレーヤーのヘッダーに「📅 今日の目標 ◯/◯問」を追加（音声の自己採点も
+      historyに積まれるため同じ数字で揃う）。
+- 新設ファイルは増やさず、既存の`casePairs.js`/`forgetting.js`/`todayFocus.js`/
+  `snoozeLog.js`/`missTypes.js`/`contentSeedLog.js`/`concepts.js`/`download.js`への
+  importの追加と、`audioReviewLog.js`（`completionRateBySubject`/`logToCsv`/`previousFinish`の
+  拡張）・`audioEngine.js`（`wakeLockEnabled`・seekforward/seekbackward）・`contentSeedLog.js`
+  （`recentlyAddedIds`）への小さな追加だけで収めた。
+- 検証：`node --test`（2660件、既存テストに影響なし）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 662KB/700KB・CSS 96KB/110KB）はすべて通過。
+  Playwright QAで実機確認済み：IndexedDBへ問題・srs・history・kwMeta・snoozeLog・
+  contentSeedLogを注入し、忘れそうな1問・今日集中すべき科目・科目バランス（別QAで
+  balanceWarningも確認）・念のため確認だけ／先送り中だけ・実施ログCSV書き出し・
+  プレイリスト・新着だけ・科目ローテーションの各UIが表示されること、語呂合わせカード・
+  知識グラフ/フラッシュカード/用語集へのボタン・読み間違い報告フォーム・今日の目標
+  （Mascot）表示・Wake Lockオフ設定・通知トグルがすべて表示・操作できること、
+  選択肢シャッフルトグルが「選択肢も読む」をONにした時だけ出ること、カレンダーの
+  日別詳細に音声学習実施済みの印が出ること、週次の弱点ジャーナルに音声復習回数の
+  自動追記チップが出ることを確認。コンソールエラー0件。用語集への深いリンクは、
+  一致する用語が無い場合に索引へフォールバックしトーストが出ることまでは確認したが、
+  実際に一致する用語（別名含む）がヒットするケースは別QAでは検証していない
+  （`Toc.jsx`の既存の完全一致ロジックをそのまま再利用しているため、ロジック自体の
+  リスクは低いと判断）。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

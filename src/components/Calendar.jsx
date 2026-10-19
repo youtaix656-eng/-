@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { phaseForDate, phasesInMonth } from '../data/roadmapPhases.js';
 import { planStudySession, DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 import { isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
 import { reviewDwellBySubject } from '../lib/reviewDwell.js';
+import { loadAudioReviewLog } from '../lib/audioReviewLog.js';
 
 // カレンダー：勉強や試験などの予定を入力・管理する。
 // 予定は store.schedule = [{ id, date, time, title, memo, kind }] に保存。
@@ -82,6 +83,15 @@ export default function Calendar({ store, onToast, onNavigate }) {
 
   // #23：科目別の滞留日数（未解消のまま復習対象に居続けている期間）。上位1件だけ日別詳細に添える。
   const dwellBySubject = useMemo(() => reviewDwellBySubject(reviewQuestions, srs, history), [reviewQuestions, srs, history]);
+
+  // 音声学習（AudioMode.jsx）で実施済みの日付（音声学習側のストアとは別の発生源なのでここだけで読む）。
+  const [audioLog, setAudioLog] = useState([]);
+  useEffect(() => { loadAudioReviewLog().then(setAudioLog); }, []);
+  const audioDoneDays = useMemo(() => {
+    const set = new Set();
+    for (const e of audioLog) if (e.kind === 'finish' && e.at) set.add(ymd(new Date(e.at)));
+    return set;
+  }, [audioLog]);
 
   const byDate = useMemo(() => {
     const m = {};
@@ -277,6 +287,9 @@ export default function Calendar({ store, onToast, onNavigate }) {
           <p className="inline-note" style={{ marginTop: 4 }}>
             滞留長め：{dwellBySubject[0].subject}（平均{dwellBySubject[0].avgDays}日・{dwellBySubject[0].count}問）
           </p>
+        )}
+        {audioDoneDays.has(selected) && (
+          <p className="inline-note" style={{ marginTop: 4 }}>🎧 この日は音声学習を実施済みです。</p>
         )}
         {selectedEvents.length === 0 ? (
           <p className="inline-note">この日の予定はまだありません。</p>

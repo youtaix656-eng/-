@@ -7,6 +7,7 @@ import { loadContentSeedLog, seedEntriesSince } from '../lib/contentSeedLog.js';
 import { zeroDaysSummary } from '../lib/reviewZeroLog.js';
 import { resolvedLeechesSince } from '../lib/reviewDwell.js';
 import { weakTagClusters, tagTrend } from '../lib/weakClusters.js';
+import { loadAudioReviewLog, audioReviewCountSince } from '../lib/audioReviewLog.js';
 
 function formatWeekLabel(weekKeyStr) {
   const start = new Date(Number(weekKeyStr));
@@ -26,10 +27,12 @@ export default function WeeklyJournal({ store, onNavigate }) {
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState(false);
   const [seedLog, setSeedLog] = useState([]); // #30：今週埋めた手薄科目の自動追記候補
+  const [audioLog, setAudioLog] = useState([]); // 音声学習の実施ログ（AudioMode.jsxと同じ発生源）
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
   useEffect(() => { loadRoundLog().then(setRoundLog); }, []);
   useEffect(() => { loadContentSeedLog().then(setSeedLog); }, []);
+  useEffect(() => { loadAudioReviewLog().then(setAudioLog); }, []);
   useEffect(() => {
     loadWeeklyNotes().then((all) => {
       setNotes(all);
@@ -77,6 +80,13 @@ export default function WeeklyJournal({ store, onNavigate }) {
     if (better.length === 0) return null;
     return `先週より「${better.map((t) => t.tag).join('」「')}」の誤答率が改善した。`;
   }, [history, questions, links]);
+
+  // 今週の音声だけでの復習回数（AudioMode.jsxの実施ログから）
+  const audioReviewSummary = useMemo(() => {
+    const n = audioReviewCountSince(audioLog, weekStartOf());
+    if (n === 0) return null;
+    return `今週は音声だけでの復習を${n}回行った。`;
+  }, [audioLog]);
 
   const thisWeekKey = weekKeyOf();
   const pastWeeks = useMemo(
@@ -193,9 +203,9 @@ export default function WeeklyJournal({ store, onNavigate }) {
 
       <div className="section-label">✍️ 来週の方針（一言）</div>
       <div className="card">
-        {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary].filter(Boolean).length > 0 && (
+        {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary, audioReviewSummary].filter(Boolean).length > 0 && (
           <div className="chip-row" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-            {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary]
+            {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary, audioReviewSummary]
               .filter(Boolean)
               .map((summary) => (
                 <button
