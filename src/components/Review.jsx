@@ -1168,6 +1168,16 @@ export default function Review({
               <label>念のため確認の対象数（最大 {nagameCap} 問）</label>
               <input type="range" min="5" max="50" step="5" value={nagameCap} onChange={(e) => setNagameCap(Number(e.target.value))} />
             </div>
+            {/* 要注意・誤答理由の型と同じく、念のため確認だけも音声でそのまま渡せるように */}
+            {onGoAudio && (
+              <button
+                className="btn ghost sm"
+                style={{ marginTop: 6 }}
+                onClick={() => onGoAudio(sortReview(nagameQuestions, orderMode, { srs, history, links }).slice(0, nagameCap).map((q) => q.id))}
+              >
+                🎧 念のため確認だけ音声で聞く
+              </button>
+            )}
           </>
         )}
 
@@ -1332,6 +1342,9 @@ export default function Review({
                 )}
                 {onOpenFlashcardKeyword && effectiveTags(q, links)[0] && (
                   <button className="btn ghost sm" onClick={() => onOpenFlashcardKeyword(effectiveTags(q, links)[0])}>🃏 カードで見る</button>
+                )}
+                {onGoAudio && (
+                  <button className="btn ghost sm" onClick={() => onGoAudio([q.id])}>🎧 この1問だけ聞く</button>
                 )}
               </div>
             </div>

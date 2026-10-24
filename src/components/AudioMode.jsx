@@ -125,6 +125,11 @@ export default function AudioMode({
   );
   // 復習対象プール：期限優先＋「念のため確認」込み（Session.jsxの「すべて復習」と同じ定義）
   const reviewPool = useMemo(() => reviewPoolFor(questions, srs), [questions, srs]);
+  // customReviewIds（Review.jsx等から渡されたid配列）をquestionsへ変換する時、
+  // 渡された配列の順序をそのまま保つ（Review.jsxは忘れそうな順・滞留日数順などの
+  // 意味のある並びでidを渡しているため、questionsの収録順で作り直すとその並びが消えてしまう）。
+  const questionsById = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions]);
+  const orderedByCustomIds = (ids) => ids.map((id) => questionsById.get(id)).filter(Boolean);
   const { streak, studiedToday } = useMemo(() => studyStreak(history), [history]);
   const [mood, setMood] = useState(null);
   useEffect(() => { loadTodayMood().then(setMood); }, []);
@@ -644,7 +649,7 @@ export default function AudioMode({
     }
     let base;
     if (source === 'review') {
-      base = customReviewIds ? questions.filter((q) => customReviewIds.includes(q.id)) : reviewPool;
+      base = customReviewIds ? orderedByCustomIds(customReviewIds) : reviewPool;
       // 「誤った問題」モード中でも科目・ジャンル・回でさらに絞り込める
       // （要望：科目選択＋誤った問題の組み合わせ、#24・#25でジャンル・回にも拡張）。
       if (filterSubject) base = base.filter((q) => q.subject === filterSubject);
@@ -1595,7 +1600,7 @@ export default function AudioMode({
         if (isNewOnlyMode) {
           n = filteredPool.length;
         } else {
-          let reviewBase = customReviewIds ? questions.filter((q) => customReviewIds.includes(q.id)) : reviewPool;
+          let reviewBase = customReviewIds ? orderedByCustomIds(customReviewIds) : reviewPool;
           if (filterSubject) reviewBase = reviewBase.filter((q) => q.subject === filterSubject);
           if (filterGenre) reviewBase = reviewBase.filter((q) => q.genre === filterGenre);
           if (filterRound) reviewBase = reviewBase.filter((q) => isSameRound(q.round, filterRound));

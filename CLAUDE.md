@@ -3318,6 +3318,40 @@ grep確認したうえで、本当に欠けていた30項目を提案・**ユー
   （`Toc.jsx`の既存の完全一致ロジックをそのまま再利用しているため、ロジック自体の
   リスクは低いと判断）。
 
+## Review.jsx→AudioMode.jsxの音声ハンドオフで並び順が消えるバグの修正（2026-10-24追加）
+ユーザーに「復習の音声学習を強化するには？今の評価は？」と聞かれ、Review.jsx↔AudioMode.jsxの
+連携を調査した結果、**Review.jsxが意味のある順序で選んだ問題が、AudioModeに渡った瞬間に
+順序を失っていた**ことを発見・報告し、ユーザー承認（「では全て強化して」）で修正した。
+- **バグの実体**：Review.jsxの既定の並び順は`orderMode:'forget'`（忘れそうな順）で、
+  「要注意だけ音声で聞く」は滞留日数の長い順、誤答理由チップは`sortReview`の並びで、
+  それぞれ意味のある順序の問題id配列を`onGoAudio(ids)`経由で渡している。ところが
+  AudioMode.jsx側は`customReviewIds ? questions.filter((q) => customReviewIds.includes(q.id))
+  : reviewPool`と**questionsの収録順でfilterし直していた**ため、Reviewが選んだ並びは
+  毎回無視され、実際には収録順で読み上げられていた（Review.jsx内の4つのハンドオフ地点
+  すべてがこの1か所を通るため、直せば一度に効く・逆に直さない限りどれも効かない）。
+- **修正**：AudioMode.jsxに`questionsById`（`questions`からのMap）と
+  `orderedByCustomIds(ids) = ids.map((id) => questionsById.get(id)).filter(Boolean)`を追加し、
+  2か所の`customReviewIds`展開（`plan`のuseMemo本体・表示用の件数カード内）をこれに置き換えた。
+  `.filter()`は元配列（questions）の順序を保つのに対し、`.map()`は渡された配列（ids）の
+  順序を保つ——この違いだけで、Reviewの並び替えがそのまま音声に活きるようになる。
+- **「念のため確認だけ」に🎧ボタンを追加**：要注意・誤答理由の型にはあったのに、
+  念のため確認だけ音声ハンドオフが無かった（Review側は`startWith`でテキスト学習しか
+  始められなかった）。`sortReview(nagameQuestions, orderMode, {...}).slice(0, nagameCap)`の
+  idをそのまま`onGoAudio`へ渡すだけ（新しい絞り込みロジックは作っていない）。
+- **一覧の各行に「🎧 この1問だけ聞く」を追加**：知識グラフ・フラッシュカードへのボタンは
+  行ごとにあったのに音声だけ無かった。`onGoAudio([q.id])`——1問だけのidを配列で渡すだけ。
+- 検証：`node --test`（2660件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 662KB/700KB）はすべて通過。
+  Playwright QAで実機確認済み：IndexedDBへ要注意状態（wrongCount9）の問題3問を注入し、
+  Review画面に「要注意だけ音声で聞く」ボタンと各行に「この1問だけ聞く」ボタンが
+  表示されること、後者をクリックすると音声学習画面へ正しく遷移し問題文が表示されることを
+  確認。コンソールエラー0件。並び順が実際に保たれているかの厳密な時系列検証
+  （忘却リスク・滞留日数の計算結果に基づく順序の再現）は、QAスクリプトの実行中に
+  プレビューサーバーを誤って停止させてしまい完走できなかったため、**コードレベルの
+  確認**（`.filter()`→`.map()`で順序の挙動が変わることの読解）にとどめている——
+  `orderedByCustomIds`は渡された配列をそのまま`.map()`するだけの単純な実装なので、
+  誤りの余地は小さいと判断した。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
