@@ -3588,6 +3588,60 @@ grep確認したうえで、本当に欠けていた30項目を提案・**ユー
   前回値が復元されることまでの実機確認は時間の都合で行っていない——`settings.sessionNewRatio`の
   既存の同期パターンをそのまま流用しているため、ロジック自体のリスクは低いと判断した）。
 
+## 音声学習×連結学習、学習(10・60・300・900)からの追加移植・8件（2026-11-07追加・第3弾）
+前バッチ（20件の追加移植）の完了後、ユーザーに改めて「学習10・60・300・900から音声学習×連結学習に
+活かせることを最大10こ探してください」と依頼し、両ファイルを再度比較して**水増しせず実際に見つかった
+8件**を報告、「では全て活かして改善して」のユーザー指示で全8件を実装したもの。
+1. **弱点分析に関連する対比（混同しやすいポイント）を表示**：既存の`weaknessSummary`
+   （`buildWeaknessSummary`）は元から`relatedComparisons`を返していたが、AudioMode.jsxの
+   表示側は`topGenres`/`topTags`しか使っておらず、Session.jsxの完了画面にある
+   「関連する対比」の比較カード（`compare-item`/`compare-title`/`compare-members`）が
+   抜けていた。同じマークアップを「🧭 今のセッションの弱点分析」カードに追加。
+2. **誤答・あいまい一覧に△/✕の区別を追加**：`sessionWrong`（問題オブジェクトの配列、多数の
+   既存呼び出し元が構造に依存するため変えない）とは別に、並行state`sessionWrongKinds`
+   （id→'sankaku'|'batsu'）を新設。`gradeCurrent`で同時に記録し、一覧の各行に
+   `.wl-mark`（Session.jsxのwrongEntriesと同じCSSクラス）で△/✕を表示、見出しに
+   「△◯問・✕◯問」の内訳も追加。`sessionWrong`をリセットする6箇所すべてに
+   `setSessionWrongKinds({})`も対にして追加した。
+3・4. **○の見直し中の自動メモ印付け＋recordAnswerのsource引き渡し**：新設の
+   `audioSessionKindRef`（'maruReview'|'maruFast'|null）を追加。`startMaruAudio`が
+   `fast`の値に応じてセットし、他の明示的なセッション開始経路（`changeSource`・
+   `clearFilter`・`startAudioBufferPlan`・`startReviewSource`・プレイリストの次の束）では
+   `null`に戻す（「もう一度」ボタンだけは意図的に対象外——同じセッション種別の継続のため）。
+   `gradeCurrent`はこのrefを見て、maru系セッション中は`recordAnswer`の`source`に
+   `'maru-review'`を渡し（Session.jsxの`isMaruSession`と同じ考え方。`maruPool.js`の
+   `lastMaruReviewAt`が追跡できるようにする）、かつ`'maruReview'`（見直し。「高速回転」は
+   対象外——Session.jsxの判定基準に合わせる）中に△・✕を選んだ時だけ、間違いノートへ
+   「⚠️見直しで判明：うろ覚えだった可能性」を自動追記する。
+5. **今日の目標達成時のお祝い**：従来はヘッダーに数字（`📅 今日の目標 ◯/◯問`）が
+   表示されるだけだった。`dailyGoalCount`が`effectiveDailyGoal`を初めて超えた瞬間に
+   一度だけ`onToast`でお祝いする`useEffect`を追加（`dailyGoalCelebratedRef`で多重発火を防止、
+   目標を下回ったら解除して次回また発火できるようにする）。
+6. **解答済みの問題へ戻った時の注記**：`gradedIdsRef.current.has(current.id)`を見て、
+   前へ戻って解答済みの問題を表示している間だけ「📝 この問題はすでに記録済みです」を
+   表示する（Session.jsxの`isReviewingAnswered`と同じ考え方）。
+7. **A1新規:復習スライダーに定義の説明文を追加**：Session.jsxの`<div className="hint">`
+   （新規／復習の定義、「すべて新規」の挙動の説明）をそのまま移植。
+8. **完了時に1つ目立つ見出しカードを追加**：従来は`snap.finished`時の情報が複数の
+   source分岐それぞれの中に散らばっていて、連結学習モードなど一部の分岐では完了の
+   見出しそのものが無かった。`sess-done`/`sess-done-ico`（Session.jsxと同じCSSクラス）で
+   アイコン・見出しをどのsource分岐で終わったかに関わらず一括して表示する新カードを、
+   既存のストリークカードの直後に追加（`graded >= 900/effectiveDailyGoal/60`で
+   アイコン・文言を段階的に変える、Session.jsxの`doneIco`/`doneTitle`と同じロジック）。
+- 検証：`node --test`（2660件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 683KB/700KB）はすべて通過。
+  Playwright QAで実機確認済み：A1新規:復習スライダーに定義の説明文（hint）が表示されること、
+  問題を自己採点した直後は「すでに記録済みです」の注記が表示され、次の（未採点の）問題へ
+  進むと注記が消え、前の問題へ戻ると再度表示されること（item 6の時系列挙動を実際に
+  確認）。コンソールエラー0件。**○の見直しの自動メモ印付け・完了時の見出しカード・
+  弱点分析の対比カードは、実際にTTS再生を伴う一連のフロー（○を2問採点→○の見直し開始→
+  ✕採点→最後まで聞き終える）をPlaywrightで検証しようとしたところ、ヘッドレスChromiumでの
+  Web Speech API再生が原因と見られるスクリプトのハングが発生し（過去のバッチでも同種の
+  リスクが記録済み）、完走できなかった**ため中断し、コードレベルの確認（Session.jsxの
+  既存パターン・既存の単一の正（`buildWeaknessSummary`・`memos`/`setMemo`・`recordAnswer`の
+  既存シグネチャ）をそのまま再利用しているだけで新しい非同期制御は導入していないこと）に
+  留めた。ハングしたプロセスは`pkill`で明示的に停止し、以後のQAには影響していない。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

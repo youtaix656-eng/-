@@ -216,6 +216,19 @@ export default function AudioMode({
   }, [history]);
   const dailyGoalTarget = settings.dailyGoal ?? 300;
   const effectiveDailyGoal = mood === 'tired' ? Math.max(20, Math.round(dailyGoalTarget * 0.5)) : dailyGoalTarget;
+  // 新規5：今日の目標を達成した瞬間に一度だけお祝いする（それまではヘッダーの数字だけの表示だった）。
+  const dailyGoalCelebratedRef = useRef(false);
+  useEffect(() => {
+    if (effectiveDailyGoal <= 0) return;
+    if (dailyGoalCount >= effectiveDailyGoal) {
+      if (!dailyGoalCelebratedRef.current) {
+        dailyGoalCelebratedRef.current = true;
+        onToast?.(`🎉 今日の目標${effectiveDailyGoal}問を達成しました！`);
+      }
+    } else {
+      dailyGoalCelebratedRef.current = false;
+    }
+  }, [dailyGoalCount, effectiveDailyGoal, onToast]);
 
   // このタブがバックグラウンドの間に束が終わっても知らせる、既定オフのオプトイン通知。
   const [notifyOn, setNotifyOn] = useState(false);
@@ -467,6 +480,8 @@ export default function AudioMode({
     setReviewTarget(null);
     setSessionGradedCount(0);
     setSessionWrong([]);
+    setSessionWrongKinds({});
+    audioSessionKindRef.current = fast ? 'maruFast' : 'maruReview';
     if (fast) setSkipQuestionText(true);
     onToast?.(fast ? `⚡ ○の高速回転を音声で始めます（${pool.length}問）` : `📝 ○の見直しを音声で始めます（${pool.length}問）`);
     setTimeout(() => togglePlay(), 300);
@@ -500,6 +515,10 @@ export default function AudioMode({
 
   // 今のセッションで △・✕ と自己採点した問題（弱点分析の材料）
   const [sessionWrong, setSessionWrong] = useState([]);
+  // sessionWrongは多くの既存呼び出し元が「問題オブジェクトの配列」である前提に依存しているため
+  // 構造は変えず、△/✕の種別だけを別の並行state（id→kind）で持つ（学習10・60・300・900の
+  // wrongEntriesと同じ区別を音声側でも見せるため）。
+  const [sessionWrongKinds, setSessionWrongKinds] = useState({});
   // まぎらわしい対比・数値まとめ（mindmapData.js）は連結モード2/3や弱点分析（3問以上）でしか
   // 使わないため、そのタイミングで遅延読み込みする（起動時バンドルから約14万字ぶんを外すため）。
   const mindmapData = useMindmapData(mode === 2 || mode === 3 || sessionWrong.length >= 3);
@@ -1024,6 +1043,8 @@ export default function AudioMode({
     requeuedRef.current = false;
     setSessionGradedCount(0);
     setSessionWrong([]);
+    setSessionWrongKinds({});
+    audioSessionKindRef.current = null;
   };
   useEffect(() => {
     if (!reviewPreset) return;
@@ -1213,6 +1234,7 @@ export default function AudioMode({
       requeuedRef.current = true;
       const ids = sessionWrong.map((q) => q.id);
       setSessionWrong([]);
+      setSessionWrongKinds({});
       setTimeout(() => {
         setCustomReviewIds(ids);
         setReviewTarget(null);
@@ -1231,6 +1253,8 @@ export default function AudioMode({
         setReviewTarget(nextItem.target);
         setSessionGradedCount(0);
         setSessionWrong([]);
+        setSessionWrongKinds({});
+        audioSessionKindRef.current = null;
         requeuedRef.current = false;
         onToast?.(`▶ 次の束へ進みます（${nextItem.subject || '全科目'}×${nextItem.target ?? 'すべて'}）`);
         setTimeout(() => engine.play(), 300);
@@ -1266,6 +1290,8 @@ export default function AudioMode({
     setReviewTarget(bufferPlan.baseTaskQuestionCount);
     setSessionGradedCount(0);
     setSessionWrong([]);
+    setSessionWrongKinds({});
+    audioSessionKindRef.current = null;
     onToast?.(`🧩 基礎タスク（約${bufferPlan.baseTaskMinutes}分・${bufferPlan.baseTaskQuestionCount}問）を音声で始めます`);
     setTimeout(() => togglePlay(), 300);
   };
@@ -1314,6 +1340,7 @@ export default function AudioMode({
     setFilterGenre('');
     setFilterKeyword('');
     setSource(s);
+    audioSessionKindRef.current = null;
     if (s === 'keyword' && !selectedKeyword && hasKeywords) setSelectedKeyword(kwNames[0]);
   };
 
@@ -1347,6 +1374,7 @@ export default function AudioMode({
   };
   const clearFilter = () => {
     rebuildStop();
+    audioSessionKindRef.current = null;
     setFilterSubject('');
     setFilterGenre('');
     setFilterKeyword('');
@@ -1472,6 +1500,11 @@ export default function AudioMode({
   //   同じ問題をもう一度自己採点しても、SRS・履歴・自己採点件数が上書きされないようにする。
   //   planが変わる（科目・条件変更・もう一度・プレイリストの次の束等）たびに自然に解除される。
   const gradedIdsRef = useRef(new Set());
+  // ○の見直し／○の高速回転の音声セッション中かどうか（学習10・60・300・900のisMaruSessionと
+  //   同じ考え方）。recordAnswerのsource（'maru-review'）・見直し時の自動メモ印付けに使う。
+  //   startMaruAudioが設定し、他の明示的なセッション開始経路（科目/条件の変更・バッファ開始）で
+  //   nullに戻す（これらの開始直後はもう○の見直しではないため）。
+  const audioSessionKindRef = useRef(null);
   // planは自己採点でsrsが変わるたびに再計算される（srsが依存配列にあるため）が、問題の構成・
   // 順序そのものは変わらないことが大半なので、参照ではなく内容（id列）で比較する
   // （参照で比較すると、1問採点するたびにガードがリセットされ、二重記録防止が機能しなくなる）。
@@ -1505,8 +1538,11 @@ export default function AudioMode({
     const ok = kind === 'maru';
     // 学習(10・60・300・900)と同じく、grade・selfKindも渡す（Quiz.jsxで過去に実際に踏んだのと
     // 同じ型のバグ——渡さないと○の見直し等のselfKind依存機能から音声の自己採点が一切見えない）。
+    // ○の見直し・○の高速回転中はsourceに印を付ける（Session.jsxのisMaruSessionと同じ考え方。
+    // maruPool.jsのlastMaruReviewAtが「最後にいつふりかえったか」をここから追跡する）。
+    const isMaruAudioSession = audioSessionKindRef.current === 'maruReview' || audioSessionKindRef.current === 'maruFast';
     const grade = ok ? GRADES.easy : GRADES.again;
-    const leechEvent = recordAnswer(q, ok, grade, undefined, kind);
+    const leechEvent = recordAnswer(q, ok, grade, isMaruAudioSession ? 'maru-review' : undefined, kind);
     if (leechEvent === 'became') {
       onToast?.(`⚠️ 要注意（${LEECH_THRESHOLD}回以上の誤答）：「${(q.question || '（図の問題）').slice(0, 20)}」`);
     } else if (leechEvent === 'resolved') {
@@ -1514,10 +1550,19 @@ export default function AudioMode({
     }
     if (kind === 'sankaku' || kind === 'batsu') {
       recordSelfKindCount(q.id, kind).then(setSelfKindCounts);
+      // 「○の見直し」中に△・✕へ崩れた＝当初の○は思い違いだった可能性が高いので、
+      //   間違いノート（MistakeNote.jsx）で見分けられるよう自動でメモに印を付ける
+      //   （Session.jsxと同じ考え方。「高速回転」は対象外——判定基準はSession.jsxに合わせる）。
+      if (audioSessionKindRef.current === 'maruReview') {
+        const tag = '⚠️見直しで判明：うろ覚えだった可能性';
+        const existing = memos[q.id] || '';
+        if (!existing.includes(tag)) setMemo(q.id, existing ? `${existing} / ${tag}` : tag);
+      }
     }
     setSessionGradedCount((n) => n + 1);
     if (!ok) {
       setSessionWrong((prev) => (prev.some((x) => x.id === q.id) ? prev : [...prev, q]));
+      setSessionWrongKinds((prev) => ({ ...prev, [q.id]: kind }));
       setJustGradedWrongId(q.id); // A10：その場で誤答理由を選べるように
       // A9：自己説明ステップ（音声版）。QuestionCard.jsxのwhyPrompt（誤答時に自動で促す）と
       //   同じ考え方を、聞きながらでも使えるよう声でも一言促す。
@@ -1638,6 +1683,29 @@ export default function AudioMode({
         </div>
       )}
 
+      {/* 新規8：完了時に1つ目立つ見出しカードを出す（学習10・60・300・900の.sess-doneと同じ考え方。
+          どのsource分岐で終わったかに関わらず、ここで一括して出す） */}
+      {snap.finished && total > 0 && (() => {
+        const graded = sessionGradedCount;
+        const doneIco = graded >= 900 ? '🏆' : graded >= effectiveDailyGoal ? '🎉' : graded >= 60 ? '✅' : '🔁';
+        const doneTitle = graded >= 900
+          ? '1周（900問）終了！'
+          : graded >= effectiveDailyGoal
+          ? `今日の目標 ${effectiveDailyGoal}問 達成！`
+          : graded >= 60
+          ? '1セット（60問）完了！'
+          : `すきま学習（${total}問）完了！`;
+        return (
+          <div className="card sess-done" style={{ marginBottom: 12 }}>
+            <div className="sess-done-ico">{doneIco}</div>
+            <h2 style={{ textAlign: 'center' }}>{doneTitle}</h2>
+            <p className="view-desc" style={{ textAlign: 'center' }}>
+              おつかれさまでした。全{total}問・自己採点{graded}問。
+            </p>
+          </div>
+        );
+      })()}
+
       {/* A3：3分の2バッファ術の振り返り後、バッファ枠（ご褒美復習／積み残し消化）へ続ける */}
       {audioBufferUsage && audioBufferPlan && (
         <div className="card" style={{ marginBottom: 10 }}>
@@ -1658,6 +1726,7 @@ export default function AudioMode({
               setReviewTarget(audioBufferPlan.bufferQuestionCount || null);
               setSessionGradedCount(0);
               setSessionWrong([]);
+              setSessionWrongKinds({});
               setAudioBufferPlan(null);
               setAudioBufferUsage(null);
               setTimeout(() => togglePlay(), 300);
@@ -1934,6 +2003,10 @@ export default function AudioMode({
                 {audioNewPct != null && (
                   <button className="btn ghost sm" onClick={() => changeAudioNewPct(null)}>解除</button>
                 )}
+              </div>
+              <div className="hint">
+                <strong>新規</strong>＝まだ一度も解いていない問題、<strong>復習</strong>＝一度解いて間違えた問題。
+                <br />「<strong>すべて新規</strong>」を選ぶと、<strong>すでに解いた問題は読み上げず</strong>、未着手の問題だけを読みます（同じ問題は繰り返しません）。復習も混ぜたいときはスライダーで割合を下げてください。
               </div>
               {audioNewPct === 100 && newRemainingAudio === 0 && (
                 <p className="inline-note" style={{ marginTop: 6, color: 'var(--warn, #e0a800)' }}>
@@ -2439,19 +2512,30 @@ export default function AudioMode({
                   </div>
                 )}
                 {/* 今回の誤答・あいまい一覧（学習10・60・300・900の完了画面と同じく、実際の問題文を見せる） */}
-                {snap.finished && sessionWrong.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <div className="section-label" style={{ marginTop: 0 }}>今回の誤答・あいまい（{sessionWrong.length}問）</div>
-                    <ul className="wrong-list">
-                      {sessionWrong.map((q) => (
-                        <li key={q.id}>
-                          <span className="wl-ans">{q.type === 'ox' ? `正解 ${q.answer === 0 ? '○' : '✕'}` : `正解 ${q.answer + 1}`}</span>
-                          <span className="wl-q">{q.question}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                {snap.finished && sessionWrong.length > 0 && (() => {
+                  const sankakuN = sessionWrong.filter((q) => sessionWrongKinds[q.id] === 'sankaku').length;
+                  const batsuN = sessionWrong.length - sankakuN;
+                  return (
+                    <div style={{ marginTop: 8 }}>
+                      <div className="section-label" style={{ marginTop: 0 }}>今回の誤答・あいまい（{sessionWrong.length}問）</div>
+                      <p className="inline-note" style={{ marginTop: 0 }}>
+                        自己採点で「△ あいまい」「✕ できない」を選んだ問題も含みます（△{sankakuN}問・✕{batsuN}問）。
+                      </p>
+                      <ul className="wrong-list">
+                        {sessionWrong.map((q) => {
+                          const k = sessionWrongKinds[q.id] === 'sankaku' ? 'sankaku' : 'batsu';
+                          return (
+                            <li key={q.id}>
+                              <span className={`wl-mark ${k}`}>{k === 'sankaku' ? '△' : '✕'}</span>
+                              <span className="wl-ans">{q.type === 'ox' ? `正解 ${q.answer === 0 ? '○' : '✕'}` : `正解 ${q.answer + 1}`}</span>
+                              <span className="wl-q">{q.question}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })()}
                 {/* A6：明日の最初の1タスクを決めておく（学習10・60・300・900と同じ仕組み） */}
                 {snap.finished && (
                   <div style={{ marginTop: 10 }}>
@@ -2599,6 +2683,11 @@ export default function AudioMode({
             {current && latestMissType(missTypes[current.id])?.type && (
               <div className="inline-note">
                 {missTypeLabel(latestMissType(missTypes[current.id]).type)}の記録がある問題です。
+              </div>
+            )}
+            {current && gradedIdsRef.current.has(current.id) && (
+              <div className="inline-note">
+                📝 この問題はすでに記録済みです（見直し用に表示中。もう一度選んでも二重には記録しません）。
               </div>
             )}
             <div className="now-text">
@@ -2836,6 +2925,19 @@ export default function AudioMode({
               >
                 🔊 弱点分析を読み上げる
               </button>
+              {weaknessSummary.relatedComparisons.length > 0 && (
+                <>
+                  <div className="section-label">関連する対比（混同しやすいポイント）</div>
+                  {weaknessSummary.relatedComparisons.map((c) => (
+                    <div className="compare-item" key={c.id}>
+                      <div className="compare-title">{c.title}</div>
+                      <ul className="compare-members">
+                        {(c.members || []).slice(0, 4).map((m, i) => (<li key={i}>{m}</li>))}
+                      </ul>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           )}
 
