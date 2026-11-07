@@ -34,6 +34,7 @@ let running = false;
 let sleepTimer = null;
 let wakeLock = null;
 let visInit = false;
+let manualResolve = null; // アウトプットモード：「解答を見る」が押されるまで待つステップの解除関数
 
 // ---- バックグラウンド表示（メディアセッション＋無音キープアライブ） ----
 // 再生中に無音トラックを鳴らし、ロック画面/通知に「再生中」を表示する。
@@ -177,6 +178,16 @@ async function playOne(item, signal) {
       const g = step.waitGap === 'cap2' ? Math.min(settings.gapSeconds, 2) : settings.gapSeconds;
       await wait(g * 1000, signal);
     }
+    // アウトプットモード：自動タイマーでは進めず、「解答を見る」（resumeManual）が
+    // 押されるまでここで待つ（止めた・スキップした時は中断扱いで即解除する）。
+    if (step.waitManual) {
+      if (signal.aborted) return;
+      await new Promise((resolve) => {
+        const done = () => { manualResolve = null; resolve(); };
+        manualResolve = done;
+        signal.addEventListener('abort', done, { once: true });
+      });
+    }
     // 解答・解説を読み終えてから次の問題へ移るまでの間（規定の時間で自動的に次へ進む）。
     if (step.waitNextGap) await wait(settings.nextGapSeconds * 1000, signal);
   }
@@ -254,6 +265,11 @@ export function resetToStart() {
 export function finishNow() {
   stop();
   emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true });
+}
+
+// アウトプットモード：「✅ 解答を見る」ボタンから呼ぶ。待機中でなければ何もしない。
+export function resumeManual() {
+  if (manualResolve) manualResolve();
 }
 
 export function setSleep(min) {

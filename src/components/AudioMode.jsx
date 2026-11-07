@@ -308,6 +308,9 @@ export default function AudioMode({
   const [headphoneHint, setHeadphoneHint] = useState(null);
   // 10問ごとに「ここまで◯問、残り◯問」を声で知らせる
   const [progressAnnounceOn, setProgressAnnounceOn] = useState(false);
+  // 再生スタイル：インプット（聞くだけ・自動で正解まで進む＝既定）／アウトプット（間で一度止め、
+  // 「解答を見る」を押すまで正解を言わない＝自分で思い出す・解答してから答え合わせする形）。
+  const [outputModeOn, setOutputModeOn] = useState(false);
   // このセッションで△・✕にした問題を、最後まで聞き終えたあと自動でもう一度だけ回す
   const [autoRequeueWrongOn, setAutoRequeueWrongOn] = useState(false);
   const requeuedRef = useRef(false);
@@ -523,6 +526,19 @@ export default function AudioMode({
       return items;
     };
 
+    // 件数しぼり込み（学習の10・60・300・900と同じ考え方）。足りなければ繰り返さずそこで
+    // 終わる（周回して埋めない、「すべて復習」モードと同じ方針）。「もう一度（同じ件数で
+    // 別の問題を）」はreviewOffsetで対象プールの次の束へローテーションする。
+    // 連結学習モード（1〜10）からも使うため、mode>0の分岐より前に定義する。
+    const applyTarget = (list) => {
+      if (!reviewTarget) return list;
+      const n = list.length;
+      if (n === 0) return list;
+      const off = reviewOffset % n;
+      const rotated = off === 0 ? list : [...list.slice(off), ...list.slice(0, off)];
+      return rotated.slice(0, reviewTarget);
+    };
+
     // ===== 連結モード（検索の下の1〜10）=====
     if (mode > 0) {
       const pool = filterActive ? filteredPool : questions;
@@ -584,45 +600,36 @@ export default function AudioMode({
       };
       const fallback = () => seqQ(pool).map((q) => ({ kind: 'question', q }));
 
-      if (mode === 1) return poolKw.length ? readCluster(chainOrder(byCount[0], relatedMap, poolKw)) : fallback();
-      if (mode === 2) return mindmapData ? relevant(mindmapData.COMPARISONS).map((c) => ({ kind: 'compare', comp: c })) : [];
-      if (mode === 3) return mindmapData ? relevant(mindmapData.NUMBER_FACTS).map((n) => ({ kind: 'number', num: n })) : [];
-      if (mode === 4) return seqQ(pool).map((q) => ({ kind: 'cloze', q }));
-      if (mode === 5) return weakSort(pool).map((q) => ({ kind: 'question', q }));
-      if (mode === 6) return seqQ(pool).map((q) => ({ kind: 'choices', q }));
+      // 件数しぼり込み（10・60・300・900）は連結モードでも同じ考え方で効かせる
+      // （以前はmode>0の分岐がapplyTargetより前でreturnしていたため、連結学習では
+      // 件数の指定が一切効いていなかった）。
+      if (mode === 1) return applyTarget(poolKw.length ? readCluster(chainOrder(byCount[0], relatedMap, poolKw)) : fallback());
+      if (mode === 2) return applyTarget(mindmapData ? relevant(mindmapData.COMPARISONS).map((c) => ({ kind: 'compare', comp: c })) : []);
+      if (mode === 3) return applyTarget(mindmapData ? relevant(mindmapData.NUMBER_FACTS).map((n) => ({ kind: 'number', num: n })) : []);
+      if (mode === 4) return applyTarget(seqQ(pool).map((q) => ({ kind: 'cloze', q })));
+      if (mode === 5) return applyTarget(weakSort(pool).map((q) => ({ kind: 'question', q })));
+      if (mode === 6) return applyTarget(seqQ(pool).map((q) => ({ kind: 'choices', q })));
       if (mode === 7) {
         const CATS = ['現代の医療と社会', '社会保障制度', '医療倫理', '医療と社会', '医療従事者', '医療・福祉施設', '医療経済', '医療保険のしくみ', '公費負担医療', '介護サービス行政', '医療倫理教育', '施術者としての倫理'];
         const order = CATS.filter((c) => cl.has(c));
-        return order.length ? readCluster(order) : fallback();
+        return applyTarget(order.length ? readCluster(order) : fallback());
       }
-      if (mode === 8) return poolKw.length ? readCluster(byCount, true) : fallback();
-      if (mode === 9) return weakSort(pool).map((q) => ({ kind: 'question', q }));
+      if (mode === 8) return applyTarget(poolKw.length ? readCluster(byCount, true) : fallback());
+      if (mode === 9) return applyTarget(weakSort(pool).map((q) => ({ kind: 'question', q })));
       if (mode === 10) {
         const dueFirst = reviewPool.filter((q) => poolIds.has(q.id)).map((q) => ({ kind: 'question', q }));
         const seed = dailyKw && cl.has(dailyKw) ? dailyKw : byCount[0];
         const chainItems = seed ? readCluster(chainOrder(seed, relatedMap, poolKw)) : [];
         const seen = new Set();
-        return [...dueFirst, ...chainItems].filter((it) => {
+        return applyTarget([...dueFirst, ...chainItems].filter((it) => {
           if (it.kind !== 'question') return true;
           if (seen.has(it.q.id)) return false;
           seen.add(it.q.id);
           return true;
-        });
+        }));
       }
-      return fallback();
+      return applyTarget(fallback());
     }
-
-    // 件数しぼり込み（学習の10・60・300・900と同じ考え方）。足りなければ繰り返さずそこで
-    // 終わる（周回して埋めない、「すべて復習」モードと同じ方針）。「もう一度（同じ件数で
-    // 別の問題を）」はreviewOffsetで対象プールの次の束へローテーションする。
-    const applyTarget = (list) => {
-      if (!reviewTarget) return list;
-      const n = list.length;
-      if (n === 0) return list;
-      const off = reviewOffset % n;
-      const rotated = off === 0 ? list : [...list.slice(off), ...list.slice(0, off)];
-      return rotated.slice(0, reviewTarget);
-    };
     // 10問ごとに「ここまで◯問、残り◯問」を読み上げる進捗アナウンス項目を差し込む。
     const withProgressAnnounce = (qs) => {
       if (!progressAnnounceOn || qs.length < 10) return qs.map((q) => ({ kind: 'question', q }));
@@ -640,12 +647,10 @@ export default function AudioMode({
       if (shuffleOn) base = shuffle(base);
       if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
       base = adjustCasePairs(base);
-      // 「まだ解いていない問題だけ」に限っては、復習と同じ件数チップのUIを使い回せる。
-      if (newOnly) {
-        base = applyTarget(base);
-        return withProgressAnnounce(base);
-      }
-      return base.map((q) => ({ kind: 'question', q }));
+      // 件数しぼり込みは「まだ解いていない問題だけ」限定ではなく、検索結果の読み上げ全般に効かせる
+      // （reviewTarget/applyTargetは0件時に無反応なので、未指定のままなら従来どおり全件のまま）。
+      base = applyTarget(base);
+      return withProgressAnnounce(base);
     }
     if (source === 'keyword') {
       if (!hasKeywords) return [];
@@ -677,11 +682,10 @@ export default function AudioMode({
     if (shuffleOn) base = shuffle(base);
     if (leechFirst) base = [...base].sort((a, b) => (isLeechState(srs[b.id]) ? 1 : 0) - (isLeechState(srs[a.id]) ? 1 : 0));
     base = adjustCasePairs(base);
-    if (source === 'review') {
-      base = applyTarget(base);
-      return withProgressAnnounce(base);
-    }
-    return base.map((q) => ({ kind: 'question', q }));
+    // 件数しぼり込みは「誤った問題」限定ではなく、タグ読み上げ・全件読み上げにも効かせる
+    // （reviewTarget未指定なら従来どおり全件のまま。音声学習×連結学習の要望対応）。
+    base = applyTarget(base);
+    return withProgressAnnounce(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState]);
 
@@ -863,24 +867,34 @@ export default function AudioMode({
     steps.push({ waitNextGap: true });
     return steps;
   };
-  // 読み上げ文にだけ手動補正辞書を適用（画面表示のテキストには影響しない）
-  const buildSteps = (item) => buildStepsRaw(item).map((s) => (s.say ? { ...s, say: applyPronunciation(s.say) } : s));
+  // 読み上げ文にだけ手動補正辞書を適用（画面表示のテキストには影響しない）。
+  // アウトプットモード（outputModeOn）の時は、問題→正解の「間」（waitGap）を
+  // 自動タイマーではなく手動操作（waitManual）に置き換える——1箇所で変換するので
+  // 項目の種類（通常問題／クローズ／選択肢／比較／数字／暗記カード）ごとに個別対応しなくてよい。
+  const buildSteps = (item) => buildStepsRaw(item).map((s) => {
+    let step = s.say ? { ...s, say: applyPronunciation(s.say) } : s;
+    if (outputModeOn && step.waitGap) {
+      const { waitGap, ...rest } = step;
+      step = { ...rest, waitManual: true };
+    }
+    return step;
+  });
 
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
     () => JSON.stringify([
       source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn,
       readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound,
-      reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText,
+      reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn,
       questions.length, plan.length,
     ]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, questions.length, plan.length]
+    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn, questions.length, plan.length]
   );
 
   // 保存済みの再生位置（続きから）。マウント時に一度だけ読み込む。
@@ -1998,6 +2012,79 @@ export default function AudioMode({
         </div>
       )}
 
+      {/* 🎯 このセッションの設定（件数・再生スタイル）。「間違えた問題」「まだ解いていない問題だけ」
+          には専用の件数チップが別にあるため、ここは連結学習モード（1〜10）・通常の全件読み上げ・
+          タグ読み上げ・検索結果の読み上げ向け（二重のUIにならないよう排他にする）。 */}
+      {!(source === 'review' || (source === 'filter' && newOnly) || source === 'keyword' || source === 'daily' || source === 'weak') && (() => {
+        const n = mode > 0
+          ? (filterActive ? filteredPool : questions).length
+          : source === 'filter' ? filteredPool.length
+          : source === 'tagged' ? taggedQuestions.length
+          : questions.length;
+        return (
+          <div className="card">
+            <div className="section-label" style={{ marginTop: 0 }}>🎯 このセッションの設定</div>
+            {n > 0 ? (
+              <>
+                <p style={{ margin: '0 0 8px', fontWeight: 700 }}>対象の目安：{n}問</p>
+                <label className="section-label" style={{ marginTop: 0 }}>今回はどれだけ読みますか？</label>
+                <div className="sess-targets">
+                  {SESSION_TARGETS.map((t) => {
+                    const estSec = estimateAudioSeconds(Math.min(t, n), { rate, gapSeconds: gap, nextGapSeconds: nextGap });
+                    return (
+                      <button
+                        key={t}
+                        className={`sess-target ${reviewTarget === t ? 'active' : ''}`}
+                        onClick={() => changeReviewTarget(t)}
+                      >
+                        <span className="sess-target-n">{t}</span>
+                        <span className="sess-target-l">{sessionTargetLabel(t)}</span>
+                        <span className="sess-target-est">{formatEstimateMinutes(estSec)}{t > n ? `・在庫${n}問` : ''}</span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    className={`sess-target ${!reviewTarget ? 'active' : ''}`}
+                    onClick={() => changeReviewTarget(null)}
+                  >
+                    <span className="sess-target-n">すべて</span>
+                    <span className="sess-target-l">{n}問</span>
+                    <span className="sess-target-est">{formatEstimateMinutes(estimateAudioSeconds(n, { rate, gapSeconds: gap, nextGapSeconds: nextGap }))}</span>
+                  </button>
+                </div>
+                {reviewTarget && reviewTarget > n && (
+                  <p className="inline-note" style={{ marginTop: 6 }}>
+                    対象は{n}問しかないため、{reviewTarget}問には届かずそこで終わります（繰り返しはしません）。
+                  </p>
+                )}
+                {snap.finished && total > 0 && (
+                  <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={repeatWithNextBatch}>
+                    🔁 もう一度（同じ件数で別の問題を）
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="inline-note">対象が0問です。検索条件をゆるめてください。</p>
+            )}
+            <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
+              <label>再生スタイル</label>
+              <div className="chip-row" style={{ marginBottom: 0 }}>
+                <button className={`chip ${!outputModeOn ? 'active' : ''}`} onClick={() => setOutputModeOn(false)}>
+                  📻 インプット（聞くだけ・自動で正解まで進む）
+                </button>
+                <button className={`chip ${outputModeOn ? 'active' : ''}`} onClick={() => setOutputModeOn(true)}>
+                  ✋ アウトプット（止めて、自分で解答してから正解を見る）
+                </button>
+              </div>
+              <p className="inline-note" style={{ marginTop: 6 }}>
+                アウトプットを選ぶと、問題のあと自動では正解に進まず、「✅ 解答を見る」を押すまで止まって待ちます
+                （解答選択の手が使えない時はインプットのままでも使えます）。
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ。よく使う順に並びます。 */}
       <div className="section-label">連結学習モード（読み方を選ぶ・よく使う順）</div>
       <div className="mode-list">
@@ -2103,6 +2190,14 @@ export default function AudioMode({
                 ? `穴埋め：${current?.question || ''}`
                 : current?.question || (current?.image ? '図を見て答える問題' : '')}
             </div>
+
+            {/* アウトプットモード：GAP（考え中）で自動には進まず、ここで止まって待つ。
+                自分の中で解答を決めてから押すと正解・解説が読まれる。 */}
+            {outputModeOn && phase === PHASES.GAP && (
+              <button className="btn accent block" style={{ marginTop: 8 }} onClick={() => engine.resumeManual()}>
+                ✅ 解答を見る（自分の中で答えを決めてから押してください）
+              </button>
+            )}
 
             {phase === PHASES.ANSWER && current && (
               <div className="now-answer">
