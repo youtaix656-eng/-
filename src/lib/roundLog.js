@@ -14,10 +14,16 @@ export async function loadRoundLog() {
   try { return (await idbGet(KEY)) || []; } catch (e) { return []; }
 }
 
-// target: 押した目標値（10/60/300/900）、count: 実際に出題された問数、ms: 所要時間（ミリ秒）
-export async function appendRoundLog({ target, count, ms, at = Date.now() }) {
+// target: 押した目標値（10/60/300/900）、count: 実際に出題された問数、ms: 所要時間（ミリ秒）。
+// graded/wrong（省略可・後方互換）: 自己採点した問数・そのうち誤答数。前回との正答率比較に使う。
+// subject（省略可）: 単一科目に絞っていた場合の科目名（複数科目・全科目の時は省略）。
+export async function appendRoundLog({ target, count, ms, at = Date.now(), graded, wrong, subject }) {
   const log = await loadRoundLog();
-  const next = [...log, { target, count, ms, at }].slice(-MAX_ENTRIES);
+  const entry = { target, count, ms, at };
+  if (graded != null) entry.graded = graded;
+  if (wrong != null) entry.wrong = wrong;
+  if (subject) entry.subject = subject;
+  const next = [...log, entry].slice(-MAX_ENTRIES);
   try { await idbSet(KEY, next); } catch (e) { /* noop */ }
   return next;
 }
@@ -60,4 +66,72 @@ export function latestSpeedup(log, target) {
   if (matches.length < 2) return null;
   const [latest, prev] = matches;
   return speedupPct(latest.ms, latest.count, prev.ms, prev.count);
+}
+
+// 前回との正答率比較（音声学習のaudioReviewLog.jsのpreviousFinishと同じ考え方）。
+// graded/wrongを記録していない回（旧データ・自己採点なし）は比較対象から除く。
+// excludeAtで今回自身を除外できる。
+export function previousAccuracyForTarget(log, target, excludeAt) {
+  const matches = (log || []).filter(
+    (e) => e.target === target && e.at !== excludeAt && e.graded != null && e.graded > 0
+  );
+  if (matches.length === 0) return null;
+  const prev = matches.reduce((a, b) => (a.at > b.at ? a : b));
+  return { accuracyPct: Math.round(((prev.graded - (prev.wrong || 0)) / prev.graded) * 100), at: prev.at };
+}
+
+// 学習セッションの「開始」ログ（完了率の算出用。audioReviewLog.jsの考え方を移植）。
+// 誤答復習・○の見直し・バッファ枠等の可変長セッション（session.label/session.bufferあり）は
+// 対象外——標準セッション（10/60/300/900）だけで比べる。
+const START_KEY = 'shinkyu:roundStartLog';
+const START_MAX_ENTRIES = 200;
+
+export async function loadRoundStartLog() {
+  try { return (await idbGet(START_KEY)) || []; } catch (e) { return []; }
+}
+
+export async function recordRoundStart(target) {
+  const log = await loadRoundStartLog();
+  const next = [...log, { target, at: Date.now() }].slice(-START_MAX_ENTRIES);
+  try { await idbSet(START_KEY, next); } catch (e) { /* noop */ }
+  return next;
+}
+
+// targetごとの完了率（開始したうち、実際に最後まで終えた割合）。
+// 低いtargetに「無理せずもう少し少ない件数にしてみては？」と提案する材料にする。
+export function completionRateByTarget(startLog, finishLog) {
+  const starts = new Map();
+  for (const e of startLog || []) starts.set(e.target, (starts.get(e.target) || 0) + 1);
+  const finishes = new Map();
+  for (const e of finishLog || []) finishes.set(e.target, (finishes.get(e.target) || 0) + 1);
+  const out = {};
+  for (const [target, s] of starts) {
+    const f = finishes.get(target) || 0;
+    out[target] = { starts: s, finishes: f, rate: s > 0 ? f / s : null };
+  }
+  return out;
+}
+
+function escCsv(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// 周回ログの書き出し（audioReviewLog.jsのlogToCsvと同じパターン）。
+export function roundLogToCsv(log) {
+  const header = ['目標件数', '日時', '出題数', '所要時間', '科目', '自己採点数', '誤答数'];
+  const rows = (log || []).map((e) =>
+    [
+      e.target,
+      e.at ? new Date(e.at).toLocaleString('ja-JP') : '',
+      e.count,
+      formatDuration(e.ms),
+      e.subject || '',
+      e.graded ?? '',
+      e.wrong ?? '',
+    ]
+      .map(escCsv)
+      .join(',')
+  );
+  return [header.join(','), ...rows].join('\n');
 }

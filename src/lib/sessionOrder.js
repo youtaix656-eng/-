@@ -5,6 +5,18 @@
 import { reviewPoolFor } from './reviewPool.js';
 import { buildCaseLinkMap, keepCasePairsAdjacent } from './casePairs.js';
 
+// 複数の配列を位置ごとに1件ずつ交互に混ぜる（複数科目のローテーション読み上げ・ローテーション
+//   出題で共用。元はAudioMode.jsxのローカル関数だったが、Session.jsxの複数科目ローテーションでも
+//   同じ考え方が要るため切り出した＝単一の正）。
+export function roundRobinMerge(lists) {
+  const out = [];
+  const max = Math.max(0, ...lists.map((l) => l.length));
+  for (let i = 0; i < max; i++) {
+    for (const l of lists) if (l[i] !== undefined) out.push(l[i]);
+  }
+  return out;
+}
+
 export function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

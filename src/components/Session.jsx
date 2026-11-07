@@ -12,12 +12,12 @@ import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { reviewPoolFor, buildWeaknessSummary, recommendNewPct } from '../lib/reviewPool.js';
 import { loadNextTask, saveNextTask } from '../lib/nextTask.js';
 import { shuffle, spaceById, buildOrder, buildNewOnlyOrder, buildReviewOnlyOrder, buildMixedOrder, buildMixedNoRepeatOrder } from '../lib/sessionOrder.js';
-import { resolveBufferUsage, bufferUsageLabel } from '../lib/bufferSession.js';
+import { resolveBufferUsage, bufferUsageLabel, estimatedAnswerSeconds } from '../lib/bufferSession.js';
 import BufferPlanCard from './BufferPlanCard.jsx';
 import { loadTodayMood } from '../lib/mood.js';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
-import { loadRoundLog, appendRoundLog, previousForTarget, countForTarget, formatDuration, speedupPct } from '../lib/roundLog.js';
+import { loadRoundLog, appendRoundLog, previousForTarget, countForTarget, formatDuration, speedupPct, recordRoundStart, loadRoundStartLog, completionRateByTarget } from '../lib/roundLog.js';
 import { latestMissType } from '../lib/missTypes.js';
 import { useMissTypeHandling } from '../lib/useMissTypeHandling.js';
 import { loadSelfKindCounts, recordSelfKindCount } from '../lib/starWeak.js';
@@ -28,6 +28,12 @@ import MaruReviewCard from './MaruReviewCard.jsx';
 import { weakTagClusters } from '../lib/weakClusters.js';
 import { loadReviewZeroLog, daysSinceLastZero } from '../lib/reviewZeroLog.js';
 import { SESSION_TARGETS as TARGETS, sessionTargetLabel } from '../lib/sessionTargets.js';
+import BreakTimer from './BreakTimer.jsx';
+import { roundRobinMerge } from '../lib/sessionOrder.js';
+import { isVoiceCommandSupported, parseVoiceCommand, listenOnce } from '../lib/voiceCommand.js';
+import { loadContentSeedLog, recentlyAddedIds } from '../lib/contentSeedLog.js';
+import { downloadFile } from '../lib/download.js';
+import { previousAccuracyForTarget, roundLogToCsv } from '../lib/roundLog.js';
 
 const uniqJa = (arr) => Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
 
@@ -65,6 +71,25 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const [bookmarkOnly, setBookmarkOnly] = useState(false); // ブックマークのみ
   const [term, setTerm] = useState('');
   const [fast, setFast] = useState(false);
+  // 複数科目をバランスよく混ぜて読む（音声学習と同じ考え方。2科目以上選ぶと単一の科目選択より優先）
+  const [rotateSubjects, setRotateSubjects] = useState([]);
+  const toggleRotateSubject = (s) => setRotateSubjects((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
+  // 🆕 新着だけ（直近14日でコンテンツ更新により追加された問題。音声学習と同じ考え方）
+  const [recentOnlyFilter, setRecentOnlyFilter] = useState(false);
+  const [recentIds, setRecentIds] = useState(null); // null=未読み込み（絞り込みに使わない）
+  useEffect(() => {
+    loadContentSeedLog().then((log) => setRecentIds(recentlyAddedIds(log, Date.now() - 14 * 24 * 60 * 60 * 1000)));
+  }, []);
+  // 声で自己採点・操作（○/△/✕・次へ/前へ）。既定オフのオプトイン（音声データが音声認識サーバーへ
+  // 送られる場合があるため。音声学習と同じ扱い）。
+  const [voiceControlOn, setVoiceControlOn] = useState(false);
+  const [voiceGradeSignal, setVoiceGradeSignal] = useState(null); // {kind, nonce}
+  const voiceNonceRef = useRef(0);
+  const [answerRevealed, setAnswerRevealed] = useState(false);
+  // 画面を大きくタップして自己採点（タップ＝○・長押し＝✕。音声学習と同じ操作方法）
+  const [wideTapOn, setWideTapOn] = useState(false);
+  // 🎵 複数のセッション設定を積んで、終わったら自動で次へ進む（プレイリスト。音声学習と同じ考え方）
+  const [sessionPlaylist, setSessionPlaylist] = useState([]);
   const [showBreak, setShowBreak] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [showAllGenres, setShowAllGenres] = useState(false); // 完了画面のジャンル別正答率を全件表示するか
@@ -100,7 +125,14 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   useEffect(() => { loadTodayMood().then(setMood); }, []);
 
   // 検索（科目→ジャンル→キーワード の段階しぼり＋フリーワード）
-  const afterSubject = useMemo(() => (subject === 'all' ? questions : poolFor(questions, subject)), [questions, subject]);
+  // 複数科目をバランスよく混ぜて読む（2科目以上選んだ時は単一の科目選択より優先。音声学習と同じ考え方）
+  const afterSubject = useMemo(
+    () =>
+      rotateSubjects.length >= 2
+        ? roundRobinMerge(rotateSubjects.map((s) => questions.filter((q) => q.subject === s)))
+        : subject === 'all' ? questions : poolFor(questions, subject),
+    [questions, subject, rotateSubjects]
+  );
   const genreOptions = useMemo(() => uniqJa(afterSubject.flatMap((q) => (q.genre ? [q.genre] : []))), [afterSubject]);
   const afterGenre = useMemo(() => (genre ? afterSubject.filter((q) => q.genre === genre) : afterSubject), [afterSubject, genre]);
   const kwOptions = useMemo(() => uniqJa(afterGenre.flatMap((q) => effectiveTags(q, links))), [afterGenre, links]);
@@ -115,13 +147,14 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   const filteredPool = useMemo(() => {
     let pool = afterRound;
     if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
+    if (recentOnlyFilter && recentIds) pool = pool.filter((q) => recentIds.has(q.id));
     const t = term.trim().toLowerCase();
     if (!t) return pool;
     return pool.filter((q) => {
       const hay = [q.question, q.subject, q.round, ...(q.choices || []), q.explanation, ...effectiveTags(q, links)].filter(Boolean).join(' ').toLowerCase();
       return hay.includes(t);
     });
-  }, [afterRound, bookmarkOnly, bookmarks, term, links]);
+  }, [afterRound, bookmarkOnly, bookmarks, term, links, recentOnlyFilter, recentIds]);
 
   // ○にした問題の見直し・高速回転用プール（上の絞り込み条件を引き継ぐ）。
   //   自己採点で最後に○（完璧）を選んだ問題だけを対象にし、
@@ -142,6 +175,26 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 誤答理由の記録・次回間隔調整（useMissTypeHandling.jsが単一の正。Review.jsxと同じくsetNextDueで
   //   型別に間隔を調整する＝以前はSession.jsxだけ記録のみで間隔調整が効いていなかった不整合を解消）。
   const { missTypes, onMissType } = useMissTypeHandling(setNextDue);
+
+  // 声で自己採点・操作（音声学習と同じ仕組み・既定オフ）。答えが開示されている時だけ一度聞き取る。
+  // ○/△/✕はQuestionCardへvoiceGradeSignalで渡し（記録自体はQuestionCard内のpickSelfに任せる）、
+  // 次へ/前へはこのコンポーネント側でpos移動する。フックの並びを崩さないよう、必ず本体の先頭
+  // （他のuseEffectと同じ場所）に置く——条件分岐の後ろ（出題画面側）に置くとビルドがクラッシュする。
+  useEffect(() => {
+    if (!voiceControlOn || !answerRevealed || !session || session.fast || session.pos >= session.target) return;
+    const handle = listenOnce({
+      onResult: (text) => {
+        const cmd = parseVoiceCommand(text);
+        if (!cmd) return;
+        if (cmd.type === 'grade') setVoiceGradeSignal({ kind: cmd.kind, nonce: ++voiceNonceRef.current });
+        else if (cmd.type === 'nav' && cmd.kind === 'next') updateSession({ pos: Math.min(session.target - 1, session.pos + 1) });
+        else if (cmd.type === 'nav' && cmd.kind === 'prev') updateSession({ pos: Math.max(0, session.pos - 1) });
+      },
+      onError: () => {},
+    });
+    return () => handle?.stop?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceControlOn, answerRevealed, session?.pos]);
   const [selfKindCounts, setSelfKindCounts] = useState({});
   useEffect(() => { loadSelfKindCounts().then(setSelfKindCounts); }, []);
   // #17：復習が何日ゼロに戻せていないか（「今日のおすすめ」の比率を復習側へさらに寄せる材料）
@@ -185,6 +238,14 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
   // 完了した瞬間に1回だけ所要時間を記録し、同じ目標での前回と比べる。
   const [lastRoundInfo, setLastRoundInfo] = useState(null);
   const loggedRoundRef = useRef(null);
+  // B5：件数ごとの完了率（開始したうち実際に最後まで終えた割合）。低い件数に
+  //   「無理せずもう少し少ない件数にしてみては？」と提案する（音声学習のaudioReviewLog.jsと同じ考え方）。
+  const [roundCompletion, setRoundCompletion] = useState({});
+  useEffect(() => {
+    Promise.all([loadRoundStartLog(), loadRoundLog()]).then(([starts, finishes]) => {
+      setRoundCompletion(completionRateByTarget(starts, finishes));
+    });
+  }, [session]);
   useEffect(() => {
     if (!session || session.pos < session.target) return;
     if (!session.startedAt || session.label || session.buffer) return;
@@ -193,12 +254,40 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
     const target = session.requestedTarget || session.target;
     const ms = Date.now() - session.startedAt;
     const count = session.pos;
+    // 自己採点した問数・そのうち誤答数（B4：前回との正答率比較に使う）。単一科目に絞っていた
+    // 時だけ科目名も記録する（複数科目・全科目の時はsubjectを省略＝前回比較の対象をぶらさないため）。
+    const idsSet = new Set(session.ids || []);
+    let graded = 0, wrong = 0;
+    for (const h of history) {
+      if (h.at >= session.startedAt && idsSet.has(h.questionId)) { graded++; if (!h.correct) wrong++; }
+    }
+    const subjectForLog = session.subject && session.subject !== 'all' ? session.subject : undefined;
     loadRoundLog().then((log) => {
       const prev = previousForTarget(log, target, session.startedAt);
       const roundNo = countForTarget(log, target) + 1; // 今回を含めた通算回数
-      setLastRoundInfo({ target, count, ms, prev, roundNo });
-      appendRoundLog({ target, count, ms, at: session.startedAt });
+      const prevAccuracy = previousAccuracyForTarget(log, target, session.startedAt);
+      setLastRoundInfo({ target, count, ms, prev, roundNo, graded, wrong, prevAccuracy });
+      appendRoundLog({ target, count, ms, at: session.startedAt, graded, wrong, subject: subjectForLog });
     });
+  }, [session]);
+
+  // B3：プレイリストが積まれていれば、標準セッション完了時に自動で次の設定を開始する
+  //   （誤答復習・バッファ枠・基礎タスクは対象外。音声学習の束の自動継続と同じ考え方）。
+  const playlistAdvancedRef = useRef(null);
+  useEffect(() => {
+    if (!session || session.pos < session.target) return;
+    if (!session.startedAt || session.label || session.buffer) return;
+    if (sessionPlaylist.length === 0) return;
+    if (playlistAdvancedRef.current === session.startedAt) return;
+    playlistAdvancedRef.current = session.startedAt;
+    const [next, ...rest] = sessionPlaylist;
+    const t = setTimeout(() => {
+      setSessionPlaylist(rest);
+      onToast?.(`🎵 プレイリストの次へ：${next.subject === 'all' ? '全科目' : next.subject}・${next.target}問`);
+      begin(next.target, { subject: next.subject, newRatio: next.newPct / 100, pool: poolFor(questions, next.subject) });
+    }, 1800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   // 開始ボタン共通の無効化条件（10・60・300・900のTARGETSボタンと、
@@ -262,6 +351,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
       ...(opts.buffer ? { buffer: opts.buffer } : {}),
     });
     setShowBreak(false);
+    // B5：標準セッション（誤答復習・バッファ枠・基礎タスクは対象外）だけ「開始」ログを記録する
+    //   （完了率＝開始したうち実際に最後まで終えた割合、の算出用。音声学習のaudioReviewLog.jsと同じ考え方）。
+    if (!opts.label && !opts.buffer) recordRoundStart(target);
   };
 
   // 学習のリセット（進行中の学習セッションを破棄して開始画面へ戻す）
@@ -426,6 +518,40 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
             <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} />
             <span>⚡ 高速回転モード（問題→3秒想起→答え。サクサク周回）</span>
           </label>
+          <label className="autokw-row" style={{ marginTop: 6 }}>
+            <input type="checkbox" checked={recentOnlyFilter} onChange={(e) => setRecentOnlyFilter(e.target.checked)} />
+            <span>🆕 新着だけ（直近14日でコンテンツ更新により追加された問題）</span>
+          </label>
+          <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
+            <label>複数科目をバランスよく混ぜて学習する（2科目以上選ぶと単一の科目選択より優先）</label>
+            <div className="chip-row" style={{ marginBottom: 0 }}>
+              {subjects.map((s) => (
+                <button key={s} className={`chip ${rotateSubjects.includes(s) ? 'active' : ''}`} onClick={() => toggleRotateSubject(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="autokw-row" style={{ marginTop: 6 }}>
+            <input type="checkbox" checked={wideTapOn} onChange={(e) => setWideTapOn(e.target.checked)} />
+            <span>👆 画面を大きくタップして自己採点（タップ＝○・長押し0.6秒＝✕）</span>
+          </label>
+          <label className="autokw-row" style={{ marginTop: 6 }}>
+            <input
+              type="checkbox"
+              checked={voiceControlOn}
+              disabled={!isVoiceCommandSupported()}
+              onChange={(e) => setVoiceControlOn(e.target.checked)}
+            />
+            <span>
+              🎙️ 声で自己採点・操作する（○/△/✕・次へ/前へ）。答えを開示したタイミングで一度だけ聞き取ります。
+              この端末のブラウザの音声認識機能を使うため、認識のために音声データが音声認識サーバーへ送られる
+              場合があります（端末内保存方針の明示的な例外）。
+            </span>
+          </label>
+          {!isVoiceCommandSupported() && (
+            <p className="inline-note">この端末・ブラウザは音声認識（SpeechRecognition）に対応していません。</p>
+          )}
 
           <div className="section-label">
             新規と復習の割合
@@ -476,6 +602,64 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
                 <span className="sess-target-l">{sessionTargetLabel(t)}</span>
               </button>
             ))}
+          </div>
+          {(() => {
+            // B5：3回以上試して完了率5割未満の件数があれば、無理せず少なめを提案する
+            const low = TARGETS.filter((t) => roundCompletion[t] && roundCompletion[t].starts >= 3 && roundCompletion[t].rate < 0.5);
+            if (low.length === 0) return null;
+            return (
+              <p className="inline-note" style={{ marginTop: 6, color: 'var(--warn, #e0a800)' }}>
+                「{low.map((t) => `${t}問（${sessionTargetLabel(t)}）`).join('」「')}」は最後まで終えられていない回が多いようです（完了率
+                {low.map((t) => `${Math.round(roundCompletion[t].rate * 100)}%`).join('・')}）。無理せずもう少し少ない件数にしてみては？
+              </p>
+            );
+          })()}
+          {/* B6：時間から件数を逆算するチップ（音声学習の「時間から選ぶ」と同じ考え方。
+              過去の実際の解答ペースから概算するだけで、バッファ術のような計画の分割は行わない） */}
+          <div className="field" style={{ marginTop: 10 }}>
+            <label>時間から件数を決める（これまでの解答ペースから概算）</label>
+            <div className="chip-row">
+              {[5, 10, 15, 20, 30].map((min) => {
+                const secPer = estimatedAnswerSeconds(history, subject === 'all' ? undefined : subject);
+                const n = Math.max(1, Math.round((min * 60) / secPer));
+                return (
+                  <button key={min} className="chip" disabled={startDisabled} onClick={() => begin(n)}>
+                    {min}分（約{n}問）
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* B3：プレイリスト（複数の設定を積んで、終わったら自動で次へ。音声学習と同じ考え方。
+              積んだ時点の科目・新規復習比率をそのままスナップショットする＝ジャンル/キーワード等の
+              細かい絞り込みは対象外とし、積んだあとに条件を変えても中身は変わらない） */}
+          <div className="field" style={{ marginTop: 10 }}>
+            <label>🎵 プレイリスト（複数の設定を積んで、終わったら自動で次へ進む）</label>
+            <div className="chip-row">
+              {TARGETS.map((t) => (
+                <button
+                  key={t}
+                  className="chip"
+                  onClick={() => setSessionPlaylist((cur) => [...cur, { target: t, subject, newPct }])}
+                >
+                  +積む（{t}問・{subject === 'all' ? '全科目' : subject}）
+                </button>
+              ))}
+            </div>
+            {sessionPlaylist.length > 0 && (
+              <div className="chip-row" style={{ marginTop: 6 }}>
+                {sessionPlaylist.map((p, i) => (
+                  <button
+                    key={i}
+                    className="chip active"
+                    title="タップで取り消し"
+                    onClick={() => setSessionPlaylist((cur) => cur.filter((_, j) => j !== i))}
+                  >
+                    {i + 1}. {p.subject === 'all' ? '全科目' : p.subject}・{p.target}問 ✕
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {newPct >= 100 && newRemaining === 0 ? (
             <p className="inline-note" style={{ marginTop: 10, color: 'var(--warn, #e0a800)' }}>
@@ -623,6 +807,31 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
                   : `（前回の${requested}問とほぼ同じペース）`;
               })()}
             </p>
+          )}
+          {/* B4：前回の同じ件数との正答率比較（音声学習のpreviousFinishと同じ考え方） */}
+          {isStandardSession && lastRoundInfo && lastRoundInfo.target === requested && lastRoundInfo.graded > 0 && lastRoundInfo.prevAccuracy && (
+            <p className="inline-note" style={{ textAlign: 'center' }}>
+              {(() => {
+                const curPct = Math.round(((lastRoundInfo.graded - lastRoundInfo.wrong) / lastRoundInfo.graded) * 100);
+                const diff = curPct - lastRoundInfo.prevAccuracy.accuracyPct;
+                return diff === 0
+                  ? `📊 自己採点の正答率は前回と同じ約${curPct}%でした`
+                  : `📊 自己採点の正答率は前回よりおよそ${Math.abs(diff)}ポイント${diff > 0 ? '上がり' : '下がり'}ました（今回約${curPct}%）`;
+              })()}
+            </p>
+          )}
+          {/* B10：周回ログの書き出し（Review.jsxの要注意一覧CSVと同じパターン） */}
+          {isStandardSession && lastRoundInfo && (
+            <button
+              className="btn ghost sm block"
+              style={{ marginTop: 6 }}
+              onClick={async () => {
+                const log = await loadRoundLog();
+                downloadFile(roundLogToCsv(log), '周回速度ログ.csv', 'text/csv');
+              }}
+            >
+              📄 周回速度ログをCSVで書き出す
+            </button>
           )}
         </div>
 
@@ -902,6 +1111,9 @@ export default function Session({ store, onToast, onOpenKeyword, onGoReview, onG
           GRADES={GRADES}
           onMissType={onMissType}
           missType={latestMissType(missTypes[current.id])?.type || ''}
+          onRevealedChange={setAnswerRevealed}
+          voiceGradeSignal={voiceGradeSignal}
+          wideTap={wideTapOn}
         />
       )}
       <button className="btn ghost sm block" style={{ marginTop: 10 }} onClick={() => setShowBreak(true)}>
@@ -937,42 +1149,5 @@ function ResetControl({ target, confirming, onAsk, onConfirm, onCancel }) {
     <button className="btn ghost sm block sess-reset-btn" style={{ marginTop: 10 }} onClick={onAsk}>
       🗑 {label}
     </button>
-  );
-}
-
-// 休憩タイマー（5分/10分）。残り時間を表示し、終わると自動で続行。途中スキップ可。
-function BreakTimer({ minutes, onDone }) {
-  const [remain, setRemain] = useState(null); // 秒。null=未開始
-  const ivRef = useRef(null);
-  // アンマウント時（「続ける」を押す・中断する等でこの画面ごと消える時）にインターバルを
-  // 必ず止める。放置すると、残り時間ぶん裏で動き続けたタイマーが、あとで表示される
-  // 別の（無関係な）休憩画面を勝手に閉じてしまう。
-  useEffect(() => () => { if (ivRef.current) clearInterval(ivRef.current); }, []);
-  const start = () => {
-    setRemain(minutes * 60);
-    ivRef.current = setInterval(() => {
-      setRemain((r) => {
-        if (r <= 1) {
-          clearInterval(ivRef.current);
-          ivRef.current = null;
-          onDone?.();
-          return null;
-        }
-        return r - 1;
-      });
-    }, 1000);
-  };
-  if (remain == null) {
-    return (
-      <button className="btn block" onClick={start}>⏱ {minutes}分休憩</button>
-    );
-  }
-  const mm = Math.floor(remain / 60);
-  const ss = String(remain % 60).padStart(2, '0');
-  return (
-    <div className="sess-timer">
-      <span>休憩中… あと {mm}:{ss}</span>
-      <button className="btn ghost sm" onClick={() => { if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; } onDone?.(); }}>スキップして再開</button>
-    </div>
   );
 }

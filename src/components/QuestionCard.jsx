@@ -35,6 +35,10 @@ export default function QuestionCard({
   compact = false, // 1画面に収める省スペース表示（学習セッション向け）
   bookmarked = false, // ブックマーク済みか
   onToggleBookmark, // (questionId) ブックマーク切替（右上のしおり）
+  onRevealedChange, // (revealed:boolean) 答えの開示状態が変わった時に呼ぶ（音声学習と同じ声操作をするため、
+  //   親（Session.jsx）が「今ANSWERフェーズか」を知る必要がある）
+  voiceGradeSignal, // {kind, nonce} 外部（声コマンド）からの自己採点トリガー。nonceが変わるたびに1回だけ発火
+  wideTap = false, // 画面を大きくタップして自己採点（タップ＝○・長押し＝✕）。音声学習と同じ操作方法
 }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
@@ -166,6 +170,30 @@ export default function QuestionCard({
     } else {
       onNext?.();
     }
+  };
+
+  // revealedの変化を親へ知らせる（音声学習のPHASES.ANSWERと同じ考え方で、
+  //   声コマンドを「開示後だけ」聞き取るために親がこのタイミングを知る必要がある）。
+  useEffect(() => { onRevealedChange?.(revealed); }, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 声コマンドでの自己採点（B1）。voiceGradeSignal.nonceが変わるたびに1回だけ発火し、
+  // 開示後・自己採点中（askType/confirmMismatchでない）の時だけ反映する
+  // （キーボードの'1'/'2'/'3'と同じ条件）。
+  const lastVoiceNonceRef = useRef(null);
+  useEffect(() => {
+    if (!voiceGradeSignal || voiceGradeSignal.nonce === lastVoiceNonceRef.current) return;
+    lastVoiceNonceRef.current = voiceGradeSignal.nonce;
+    if (selfGrade && revealed && !askType && !confirmMismatch) pickSelf(voiceGradeSignal.kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceGradeSignal]);
+
+  // 画面を大きくタップして自己採点（B2。タップ＝○・長押し0.6秒＝✕。音声学習の大きくタップと同じ操作方法）。
+  const wideTapDownRef = useRef(0);
+  const onWideTapDown = () => { wideTapDownRef.current = Date.now(); };
+  const onWideTapUp = () => {
+    if (!selfGrade || !revealed || askType || confirmMismatch) return;
+    const dt = Date.now() - wideTapDownRef.current;
+    pickSelf(dt >= 600 ? 'batsu' : 'maru');
   };
 
   // 暗記カード：選択せずに「裏（答え）」をめくる
@@ -550,6 +578,17 @@ export default function QuestionCard({
                   この問題の理解度は？（正解・不正解ではなく「今また出たら自信を持って答えられるか」で選びましょう。
                   △・✕は自動で復習リストに入ります）
                 </div>
+                {wideTap && (
+                  <div
+                    className="wide-tap-zone"
+                    onMouseDown={onWideTapDown}
+                    onMouseUp={onWideTapUp}
+                    onTouchStart={onWideTapDown}
+                    onTouchEnd={onWideTapUp}
+                  >
+                    タップ＝○ できた／長押し（0.6秒）＝✕ できない
+                  </div>
+                )}
                 <div className="selfgrade-row">
                   <button className="btn self-maru" onClick={() => pickSelf('maru')}>
                     <span className="sg-mark">○</span>完璧！自信あり
