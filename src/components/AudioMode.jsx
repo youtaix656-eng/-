@@ -28,6 +28,7 @@ import {
 import { loadMissTypes, latestMissType, missTypeLabel, recordMissType, MISS_TYPES } from '../lib/missTypes.js';
 import { isNowBestTime } from '../lib/timeOfDay.js';
 import { buildCaseLinkMap, keepCasePairsAdjacentObjects } from '../lib/casePairs.js';
+import { weakTagClusters } from '../lib/weakClusters.js';
 import { dailyForgettingPick } from '../lib/forgetting.js';
 import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { scopeCoverage } from '../data/examScope.js';
@@ -334,6 +335,8 @@ export default function AudioMode({
   const [filterGenre, setFilterGenre] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [filterRound, setFilterRound] = useState('');
+  // 学習（10・60・300・900）の検索窓にある自由語検索を音声学習にも組み込む（単一の正の移植）。
+  const [filterTerm, setFilterTerm] = useState('');
   const [bookmarkOnly, setBookmarkOnly] = useState(false);
   const [minRisk, setMinRisk] = useState(0);
   const [minWrong, setMinWrong] = useState(0);
@@ -401,9 +404,22 @@ export default function AudioMode({
     }
     if (recentWrongIds) pool = pool.filter((q) => recentWrongIds.has(q.id));
     if (recentOnlyFilter) pool = pool.filter((q) => recentIds.has(q.id));
+    // 自由語検索（学習(10・60・300・900)のtermと同じ照合先・同じ判定）。科目をまたいで探せる。
+    const t = filterTerm.trim().toLowerCase();
+    if (t) {
+      pool = pool.filter((q) => {
+        const hay = [q.question, q.subject, q.round, ...(q.choices || []), q.explanation, ...effectiveTags(q, links)].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(t);
+      });
+    }
     return pool;
-  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIds, minWrong, minRisk, riskTopN, srs, recentWrongIds, recentOnlyFilter, recentIds]);
-  const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || newOnly || minWrong > 0 || minRisk > 0 || riskTopN || recentOnly || recentOnlyFilter || rotateSubjects.length > 0);
+  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIds, minWrong, minRisk, riskTopN, srs, recentWrongIds, recentOnlyFilter, recentIds, filterTerm, links]);
+  const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || filterTerm || bookmarkOnly || newOnly || minWrong > 0 || minRisk > 0 || riskTopN || recentOnly || recentOnlyFilter || rotateSubjects.length > 0);
+  // 弱点タグ（学習(10・60・300・900)のweakTagsと同じ単一の正=weakClusters.jsを移植。タップでキーワードしぼり）。
+  const weakAudioTags = useMemo(
+    () => weakTagClusters(history, questions, links, { minWrong: 2, limit: 8 }),
+    [history, questions, links]
+  );
 
   // 連結の工夫（プラン構造を変えるもの＝再構築が必要）
   const [chain, setChain] = useState(false); // #1 関連へ連鎖
@@ -1173,6 +1189,7 @@ export default function AudioMode({
     setFilterGenre('');
     setFilterKeyword('');
     setFilterRound('');
+    setFilterTerm('');
     setBookmarkOnly(false);
     setNewOnly(false);
     setMinRisk(0);
@@ -1215,6 +1232,13 @@ export default function AudioMode({
   const toggleExcludeSnoozed = () => {
     rebuildStop();
     setExcludeSnoozed((v) => { if (!v) setSnoozedOnly(false); return !v; });
+  };
+  // 自由語検索（学習(10・60・300・900)と同じく、キーワード選択と同様に「誤った問題」モードを解除する）
+  const changeFilterTerm = (v) => {
+    rebuildStop();
+    setFilterTerm(v);
+    if (source === 'review' && !v) return;
+    setSource(v || filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || newOnly ? 'filter' : 'all');
   };
   const changeRecentOnly = (v) => {
     rebuildStop();
@@ -1537,6 +1561,34 @@ export default function AudioMode({
             </select>
           </label>
         </div>
+
+        {/* 弱点タグ（学習(10・60・300・900)から移植）：誤答が多いタグをタップでしぼり込み */}
+        {weakAudioTags.length > 0 && (
+          <div className="weak-tags">
+            <span className="weak-tags-label">弱点タグ</span>
+            <div className="chip-row">
+              {weakAudioTags.map((w) => (
+                <button
+                  key={w.tag}
+                  className={`chip ${filterKeyword === w.tag ? 'active' : ''}`}
+                  onClick={() => applyFilter({ keyword: filterKeyword === w.tag ? '' : w.tag })}
+                  title={`誤答${w.wrong}回・正答率${Math.round((1 - w.rate) * 100)}%`}
+                >
+                  {w.tag} <span className="weak-count">×{w.wrong}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <input
+          type="text"
+          value={filterTerm}
+          onChange={(e) => changeFilterTerm(e.target.value)}
+          placeholder="🔎 語で検索（例：顔面神経・足三里・糖尿病）科目をまたいで探せます"
+          style={{ marginTop: 10 }}
+        />
+
         <label className="autokw-row" style={{ marginTop: 8 }}>
           <input type="checkbox" checked={bookmarkOnly} onChange={toggleBookmarkOnly} />
           <span>★ ブックマークした問題だけ読み上げ</span>
