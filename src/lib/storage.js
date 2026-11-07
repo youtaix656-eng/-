@@ -275,7 +275,7 @@ export const saveExamProgress = (p) => write(KEYS.examProgress, p);
 export const clearExamProgress = () => remove(KEYS.examProgress);
 
 // ---- 音声学習の再生位置（続きから） ----
-// audioProgress = { sig, index, at }
+// audioProgress = { sig, index, at, graded? }（gradedは二重記録防止のid配列、省略可・後方互換）
 export const loadAudioProgress = () => read(KEYS.audioProgress, null);
 export const saveAudioProgress = (p) => write(KEYS.audioProgress, p);
 export const clearAudioProgress = () => remove(KEYS.audioProgress);
