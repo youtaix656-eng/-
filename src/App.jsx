@@ -941,7 +941,7 @@ export default function App() {
         <div className="modal-backdrop" onClick={resumeDialogNo}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="modal-title">前回の続きから</h3>
-            <p>①機能名：{resumeCandidate.title}</p>
+            <p>①科目名：{resumeCandidate.subject || 'なし'}</p>
             <p>②ジャンル名：{resumeCandidate.genre || 'なし'}</p>
             <p>③キーワード名：{resumeCandidate.keyword || 'なし'}</p>
             <p>④残り{resumeCandidate.remaining}問</p>

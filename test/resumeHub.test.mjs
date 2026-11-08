@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { pickTopResumeCandidate } from '../src/lib/resumeHub.js';
 
 const questions = [
-  { id: 'q1', genre: '骨格系', tags: ['骨'] },
-  { id: 'q2', genre: '循環器系', tags: ['血管'] },
+  { id: 'q1', subject: '解剖学', genre: '骨格系', tags: ['骨'] },
+  { id: 'q2', subject: '生理学', genre: '循環器系', tags: ['血管'] },
 ];
 
 test('戻り値null: 何も保存されていない時は候補が無い', () => {
@@ -16,11 +16,12 @@ test('session: 完了済み（pos>=target）は対象外', () => {
   assert.equal(pickTopResumeCandidate({ session, questions }), null);
 });
 
-test('session: 残り問題数とジャンル・キーワードを次の問題から出す', () => {
+test('session: 残り問題数と科目・ジャンル・キーワードを次の問題から出す', () => {
   const session = { ids: ['q1', 'q2'], pos: 0, target: 2, startedAt: 100 };
   const c = pickTopResumeCandidate({ session, questions });
   assert.equal(c.key, 'session');
   assert.equal(c.remaining, 2);
+  assert.equal(c.subject, '解剖学');
   assert.equal(c.genre, '骨格系');
   assert.equal(c.keyword, '骨');
 });
@@ -30,6 +31,7 @@ test('quiz: idxが進んだ分だけ残りが減る', () => {
   const c = pickTopResumeCandidate({ quizProgress, questions });
   assert.equal(c.key, 'quiz');
   assert.equal(c.remaining, 1);
+  assert.equal(c.subject, '生理学');
   assert.equal(c.genre, '循環器系');
 });
 
@@ -49,11 +51,12 @@ test('exam: 午前+午後 通しの午後フェーズは午前ぶんを残り計
   assert.equal(c.remaining, 2);
 });
 
-test('review: 残り件数とジャンルを次の問題から出す', () => {
+test('review: 残り件数と科目・ジャンルを次の問題から出す', () => {
   const reviewProgress = { ids: ['q2'], idx: 0, at: 400 };
   const c = pickTopResumeCandidate({ reviewProgress, questions });
   assert.equal(c.key, 'review');
   assert.equal(c.remaining, 1);
+  assert.equal(c.subject, '生理学');
   assert.equal(c.genre, '循環器系');
 });
 
