@@ -766,6 +766,16 @@ textarea {
   box-shadow: var(--shadow);
   margin-bottom: 16px;
 }
+/* ヘッダー行（学習(10・60・300・900)の.sess-topbarと同じ考え方のflexbox。
+   以前は.now-indexをfloat:rightで並べ、スマホ幅で折り返すと複数の数字が
+   すき間なく連結して読めなくなっていたため、flexに直した）。 */
+.player-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .player .now-phase {
   font-size: 12px;
   font-weight: 700;
@@ -773,14 +783,40 @@ textarea {
   opacity: 0.85;
   text-transform: uppercase;
 }
+.player-topbar-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .player .now-index {
   font-size: 12px;
   opacity: 0.75;
-  float: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 視覚的な進捗バー（学習(10・60・300・900)の.progressと同じ考え方）。
+   .playerは常に濃い紺〜黒背景なので、var(--navy)の帯は使わず白系の塗りにする。 */
+.player-progress {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 8px 0 4px;
+}
+.player-progress > span {
+  display: block;
+  height: 100%;
+  background: #fff;
+  border-radius: 999px;
+  transition: width 0.3s ease;
 }
 .player .now-subject {
-  font-size: 12px;
-  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.95;
   margin: 12px 0 4px;
 }
 .player .now-text {

@@ -820,7 +820,8 @@ export default function AudioMode({
     const K = PHASES.KEYWORD, Q = PHASES.QUESTION, G = PHASES.GAP, A = PHASES.ANSWER, N = PHASES.NOTE;
     const steps = [];
     if (item.kind === 'progress') {
-      steps.push({ phase: N, say: `ここまで${item.done}問、残り${item.remain}問です。` });
+      // ユーザー指定：10問ごとに「残り◯◯問」とだけ声で知らせる（シンプルに）。
+      steps.push({ phase: N, say: `残り${item.remain}問です。` });
       steps.push({ wait: 300 });
       return steps;
     }
@@ -1180,7 +1181,16 @@ export default function AudioMode({
     const justFinished = snap.finished && !prevFinishedRef.current;
     prevFinishedRef.current = snap.finished;
     if (!justFinished) return;
-    if (!(source === 'review' || (source === 'filter' && newOnly))) return;
+    if (!(source === 'review' || (source === 'filter' && newOnly))) {
+      // ユーザー指定：科目の音声を再生していく（インプット）等、間違えた問題／まだ解いていない
+      // 問題だけモード以外で一周（最後まで）聞き終えたら、短くそれだけ声で知らせる
+      // （こちらは詳しい正答率等の読み上げは行わない＝情報量の多いreview向けの読み上げと役割を分ける）。
+      if (total > 0) {
+        cancelSpeech();
+        speak('一周終了です、お疲れ様でした。', { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
+      }
+      return;
+    }
     const n = total;
     if (n === 0) return;
     const gradedN = sessionGradedCount;
@@ -2235,15 +2245,20 @@ export default function AudioMode({
                           この誤答、理由は？（未分類の{sessionWrong.filter((q) => !latestMissType(missTypes[q.id])).length}問）
                         </div>
                         {sessionWrong.filter((q) => !latestMissType(missTypes[q.id])).map((q) => (
-                          <div key={q.id} className="btn-row" style={{ flexWrap: 'wrap', marginBottom: 6, alignItems: 'center' }}>
+                          <div key={q.id} style={{ marginBottom: 8 }}>
                             <span className="inline-note" style={{ marginRight: 6 }}>
                               {(q.question || '（図の問題）').slice(0, 20)}…
                             </span>
-                            {MISS_TYPES.map((t) => (
-                              <button key={t.id} className="chip" onClick={() => onMissType(q.id, t.id)}>
-                                {t.label}
-                              </button>
-                            ))}
+                            {/* 学習(10・60・300・900)のQuestionCard.jsxと同じ.misstype-row（横スクロール・
+                                折り返さない）。以前は素のbtn-rowで、長いラベル（「ケアレス」等）が
+                                混ざると折り返して崩れるリスクがあった。 */}
+                            <div className="misstype-row" style={{ marginTop: 4 }}>
+                              {MISS_TYPES.map((t) => (
+                                <button key={t.id} className="chip" onClick={() => onMissType(q.id, t.id)}>
+                                  {t.label}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -2479,6 +2494,16 @@ export default function AudioMode({
                     対象は{n}問しかないため、{reviewTarget}問には届かずそこで終わります（繰り返しはしません）。
                   </p>
                 )}
+                {/* ユーザー指定：科目の音声を再生していく（インプット）時も、10問ごとに
+                    「残り◯◯問」を声で知らせられるように。以前は「間違えた問題」
+                    「まだ解いていない問題だけ」専用カードにしかトグルが無く、
+                    ここ（連結学習モード・全件読み上げ等）からは操作できなかった。 */}
+                <Opt
+                  on={progressAnnounceOn}
+                  onToggle={() => setProgressAnnounceOn((v) => !v)}
+                  title="🔔 10問ごとに残り件数を声で知らせる"
+                  desc="画面を見ていなくても「残り◯◯問です」で進み具合が分かります。"
+                />
                 {snap.finished && total > 0 && (
                   <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={repeatWithNextBatch}>
                     🔁 もう一度（同じ件数で別の問題を）
@@ -2499,11 +2524,20 @@ export default function AudioMode({
                 {snap.finished && audioGenreBreakdown && audioGenreBreakdown.length > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <div className="section-label" style={{ marginTop: 0 }}>ジャンル別正答率（苦手順）</div>
-                    {(showAllAudioGenres ? audioGenreBreakdown : audioGenreBreakdown.slice(0, 6)).map(([g, s]) => (
-                      <div key={g} className="inline-note" style={{ margin: '2px 0' }}>
-                        {g}：{s.correct}/{s.total}問（{Math.round((s.correct / s.total) * 100)}%）
-                      </div>
-                    ))}
+                    {/* 学習(10・60・300・900)と同じ色付きバー（赤=低い・黄=中・緑=高い）で
+                        苦手度を一目で見せる（以前は文字だけだった）。 */}
+                    <ul className="genre-stats">
+                      {(showAllAudioGenres ? audioGenreBreakdown : audioGenreBreakdown.slice(0, 6)).map(([g, s]) => {
+                        const p = Math.round((s.correct / s.total) * 100);
+                        return (
+                          <li key={g}>
+                            <span className="gs-name">{g}</span>
+                            <span className="gs-bar"><i style={{ width: `${p}%`, background: p < 60 ? 'var(--wrong)' : p < 80 ? 'var(--warn)' : 'var(--correct)' }} /></span>
+                            <span className="gs-num">{p}%（{s.correct}/{s.total}）</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
                     {audioGenreBreakdown.length > 6 && (
                       <button className="btn ghost sm block" style={{ marginTop: 6 }} onClick={() => setShowAllAudioGenres((v) => !v)}>
                         {showAllAudioGenres ? '折りたたむ' : `もっと見る（残り${audioGenreBreakdown.length - 6}件）`}
@@ -2641,7 +2675,11 @@ export default function AudioMode({
               {phase === PHASES.NOTE && 'まとめ'}
             </div>
             {currentItem?.keyword && <div className="now-keyword">🔗 {currentItem.keyword}</div>}
-            <div>
+            {/* 学習(10・60・300・900)の.sess-topbarと同じく、flexboxで分けて折り返しても
+                読める形にする（以前は3つの.now-indexをfloat:rightで並べていたため、
+                スマホ幅で折り返すと「📅 今日の目標 0/300問1 / 3301」のようにすき間なく
+                連結して読めなくなるのを実機で確認した）。 */}
+            <div className="player-topbar">
               <span className="now-phase">
                 {phase === PHASES.KEYWORD && (currentItem?.kind === 'flashcard' ? '用語' : 'キーワード')}
                 {phase === PHASES.QUESTION && '問題'}
@@ -2649,19 +2687,33 @@ export default function AudioMode({
                 {phase === PHASES.ANSWER && (currentItem?.kind === 'flashcard' ? '意味・要点' : '正解・解説')}
                 {phase === PHASES.NOTE && (currentItem?.kind === 'summary' ? 'まとめ' : 'つながり')}
               </span>
-              <span className="now-index">{index + 1} / {total}</span>
-              {effectiveGoal > 0 && (
-                <span className="now-index" style={{ marginLeft: 8 }}>
-                  🎯 目標 {Math.min(index + 1, effectiveGoal)} / {effectiveGoal}問
-                  {mood === 'tired' && goal > 0 && effectiveGoal < goal && '（少なめに調整中）'}
+              <span className="player-topbar-stats">
+                <span className="now-index">{index + 1} / {total}</span>
+                {effectiveGoal > 0 && (
+                  <span className="now-index">
+                    🎯 目標 {Math.min(index + 1, effectiveGoal)} / {effectiveGoal}問
+                    {mood === 'tired' && goal > 0 && effectiveGoal < goal && '（少なめに調整中）'}
+                  </span>
+                )}
+                <span className="now-index">
+                  📅 今日の目標 {dailyGoalCount}/{effectiveDailyGoal}問
                 </span>
-              )}
-              <span className="now-index" style={{ marginLeft: 8 }}>
-                📅 今日の目標 {dailyGoalCount}/{effectiveDailyGoal}問
               </span>
             </div>
+            {/* 視覚的な進捗バー（学習(10・60・300・900)の.progressと同じ考え方）。
+                文字の分数だけより、ちらっと見ただけで進み具合が分かる。 */}
+            {total > 0 && (
+              <div className="player-progress">
+                <span style={{ width: `${Math.min(100, ((index + 1) / total) * 100)}%` }} />
+              </div>
+            )}
 
             <div className="now-subject">
+              {current && !['flashcard', 'summary', 'compare', 'number'].includes(currentItem?.kind) && (
+                <span className={`badge ${current.type === 'ox' ? 'ox' : 'choice'}`} style={{ marginRight: 6 }}>
+                  {current.type === 'ox' ? '○×' : '四択'}
+                </span>
+              )}
               {current?.subject ||
                 (currentItem?.kind === 'flashcard'
                   ? '用語カード'
@@ -2812,22 +2864,26 @@ export default function AudioMode({
             {/* A10：誤答理由をその場で選べるように（△・✕を選んだ直後だけ表示。
                 完了画面でまとめて選ぶのとは別に、忘れないうちに今すぐ記録できる） */}
             {current && justGradedWrongId === current.id && (
-              <div className="btn-row" style={{ flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
+              <div style={{ marginTop: 6 }}>
                 <span className="inline-note" style={{ marginRight: 6 }}>この誤答、理由は？</span>
-                {MISS_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    className="chip"
-                    onClick={() => {
-                      onMissType(current.id, t.id);
-                      setJustGradedWrongId(null);
-                      onToast?.(`「${t.label}」として記録しました`);
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-                <button className="chip ghost" onClick={() => setJustGradedWrongId(null)}>あとで</button>
+                {/* 学習(10・60・300・900)のQuestionCard.jsxと同じ.misstype-row（横スクロール・
+                    折り返さない）に統一（レイアウト崩れ防止）。 */}
+                <div className="misstype-row" style={{ marginTop: 4 }}>
+                  {MISS_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      className="chip"
+                      onClick={() => {
+                        onMissType(current.id, t.id);
+                        setJustGradedWrongId(null);
+                        onToast?.(`「${t.label}」として記録しました`);
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                  <button className="chip ghost" onClick={() => setJustGradedWrongId(null)}>あとで</button>
+                </div>
               </div>
             )}
             {/* A9：自己説明ステップ（音声版）。QuestionCard.jsxのwhyPromptと同じ考え方で、
