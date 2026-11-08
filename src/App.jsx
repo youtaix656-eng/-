@@ -179,6 +179,10 @@ export default function App() {
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
+  // 音声学習画面（AudioMode.jsx）のフルプレーヤーが画面内に見えているか。
+  // 見えている間はミニプレーヤー（下部の常設バー）と二重にならないよう隠し、
+  // 検索・設定カードをスクロールして画面外に出たら下部のミニプレーヤーで操作できるようにする。
+  const [audioPlayerInView, setAudioPlayerInView] = useState(true);
   // 音声だけでの復習（AudioMode.jsx）の実施ログ。毎日のリマインド通知に一言相乗りさせる
   // ためだけに使う軽量な読み込み（新規#8。別のリマインド設定は作らない）。
   const [audioReviewLog, setAudioReviewLog] = useState([]);
@@ -619,6 +623,7 @@ export default function App() {
             onOpenMnemonicKeyword={openMnemonicKeyword}
             onOpenGraphConcept={openGraphConcept}
             onOpenGlossaryTerm={openGlossaryTerm}
+            onPlayerVisibilityChange={setAudioPlayerInView}
           />
         );
       case 'exam':
@@ -892,8 +897,14 @@ export default function App() {
           動かない画面では自分で消える。 */}
       <ScrollArrows view={view} />
 
-      {/* 音声ミニプレーヤー：他の画面へ移っても再生を続けられる（音声画面では非表示） */}
-      <MiniPlayer hidden={view === 'audio'} onOpen={() => setView('audio')} lifted={view !== 'roadmap'} />
+      {/* 音声ミニプレーヤー：他の画面へ移っても再生を続けられる。音声画面にいる間は、
+          フルプレーヤーが画面内に見えている時だけ非表示にし（二重表示防止）、
+          検索・設定カードをスクロールしてフルプレーヤーが画面外に出たら自動で出す。 */}
+      <MiniPlayer
+        hidden={view === 'audio' && audioPlayerInView}
+        onOpen={() => setView('audio')}
+        lifted={view !== 'roadmap'}
+      />
 
       {/* 合格ロードマップ：どの画面からでも開ける常設バー（ロードマップ画面自体では非表示） */}
       {view !== 'roadmap' && (

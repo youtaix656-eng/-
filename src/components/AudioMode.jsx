@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isSpeechSupported, loadVoices, speak, cancelSpeech } from '../lib/speech.js';
 import * as storage from '../lib/storage.js';
 import * as engine from '../lib/audioEngine.js';
@@ -112,6 +112,7 @@ function Opt({ on, onToggle, title, desc, disabled }) {
 export default function AudioMode({
   store, onToast, reviewPreset, onConsumePreset, onNavigate,
   onOpenFlashcardKeyword, onOpenMnemonicKeyword, onOpenGraphConcept, onOpenGlossaryTerm,
+  onPlayerVisibilityChange,
 }) {
   const {
     questions, links, history, srs, settings, updateSettings, recordAnswer, setLink, bookmarks, toggleBookmark,
@@ -1541,6 +1542,27 @@ export default function AudioMode({
   const [modesExpanded, setModesExpanded] = useState(false);
   const [voicesExpanded, setVoicesExpanded] = useState(false);
   const [detailSettingsOpen, setDetailSettingsOpen] = useState(false);
+  // 画面下部のミニプレーヤー（App.jsxの常設バー）は、この画面にいる間だけフルプレーヤーと
+  // 二重にならないよう隠している。検索・設定カードをスクロールしてフルプレーヤーが画面外に
+  // 出た時は、ミニプレーヤー側で再生ボタン・前へ/次へを操作できるようにする（IntersectionObserver
+  // でフルプレーヤーの可視状態をApp.jsxへ伝える。プレーヤーが無い＝builtPlan.length===0の時は
+  // 伝えない＝App.jsx側の既定値のまま、ミニプレーヤー自身がsnap.startedを見て出し分ける）。
+  const playerObserverRef = useRef(null);
+  const setPlayerRef = useCallback((node) => {
+    if (playerObserverRef.current) {
+      playerObserverRef.current.disconnect();
+      playerObserverRef.current = null;
+    }
+    if (node && typeof IntersectionObserver !== 'undefined' && onPlayerVisibilityChange) {
+      playerObserverRef.current = new IntersectionObserver(
+        (entries) => onPlayerVisibilityChange(entries[0]?.isIntersecting !== false),
+        { threshold: 0.01 }
+      );
+      playerObserverRef.current.observe(node);
+    } else if (!node && onPlayerVisibilityChange) {
+      onPlayerVisibilityChange(true);
+    }
+  }, [onPlayerVisibilityChange]);
   // #10 聞きながら自己採点／キーワード追加（○＝できた, △・✕＝復習へ）
   const gradeCurrent = (kind) => {
     const q = current;
@@ -2104,7 +2126,7 @@ export default function AudioMode({
             </p>
           )}
           {/* プレーヤー */}
-          <div className="player">
+          <div className="player" ref={setPlayerRef}>
             {/* スクリーンリーダー向け：フェーズの切り替えを読み上げとは別に伝える */}
             <div aria-live="polite" className="sr-only">
               {phase === PHASES.QUESTION && '問題'}
