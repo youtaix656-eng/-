@@ -189,13 +189,11 @@ export default function Pomodoro({ store, onToast }) {
       {open && (
         <div className="pomo-config">
           <PomodoroConfigFields cfg={cfg} setCfg={setCfg} onToast={onToast} onMusicChange={() => setMusicVersion((v) => v + 1)} />
-          <button
-            className="btn ghost sm block"
-            style={{ marginTop: 8 }}
-            onClick={() => { setOpen(false); setCfg({ enabled: false }); }}
-          >
-            タイマーを閉じる（オフにする）
-          </button>
+          <p className="pomo-hint" style={{ marginTop: 8 }}>
+            間違って消してしまうことがあったため、ここには「閉じる」ボタンはありません。
+            タイマーをオフにしたい時は、設定画面の「画面上部にポモドーロタイマーを表示」を
+            オフにしてください。
+          </p>
         </div>
       )}
     </div>
