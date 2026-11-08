@@ -373,6 +373,12 @@ export default function AudioMode({
   const [leechFirst, setLeechFirst] = useState(false); // リーチ（要注意）を優先して読む
   const [recentOnly, setRecentOnly] = useState(''); // ''|'today'|'week'：直近の誤答だけに絞る
   const [recentOnlyFilter, setRecentOnlyFilter] = useState(false); // 🆕 新着だけ（直近14日に追加された問題）
+  // 出題形式でしぼる（2026-11-08追加・ユーザー指定）。一問一答＝原問（round設定あり）ではない
+  // 派生問題、マルバツ＝type==='ox'。独立したON/OFFで組み合わせられる（両方ONなら「派生かつ○×」
+  // だけに絞られる）。音声で科目を再生する時、今まではこの区別が一切無く、原問の4択・派生の
+  // 一問一答・○×がすべて混ざったまま読み上げられていた。
+  const [derivedOnly, setDerivedOnly] = useState(false); // 一問一答（派生）だけ
+  const [oxOnly, setOxOnly] = useState(false); // マルバツ（○×）だけ
   // A1：新規:復習の割合（学習10・60・300・900の「新規と復習の割合」スライダーと同じ考え方）。
   // 既定null＝未指定なら従来どおり（全件読み上げ・検索結果そのまま）。次回開いた時に前回の値を
   // 覚えておく（settings.audioNewPct、学習10・60・300・900のsettings.sessionNewRatio同期と同じ考え方）。
@@ -455,6 +461,10 @@ export default function AudioMode({
     }
     if (recentWrongIds) pool = pool.filter((q) => recentWrongIds.has(q.id));
     if (recentOnlyFilter) pool = pool.filter((q) => recentIds.has(q.id));
+    // 出題形式でしぼる：一問一答（派生＝round未設定）／マルバツ（○×）。coverage.jsの
+    // 「原問＝round設定あり」と同じ基準を使う（新しい判定ロジックは作らない）。
+    if (derivedOnly) pool = pool.filter((q) => !q.round);
+    if (oxOnly) pool = pool.filter((q) => q.type === 'ox');
     // 自由語検索（学習(10・60・300・900)のtermと同じ照合先・同じ判定）。科目をまたいで探せる。
     const t = filterTerm.trim().toLowerCase();
     if (t) {
@@ -464,8 +474,8 @@ export default function AudioMode({
       });
     }
     return pool;
-  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIds, minWrong, minRisk, riskTopN, srs, recentWrongIds, recentOnlyFilter, recentIds, filterTerm, links]);
-  const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || filterTerm || bookmarkOnly || newOnly || minWrong > 0 || minRisk > 0 || riskTopN || recentOnly || recentOnlyFilter || rotateSubjects.length > 0);
+  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIds, minWrong, minRisk, riskTopN, srs, recentWrongIds, recentOnlyFilter, recentIds, derivedOnly, oxOnly, filterTerm, links]);
+  const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || filterTerm || bookmarkOnly || newOnly || minWrong > 0 || minRisk > 0 || riskTopN || recentOnly || recentOnlyFilter || derivedOnly || oxOnly || rotateSubjects.length > 0);
   // ○の見直し・○の高速回転（学習10・60・300・900と同じuseMaruReview/MaruReviewCardをそのまま使う）。
   // 検索の絞り込み（filteredPool）を引き継ぐ。
   const {
@@ -1398,6 +1408,8 @@ export default function AudioMode({
     setMinWrong(0);
     setRecentOnly('');
     setRecentOnlyFilter(false);
+    setDerivedOnly(false);
+    setOxOnly(false);
     setRotateSubjects([]);
     setNagameOnly(false);
     setExcludeNagame(false);
@@ -1453,6 +1465,20 @@ export default function AudioMode({
     const next = !bookmarkOnly;
     setBookmarkOnly(next);
     setSource(next || filterSubject || filterGenre || filterKeyword || filterRound || newOnly ? 'filter' : 'all');
+  };
+  // 出題形式でしぼる：一問一答（派生）だけ／マルバツ（○×）だけ。独立にON/OFFできる
+  // （両方ONなら「派生かつ○×」だけに絞られる）。
+  const toggleDerivedOnly = () => {
+    rebuildStop();
+    const next = !derivedOnly;
+    setDerivedOnly(next);
+    setSource(next || filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || newOnly ? 'filter' : 'all');
+  };
+  const toggleOxOnly = () => {
+    rebuildStop();
+    const next = !oxOnly;
+    setOxOnly(next);
+    setSource(next || filterSubject || filterGenre || filterKeyword || filterRound || bookmarkOnly || newOnly ? 'filter' : 'all');
   };
   // 🆕 まだ解いていない問題だけ（#29。復習と同じ件数チップのUIを使い回す）
   const toggleNewOnly = () => {
@@ -1970,6 +1996,23 @@ export default function AudioMode({
           <input type="checkbox" checked={recentOnlyFilter} onChange={toggleRecentOnlyFilter} />
           <span>🆕 新着だけ（直近14日でコンテンツ更新により追加された問題）</span>
         </label>
+        {/* 出題形式でしぼる（2026-11-08追加）。今までは科目を選んでも原問（4択の元問題）・
+            一問一答の派生・○×が区別なく混ざって読み上げられていた。組み合わせ可能。 */}
+        <label className="autokw-row" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={derivedOnly} onChange={toggleDerivedOnly} />
+          <span>📝 一問一答だけ（原問＝4択の元問題を除く）</span>
+        </label>
+        <label className="autokw-row" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={oxOnly} onChange={toggleOxOnly} />
+          <span>⭕ マルバツ（○×）だけ</span>
+        </label>
+        {(derivedOnly || oxOnly) && (
+          <p className="inline-note" style={{ marginTop: 4 }}>
+            両方チェックすると「一問一答かつ○×」だけに絞られます。この条件で
+            <strong> {filteredPool.length}</strong> 問（下の件数チップの「すべて」＋繰り返しオフで
+            もれなく1周できます。途中で閉じても「続きから」で再開できます）。
+          </p>
+        )}
         <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
           <label>複数科目をバランスよく混ぜて読む（2科目以上選ぶと単一の科目選択より優先）</label>
           <div className="chip-row" style={{ marginBottom: 0 }}>
