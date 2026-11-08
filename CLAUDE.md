@@ -3886,6 +3886,60 @@ grep確認したうえで、本当に欠けていた30項目を提案・**ユー
   autoResume経路はコードレベルで確認済み（Quiz.jsxの既存autoResumeパターンをそのまま複製した
   だけのため、ロジック自体のリスクは低いと判断）。
 
+## ポモドーロタイマーを「時間+/-」「1曲だけループ再生」の2機能だけに全面リセット（2026-11-08追加）
+ユーザーから「ポモドーロタイマーの全機能を一度リセットし、①自分でタイマーの時間を+/-だけで
+設定できる ②スマホ内の音楽を1曲だけ設定し、勉強中はその1曲だけをループ再生する、の2つだけに
+絞ってほしい」と依頼された。変更の規模が大きい（`Pomodoro.jsx`940行＋`PomodoroConfigFields.jsx`
+234行の大半を削る）ため、着手前に`AskUserQuestion`で2点を確認した：①「全機能リセット」は
+UIごと削るのか保存値を既定へ戻すだけか→**UIごと削る**（既存のプリセット・短い休憩/長い休憩/
+サイクル回数・勉強中の通知・1日の目標・効果音・振動・画面常時点灯・集中モード・バー位置・
+タブを閉じる確認・週間統計グラフ/CSV書き出し等をすべて削除）、②曲は「勉強開始の合図として
+1回だけ」か「勉強時間中ずっとループ」か→**ずっとループ**。両方ともユーザーが推奨案を選択。
+- **`Pomodoro.jsx`・`PomodoroConfigFields.jsx`を全面的に作り直した**。残るのは
+  ①タイマーの時間（分）を`+`/`-`ボタンだけで調整（1〜180分）②スマホ内の音楽ファイルを
+  storage.jsの既存`savePomoMusic`/`loadPomoMusic`/`clearPomoMusic`（IndexedDB Blob、15MBまで）
+  で1曲だけ保存し、`<audio loop>`で勉強中ずっとループ再生、の2つだけ。設定は
+  `settings.pomodoro`の`durationMin`フィールドに持つ（旧`study`から改名。クラウド同期の
+  マージは`progressMerge.js`の`pickNewerByOwnTimestamp`が`pomodoro`オブジェクトを
+  `updatedAt`で丸ごと入れ替えるだけなので、内部フィールド名を変えても影響なし）。
+  Settings.jsx（バーがオフの間も同じ`PomodoroConfigFields`で調整可能）はそのまま流用。
+- **時刻ベース設計は維持**（残り時間を1秒ずつ減算せず「終わる時刻（endAt）」から毎回
+  計算し直す。タブが裏に回っていても戻った時に正しい残り時間を表示する）。
+  **タイマーの実行状態の端末内保存（ページ再読み込みをまたいだ「続きから」）は廃止**——
+  これも「全機能のリセット」の結果として意図的に削った。再読み込みすると待機中に戻る。
+- **完全に不要になったライブラリ・テストを削除した**（`Pomodoro.jsx`/
+  `PomodoroConfigFields.jsx`だけが使っていた、かつ本体からの参照が無くなったことを
+  grepで確認済み）：`src/lib/pomoLog.js`（週間統計・CSV書き出し）・`pomoFocus.js`
+  （集中度セルフチェック）・`pomoPause.js`（中断理由）・`pomoLeader.js`（複数タブの
+  幹事タブ判定／BroadcastChannel）・`pomoNotify.js`（通知許可）・`pomoBackground.js`
+  （アプリアイコンのバッジ・終了時刻の通知予約・Periodic Background Sync）・
+  `pomoState.js`（タイマー実行状態の永続化）・`pomodoroLogic.js`（フェーズ遷移・
+  サイクル計算・ビープ音階表等、複数フェーズモデル前提のロジック）・`useLongPress.js`
+  （Pomodoro.jsx以外では使われておらず、Home.jsxは元から独自のローカル実装を持つ）と、
+  対応する6本のテストファイル。**`src/lib/storage.js`のPomoMusic関連（`savePomoMusic`等）・
+  `sound.js`（beep/vibrate、AudioMode.jsxが使用中）・`runtimeFlags.js`
+  （`setPomoRunning`/`isPomoRunning`、main.jsxのSW更新保留判定が使用中）は他画面でも
+  使うため削除していない**。
+- **`public/sw.js`のPeriodic Background Sync用コード（`checkPomoStateAndNotify`等）も削除**。
+  `pomoState.js`を削除したことで`shinkyu:pomoState`キーには二度と書き込まれなくなり
+  （このSWコードが読んでいた唯一のキー）、登録する側（`pomoBackground.js`の
+  `tryRegisterPeriodicSync`）も削除済みで今後登録されることもないため、完全に死んだコードに
+  なっていた。
+- **CSS（`src/styles/index.css`）も使われなくなったセレクタを削除**：フェーズ別の背景色
+  （`.pomo-bar.study/.short/.long`）・サイクル表示・設定の数値入力欄（`.pomo-config-grid input`、
+  `+/-`ボタンだけになったため）・勉強内容メモ・統計・1日の目標バー・バー位置の浮動表示・
+  カスタムプリセットの並べ替え/削除チップ（`.chip-with-remove`/`.chip-remove`/`.chip-reorder`、
+  他画面での使用が無いことをgrep確認済み）・効果音の音色/音量・週間統計グラフ・集中度
+  チェック/中断理由プロンプト・バックグラウンド機能の案内文。
+- 検証：`node --test`（2608件。削除した6テストファイル分、2671→2608）・`npx vite build`・
+  `npm run validate`・`node scripts/check-bundle-size.mjs`（起動時JS 692KB/700KB・
+  CSS 93KB/110KB、CSS削減ぶんでわずかに軽量化）はすべて通過。Playwright QAで実機確認済み：
+  設定画面のポモドーロ欄が「タイマーの時間（分）」の+/-と「曲を選ぶ」だけになっていること
+  （以前の多数の設定項目が消えていることを確認）、バーを開くと「⏱️ タイマー」「25:00」
+  「▶/⟲/⚙/▴」だけが表示されること、`+`を押すと26分に変わること、再生すると実際に
+  カウントダウンすること（25:59）、`<audio>`要素に`loop`属性が付いていること、
+  コンソールエラー0件。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

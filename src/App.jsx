@@ -867,7 +867,7 @@ export default function App() {
   return (
     <div className={appClassName} style={fontScale !== 1 ? { zoom: fontScale } : undefined}>
       <Suspense fallback={null}>
-        <Pomodoro store={store} onToast={showToast} activeView={view} onNavigate={setView} installPrompt={installPrompt} onInstall={installApp} />
+        <Pomodoro store={store} onToast={showToast} />
       </Suspense>
       <header className="app-header">
         <h1>

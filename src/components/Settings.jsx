@@ -315,6 +315,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           <PomodoroConfigFields
             cfg={settings.pomodoro || {}}
             setCfg={(patch) => updateSettings({ pomodoro: { ...(settings.pomodoro || {}), ...patch, updatedAt: Date.now() } })}
+            onToast={onToast}
           />
         </div>
       </div>
