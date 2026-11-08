@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { isSpeechSupported, loadVoices, speak, cancelSpeech } from '../lib/speech.js';
 import * as storage from '../lib/storage.js';
 import * as engine from '../lib/audioEngine.js';
@@ -112,7 +112,7 @@ function Opt({ on, onToggle, title, desc, disabled }) {
 export default function AudioMode({
   store, onToast, reviewPreset, onConsumePreset, onNavigate,
   onOpenFlashcardKeyword, onOpenMnemonicKeyword, onOpenGraphConcept, onOpenGlossaryTerm,
-  onPlayerVisibilityChange,
+  resumeFilters, onConsumeResumeFilters,
 }) {
   const {
     questions, links, history, srs, settings, updateSettings, recordAnswer, setLink, bookmarks, toggleBookmark,
@@ -289,7 +289,10 @@ export default function AudioMode({
   const hasKeywords = kwNames.length > 0;
 
   // ソース・キーワード選択（既定は全問題。検索で絞ると filter）
-  const [source, setSource] = useState('all'); // all|filter（旧: review|tagged|keyword|daily|weak）
+  // resumeFilters（App.jsxの「前回の続きから」ダイアログで「はい」を選んだ時だけ渡される）が
+  // あれば、科目/ジャンル/キーワード/回の検索結果読み上げモードで初期化する（一度だけ消費する中継state、
+  // 既存のfocusFlashcardKeyword等と同じパターン）。
+  const [source, setSource] = useState(() => (resumeFilters ? 'filter' : 'all')); // all|filter（旧: review|tagged|keyword|daily|weak）
   const [mode, setMode] = useState(0); // 連結モード（0=通常, 1〜10）
   const [selectedKeyword, setSelectedKeyword] = useState('');
   // 復習画面の絞り込み条件から渡された問題idだけに絞る場合に使う（未指定なら通常の復習プール全体）
@@ -361,10 +364,14 @@ export default function AudioMode({
   const [vcKind, setVcKind] = useState('maru');
 
   // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
-  const [filterSubject, setFilterSubject] = useState('');
-  const [filterGenre, setFilterGenre] = useState('');
-  const [filterKeyword, setFilterKeyword] = useState('');
-  const [filterRound, setFilterRound] = useState('');
+  const [filterSubject, setFilterSubject] = useState(() => resumeFilters?.subject || '');
+  const [filterGenre, setFilterGenre] = useState(() => resumeFilters?.genre || '');
+  const [filterKeyword, setFilterKeyword] = useState(() => resumeFilters?.keyword || '');
+  const [filterRound, setFilterRound] = useState(() => resumeFilters?.round || '');
+  useEffect(() => {
+    if (resumeFilters) onConsumeResumeFilters?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 学習（10・60・300・900）の検索窓にある自由語検索を音声学習にも組み込む（単一の正の移植）。
   const [filterTerm, setFilterTerm] = useState('');
   const [bookmarkOnly, setBookmarkOnly] = useState(false);
@@ -1022,8 +1029,21 @@ export default function AudioMode({
   // （Session.jsxのsession.recordedIdsはセッション自体に保存されるため、この問題が無い）。
   useEffect(() => {
     if (!audioReady || !planSig) return;
-    storage.saveAudioProgress({ sig: planSig, index: snap.index || 0, at: Date.now(), graded: [...gradedIdsRef.current] });
-  }, [snap.index, planSig, audioReady]);
+    storage.saveAudioProgress({
+      sig: planSig,
+      index: snap.index || 0,
+      at: Date.now(),
+      graded: [...gradedIdsRef.current],
+      total: builtPlan.length,
+      // アプリ起動時の「前回の続きから」ダイアログ（App.jsx）向け：科目/ジャンル/キーワード/回の
+      // 検索結果読み上げ（source==='filter'）の時だけ、同じ絞り込みを再現できるように持つ。
+      // 連結学習モード・間違えた問題・キーワード単位の読み上げ等は対象外（再現が複雑になるため）。
+      subject: source === 'filter' ? (filterSubject || null) : null,
+      genre: source === 'filter' ? (filterGenre || null) : null,
+      keyword: source === 'filter' ? (filterKeyword || null) : null,
+      round: source === 'filter' ? (filterRound || null) : null,
+    });
+  }, [snap.index, planSig, audioReady, builtPlan.length, source, filterSubject, filterGenre, filterKeyword, filterRound]);
 
   // 再生設定をエンジンへ反映（再生中でも即時）
   useEffect(() => { engine.configure({ rate }); }, [rate]);
@@ -1568,27 +1588,6 @@ export default function AudioMode({
   const [modesExpanded, setModesExpanded] = useState(false);
   const [voicesExpanded, setVoicesExpanded] = useState(false);
   const [detailSettingsOpen, setDetailSettingsOpen] = useState(false);
-  // 画面下部のミニプレーヤー（App.jsxの常設バー）は、この画面にいる間だけフルプレーヤーと
-  // 二重にならないよう隠している。検索・設定カードをスクロールしてフルプレーヤーが画面外に
-  // 出た時は、ミニプレーヤー側で再生ボタン・前へ/次へを操作できるようにする（IntersectionObserver
-  // でフルプレーヤーの可視状態をApp.jsxへ伝える。プレーヤーが無い＝builtPlan.length===0の時は
-  // 伝えない＝App.jsx側の既定値のまま、ミニプレーヤー自身がsnap.startedを見て出し分ける）。
-  const playerObserverRef = useRef(null);
-  const setPlayerRef = useCallback((node) => {
-    if (playerObserverRef.current) {
-      playerObserverRef.current.disconnect();
-      playerObserverRef.current = null;
-    }
-    if (node && typeof IntersectionObserver !== 'undefined' && onPlayerVisibilityChange) {
-      playerObserverRef.current = new IntersectionObserver(
-        (entries) => onPlayerVisibilityChange(entries[0]?.isIntersecting !== false),
-        { threshold: 0.01 }
-      );
-      playerObserverRef.current.observe(node);
-    } else if (!node && onPlayerVisibilityChange) {
-      onPlayerVisibilityChange(true);
-    }
-  }, [onPlayerVisibilityChange]);
   // #10 聞きながら自己採点／キーワード追加（○＝できた, △・✕＝復習へ）
   const gradeCurrent = (kind) => {
     const q = current;
@@ -2169,7 +2168,7 @@ export default function AudioMode({
             </p>
           )}
           {/* プレーヤー */}
-          <div className="player" ref={setPlayerRef}>
+          <div className="player">
             {/* スクリーンリーダー向け：フェーズの切り替えを読み上げとは別に伝える */}
             <div aria-live="polite" className="sr-only">
               {phase === PHASES.QUESTION && '問題'}

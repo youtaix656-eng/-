@@ -50,7 +50,7 @@ function todayStr() {
 // 午前／午後は本番同形式の科目配分・時間制限で通し演習。
 // 得意／苦手／選択式は正答率の自動提案や検索条件から出題数を組み立てる演習モード。
 // いずれも終了後に正答率・科目別内訳を表示し、解答はSRS・復習リストへ自動反映される。
-export default function Exam({ store, onNavigate }) {
+export default function Exam({ store, onNavigate, autoResume, onConsumeAutoResume }) {
   const { questions, links, history, srs, recordAnswer, examResults, addExamResult, bookmarks } = store;
 
   const [stage, setStage] = useState('select'); // select | setup | running | result
@@ -352,6 +352,15 @@ export default function Exam({ store, onNavigate }) {
     setResume(null);
     setStage('running');
   };
+
+  // アプリ起動時の「前回の続きから」ダイアログ（App.jsx）で「はい」を選んだ時の自動再開。
+  // 通常のタップ（手動でこの画面を開いた時）は、下の「前回の続きから」ボタンを自分で押してもらう。
+  useEffect(() => {
+    if (!autoResume || !resume) return;
+    doResume();
+    onConsumeAutoResume?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoResume, resume]);
 
   // 試験中は1問ごと（解答・移動ごと）に途中経過を保存
   useEffect(() => {

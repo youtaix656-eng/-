@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useStore } from './lib/useStore.js';
-import { exportAll, loadLastView, saveLastView } from './lib/storage.js';
+import {
+  exportAll, loadLastView, saveLastView,
+  loadQuizProgress, loadExamProgress, loadReviewProgress, loadAudioProgress,
+} from './lib/storage.js';
+import { pickTopResumeCandidate } from './lib/resumeHub.js';
 import { daysUntil } from './lib/gamify.js';
 import { haripanReminder, daysSinceLastMockExam } from './data/haripan.js';
 import { daysSinceLastZero } from './lib/reviewZeroLog.js';
@@ -170,6 +174,45 @@ export default function App() {
   const [quizSubject, setQuizSubject] = useState(null);
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [quizAutoResume, setQuizAutoResume] = useState(false);
+  const [examAutoResume, setExamAutoResume] = useState(false);
+  const [reviewAutoResume, setReviewAutoResume] = useState(false);
+  const [audioResumeFilters, setAudioResumeFilters] = useState(null);
+  // アプリを開いた時の「前回の続きから」ダイアログ（ユーザー指定・2026-11-08）。
+  // undefined=まだ判定していない／null=対象なしと判定済み／object=1件だけ提示する候補。
+  const [resumeCandidate, setResumeCandidate] = useState(undefined);
+  useEffect(() => {
+    if (!store.loaded || resumeCandidate !== undefined) return;
+    let alive = true;
+    Promise.all([loadQuizProgress(), loadExamProgress(), loadReviewProgress(), loadAudioProgress()]).then(
+      ([quizProgress, examProgress, reviewProgress, audioProgress]) => {
+        if (!alive) return;
+        setResumeCandidate(
+          pickTopResumeCandidate({
+            session: store.session, quizProgress, examProgress, reviewProgress, audioProgress,
+            questions: store.questions,
+          })
+        );
+      }
+    );
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.loaded]);
+  const resumeDialogYes = () => {
+    const c = resumeCandidate;
+    if (!c) return;
+    if (c.key === 'quiz') setQuizAutoResume(true);
+    if (c.key === 'exam') setExamAutoResume(true);
+    if (c.key === 'review') setReviewAutoResume(true);
+    if (c.key === 'audio') {
+      setAudioResumeFilters({ subject: c.subject, genre: c.genre, keyword: c.keyword, round: c.round });
+    }
+    setView(c.view);
+    setResumeCandidate(null);
+  };
+  const resumeDialogNo = () => {
+    setResumeCandidate(null);
+    setView('home');
+  };
   const [focusKeyword, setFocusKeyword] = useState(null);
   const [focusFlashcardKeyword, setFocusFlashcardKeyword] = useState(null);
   const [focusMnemonicKeyword, setFocusMnemonicKeyword] = useState(null);
@@ -179,10 +222,6 @@ export default function App() {
   const [focusRoadmapLevel, setFocusRoadmapLevel] = useState(null);
   const [focusTrainingMode, setFocusTrainingMode] = useState(null);
   const [audioReview, setAudioReview] = useState(false);
-  // 音声学習画面（AudioMode.jsx）のフルプレーヤーが画面内に見えているか。
-  // 見えている間はミニプレーヤー（下部の常設バー）と二重にならないよう隠し、
-  // 検索・設定カードをスクロールして画面外に出たら下部のミニプレーヤーで操作できるようにする。
-  const [audioPlayerInView, setAudioPlayerInView] = useState(true);
   // 音声だけでの復習（AudioMode.jsx）の実施ログ。毎日のリマインド通知に一言相乗りさせる
   // ためだけに使う軽量な読み込み（新規#8。別のリマインド設定は作らない）。
   const [audioReviewLog, setAudioReviewLog] = useState([]);
@@ -609,6 +648,8 @@ export default function App() {
             onOpenGraphConcept={openGraphConcept}
             onOpenFlashcardKeyword={openFlashcardKeyword}
             onOpenMnemonicKeyword={openMnemonicKeyword}
+            autoResume={reviewAutoResume}
+            onConsumeAutoResume={() => setReviewAutoResume(false)}
           />
         );
       case 'audio':
@@ -623,11 +664,12 @@ export default function App() {
             onOpenMnemonicKeyword={openMnemonicKeyword}
             onOpenGraphConcept={openGraphConcept}
             onOpenGlossaryTerm={openGlossaryTerm}
-            onPlayerVisibilityChange={setAudioPlayerInView}
+            resumeFilters={audioResumeFilters}
+            onConsumeResumeFilters={() => setAudioResumeFilters(null)}
           />
         );
       case 'exam':
-        return <Exam store={store} onNavigate={setView} />;
+        return <Exam store={store} onNavigate={setView} autoResume={examAutoResume} onConsumeAutoResume={() => setExamAutoResume(false)} />;
       case 'choicequiz':
         return <ChoiceQuiz store={store} onStartQuiz={startCustomQuiz} />;
       case 'dashboard':
@@ -892,16 +934,35 @@ export default function App() {
 
       {toast && <div className="toast">{toast}</div>}
 
+      {/* 前回の続きからダイアログ（ユーザー指定・2026-11-08）：アプリを開いた直後、
+          学習・一問一答・模試・復習・音声学習×連結学習のうち最後に触れていた1件だけを
+          機能名・ジャンル名・キーワード名・残り◯問で確認する。 */}
+      {resumeCandidate && (
+        <div className="modal-backdrop" onClick={resumeDialogNo}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">前回の続きから</h3>
+            <p>①機能名：{resumeCandidate.title}</p>
+            <p>②ジャンル名：{resumeCandidate.genre || 'なし'}</p>
+            <p>③キーワード名：{resumeCandidate.keyword || 'なし'}</p>
+            <p>④残り{resumeCandidate.remaining}問</p>
+            <p style={{ marginTop: 10, fontWeight: 700 }}>続きから始めますか？</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button className="btn primary block" onClick={resumeDialogYes}>はい</button>
+              <button className="btn block" onClick={resumeDialogNo}>いいえ</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 右端のスクロール矢印：長い画面を1画面ずつ動かす。
           **画面の分岐（renderView）の中に入れないこと**——入れるとその画面にしか出ない。
           動かない画面では自分で消える。 */}
       <ScrollArrows view={view} />
 
-      {/* 音声ミニプレーヤー：他の画面へ移っても再生を続けられる。音声画面にいる間は、
-          フルプレーヤーが画面内に見えている時だけ非表示にし（二重表示防止）、
-          検索・設定カードをスクロールしてフルプレーヤーが画面外に出たら自動で出す。 */}
+      {/* 音声ミニプレーヤー：常時表示（ユーザー指定・2026-11-08）。再生中は音声学習画面
+          （フルプレーヤーと並ぶ形）も含めて全画面の下部に常に出す。hidden指定は行わず、
+          表示の有無はMiniPlayer自身のsnap.hasPlan/snap.startedの判定だけに委ねる。 */}
       <MiniPlayer
-        hidden={view === 'audio' && audioPlayerInView}
         onOpen={() => setView('audio')}
         lifted={view !== 'roadmap'}
       />

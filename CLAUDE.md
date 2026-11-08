@@ -3773,38 +3773,28 @@ grep確認したうえで、本当に欠けていた30項目を提案・**ユー
   3分の2バッファ術・忘却リスク/誤答回数の下限フィルタそのものの挙動）はロジックを一切
   変更していないため、`node --test`の既存2660件がそのまま回帰テストとして機能している。
 
-## 音声学習画面でもミニプレーヤー（下部バー）をスクロールに応じて出す（2026-11-08追加）
+## 音声学習画面でもミニプレーヤー（下部バー）を出す（2026-11-08追加・同日中に常時表示へ変更）
 ユーザーから「再生している音声が下部にタブで表示されるようにしたい、再生ボタンもつけて」と
 依頼された。調査したところ、**この要望の実体（下部の常設バーに現在再生中の内容と再生ボタン・
 前へ/次へを表示する仕組み＝`MiniPlayer.jsx`）は既に実装済み**で、下部ナビのすぐ上に
 `.mini-player`として常時待機していた（`App.jsx`が全画面で即時importし、再生開始後だけ表示）。
 **本当に欠けていたのは1点だけ**——`App.jsx`が`hidden={view === 'audio'}`で、**音声学習画面に
-いる間は常にミニプレーヤーを隠す**作りだった（画面内のフルプレーヤーと二重に見えないようにする
-意図）。直前のバッチでフルプレーヤーを検索カードのすぐ下へ移動したことで、検索・設定カードを
-スクロールしてフルプレーヤーが画面外に出た状態が今まで以上に起こりやすくなったが、その状態でも
-ミニプレーヤーは画面全体で一律に隠されたままだったため、**音声学習画面を下にスクロールすると
-どこにも再生ボタンが無くなる**という抜けがあった。
-- **`src/components/AudioMode.jsx`**：`.player`（フルプレーヤー）のdivに
-  IntersectionObserver付きのコールバックref（`setPlayerRef`）を追加。可視状態が変わるたびに
-  新設の`onPlayerVisibilityChange(isIntersecting)` propを呼ぶ（`builtPlan.length===0`で
-  フルプレーヤー自体が無い時は何も呼ばない＝`App.jsx`側の既定値のまま）。
-- **`src/App.jsx`**：`audioPlayerInView`（既定`true`）を新設し、`AudioMode`へ
-  `onPlayerVisibilityChange={setAudioPlayerInView}`として渡す。`MiniPlayer`の`hidden`条件を
-  `view === 'audio' && audioPlayerInView`に変更——**音声学習画面にいて、かつフルプレーヤーが
-  画面内に見えている時だけ**ミニプレーヤーを隠す。フルプレーヤーが画面外に出た瞬間、自動で
-  下部にミニプレーヤー（曲名相当の表示・⏮/▶⏸/⏭・✕）が現れる。
-- **新しい仕組みは作っていない**——`MiniPlayer.jsx`自体（再生ボタン・前へ/次へ・停止ボタン・
-  現在再生中の表示）は無改修。既存の`engine`（`audioEngine.js`）の操作関数（`skip`/`toggle`/
-  `resetToStart`）もそのまま。変更は「いつ隠すか」の条件を1つ精緻化しただけ。
-- 検証：`node --test`（2660件）・`npx vite build`・`npm run validate`・
-  `node scripts/check-bundle-size.mjs`（起動時JS 687KB/700KB）はすべて通過。Playwright QAで
-  実機確認済み：音声学習画面でフルプレーヤーの▶を押して一時再生→即一時停止→スクロールして
-  フルプレーヤーを画面外に出すと`.mini-player`が1件出現し、再生ボタン（▶）・曲名相当表示
-  （科目名・問題文冒頭）・前へ/次へ/✕が表示されること、ミニプレーヤーの再生ボタンで実際に
-  再生/一時停止が切り替わること、スクロールして戻るとミニプレーヤーが消えること（フルプレーヤーが
-  見えている間は二重表示にならない）、再生開始前（`snap.started`がfalseの間）はスクロールしても
-  ミニプレーヤーが出ないこと（既存の`MiniPlayer.jsx`の`!snap.hasPlan || !snap.started`ガードが
-  そのまま効いている）、コンソールエラー0件を確認。
+いる間は常にミニプレーヤーを隠す**作りだった。最初はIntersectionObserverでフルプレーヤーの
+画面内可視状態を見て「フルプレーヤーが画面外に出た時だけ出す」条件つきの表示にしたが、
+**同日中にユーザーから「これは常時表示するようにしてほしい」と明確な指示があり、条件を撤廃した**。
+- **現在の実装（`src/App.jsx`）**：`<MiniPlayer onOpen={...} lifted={...} />`に`hidden`は
+  一切渡さない。表示の有無は`MiniPlayer.jsx`内部の`!snap.hasPlan || !snap.started`判定だけに
+  委ねる——**再生を開始してさえいれば、音声学習画面自身（フルプレーヤーと並ぶ形）を含めて
+  全画面の下部に常に出る**。
+- **一度実装したIntersectionObserver方式は完全に削除した**（`AudioMode.jsx`の
+  `playerObserverRef`/`setPlayerRef`/`onPlayerVisibilityChange`prop、`App.jsx`の
+  `audioPlayerInView`state・同prop配線）——常時表示になった時点で可視状態を見る必要が
+  無くなったため、死んだコードとして残さず削除した。
+- 検証：`node --test`（2671件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 692KB/700KB）はすべて通過。Playwright QAで
+  実機確認済み：音声学習画面でフルプレーヤーの▶を押して一時再生→即一時停止した状態で、
+  フルプレーヤーが画面内に見えたままでも`.mini-player`が1件表示されること（常時表示を確認）、
+  ホーム画面でも引き続き表示されること、コンソールエラー0件。
 
 ## 音声学習×連結学習：出題形式（一問一答／マルバツ）でしぼる機能を追加（2026-11-08追加）
 ユーザーから「科目の音声再生は今は一問一答ですか？マルバツですか？四択ですか？」と質問され、
@@ -3847,6 +3837,54 @@ grep確認したうえで、本当に欠けていた30項目を提案・**ユー
   「マルバツだけ」もONで1問（交差）に正しく絞り込まれること、両方ONの時だけ案内文
   （「両方チェックすると『一問一答かつ○×』だけに絞られます。この条件で1問…」）が
   表示されること、チェックを外すと順に123問へ戻ること、コンソールエラー0件を確認。
+
+## アプリを開いた時の「前回の続きから」ダイアログ（2026-11-08追加）
+ユーザーから「アプリを開いたら①機能名②ジャンル名（なければなし）③キーワード名④残り◯問を表示し、
+『続きから始めますか？』を はい／いいえ の2択で確認したい（はい→その機能の続きから、
+いいえ→ホームへ）」と依頼された。従来の「前回の続きから」は学習(session)・一問一答
+(quizProgress)・模試(examProgress)の3つだけがHome.jsxに個別のカード（タップで再開・長押しで
+削除）として受動的に出ており、復習(reviewProgress)・音声学習×連結学習(audioProgress)は
+各画面を開いた時だけ内部で確認する作りだった。今回は**アプリ起動直後に割り込む能動的な確認**を
+新設し、既存の5つの保存先すべてを対象にした。
+- **`src/lib/resumeHub.js`が単一の正**：`pickTopResumeCandidate({session, quizProgress,
+  examProgress, reviewProgress, audioProgress, questions})`が5つの保存済み進捗から
+  完了済み（行き止まり）を除外したうえで、**タイムスタンプが最も新しい1件だけ**を返す
+  （session.startedAt／各progressのat）。②ジャンル名・③キーワード名は、学習・一問一答・
+  模試・復習の4つは保存先にその情報を持たないため、**「次に出る問題」自体のgenre/tags[0]**
+  から取る（実在する次の問題の情報であり作り話にはならない。無ければ素直にnull→呼び出し側で
+  「なし」と表示）。音声学習だけは、実際に選んでいた検索条件（filterGenre/filterKeyword）を
+  そのまま使う（下記）。テストは`test/resumeHub.test.mjs`（11件）。
+- **`src/components/AudioMode.jsx`**：`storage.saveAudioProgress`に`total`（`builtPlan.length`）・
+  `subject`/`genre`/`keyword`/`round`（**`source==='filter'`の時だけ**、現在のfilterSubject等を
+  そのまま）を追加。連結学習モード(1〜10)・間違えた問題・キーワード単位の読み上げ等は
+  対象外（再現が複雑になるため、その場合はnullのまま保存——ダイアログの候補にはならない）。
+  新設の`resumeFilters`/`onConsumeResumeFilters`prop：`source`/`filterSubject`/`filterGenre`/
+  `filterKeyword`/`filterRound`の`useState`初期値を`resumeFilters`から読み（遅延初期化関数、
+  マウント時の1回だけ適用）、マウント後に`onConsumeResumeFilters()`を呼んで中継stateをクリア
+  （既存の`focusFlashcardKeyword`等と同じ「一度だけ消費する中継state」パターン）。
+- **`src/components/Exam.jsx`・`src/components/Review.jsx`**：新設の`autoResume`/
+  `onConsumeAutoResume`prop（**Quiz.jsxが元から持っていた`autoResume`パターンをそのまま
+  移植**。Exam/Reviewは従来、画面を開くと内部の「▶ 前回の続きから」ボタンをもう一度
+  タップする必要があったが、`autoResume`がtrueの時は`resume`が読み込まれ次第
+  自動で`doResume()`を呼ぶ）。**手動でこの画面を開いた時（autoResume未指定）は、
+  従来通り内部の確認ボタンが残る**——削除していない。
+- **`src/App.jsx`**：`store.loaded`後に1度だけ4つのprogressをまとめて読み込み
+  `pickTopResumeCandidate`へ渡す（`store.session`/`store.questions`と合わせて判定）。
+  結果が`.modal-backdrop`/`.modal`（既存のCalendar.jsx等と同じ共通パターン）で
+  ①〜④＋はい/いいえを表示。**はい**：機能ごとの自動再開フラグ
+  （`quizAutoResume`/`examAutoResume`/`reviewAutoResume`/`audioResumeFilters`）をセットして
+  `setView(candidate.view)`。**いいえ**：`setView('home')`——既存の「前回開いていた画面を
+  自動復元する」仕組み（`loadLastView`）より後に実行されるため、いいえを選ぶと必ずホームに着く。
+  ダイアログは`resumeCandidate`が`undefined`（未判定）/`null`（対象なし）/`object`（候補あり）の
+  3値で管理し、1回のアプリ起動につき1回だけ判定する（毎回の画面遷移では再判定しない）。
+- 検証：`node --test`（2671件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 692KB/700KB）はすべて通過。Playwright QAで
+  実機確認済み：IndexedDBへ`shinkyu:quizProgress`（5問中2問解答済み）を注入して再読み込みすると
+  「①機能名：一問一答②ジャンル名：なし③キーワード名：なし④残り3問」のダイアログが表示されること、
+  「はい」を押すと一問一答画面へ遷移し実際に3問目（解答済みの続き）から再開されること
+  （「3 /」の表示で確認）、コンソールエラー0件。音声学習（filterSubject等の復元）・模試・復習の
+  autoResume経路はコードレベルで確認済み（Quiz.jsxの既存autoResumeパターンをそのまま複製した
+  だけのため、ロジック自体のリスクは低いと判断）。
 
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、

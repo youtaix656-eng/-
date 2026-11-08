@@ -139,6 +139,7 @@ function spaceByOrigin(qs, linkOf, pairOf) {
 export default function Review({
   store, onToast, onOpenKeyword, onGoAudio, quickStartCount, onConsumeQuickStart,
   onOpenGraphConcept, onOpenFlashcardKeyword, onOpenMnemonicKeyword,
+  autoResume, onConsumeAutoResume,
 }) {
   const {
     questions, dueReviewQuestions, reviewQuestions, history,
@@ -585,6 +586,15 @@ export default function Review({
     setStarted(true);
     setResume(null);
   };
+
+  // アプリ起動時の「前回の続きから」ダイアログ（App.jsx）で「はい」を選んだ時の自動再開。
+  // 通常のタップ（手動でこの画面を開いた時）は、画面内の「前回の続きから」ボタンを自分で押してもらう。
+  useEffect(() => {
+    if (!autoResume || !resume) return;
+    doResume();
+    onConsumeAutoResume?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoResume, resume]);
 
   // 復習をリセット（途中経過を破棄してリストへ戻す）
   const resetReview = () => {
