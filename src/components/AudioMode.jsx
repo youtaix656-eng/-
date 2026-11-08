@@ -1536,6 +1536,11 @@ export default function AudioMode({
   const [audioWhy, setAudioWhy] = useState('');
   // 「最初から（リセット）」の確認ステップ（ResetControl.jsxが単一の正。学習10・60・300・900と同じ）
   const [confirmAudioReset, setConfirmAudioReset] = useState(false);
+  // 画面の見やすさ改善（2026-11-08追加）：連結学習モード一覧・声を選ぶ一覧・細かい設定を
+  // 既定で折りたたみ、必要な時だけ開く（全部が常に全展開だと画面が長くなりすぎるため）。
+  const [modesExpanded, setModesExpanded] = useState(false);
+  const [voicesExpanded, setVoicesExpanded] = useState(false);
+  const [detailSettingsOpen, setDetailSettingsOpen] = useState(false);
   // #10 聞きながら自己採点／キーワード追加（○＝できた, △・✕＝復習へ）
   const gradeCurrent = (kind) => {
     const q = current;
@@ -1946,9 +1951,9 @@ export default function AudioMode({
         <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
           <label>複数科目をバランスよく混ぜて読む（2科目以上選ぶと単一の科目選択より優先）</label>
           <div className="chip-row" style={{ marginBottom: 0 }}>
-            {subjectOptions.map((s) => (
+            {subjectOptions.map((s, i) => (
               <button key={s} className={`chip ${rotateSubjects.includes(s) ? 'active' : ''}`} onClick={() => toggleRotateSubject(s)}>
-                {s}
+                {i + 1}. {s}
               </button>
             ))}
           </div>
@@ -2038,17 +2043,28 @@ export default function AudioMode({
         </div>
         <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
           <label>忘却リスクの下限（{riskTopN ? '上位件数を使用中' : minRisk === 0 ? '指定なし' : `${minRisk}%以上だけ`}）</label>
-          <input type="range" min="0" max="90" step="10" value={minRisk} disabled={!!riskTopN} onChange={(e) => changeMinRisk(Number(e.target.value))} />
+          <input
+            type="range" min="0" max="90" step="10" value={minRisk} disabled={!!riskTopN}
+            className={minRisk > 0 ? 'range-active' : ''}
+            onChange={(e) => changeMinRisk(Number(e.target.value))}
+          />
           <div className="chip-row" style={{ marginTop: 6, marginBottom: 0 }}>
             <span className="section-hint">しきい値ではなく上位◯件で選ぶ：</span>
             {[5, 10, 20, 30].map((n) => (
               <button key={n} className={`chip ${riskTopN === n ? 'active' : ''}`} onClick={() => changeRiskTopN(n)}>上位{n}件</button>
             ))}
           </div>
+          <p className="inline-note" style={{ marginTop: 4 }}>
+            どちらか一方だけが使えます。上位◯件を選ぶと、下限スライダーは自動で無効になります（解除するには上位◯件をもう一度タップ）。
+          </p>
         </div>
         <div className="field" style={{ marginTop: 8 }}>
           <label>誤答回数の下限（{minWrong === 0 ? '指定なし' : `${minWrong}回以上だけ`}）</label>
-          <input type="range" min="0" max="10" step="1" value={minWrong} onChange={(e) => { rebuildStop(); setMinWrong(Number(e.target.value)); }} />
+          <input
+            type="range" min="0" max="10" step="1" value={minWrong}
+            className={minWrong > 0 ? 'range-active' : ''}
+            onChange={(e) => { rebuildStop(); setMinWrong(Number(e.target.value)); }}
+          />
         </div>
         <div className="search-foot">
           {filterActive ? (
@@ -2061,6 +2077,368 @@ export default function AudioMode({
           )}
         </div>
       </div>
+
+      {/* プレーヤー（検索のすぐ下に表示。くわしい設定は下にあります。2026-11-08追加） */}
+      {builtPlan.length === 0 ? (
+        <div className="empty">
+          <div className="ico">🎧</div>
+          <p>読み上げる項目がありません。</p>
+          <p className="inline-note">
+            {source === 'review'
+              ? '復習対象がありません。一問一答や模擬試験で問題を解き、間違えた問題（△・✕）を溜めましょう。'
+              : source === 'tagged'
+              ? 'キーワード（連結キーワード / タグ）を付けた問題がありません。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
+              : source === 'filter'
+              ? '選んだ条件に合う問題がありません。上の検索で条件をゆるめる（別の科目・ジャンルにする、キーワードを「指定なし」に戻す）か、「クリア」してください。'
+              : kwLike
+              ? 'キーワード（連結キーワード / タグ）を付けた問題を用意すると、ここで回せます。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
+              : 'まずは一問一答や模擬試験で問題を解き、間違えた問題を溜めましょう。'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {!settings.audioPlayerTipDismissed && (
+            <p className="inline-note" style={{ marginBottom: 10 }}>
+              💡 まずは▶を押すだけで始められます。くわしい設定（件数・連結学習モード・声など）は下にあります。
+              <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => updateSettings({ audioPlayerTipDismissed: true })}>✕ 次回から表示しない</button>
+            </p>
+          )}
+          {/* プレーヤー */}
+          <div className="player">
+            {/* スクリーンリーダー向け：フェーズの切り替えを読み上げとは別に伝える */}
+            <div aria-live="polite" className="sr-only">
+              {phase === PHASES.QUESTION && '問題'}
+              {phase === PHASES.GAP && '考え中'}
+              {phase === PHASES.ANSWER && '正解と解説'}
+              {phase === PHASES.NOTE && 'まとめ'}
+            </div>
+            {currentItem?.keyword && <div className="now-keyword">🔗 {currentItem.keyword}</div>}
+            {/* 学習(10・60・300・900)の.sess-topbarと同じく、flexboxで分けて折り返しても
+                読める形にする（以前は3つの.now-indexをfloat:rightで並べていたため、
+                スマホ幅で折り返すと「📅 今日の目標 0/300問1 / 3301」のようにすき間なく
+                連結して読めなくなるのを実機で確認した）。 */}
+            <div className="player-topbar">
+              <span className="now-phase">
+                {phase === PHASES.KEYWORD && (currentItem?.kind === 'flashcard' ? '用語' : 'キーワード')}
+                {phase === PHASES.QUESTION && '問題'}
+                {phase === PHASES.GAP && '……考え中……'}
+                {phase === PHASES.ANSWER && (currentItem?.kind === 'flashcard' ? '意味・要点' : '正解・解説')}
+                {phase === PHASES.NOTE && (currentItem?.kind === 'summary' ? 'まとめ' : 'つながり')}
+              </span>
+              <span className="player-topbar-stats">
+                <span className="now-index">{index + 1} / {total}</span>
+                {effectiveGoal > 0 && (
+                  <span className="now-index">
+                    🎯 目標 {Math.min(index + 1, effectiveGoal)} / {effectiveGoal}問
+                    {mood === 'tired' && goal > 0 && effectiveGoal < goal && '（少なめに調整中）'}
+                  </span>
+                )}
+                <span className="now-index">
+                  📅 今日の目標 {dailyGoalCount}/{effectiveDailyGoal}問
+                </span>
+              </span>
+            </div>
+            {/* 視覚的な進捗バー（学習(10・60・300・900)の.progressと同じ考え方）。
+                文字の分数だけより、ちらっと見ただけで進み具合が分かる。 */}
+            {total > 0 && (
+              <div className="player-progress">
+                <span style={{ width: `${Math.min(100, ((index + 1) / total) * 100)}%` }} />
+              </div>
+            )}
+
+            <div className="now-subject">
+              {current && !['flashcard', 'summary', 'compare', 'number'].includes(currentItem?.kind) && (
+                <span className={`badge ${current.type === 'ox' ? 'ox' : 'choice'}`} style={{ marginRight: 6 }}>
+                  {current.type === 'ox' ? '○×' : '四択'}
+                </span>
+              )}
+              {current?.subject ||
+                (currentItem?.kind === 'flashcard'
+                  ? '用語カード'
+                  : currentItem?.kind === 'summary'
+                  ? 'まとめ'
+                  : currentItem?.kind === 'compare'
+                  ? '比較・対比'
+                  : currentItem?.kind === 'number'
+                  ? '数値'
+                  : '')}
+            </div>
+            {current?.image && <img className="now-image" src={current.image} alt="問題の図" loading="lazy" />}
+            {current && needsFigureWarning(current) && (
+              <div className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
+                ⚠ この設問は図・写真に言及していますが、画像が登録されていません。この問題は判断せず、あとで報告してください。
+              </div>
+            )}
+            {/* 記録済みの誤答理由（型）があれば、学習(10・60・300・900)のQuestionCardと同じく表示する */}
+            {current && latestMissType(missTypes[current.id])?.type && (
+              <div className="inline-note">
+                {missTypeLabel(latestMissType(missTypes[current.id]).type)}の記録がある問題です。
+              </div>
+            )}
+            {current && gradedIdsRef.current.has(current.id) && (
+              <div className="inline-note">
+                📝 この問題はすでに記録済みです（見直し用に表示中。もう一度選んでも二重には記録しません）。
+              </div>
+            )}
+            <div className="now-text">
+              {currentItem?.kind === 'flashcard'
+                ? `用語：${currentItem.keyword}`
+                : currentItem?.kind === 'summary'
+                ? `キーワード「${currentItem.keyword}」のまとめ`
+                : currentItem?.kind === 'compare'
+                ? `比較：${currentItem.comp.title}`
+                : currentItem?.kind === 'number'
+                ? `数字：${currentItem.num.topic}`
+                : currentItem?.kind === 'cloze'
+                ? `穴埋め：${current?.question || ''}`
+                : current?.question || (current?.image ? '図を見て答える問題' : '')}
+            </div>
+
+            {/* アウトプットモード：GAP（考え中）で自動には進まず、ここで止まって待つ。
+                自分の中で解答を決めてから押すと正解・解説が読まれる。 */}
+            {outputModeOn && phase === PHASES.GAP && (
+              <button className="btn accent block" style={{ marginTop: 8 }} onClick={() => engine.resumeManual()}>
+                ✅ 解答を見る（自分の中で答えを決めてから押してください）
+              </button>
+            )}
+
+            {phase === PHASES.ANSWER && current && (
+              <div className="now-answer">
+                <strong>
+                  正解：
+                  {current.type === 'ox'
+                    ? current.choices[current.answer]
+                    : `${current.answer + 1}. ${current.choices[current.answer]}`}
+                </strong>
+                {current.explanation && <div style={{ marginTop: 6 }}>{current.explanation}</div>}
+              </div>
+            )}
+            {phase === PHASES.ANSWER && currentItem?.kind === 'flashcard' && (
+              <div className="now-answer"><div>{currentItem.text}</div></div>
+            )}
+            {phase === PHASES.ANSWER && currentItem?.kind === 'compare' && (
+              <div className="now-answer">
+                {(currentItem.comp.members || []).map((m, i) => (
+                  <div key={i}>・{m}</div>
+                ))}
+                {currentItem.comp.note && <div style={{ marginTop: 6 }}>💡 {currentItem.comp.note}</div>}
+              </div>
+            )}
+            {phase === PHASES.ANSWER && currentItem?.kind === 'number' && (
+              <div className="now-answer">
+                <strong>{currentItem.num.value}</strong>
+                {currentItem.num.note && <div style={{ marginTop: 6 }}>{currentItem.num.note}</div>}
+              </div>
+            )}
+            {phase === PHASES.NOTE && currentItem?.kind === 'summary' && (
+              <div className="now-answer note"><div>{currentItem.text}</div></div>
+            )}
+            {phase === PHASES.NOTE && current && currentItem?.note && (
+              <div className="now-answer note">
+                <strong>つながり：</strong>
+                <div style={{ marginTop: 4 }}>{currentItem.note}</div>
+              </div>
+            )}
+
+            {/* 3分の2バッファ術：基礎タスクの残り問数が少ない時のハリオのリマインド（学習10・60・300・900と同じ） */}
+            {audioBufferPlan && !audioBufferUsage && (() => {
+              const bufRemaining = (reviewTarget || 0) - (index + 1);
+              const reminder = bufRemaining > 0 && bufRemaining <= 5 ? harioBaseTaskReminder(bufRemaining) : null;
+              return reminder ? <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{reminder}」</p> : null;
+            })()}
+            {/* 60問区切りのセット番号（学習10・60・300・900の「セット◯/◯」と同じ考え方の常設表示） */}
+            {total >= 60 && (
+              <p className="inline-note" style={{ textAlign: 'center', marginTop: 0 }}>
+                セット{Math.floor(index / 60) + 1}/{Math.ceil(total / 60)}
+              </p>
+            )}
+
+            <div className="phase-indicator">
+              <div className={`seg ${phase === PHASES.KEYWORD || phase === PHASES.QUESTION ? 'on' : ''}`} />
+              <div className={`seg ${phase === PHASES.GAP ? 'on' : ''}`} />
+              <div className={`seg ${phase === PHASES.ANSWER || phase === PHASES.NOTE ? 'on' : ''}`} />
+            </div>
+
+            <div className="player-controls">
+              <button onClick={() => skip(-1)} disabled={index === 0} aria-label="前へ">⏮</button>
+              <button className="main" onClick={togglePlay} aria-label="再生 / 一時停止">{playing ? '⏸' : '▶'}</button>
+              <button onClick={() => skip(1)} disabled={index >= total - 1} aria-label="次へ">⏭</button>
+            </div>
+            {index > 0 && (
+              <ResetControl
+                label="音声学習を最初からリセットする"
+                confirming={confirmAudioReset}
+                onAsk={() => setConfirmAudioReset(true)}
+                onConfirm={resetToStart}
+                onCancel={() => setConfirmAudioReset(false)}
+              />
+            )}
+
+            {/* 👆 画面を大きくタップして自己採点（タップ＝○・長押し＝✕） */}
+            {current && wideTapOn && (
+              <div
+                className="wide-tap-zone"
+                onPointerDown={() => { wideTapDownRef.current = Date.now(); }}
+                onPointerUp={() => {
+                  const dt = Date.now() - (wideTapDownRef.current || Date.now());
+                  gradeCurrent(dt >= 600 ? 'batsu' : 'maru');
+                }}
+              >
+                👆 タップ＝○　長押し（0.6秒）＝✕
+              </div>
+            )}
+            {/* #10 聞きながら自己採点＋キーワード追加＋ブックマーク */}
+            {current && (
+              <div className="selfgrade">
+                <button className="sg-btn ok" onClick={() => gradeCurrent('maru')}>○ できた</button>
+                <button className="sg-btn mid" onClick={() => gradeCurrent('sankaku')}>△ あいまい</button>
+                <button className="sg-btn ng" onClick={() => gradeCurrent('batsu')}>✕ できない</button>
+                <button className={`sg-btn q-bookmark${bookmarks[current.id] ? ' on' : ''}`} onClick={toggleCurrentBookmark}>
+                  {bookmarks[current.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
+                </button>
+                <button className="sg-btn" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
+              </div>
+            )}
+            {/* A10：誤答理由をその場で選べるように（△・✕を選んだ直後だけ表示。
+                完了画面でまとめて選ぶのとは別に、忘れないうちに今すぐ記録できる） */}
+            {current && justGradedWrongId === current.id && (
+              <div style={{ marginTop: 6 }}>
+                <span className="inline-note" style={{ marginRight: 6 }}>この誤答、理由は？</span>
+                {/* 学習(10・60・300・900)のQuestionCard.jsxと同じ.misstype-row（横スクロール・
+                    折り返さない）に統一（レイアウト崩れ防止）。 */}
+                <div className="misstype-row" style={{ marginTop: 4 }}>
+                  {MISS_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      className="chip"
+                      onClick={() => {
+                        onMissType(current.id, t.id);
+                        setJustGradedWrongId(null);
+                        onToast?.(`「${t.label}」として記録しました`);
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                  <button className="chip ghost" onClick={() => setJustGradedWrongId(null)}>あとで</button>
+                </div>
+              </div>
+            )}
+            {/* A9：自己説明ステップ（音声版）。QuestionCard.jsxのwhyPromptと同じ考え方で、
+                誤答直後に「なぜこの答え？」を一言メモできるようにする（声でも促す）。 */}
+            {current && justGradedWrongId === current.id && (
+              <div className="why-box">
+                <div className="elaborate-head">🤔 なぜこの答え？（自分の言葉で一言）</div>
+                <div className="goro-edit">
+                  <input value={audioWhy} onChange={(e) => setAudioWhy(e.target.value)} placeholder="理由・つながりを一言" />
+                  <button
+                    className="btn primary sm"
+                    disabled={!audioWhy.trim()}
+                    onClick={() => {
+                      const m = memos[current.id];
+                      setMemo(current.id, (m ? m + ' / ' : '') + 'なぜ:' + audioWhy.trim());
+                      setAudioWhy('');
+                      onToast?.('メモに記録しました');
+                    }}
+                  >
+                    記録
+                  </button>
+                </div>
+              </div>
+            )}
+            {current && (
+              <p className="inline-note" style={{ marginTop: 6 }}>
+                ✓ ○/△/✕は今日の学習記録（マスコットの今日の目標）にも反映されます。
+              </p>
+            )}
+            {/* 語呂合わせノート（kwMeta）との連携：登録済みならその場で表示、無ければ登録導線 */}
+            {current && curTags[0] && (
+              kwMeta[curTags[0]]?.mnemonic ? (
+                <div className="card" style={{ marginTop: 8 }}>
+                  <div className="section-label" style={{ marginTop: 0 }}>📔 語呂合わせ</div>
+                  <p style={{ margin: 0 }}>{kwMeta[curTags[0]].mnemonic}</p>
+                </div>
+              ) : onOpenMnemonicKeyword ? (
+                <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onOpenMnemonicKeyword(curTags[0])}>
+                  📔 語呂合わせを登録
+                </button>
+              ) : null
+            )}
+            {/* 知識グラフ・フラッシュカード・用語集への相互リンク（Review.jsxと同じ既存の中継を再利用） */}
+            {current && (
+              <div className="btn-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                {onOpenGraphConcept && conceptsOf(current, links)[0] && (
+                  <button className="btn ghost sm" onClick={() => onOpenGraphConcept(conceptsOf(current, links)[0])}>🕸️ 知識グラフで見る</button>
+                )}
+                {onOpenFlashcardKeyword && curTags[0] && (
+                  <button className="btn ghost sm" onClick={() => onOpenFlashcardKeyword(curTags[0])}>🃏 カードで見る</button>
+                )}
+                {onOpenGlossaryTerm && curTags[0] && (
+                  <button className="btn ghost sm" onClick={() => onOpenGlossaryTerm(curTags[0])}>📖 用語集で見る</button>
+                )}
+                <button className="btn ghost sm" onClick={() => setPfQuickOpen((v) => !v)}>🔤 読み間違いを報告</button>
+              </div>
+            )}
+            {current && pfQuickOpen && (
+              <div className="kw-add" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                <input type="text" value={pfTerm} onChange={(e) => setPfTerm(e.target.value)} placeholder="誤って読まれた言葉" />
+                <input type="text" value={pfReading} onChange={(e) => setPfReading(e.target.value)} placeholder="正しい読み方（ひらがな）" />
+                <button className="btn sm primary" onClick={() => { addPronunciationFix(); setPfQuickOpen(false); }}>登録</button>
+              </div>
+            )}
+            {current && tagOpen && (
+              <div className="kw-add" style={{ marginTop: 8 }}>
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addTag()}
+                  placeholder="この問題に付けるキーワード"
+                />
+                <button className="btn sm primary" onClick={addTag}>追加</button>
+              </div>
+            )}
+          </div>
+
+          {/* 今のセッションの弱点分析（△・✕ をつけた問題から、ジャンル・キーワードの傾向を出す） */}
+          {weaknessSummary && (
+            <div className="card">
+              <div className="section-label" style={{ marginTop: 0 }}>🧭 今のセッションの弱点分析</div>
+              {weaknessSummary.topGenres.length > 0 && (
+                <p style={{ margin: '4px 0' }}>ジャンル：{weaknessSummary.topGenres.map(([g, c]) => `${g}（${c}）`).join('、')}</p>
+              )}
+              {weaknessSummary.topTags.length > 0 && (
+                <p style={{ margin: '4px 0' }}>キーワード：{weaknessSummary.topTags.map(([tg, c]) => `${tg}（${c}）`).join('、')}</p>
+              )}
+              <button
+                className="btn ghost sm"
+                onClick={() => {
+                  cancelSpeech();
+                  speak(weaknessSummaryToText(weaknessSummary), { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
+                }}
+              >
+                🔊 弱点分析を読み上げる
+              </button>
+              <p className="inline-note" style={{ marginTop: 6 }}>
+                このボタンは今すぐ好きなタイミングで読み上げます。一周を最後まで聞き終えた時は、これとは別に自動で簡単な終了の知らせ（「一周終了です、お疲れ様でした」等）が流れます。
+              </p>
+              {weaknessSummary.relatedComparisons.length > 0 && (
+                <>
+                  <div className="section-label">関連する対比（混同しやすいポイント）</div>
+                  {weaknessSummary.relatedComparisons.map((c) => (
+                    <div className="compare-item" key={c.id}>
+                      <div className="compare-title">{c.title}</div>
+                      <ul className="compare-members">
+                        {(c.members || []).slice(0, 4).map((m, i) => (<li key={i}>{m}</li>))}
+                      </ul>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       {(source === 'review' || (source === 'filter' && newOnly)) && (() => {
         const isNewOnlyMode = source === 'filter' && newOnly;
@@ -2461,6 +2839,10 @@ export default function AudioMode({
         return (
           <div className="card">
             <div className="section-label" style={{ marginTop: 0 }}>🎯 このセッションの設定</div>
+            <p className="inline-note" style={{ marginTop: 0 }}>
+              今読み上げている内容（連結学習モード・全件・検索結果など）向けの件数設定です。
+              「間違えた問題」「まだ解いていない問題だけ」を選ぶと、この代わりに専用の件数カードに切り替わります。
+            </p>
             {n > 0 ? (
               <>
                 <p style={{ margin: '0 0 8px', fontWeight: 700 }}>対象の目安：{n}問</p>
@@ -2621,7 +3003,9 @@ export default function AudioMode({
         );
       })()}
 
-      {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ。よく使う順に並びます。 */}
+      {/* 連結モード（1〜10）。検索でしぼった範囲に対して読み方を選ぶ。よく使う順に並びます。
+          2026-11-08追加：10件すべてを常に全展開すると画面が長くなりすぎるため、既定では
+          上位3件＋現在選んでいるモードだけを表示し、「もっと見る」で全展開する。 */}
       <div className="section-label">連結学習モード（読み方を選ぶ・よく使う順）</div>
       <div className="mode-list">
         <button className={`mode-card ${mode === 0 ? 'active' : ''}`} onClick={() => changeMode(0)}>
@@ -2631,7 +3015,7 @@ export default function AudioMode({
             <span className="mode-desc">検索でしぼった問題を、問題→間→正解の順にそのまま読み上げます。</span>
           </span>
         </button>
-        {sortedModes.map((m) => (
+        {(modesExpanded ? sortedModes : sortedModes.filter((m, i) => i < 3 || m.id === mode)).map((m) => (
           <button
             key={m.id}
             className={`mode-card ${mode === m.id ? 'active' : ''}`}
@@ -2646,357 +3030,14 @@ export default function AudioMode({
           </button>
         ))}
       </div>
+      {sortedModes.length > 3 && (
+        <button className="btn ghost sm block" style={{ marginBottom: 10 }} onClick={() => setModesExpanded((v) => !v)}>
+          {modesExpanded ? '折りたたむ' : `もっと見る（他${sortedModes.length - 3}件の読み方）`}
+        </button>
+      )}
 
-      {builtPlan.length === 0 ? (
-        <div className="empty">
-          <div className="ico">🎧</div>
-          <p>読み上げる項目がありません。</p>
-          <p className="inline-note">
-            {source === 'review'
-              ? '復習対象がありません。一問一答や模擬試験で問題を解き、間違えた問題（△・✕）を溜めましょう。'
-              : source === 'tagged'
-              ? 'キーワード（連結キーワード / タグ）を付けた問題がありません。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
-              : source === 'filter'
-              ? '選んだ条件に合う問題がありません。上の検索で条件をゆるめる（別の科目・ジャンルにする、キーワードを「指定なし」に戻す）か、「クリア」してください。'
-              : kwLike
-              ? 'キーワード（連結キーワード / タグ）を付けた問題を用意すると、ここで回せます。問題を解いたあと「キーワード・連結メモを追加」から付けられます。'
-              : 'まずは一問一答や模擬試験で問題を解き、間違えた問題を溜めましょう。'}
-          </p>
-        </div>
-      ) : (
+      {builtPlan.length > 0 && (
         <>
-          {/* プレーヤー */}
-          <div className="player">
-            {/* スクリーンリーダー向け：フェーズの切り替えを読み上げとは別に伝える */}
-            <div aria-live="polite" className="sr-only">
-              {phase === PHASES.QUESTION && '問題'}
-              {phase === PHASES.GAP && '考え中'}
-              {phase === PHASES.ANSWER && '正解と解説'}
-              {phase === PHASES.NOTE && 'まとめ'}
-            </div>
-            {currentItem?.keyword && <div className="now-keyword">🔗 {currentItem.keyword}</div>}
-            {/* 学習(10・60・300・900)の.sess-topbarと同じく、flexboxで分けて折り返しても
-                読める形にする（以前は3つの.now-indexをfloat:rightで並べていたため、
-                スマホ幅で折り返すと「📅 今日の目標 0/300問1 / 3301」のようにすき間なく
-                連結して読めなくなるのを実機で確認した）。 */}
-            <div className="player-topbar">
-              <span className="now-phase">
-                {phase === PHASES.KEYWORD && (currentItem?.kind === 'flashcard' ? '用語' : 'キーワード')}
-                {phase === PHASES.QUESTION && '問題'}
-                {phase === PHASES.GAP && '……考え中……'}
-                {phase === PHASES.ANSWER && (currentItem?.kind === 'flashcard' ? '意味・要点' : '正解・解説')}
-                {phase === PHASES.NOTE && (currentItem?.kind === 'summary' ? 'まとめ' : 'つながり')}
-              </span>
-              <span className="player-topbar-stats">
-                <span className="now-index">{index + 1} / {total}</span>
-                {effectiveGoal > 0 && (
-                  <span className="now-index">
-                    🎯 目標 {Math.min(index + 1, effectiveGoal)} / {effectiveGoal}問
-                    {mood === 'tired' && goal > 0 && effectiveGoal < goal && '（少なめに調整中）'}
-                  </span>
-                )}
-                <span className="now-index">
-                  📅 今日の目標 {dailyGoalCount}/{effectiveDailyGoal}問
-                </span>
-              </span>
-            </div>
-            {/* 視覚的な進捗バー（学習(10・60・300・900)の.progressと同じ考え方）。
-                文字の分数だけより、ちらっと見ただけで進み具合が分かる。 */}
-            {total > 0 && (
-              <div className="player-progress">
-                <span style={{ width: `${Math.min(100, ((index + 1) / total) * 100)}%` }} />
-              </div>
-            )}
-
-            <div className="now-subject">
-              {current && !['flashcard', 'summary', 'compare', 'number'].includes(currentItem?.kind) && (
-                <span className={`badge ${current.type === 'ox' ? 'ox' : 'choice'}`} style={{ marginRight: 6 }}>
-                  {current.type === 'ox' ? '○×' : '四択'}
-                </span>
-              )}
-              {current?.subject ||
-                (currentItem?.kind === 'flashcard'
-                  ? '用語カード'
-                  : currentItem?.kind === 'summary'
-                  ? 'まとめ'
-                  : currentItem?.kind === 'compare'
-                  ? '比較・対比'
-                  : currentItem?.kind === 'number'
-                  ? '数値'
-                  : '')}
-            </div>
-            {current?.image && <img className="now-image" src={current.image} alt="問題の図" loading="lazy" />}
-            {current && needsFigureWarning(current) && (
-              <div className="inline-note" style={{ color: 'var(--warn, #b06a00)' }}>
-                ⚠ この設問は図・写真に言及していますが、画像が登録されていません。この問題は判断せず、あとで報告してください。
-              </div>
-            )}
-            {/* 記録済みの誤答理由（型）があれば、学習(10・60・300・900)のQuestionCardと同じく表示する */}
-            {current && latestMissType(missTypes[current.id])?.type && (
-              <div className="inline-note">
-                {missTypeLabel(latestMissType(missTypes[current.id]).type)}の記録がある問題です。
-              </div>
-            )}
-            {current && gradedIdsRef.current.has(current.id) && (
-              <div className="inline-note">
-                📝 この問題はすでに記録済みです（見直し用に表示中。もう一度選んでも二重には記録しません）。
-              </div>
-            )}
-            <div className="now-text">
-              {currentItem?.kind === 'flashcard'
-                ? `用語：${currentItem.keyword}`
-                : currentItem?.kind === 'summary'
-                ? `キーワード「${currentItem.keyword}」のまとめ`
-                : currentItem?.kind === 'compare'
-                ? `比較：${currentItem.comp.title}`
-                : currentItem?.kind === 'number'
-                ? `数字：${currentItem.num.topic}`
-                : currentItem?.kind === 'cloze'
-                ? `穴埋め：${current?.question || ''}`
-                : current?.question || (current?.image ? '図を見て答える問題' : '')}
-            </div>
-
-            {/* アウトプットモード：GAP（考え中）で自動には進まず、ここで止まって待つ。
-                自分の中で解答を決めてから押すと正解・解説が読まれる。 */}
-            {outputModeOn && phase === PHASES.GAP && (
-              <button className="btn accent block" style={{ marginTop: 8 }} onClick={() => engine.resumeManual()}>
-                ✅ 解答を見る（自分の中で答えを決めてから押してください）
-              </button>
-            )}
-
-            {phase === PHASES.ANSWER && current && (
-              <div className="now-answer">
-                <strong>
-                  正解：
-                  {current.type === 'ox'
-                    ? current.choices[current.answer]
-                    : `${current.answer + 1}. ${current.choices[current.answer]}`}
-                </strong>
-                {current.explanation && <div style={{ marginTop: 6 }}>{current.explanation}</div>}
-              </div>
-            )}
-            {phase === PHASES.ANSWER && currentItem?.kind === 'flashcard' && (
-              <div className="now-answer"><div>{currentItem.text}</div></div>
-            )}
-            {phase === PHASES.ANSWER && currentItem?.kind === 'compare' && (
-              <div className="now-answer">
-                {(currentItem.comp.members || []).map((m, i) => (
-                  <div key={i}>・{m}</div>
-                ))}
-                {currentItem.comp.note && <div style={{ marginTop: 6 }}>💡 {currentItem.comp.note}</div>}
-              </div>
-            )}
-            {phase === PHASES.ANSWER && currentItem?.kind === 'number' && (
-              <div className="now-answer">
-                <strong>{currentItem.num.value}</strong>
-                {currentItem.num.note && <div style={{ marginTop: 6 }}>{currentItem.num.note}</div>}
-              </div>
-            )}
-            {phase === PHASES.NOTE && currentItem?.kind === 'summary' && (
-              <div className="now-answer note"><div>{currentItem.text}</div></div>
-            )}
-            {phase === PHASES.NOTE && current && currentItem?.note && (
-              <div className="now-answer note">
-                <strong>つながり：</strong>
-                <div style={{ marginTop: 4 }}>{currentItem.note}</div>
-              </div>
-            )}
-
-            {/* 3分の2バッファ術：基礎タスクの残り問数が少ない時のハリオのリマインド（学習10・60・300・900と同じ） */}
-            {audioBufferPlan && !audioBufferUsage && (() => {
-              const bufRemaining = (reviewTarget || 0) - (index + 1);
-              const reminder = bufRemaining > 0 && bufRemaining <= 5 ? harioBaseTaskReminder(bufRemaining) : null;
-              return reminder ? <p className="inline-note" style={{ textAlign: 'center' }}>🧑‍⚕️ ハリオ：「{reminder}」</p> : null;
-            })()}
-            {/* 60問区切りのセット番号（学習10・60・300・900の「セット◯/◯」と同じ考え方の常設表示） */}
-            {total >= 60 && (
-              <p className="inline-note" style={{ textAlign: 'center', marginTop: 0 }}>
-                セット{Math.floor(index / 60) + 1}/{Math.ceil(total / 60)}
-              </p>
-            )}
-
-            <div className="phase-indicator">
-              <div className={`seg ${phase === PHASES.KEYWORD || phase === PHASES.QUESTION ? 'on' : ''}`} />
-              <div className={`seg ${phase === PHASES.GAP ? 'on' : ''}`} />
-              <div className={`seg ${phase === PHASES.ANSWER || phase === PHASES.NOTE ? 'on' : ''}`} />
-            </div>
-
-            <div className="player-controls">
-              <button onClick={() => skip(-1)} disabled={index === 0} aria-label="前へ">⏮</button>
-              <button className="main" onClick={togglePlay} aria-label="再生 / 一時停止">{playing ? '⏸' : '▶'}</button>
-              <button onClick={() => skip(1)} disabled={index >= total - 1} aria-label="次へ">⏭</button>
-            </div>
-            {index > 0 && (
-              <ResetControl
-                label="音声学習を最初からリセットする"
-                confirming={confirmAudioReset}
-                onAsk={() => setConfirmAudioReset(true)}
-                onConfirm={resetToStart}
-                onCancel={() => setConfirmAudioReset(false)}
-              />
-            )}
-
-            {/* 👆 画面を大きくタップして自己採点（タップ＝○・長押し＝✕） */}
-            {current && wideTapOn && (
-              <div
-                className="wide-tap-zone"
-                onPointerDown={() => { wideTapDownRef.current = Date.now(); }}
-                onPointerUp={() => {
-                  const dt = Date.now() - (wideTapDownRef.current || Date.now());
-                  gradeCurrent(dt >= 600 ? 'batsu' : 'maru');
-                }}
-              >
-                👆 タップ＝○　長押し（0.6秒）＝✕
-              </div>
-            )}
-            {/* #10 聞きながら自己採点＋キーワード追加＋ブックマーク */}
-            {current && (
-              <div className="selfgrade">
-                <button className="sg-btn ok" onClick={() => gradeCurrent('maru')}>○ できた</button>
-                <button className="sg-btn mid" onClick={() => gradeCurrent('sankaku')}>△ あいまい</button>
-                <button className="sg-btn ng" onClick={() => gradeCurrent('batsu')}>✕ できない</button>
-                <button className={`sg-btn q-bookmark${bookmarks[current.id] ? ' on' : ''}`} onClick={toggleCurrentBookmark}>
-                  {bookmarks[current.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
-                </button>
-                <button className="sg-btn" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
-              </div>
-            )}
-            {/* A10：誤答理由をその場で選べるように（△・✕を選んだ直後だけ表示。
-                完了画面でまとめて選ぶのとは別に、忘れないうちに今すぐ記録できる） */}
-            {current && justGradedWrongId === current.id && (
-              <div style={{ marginTop: 6 }}>
-                <span className="inline-note" style={{ marginRight: 6 }}>この誤答、理由は？</span>
-                {/* 学習(10・60・300・900)のQuestionCard.jsxと同じ.misstype-row（横スクロール・
-                    折り返さない）に統一（レイアウト崩れ防止）。 */}
-                <div className="misstype-row" style={{ marginTop: 4 }}>
-                  {MISS_TYPES.map((t) => (
-                    <button
-                      key={t.id}
-                      className="chip"
-                      onClick={() => {
-                        onMissType(current.id, t.id);
-                        setJustGradedWrongId(null);
-                        onToast?.(`「${t.label}」として記録しました`);
-                      }}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                  <button className="chip ghost" onClick={() => setJustGradedWrongId(null)}>あとで</button>
-                </div>
-              </div>
-            )}
-            {/* A9：自己説明ステップ（音声版）。QuestionCard.jsxのwhyPromptと同じ考え方で、
-                誤答直後に「なぜこの答え？」を一言メモできるようにする（声でも促す）。 */}
-            {current && justGradedWrongId === current.id && (
-              <div className="why-box">
-                <div className="elaborate-head">🤔 なぜこの答え？（自分の言葉で一言）</div>
-                <div className="goro-edit">
-                  <input value={audioWhy} onChange={(e) => setAudioWhy(e.target.value)} placeholder="理由・つながりを一言" />
-                  <button
-                    className="btn primary sm"
-                    disabled={!audioWhy.trim()}
-                    onClick={() => {
-                      const m = memos[current.id];
-                      setMemo(current.id, (m ? m + ' / ' : '') + 'なぜ:' + audioWhy.trim());
-                      setAudioWhy('');
-                      onToast?.('メモに記録しました');
-                    }}
-                  >
-                    記録
-                  </button>
-                </div>
-              </div>
-            )}
-            {current && (
-              <p className="inline-note" style={{ marginTop: 6 }}>
-                ✓ ○/△/✕は今日の学習記録（マスコットの今日の目標）にも反映されます。
-              </p>
-            )}
-            {/* 語呂合わせノート（kwMeta）との連携：登録済みならその場で表示、無ければ登録導線 */}
-            {current && curTags[0] && (
-              kwMeta[curTags[0]]?.mnemonic ? (
-                <div className="card" style={{ marginTop: 8 }}>
-                  <div className="section-label" style={{ marginTop: 0 }}>📔 語呂合わせ</div>
-                  <p style={{ margin: 0 }}>{kwMeta[curTags[0]].mnemonic}</p>
-                </div>
-              ) : onOpenMnemonicKeyword ? (
-                <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => onOpenMnemonicKeyword(curTags[0])}>
-                  📔 語呂合わせを登録
-                </button>
-              ) : null
-            )}
-            {/* 知識グラフ・フラッシュカード・用語集への相互リンク（Review.jsxと同じ既存の中継を再利用） */}
-            {current && (
-              <div className="btn-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
-                {onOpenGraphConcept && conceptsOf(current, links)[0] && (
-                  <button className="btn ghost sm" onClick={() => onOpenGraphConcept(conceptsOf(current, links)[0])}>🕸️ 知識グラフで見る</button>
-                )}
-                {onOpenFlashcardKeyword && curTags[0] && (
-                  <button className="btn ghost sm" onClick={() => onOpenFlashcardKeyword(curTags[0])}>🃏 カードで見る</button>
-                )}
-                {onOpenGlossaryTerm && curTags[0] && (
-                  <button className="btn ghost sm" onClick={() => onOpenGlossaryTerm(curTags[0])}>📖 用語集で見る</button>
-                )}
-                <button className="btn ghost sm" onClick={() => setPfQuickOpen((v) => !v)}>🔤 読み間違いを報告</button>
-              </div>
-            )}
-            {current && pfQuickOpen && (
-              <div className="kw-add" style={{ marginTop: 8, flexWrap: 'wrap' }}>
-                <input type="text" value={pfTerm} onChange={(e) => setPfTerm(e.target.value)} placeholder="誤って読まれた言葉" />
-                <input type="text" value={pfReading} onChange={(e) => setPfReading(e.target.value)} placeholder="正しい読み方（ひらがな）" />
-                <button className="btn sm primary" onClick={() => { addPronunciationFix(); setPfQuickOpen(false); }}>登録</button>
-              </div>
-            )}
-            {current && tagOpen && (
-              <div className="kw-add" style={{ marginTop: 8 }}>
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addTag()}
-                  placeholder="この問題に付けるキーワード"
-                />
-                <button className="btn sm primary" onClick={addTag}>追加</button>
-              </div>
-            )}
-          </div>
-
-          {/* 今のセッションの弱点分析（△・✕ をつけた問題から、ジャンル・キーワードの傾向を出す） */}
-          {weaknessSummary && (
-            <div className="card">
-              <div className="section-label" style={{ marginTop: 0 }}>🧭 今のセッションの弱点分析</div>
-              {weaknessSummary.topGenres.length > 0 && (
-                <p style={{ margin: '4px 0' }}>ジャンル：{weaknessSummary.topGenres.map(([g, c]) => `${g}（${c}）`).join('、')}</p>
-              )}
-              {weaknessSummary.topTags.length > 0 && (
-                <p style={{ margin: '4px 0' }}>キーワード：{weaknessSummary.topTags.map(([tg, c]) => `${tg}（${c}）`).join('、')}</p>
-              )}
-              <button
-                className="btn ghost sm"
-                onClick={() => {
-                  cancelSpeech();
-                  speak(weaknessSummaryToText(weaknessSummary), { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
-                }}
-              >
-                🔊 弱点分析を読み上げる
-              </button>
-              {weaknessSummary.relatedComparisons.length > 0 && (
-                <>
-                  <div className="section-label">関連する対比（混同しやすいポイント）</div>
-                  {weaknessSummary.relatedComparisons.map((c) => (
-                    <div className="compare-item" key={c.id}>
-                      <div className="compare-title">{c.title}</div>
-                      <ul className="compare-members">
-                        {(c.members || []).slice(0, 4).map((m, i) => (<li key={i}>{m}</li>))}
-                      </ul>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-
           {/* 読み上げる面（暗記カード：表＝問題／裏＝答え） */}
           <div className="card">
             <div className="section-label" style={{ marginTop: 0 }}>読み上げる面（表＝問題／裏＝答え）</div>
@@ -3036,6 +3077,15 @@ export default function AudioMode({
             />
           </div>
 
+          {/* 2026-11-08追加：連結学習の工夫・再生モード（繰り返し/シャッフル/スリープ/今日の目標）・
+              ボイスクローン・声を選ぶ・再生速度や間の調整・読み方の補正は、ふだんは一度決めたら
+              あまり触らない細かい調整なので「詳細設定」として既定で折りたたむ
+              （よく使う設定＝検索・件数・連結学習モード選びとは別に分ける）。 */}
+          <button className="btn ghost sm block" style={{ margin: '10px 0' }} onClick={() => setDetailSettingsOpen((v) => !v)}>
+            {detailSettingsOpen ? '🔧 詳細設定を閉じる' : '🔧 詳細設定を開く（連結学習の工夫・再生モード・声・再生速度・読み方の補正）'}
+          </button>
+          {detailSettingsOpen && (
+            <>
           {/* 連結学習の工夫（初心者向け説明つき） */}
           <div className="card">
             <div className="section-label" style={{ marginTop: 0 }}>連結学習の工夫（読み上げ方）</div>
@@ -3103,7 +3153,7 @@ export default function AudioMode({
                   </button>
                 ))}
               </div>
-              <div className="hint">寝る前の“ながら再生”に。指定時間で自動停止します。</div>
+              <div className="hint">寝る前の“ながら再生”に。<strong>経過した「時間」</strong>で自動的に止めます（何問聞いたかは問いません）。</div>
             </div>
             <div className="field" style={{ marginTop: 14, marginBottom: 0 }}>
               <label>今日の目標（問題数）</label>
@@ -3118,7 +3168,7 @@ export default function AudioMode({
                   </button>
                 ))}
               </div>
-              <div className="hint">タイマーの代わりに「問題数」で今日のゴールを決めたい時に。達成したら知らせます。</div>
+              <div className="hint">スリープタイマーとは別の仕組みです。自動では止まらず、<strong>解いた「問題数」</strong>が目標に達した時だけ声で知らせます。</div>
             </div>
           </div>
 
@@ -3157,10 +3207,20 @@ export default function AudioMode({
             )}
           </div>
 
-          {/* 声を選ぶ（聞き取りやすい6種） */}
+          {/* 声を選ぶ（聞き取りやすい6種）。2026-11-08追加：6種を常に全展開すると場所を取るため、
+              既定では今選んでいる声だけを表示し、「声を選び直す」で全展開する。 */}
           <div className="card" style={{ opacity: cloneActive ? 0.5 : 1 }}>
             <div className="section-label" style={{ marginTop: 0 }}>🎙️ 声を選ぶ（聞き取りやすい6種）</div>
-            <div className="voice-grid">
+            {!voicesExpanded && (() => {
+              const cur = VOICE_PRESETS.find((p) => p.id === settings.voicePreset) || VOICE_PRESETS[0];
+              return (
+                <p className="inline-note" style={{ marginTop: 0 }}>
+                  今の声：<strong>{cur?.gender === 'female' ? '👩' : '👨'} {cur?.label || '未選択'}</strong>
+                  {cur?.desc ? `（${cur.desc}）` : ''}
+                </p>
+              );
+            })()}
+            <div className="voice-grid" style={voicesExpanded ? undefined : { display: 'none' }}>
               {VOICE_PRESETS.map((p) => (
                 <button
                   key={p.id}
@@ -3176,6 +3236,9 @@ export default function AudioMode({
                 </button>
               ))}
             </div>
+            <button className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => setVoicesExpanded((v) => !v)}>
+              {voicesExpanded ? '折りたたむ' : '声を選び直す（6種から試聴）'}
+            </button>
             <div className="hint" style={{ marginTop: 8 }}>
               タップするとその声で試聴します。端末で使える日本語音声に合わせて自動調整（声質・高さ・速さ）。
               {voices.length === 0 && ' ※この端末は日本語音声が見つかりません。端末の音声（TTS）を追加すると使えます。'}
@@ -3255,6 +3318,8 @@ export default function AudioMode({
               <button className="btn sm primary" onClick={addPronunciationFix}>追加</button>
             </div>
           </div>
+            </>
+          )}
 
           <div className="audio-note">
             <strong>🎧 アプリ内なら画面を移動しても再生は続きます</strong>

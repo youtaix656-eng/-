@@ -906,6 +906,11 @@ textarea {
 .range-row input[type='range'] {
   flex: 1;
 }
+/* 未設定（既定値）と使用中の見分けを付ける（2026-11-08追加）。native accent-color で
+   つまみ・塗りの色を変えるだけなので、対応しないブラウザでは単に無印のまま見える。 */
+.field input[type='range'].range-active {
+  accent-color: var(--accent, #4da3ff);
+}
 .range-val {
   font-size: 14px;
   font-weight: 700;
