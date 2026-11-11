@@ -1226,6 +1226,20 @@ export default function AudioMode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, voiceControlOn, current?.id]);
 
+  // 他のアプリへ切り替える等でタブが非表示になり、ブラウザ側の都合で読み上げが
+  // 止まってしまった時（audioEngine.jsの`recoverFromBackground`）、黙って止まったままに
+  // せず、一度だけトーストで知らせる（2026-11-12）。実際に音を鳴らす再開はユーザーが
+  // ▶を押した時（本物のユーザー操作）に任せ、ここでは声での自動再生は行わない
+  // ——非ジェスチャー文脈からの自動再開は音が出ないまま静かに失敗する可能性があるため。
+  const prevBackgroundStoppedRef = useRef(false);
+  useEffect(() => {
+    const justStopped = snap.backgroundStopped && !prevBackgroundStoppedRef.current;
+    prevBackgroundStoppedRef.current = snap.backgroundStopped;
+    if (!justStopped) return;
+    onToast?.('⏸ バックグラウンドの影響で読み上げが止まりました。▶を押すと続きから再生します');
+    engine.clearBackgroundStopped();
+  }, [snap.backgroundStopped]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 件数チップで区切った束を最後まで読み終えたら、声で知らせ・実施ログに記録し、
   // 「間違えた問題だけもう一度」がONなら自動でもう一度だけ回す（#14・#15・#17・#19・#20）。
   // 前回との正答率比較（新規#1）・誤答理由（型）別の件数（新規#2）・プレイリストの次の束への

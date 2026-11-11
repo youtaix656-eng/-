@@ -23,6 +23,7 @@ let state = {
   display: null,
   planSig: null,
   finished: false, // 繰り返しオフで最後まで自動的に読み終えた直後だけtrue（再生・スキップ等で即false）
+  backgroundStopped: false, // タブの非表示化で読み上げを止めた直後だけtrue（AudioMode.jsxがトーストを出したら即false）
 };
 
 let plan = []; // [{ steps:[{phase, say?, wait?(ms), waitGap?:true|'cap2'}], display }]
@@ -179,6 +180,7 @@ export function load(newPlan, { sig = null, startIndex = 0 } = {}) {
     phase: 'question',
     started: false,
     finished: false,
+    backgroundStopped: false,
   });
 }
 
@@ -247,9 +249,15 @@ export function play() {
   requestWakeLock();
   initVisibility();
   startKeepAlive();
-  emit({ started: true, finished: false });
+  emit({ started: true, finished: false, backgroundStopped: false });
   const start = state.index < plan.length ? state.index : 0;
   runFrom(start);
+}
+
+// タブの非表示化で止めた読み上げが知らされないまま（＝トーストを出さないまま）
+// 次の開始に至った場合に備え、念のためここでも下ろしておく。
+export function clearBackgroundStopped() {
+  emit({ backgroundStopped: false });
 }
 
 export function stop() {
@@ -340,9 +348,16 @@ function initVisibility() {
     // 他のアプリへ切り替えた・画面を見ていなかった間（1.2秒を超える離脱）は、
     // ブラウザ側の都合（Web Speech APIがタブのバックグラウンド化で読み上げを
     // 止めてしまう既知の制約、speech.js のヘッダーコメント参照）で
-    // 読み上げが止まったまま戻ってくることがある。止まったままにせず、
-    // 今の問題の頭から自動で再開する（短いタブ切り替えでは再開しない——
-    // 何も壊れていないのに繰り返し読み直すのを避けるため）。
+    // 読み上げが止まったまま戻ってくることがある。
+    // 【2026-11-12】以前はここで自動的に runFrom() を呼び直していたが、
+    // ユーザー報告で改善が見られなかった——`visibilitychange` ハンドラの呼び出しには
+    // 直接のユーザー操作（クリック等のuser activation）が伴わないため、バックグラウンド化で
+    // 一度止まった speechSynthesis を非ジェスチャー文脈から再開しようとしても、
+    // ブラウザによっては音が出ないまま静かに失敗する可能性がある（確証は無いが、
+    // 自動再開が効かないという報告と矛盾しない）。**止まったことを偽って
+    // 「再生中のまま」に見せかけない**——`stop()`で状態を正直に「一時停止」へ戻し、
+    // 今の位置（`state.index`）はそのまま保つ。実際に音を鳴らすのは、
+    // ユーザーが▶を押す（＝正真正銘のユーザー操作）時のことにする。
     if (running && state.playing && hiddenAt && Date.now() - hiddenAt > 1200) {
       recoverFromBackground();
     }
@@ -351,10 +366,8 @@ function initVisibility() {
 }
 
 function recoverFromBackground() {
-  if (abort) abort.abort();
-  cancelSpeech();
-  cancelClonedSpeech();
-  runFrom(state.index);
+  stop();
+  emit({ backgroundStopped: true });
 }
 
 // React 用フック
