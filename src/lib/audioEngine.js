@@ -326,12 +326,35 @@ function releaseWakeLock() {
   }
   wakeLock = null;
 }
+let hiddenAt = 0;
 function initVisibility() {
   if (visInit || typeof document === 'undefined') return;
   visInit = true;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && running) requestWakeLock();
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+      return;
+    }
+    // ここから visible に戻った直後
+    if (running) requestWakeLock();
+    // 他のアプリへ切り替えた・画面を見ていなかった間（1.2秒を超える離脱）は、
+    // ブラウザ側の都合（Web Speech APIがタブのバックグラウンド化で読み上げを
+    // 止めてしまう既知の制約、speech.js のヘッダーコメント参照）で
+    // 読み上げが止まったまま戻ってくることがある。止まったままにせず、
+    // 今の問題の頭から自動で再開する（短いタブ切り替えでは再開しない——
+    // 何も壊れていないのに繰り返し読み直すのを避けるため）。
+    if (running && state.playing && hiddenAt && Date.now() - hiddenAt > 1200) {
+      recoverFromBackground();
+    }
+    hiddenAt = 0;
   });
+}
+
+function recoverFromBackground() {
+  if (abort) abort.abort();
+  cancelSpeech();
+  cancelClonedSpeech();
+  runFrom(state.index);
 }
 
 // React 用フック
