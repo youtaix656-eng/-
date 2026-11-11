@@ -4069,6 +4069,124 @@ UIごと削るのか保存値を既定へ戻すだけか→**UIごと削る**（
   画面移動→戻る、でも科目フィルタが保たれ、一時停止のまま（▶表示）で自動再生・リセットの
   どちらも起きないこと。いずれもコンソールエラー0件。
 
+## Android（Capacitor）ネイティブラップ：背景再生の強化とGoogle Play配信（2026-11-11追加）
+ユーザーから「このアプリをバックグラウンドで再生させたい（今はアプリを閉じると音声学習が
+消えてしまう）。Google Playのリリース方法も含めて他の方法も詳細に教えて」と依頼された。
+現状（Web版・PWA）の制約を整理して説明したところ、ユーザーは**B案（Capacitor＋Android
+ネイティブのフォアグラウンドサービスでラップする）**を選択。本バッチはそのネイティブ
+ラップの土台（Capacitorプロジェクト一式＋カスタムプラグイン）を実装したもの。
+- **このバッチの最大の制約：このクラウド実行環境にはAndroid SDKが無く、一度もビルド・
+  実機確認ができていない。** `dl.google.com`（Android SDK の唯一の配布元）への接続が
+  このセッションのプロキシ方針で遮断されており（403、プロキシ自身のREADMEが「回り道を
+  試みず、遮断されたホストを報告すること」と明記）、`sdkmanager`・Gradleのビルドの
+  いずれも実行できない。ユーザーにこの制約を開示し、「このまま未検証でコードを書く」
+  （実際のビルド・実機確認・署名・Google Play提出はユーザー自身のAndroid Studio環境で
+  行う前提）を選んでもらってから着手した。**これはこのリポジトリの他の機能群と違い、
+  `node --test`・Playwright QA等の通常の検証手順が一切通用しない**——必ずこの前提を
+  踏まえて扱うこと。
+- **現状把握（実装前にユーザーへ説明した内容）**：Web版（speechSynthesis＝Web Speech API）は
+  ブラウザ仕様上、画面ロック・完全なバックグラウンド化で停止する（`src/lib/speech.js`の
+  ヘッダーコメントに元から明記済み）。「ボイスクローン」機能（ElevenLabs BYOK、
+  `speakCloned()`）は実体が`<audio>`要素なのでWeb Speech APIより多少強いが、根本的な限界
+  （完全終了には対応不可）は変わらない。改善の道は2つ：**A. PWAのまま改善**
+  （ボイスクローンへの一本化等、画面ロック・バックグラウンド化だけ多少強くする）、
+  **B. Capacitorでネイティブラップし、本物のAndroidフォアグラウンドサービスを持つ**
+  （画面ロック・バックグラウンド化の耐性を本質的に上げられる唯一の道。完全終了は
+  どの方法でも直せない——Androidの仕様上の絶対的な制約）。ユーザーはB。
+- **`package.json`に`@capacitor/core`・`@capacitor/android`・`@capacitor/cli`を
+  devDependenciesとして追加**（バージョン8.6.0）。**「外部ランタイム依存なし」
+  （このアプリの既存の根本方針）は崩していない**——Webアプリの実行時バンドルは
+  どのファイルからも`@capacitor/core`を一切importしない。Capacitorのネイティブ実行環境は
+  実行時に`window.Capacitor`というグローバルを自動で用意するので、`src/lib/nativeBridge.js`
+  はそれを直接見るだけ（`window.Capacitor.Plugins.BackgroundAudio`）。これが無い
+  （＝通常のブラウザ・PWAとして開いている圧倒的多数のユーザー）場合はすべての関数が
+  静かに何もしない。devDependenciesはネイティブプロジェクトの生成（`npx cap add android`）・
+  同期（`npx cap sync android`）にしか使わない、ビルド時だけの道具という位置づけ
+  （`vite`・`playwright`と同じ扱い）。
+- **`capacitor.config.json`（リポジトリ直下）**：`appId: "com.youtaix656.shinkyu"`・
+  `appName: "鍼灸国試対策"`・`webDir: "dist"`（既存のVite出力をそのまま使う。
+  `vite.config.js`の`base: './'`は相対パスなので、Capacitorが読むローカルの
+  `file://`/`capacitor://`スキームでもそのまま動く設計）。
+- **`android/`（Capacitor標準のAndroid Studioプロジェクト、`npx cap add android`で生成）**：
+  生成されたテンプレートの中身はほぼそのまま（minSdk24・compileSdk/targetSdk36）。
+  手を加えたのは次の4点のみ：
+  1. **`MainActivity.java`**：自作プラグイン（`BackgroundAudioPlugin`）を
+     `super.onCreate()`より前に`registerPlugin()`するよう1行追加（Capacitorの定型作法）。
+  2. **`android/build.gradle`・`android/app/build.gradle`**：KotlinでJava以外の
+     プラグインファイルを書いたため、Kotlin Android Gradle Plugin（2.0.21、
+     「広く安定している組み合わせ」という推測で選んだだけで動作確認はできていない。
+     Android Studioが別バージョンを提案したらそれに従ってよい）を追加し、
+     `compileOptions`/`kotlinOptions`でJava 17ターゲットを明示。
+  3. **`AndroidManifest.xml`**：`FOREGROUND_SERVICE`・
+     `FOREGROUND_SERVICE_MEDIA_PLAYBACK`（Android 14+で`mediaPlayback`型の
+     フォアグラウンドサービスに必須）・`WAKE_LOCK`・`POST_NOTIFICATIONS`の4権限を追加し、
+     `<service android:name=".BackgroundAudioService" android:foregroundServiceType="mediaPlayback" />`
+     を宣言。
+  4. **`android/app/src/main/res/drawable/ic_stat_play.xml`**：通知の小さい
+     モノクロアイコン（新規、再生ボタンを模した塗りのVectorDrawable）。
+  - **テンプレートの標準テスト雛形**（`ExampleInstrumentedTest.java`／
+    `ExampleUnitTest.java`、パッケージが`com.getcapacitor.myapp`のまま・
+    実在しないアサーション文字列`com.getcapacitor.app`を含む既知の雛形不具合）は、
+    このアプリの実際のパッケージ（`com.youtaix656.shinkyu`）と一致せずビルドを
+    壊すだけの死んだ雛形だったため削除した。
+- **カスタムプラグイン（曲や問題の内容は一切持たず、通知の見出し（title/body）・
+  再生中かどうか（playing）だけを受け取る設計）**：
+  - **`BackgroundAudioService.kt`**：フォアグラウンドサービス本体。
+    `ServiceCompat.startForeground(..., ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)`で
+    OSにプロセスを凍結・停止されにくい状態を作り、`PARTIAL_WAKE_LOCK`を保持する
+    （上限6時間、切り忘れ対策）。通知はMediaStyle風の3ボタン（前へ/再生・一時停止/次へ）を
+    持ち、押されるとBroadcast（`ACTION_CONTROL`）で`BackgroundAudioPlugin`へ伝える。
+    **実際の音声合成（読み上げ）はここでは行っていない**——WebView側のJS
+    （`speechSynthesis`／ボイスクローンの`<audio>`要素）がそのまま担う。ここは
+    「OSにプロセスを凍結・停止されない状態」を保つための土台でしかない。
+  - **`BackgroundAudioPlugin.kt`**：JSから呼ばれる`@CapacitorPlugin`。
+    `start`/`update`/`stop`の3メソッドと、通知ボタン操作を`controlAction`イベントとして
+    JSへ返す仕組みを持つ。通知権限（Android 13+の`POST_NOTIFICATIONS`）が無ければ
+    その場で求めるが、**拒否されても処理を止めない**（通知が出ないだけで再生の続行自体は
+    妨げない＝行き止まりにしない、という既存アプリ全体の方針どおり）。
+  - **`src/lib/nativeBridge.js`**：Web側の薄い橋渡し。`isNativeApp()`・
+    `nativeAudioStart`/`nativeAudioUpdate`/`nativeAudioStop`/`onNativeAudioControl`を公開。
+    すべてtry/catchで囲み、プラグインが無ければ無条件で何もしない（例外を投げない）。
+  - **`src/lib/audioEngine.js`に3箇所だけ接続**：既存の`startKeepAlive()`
+    （再生開始・再開のたび呼ばれる）で`nativeAudioStart`、`stopKeepAlive()`で
+    `nativeAudioStop`、`updateMediaMetadata()`（既存のWeb MediaSessionの更新と
+    同じタイミング＝設問が切り替わるたび）で`nativeAudioUpdate`を呼ぶだけ——
+    既存のWeb MediaSession（`setupMediaSession`/`mediaLabels`）のロジックをそのまま
+    再利用し、新しい計算は何も増やしていない。通知のボタン操作は
+    `initNativeControl()`（`startKeepAlive()`から一度だけ初期化、既存の`initVisibility`と
+    同じ「一度だけ初期化」パターン）が既存の`toggle()`/`skip()`へそのままマッピングする。
+- **意図的にスコープ外とした点（README.mdとこのセクションの両方に明記）**：
+  - **読み上げのシーケンス進行（`playOne`/`runFrom`のループ、setTimeoutベースの
+    wait/waitGap/waitNextGap）はネイティブへ移していない。** フォアグラウンドサービスは
+    「OSにプロセスを凍結されない」ことは保証するが、Chromium（WebViewのレンダリング
+    エンジン）自身のページ可視性ベースのJSタイマー間引き（スロットリング）が
+    WebView上でも同様に働くかどうかは機種・バージョン依存で、このセッションでは
+    確認できていない。画面ロック中に読み上げの進行が実際に続くかは実機検証が必要。
+    **もし止まる・大きく遅延することが分かった場合、次の一手は読み上げシーケンサー
+    そのものをネイティブ（Androidの`android.speech.tts.TextToSpeech`）へ移すことだが、
+    今回のバッチでは着手していない**（設計上の次の一手として明記するのみ）。
+  - **ボイスクローン（ElevenLabs）のネイティブ対応は行っていない**——
+    `nativeAudioStart`/`update`は見出し文字列だけを渡す設計で、音声合成の方式
+    （Web Speech API／ElevenLabs）には関与しない。両方式ともWebView側で動き続ける前提。
+  - **署名設定（keystore・`signingConfigs`）は行っていない**——Android Studioの
+    「Generate Signed App Bundle」の案内に従う。
+  - **完全終了（タスク一覧からスワイプ）への対応は、Android仕様上どの方法でも不可能**
+    （ユーザーにも実装前に明示済み）。
+- **ビルド・実機確認・署名・Google Play提出の手順は`android/README.md`に集約**
+  （`npm install`→`npm run build`→`npx cap sync android`→Android Studioで`android/`を
+  開く、の順。Webアプリを更新した時は`npm run build`＋`npx cap sync android`を
+  毎回やり直す必要がある——`android/app/src/main/assets/public/`はCapacitor標準の
+  `.gitignore`で生成物として除外されており、リポジトリには含まれない）。
+- **検証状況（正直に明記）**：`node --test`（2608件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 693KB/700KB、nativeBridge.js追加ぶんで
+  ほぼ変化なし）はすべて通過——**これはWeb版（圧倒的多数のユーザー）が今回の変更で
+  一切壊れていないことの確認であり、Androidネイティブ側（`android/`配下のKotlin・
+  Gradle設定）がビルドできること・実機で意図通り動くことの確認ではない**。
+  `npx cap add android`・`npx cap sync android`自体は正常終了した（npm registryは
+  到達可能、Android SDKを必要としないファイルコピー処理のみのため）。Kotlinの
+  コンパイル・Gradleビルド・フォアグラウンドサービスの実際の動作・通知の表示・
+  画面ロック中の読み上げ継続は、ユーザー自身のAndroid Studio環境で確認が必要。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

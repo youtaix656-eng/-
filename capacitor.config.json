@@ -1,0 +1,9 @@
+{
+  "appId": "com.youtaix656.shinkyu",
+  "appName": "鍼灸国試対策",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false
+  }
+}

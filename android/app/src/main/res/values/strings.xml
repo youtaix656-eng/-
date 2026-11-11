@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">鍼灸国試対策</string>
+    <string name="title_activity_main">鍼灸国試対策</string>
+    <string name="package_name">com.youtaix656.shinkyu</string>
+    <string name="custom_url_scheme">com.youtaix656.shinkyu</string>
+</resources>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知の小さいモノクロアイコン（ステータスバー用）。音声学習×連結学習の背景再生通知
+     （BackgroundAudioService.kt）が使う。塗りは白固定で、OS側が自動で単色に扱う。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM10,16.5V7.5L16,12L10,16.5Z"/>
+</vector>

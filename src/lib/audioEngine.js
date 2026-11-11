@@ -10,6 +10,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { speak, cancelSpeech, wait, speakCloned, cancelClonedSpeech } from './speech.js';
+import { nativeAudioStart, nativeAudioUpdate, nativeAudioStop, onNativeAudioControl } from './nativeBridge.js';
 
 const listeners = new Set();
 let state = {
@@ -102,25 +103,45 @@ function setupMediaSession() {
 }
 
 function updateMediaMetadata() {
+  const { title, artist } = mediaLabels(state.display);
+  // Androidにネイティブでラップされている時は、通知（フォアグラウンドサービス）の
+  // 見出しもここで一緒に更新する（プレーンなWeb版ではnativeAudioUpdateは何もしない）。
+  nativeAudioUpdate({ title, body: artist, playing: running });
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || typeof window === 'undefined' || !window.MediaMetadata) return;
   try {
-    const { title, artist } = mediaLabels(state.display);
     navigator.mediaSession.metadata = new window.MediaMetadata({ title, artist, album: '鍼灸国試 対策アプリ' });
   } catch (e) {
     /* noop */
   }
 }
 
+let nativeControlInit = false;
+function initNativeControl() {
+  if (nativeControlInit) return;
+  nativeControlInit = true;
+  // 通知のボタン（前へ/再生・一時停止/次へ）操作をアプリの通常の制御に変換する
+  // （プレーンなWeb版では何も起きない。android/のBackgroundAudioPlugin.ktが送る）。
+  onNativeAudioControl(({ action } = {}) => {
+    if (action === 'playPause') toggle();
+    else if (action === 'next') skip(1);
+    else if (action === 'prev') skip(-1);
+  });
+}
+
 function startKeepAlive() {
   ensureSilentAudio();
   try { silentAudio?.play().catch(() => {}); } catch (e) { /* noop */ }
   setupMediaSession();
+  initNativeControl();
+  const { title, artist } = mediaLabels(state.display);
+  nativeAudioStart({ title, body: artist });
 }
 function stopKeepAlive() {
   try { silentAudio?.pause(); } catch (e) { /* noop */ }
   try {
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   } catch (e) { /* noop */ }
+  nativeAudioStop();
 }
 
 function emit(patch) {
