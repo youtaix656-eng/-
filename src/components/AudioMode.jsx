@@ -372,6 +372,10 @@ export default function AudioMode({
     if (resumeFilters) onConsumeResumeFilters?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // アプリ起動時の「前回の続きから」ダイアログ（App.jsx）で「はい」を選んでこの画面を開いた
+  // 場合だけ、プレーヤーの位置まで自動で画面をスクロールする（ユーザー指定・2026-11-11）。
+  // resumeFiltersは上の効果で消費されnullに戻るため、初回描画時の値をrefに固定しておく。
+  const cameFromResumeRef = useRef(!!resumeFilters);
   // 学習（10・60・300・900）の検索窓にある自由語検索を音声学習にも組み込む（単一の正の移植）。
   const [filterTerm, setFilterTerm] = useState('');
   const [bookmarkOnly, setBookmarkOnly] = useState(false);
@@ -1022,6 +1026,25 @@ export default function AudioMode({
     const startIndex = saved && saved.sig === planSig ? saved.index : 0;
     engine.load(builtPlan, { sig: planSig, startIndex });
   }, [builtPlan, planSig, audioReady]);
+
+  // 「はい」で開いた時だけ、検索カード等を飛ばしてプレーヤーまで自動スクロールする。
+  // 保存済みの続きから位置の反映（上の効果）を待ってから行う（1回だけ）。
+  // 画面上部の固定ヘッダー（.app-header、position:sticky）の高さぶんは必ず差し引く——
+  // 素の scrollIntoView(block:'start') だとヘッダーの裏に隠れてプレーヤー上段
+  // （問題番号・今日の目標の行）が見えなくなることを実機で確認したため。
+  const playerRef = useRef(null);
+  useEffect(() => {
+    if (!cameFromResumeRef.current || !audioReady || builtPlan.length === 0) return;
+    cameFromResumeRef.current = false;
+    const t = setTimeout(() => {
+      const el = playerRef.current;
+      if (!el) return;
+      const headerH = document.querySelector('.app-header')?.getBoundingClientRect().height || 0;
+      const top = el.getBoundingClientRect().top + window.scrollY - headerH - 8;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [audioReady, builtPlan.length]);
 
   // 再生位置を1問ごとに保存（続きから用）。読み込み完了後のみ。
   // 二重記録防止の対象id（gradedIdsRef）も一緒に保存する——保存しないと、閉じて「続きから」
@@ -2168,7 +2191,7 @@ export default function AudioMode({
             </p>
           )}
           {/* プレーヤー */}
-          <div className="player">
+          <div className="player" ref={playerRef}>
             {/* スクリーンリーダー向け：フェーズの切り替えを読み上げとは別に伝える */}
             <div aria-live="polite" className="sr-only">
               {phase === PHASES.QUESTION && '問題'}
