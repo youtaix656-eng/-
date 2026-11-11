@@ -10,6 +10,7 @@ import { haripanReminder, daysSinceLastMockExam } from './data/haripan.js';
 import { daysSinceLastZero } from './lib/reviewZeroLog.js';
 import { loadAudioReviewLog, daysSinceLastAudioReview } from './lib/audioReviewLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
+import { useAudioEngine } from './lib/audioEngine.js';
 // 常時マウント・下部ナビの主要タブは即時読み込み（体感速度優先）。
 import Home from './components/Home.jsx';
 import CalendarScreen from './components/Calendar.jsx';
@@ -168,6 +169,14 @@ function initialViewFromUrl() {
 export default function App() {
   const store = useStore();
   const [view, setView] = useState(initialViewFromUrl);
+  // 音声学習×連結学習は、再生中（一時停止中も含む）に別画面へ移っても音声学習画面の状態
+  // （フィルタ・連結学習モード・再生位置等）が消えてリセットされないよう、他の下部ナビ画面と
+  // 違って「再生中は裏で生かしたまま」にする（ユーザー指定・2026-11-11）。以前はview変化の
+  // たびにAudioModeがアンマウント→再マウントされ、フィルタ等のローカルstateが初期値に戻った
+  // 結果、再構築された読み上げ計画の署名(sig)が元の計画と一致せず、engine.load()が
+  // stop()を呼んでしまっていた（画面を素通りしただけで音声が止まる・最初に戻る不具合）。
+  const audioSnap = useAudioEngine();
+  const audioKeepAlive = audioSnap.hasPlan && audioSnap.started;
   const [toast, setToast] = useState(null);
   const [importText, setImportText] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -653,21 +662,9 @@ export default function App() {
           />
         );
       case 'audio':
-        return (
-          <AudioMode
-            store={store}
-            onToast={showToast}
-            reviewPreset={audioReview}
-            onConsumePreset={() => setAudioReview(false)}
-            onNavigate={setView}
-            onOpenFlashcardKeyword={openFlashcardKeyword}
-            onOpenMnemonicKeyword={openMnemonicKeyword}
-            onOpenGraphConcept={openGraphConcept}
-            onOpenGlossaryTerm={openGlossaryTerm}
-            resumeFilters={audioResumeFilters}
-            onConsumeResumeFilters={() => setAudioResumeFilters(null)}
-          />
-        );
+        // AudioMode自体は下の「再生中は裏で生かしたまま」の仕組みで別の場所に描画する
+        // （ここでnullを返しても、再生中・表示中のどちらでも欠けることはない）。
+        return null;
       case 'exam':
         return <Exam store={store} onNavigate={setView} autoResume={examAutoResume} onConsumeAutoResume={() => setExamAutoResume(false)} />;
       case 'choicequiz':
@@ -930,6 +927,26 @@ export default function App() {
           </div>
         )}
         <Suspense fallback={<ViewLoading />}>{renderView()}</Suspense>
+        {/* 音声学習×連結学習：再生中（一時停止中も含む）は画面を離れてもアンマウントしない
+            （上のaudioKeepAlive参照）。再生していなければ他の画面と同じく通常どおり
+            表示中だけマウントする（不要な常駐で起動後の処理が増えないようにするため）。 */}
+        {(view === 'audio' || audioKeepAlive) && (
+          <div style={view === 'audio' ? undefined : { display: 'none' }}>
+            <AudioMode
+              store={store}
+              onToast={showToast}
+              reviewPreset={audioReview}
+              onConsumePreset={() => setAudioReview(false)}
+              onNavigate={setView}
+              onOpenFlashcardKeyword={openFlashcardKeyword}
+              onOpenMnemonicKeyword={openMnemonicKeyword}
+              onOpenGraphConcept={openGraphConcept}
+              onOpenGlossaryTerm={openGlossaryTerm}
+              resumeFilters={audioResumeFilters}
+              onConsumeResumeFilters={() => setAudioResumeFilters(null)}
+            />
+          </div>
+        )}
       </main>
 
       {toast && <div className="toast">{toast}</div>}
