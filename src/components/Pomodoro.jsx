@@ -61,6 +61,11 @@ export default function Pomodoro({ store, onToast }) {
     return () => { if (url) URL.revokeObjectURL(url); };
   }, [musicVersion]);
 
+  // 音量スライダー（設定画面側で変更された時も即座に反映する）
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = cfg.musicVolume ?? 1;
+  }, [cfg.musicVolume]);
+
   // SW更新の反映保留判定（main.jsx）に、タイマーが実行中かどうかを伝える
   useEffect(() => {
     setPomoRunning(running);

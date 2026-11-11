@@ -64,6 +64,18 @@ export function PomodoroConfigFields({ cfg, setCfg, onToast, onMusicChange }) {
           {hasMusic && <button type="button" className="btn sm ghost" onClick={removeMusic}>削除</button>}
         </div>
         <p className="pomo-hint">{hasMusic ? '設定済みです。' : 'スマホ内の音楽ファイルを1曲だけ選べます（15MBまで）。'}</p>
+        <div className="range-row" style={{ marginTop: 8 }}>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={Math.round((cfg.musicVolume ?? 1) * 100)}
+            onChange={(e) => setCfg({ musicVolume: Number(e.target.value) / 100 })}
+            aria-label="曲の音量"
+          />
+          <span className="range-val">音量 {Math.round((cfg.musicVolume ?? 1) * 100)}%</span>
+        </div>
       </div>
     </>
   );

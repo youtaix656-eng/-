@@ -3986,6 +3986,21 @@ UIごと削るのか保存値を既定へ戻すだけか→**UIごと削る**（
   代わりの案内文が表示されること、設定パネルを開いた状態でもバー自体は表示され続けること、
   コンソールエラー0件を確認。
 
+### 曲の音量を細かく調整できるスライダーを追加（2026-11-11追加）
+ユーザーから「一曲設定のボリュームを細かく設定できるようにして。横棒に丸をつけて動かせるように」
+と依頼された（＝他画面に既にある`.range-row`のnative `<input type="range">`と同じ見た目）。
+- **`src/components/PomodoroConfigFields.jsx`**：曲の設定の直下に`.range-row`（Session.jsx・
+  BufferPlanCard.jsx等と同じ既存パターンをそのまま再利用、新しいCSSは追加していない）で
+  0〜100%・1%刻みのスライダーを追加。値は`cfg.musicVolume`（0〜1、未設定時は1＝100%扱い）
+  として`settings.pomodoro`に保存する。
+- **`src/components/Pomodoro.jsx`**：`cfg.musicVolume`が変わるたびに`audioRef.current.volume`へ
+  反映する`useEffect`を追加（初回マウント時にも実行されるため、再読み込み後も保存済みの
+  音量がそのまま復元される）。
+- 検証：`node --test`（2608件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 692KB/700KB）はすべて通過。Playwright QAで
+  実機確認済み：スライダーの初期値が100%であること、40に動かすと「音量 40%」の表示が
+  連動して更新されること、コンソールエラー0件。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
