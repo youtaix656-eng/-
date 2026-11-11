@@ -718,7 +718,8 @@ function LoginSettings({ store, onToast }) {
       if (!ok) return setMsg('解除するには現在のパスワードを入力してください。');
     }
     clearAuth();
-    try { sessionStorage.setItem('shinkyu:unlocked', '1'); } catch (e) { /* noop */ }
+    // App.jsxのUNLOCK_KEYと同じキー・同じストレージ（localStorage、2026-11-12変更）。
+    try { localStorage.setItem('shinkyu:unlocked', '1'); } catch (e) { /* noop */ }
     setCurPw('');
     setOpen(false);
     onToast?.('ログインを解除しました');

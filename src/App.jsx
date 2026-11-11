@@ -240,7 +240,13 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [unlocked, setUnlocked] = useState(() => {
     try {
-      return sessionStorage.getItem(UNLOCK_KEY) === '1';
+      // 2026-11-12：以前はsessionStorageに持っていたが、Androidが背面タブの
+      // プロセスを回収した直後（ブラウザからは「新しいセッション」に見える）にも
+      // 毎回ログイン画面へ戻ってしまっていた（この端末内ロックはサーバー認証ではなく
+      // 「人に見られないための軽い鍵」なので、ブラウザを明示的に閉じ直したわけでもない
+      // バックグラウンド回収のたびに毎回求める必要はない）。localStorageへ変更し、
+      // 端末のブラウザデータを消す・この画面から明示的に鍵を外す、までは解錠状態を保つ。
+      return localStorage.getItem(UNLOCK_KEY) === '1';
     } catch (e) {
       return false;
     }
@@ -532,7 +538,7 @@ export default function App() {
 
   const unlock = () => {
     try {
-      sessionStorage.setItem(UNLOCK_KEY, '1');
+      localStorage.setItem(UNLOCK_KEY, '1');
     } catch (e) {
       /* noop */
     }
