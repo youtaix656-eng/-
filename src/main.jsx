@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles/index.css';
 import { installErrorHandlers } from './lib/errorLog.js';
-import { isPomoRunning } from './lib/runtimeFlags.js';
+import { isPomoRunning, isAudioPlaying } from './lib/runtimeFlags.js';
 
 // 端末内エラーログを有効化（外部送信なし。設定→データ管理で閲覧・消去）
 installErrorHandlers();
@@ -30,11 +30,13 @@ if ('serviceWorker' in navigator && !import.meta.env.DEV) {
   // 新しいバージョンが有効化されたら一度だけリロードして最新に切り替える。
   // （初回インストール時は controller が無いのでリロードしない）
   //
-  // ただし、ポモドーロタイマーが実行中の間はリロードすると進行中のセッションが
-  // 断りなく中断され「リセットされた」ように見えてしまう。実行中は少し待って
-  // 再チェックし、止まった/一区切りついたタイミングで反映する。
-  // ずっと実行し続けて無期限に古いバージョンのままになるのを避けるため、
-  // 一定回数（MAX_DEFERRALS×RECHECK_MS＝約10分）待っても実行中のままなら
+  // ただし、ポモドーロタイマー実行中・音声学習×連結学習の再生中はリロードすると
+  // 進行中のセッションが断りなく中断され「アプリが止まった/リセットされた」ように
+  // 見えてしまう（2026-11-12：音声学習だけ他アプリへ切り替えて戻ると止まるという
+  // 報告があり調査した結果、音声側だけこのガードから漏れていたことを発見・追加した。
+  // ポモドーロと同じ理由で、実行中は少し待って再チェックし、止まった/一区切りついた
+  // タイミングで反映する）。ずっと実行し続けて無期限に古いバージョンのままになるのを
+  // 避けるため、一定回数（MAX_DEFERRALS×RECHECK_MS＝約10分）待っても実行中のままなら
   // 強制的に反映する。
   let reloading = false;
   let deferCount = 0;
@@ -44,7 +46,7 @@ if ('serviceWorker' in navigator && !import.meta.env.DEV) {
     if (reloading || !navigator.serviceWorker.controller) return;
     const attempt = () => {
       if (reloading) return;
-      if (isPomoRunning() && deferCount < MAX_DEFERRALS) {
+      if ((isPomoRunning() || isAudioPlaying()) && deferCount < MAX_DEFERRALS) {
         if (deferCount === 0) {
           // 初回だけ、更新を保留していることを知らせる（黙って何も起きないと
           // 「反映されていない？」と不安にさせるため）。
@@ -65,11 +67,12 @@ if ('serviceWorker' in navigator && !import.meta.env.DEV) {
     navigator.serviceWorker
       .register(swUrl)
       .then((reg) => {
-        // 起動時と、以後定期的に更新確認。ポモドーロ実行中はこの確認自体を
-        // スキップする（確認しても意味の無い自動リロードが即座に保留されるだけなので、
-        // 次の巡回まで待たせて確認の負荷そのものも減らす）。
-        if (!isPomoRunning()) reg.update();
-        setInterval(() => { if (!isPomoRunning()) reg.update(); }, 60 * 60 * 1000);
+        // 起動時と、以後定期的に更新確認。ポモドーロ実行中・音声学習の再生中はこの
+        // 確認自体をスキップする（確認しても意味の無い自動リロードが即座に保留される
+        // だけなので、次の巡回まで待たせて確認の負荷そのものも減らす）。
+        const skipCheck = () => isPomoRunning() || isAudioPlaying();
+        if (!skipCheck()) reg.update();
+        setInterval(() => { if (!skipCheck()) reg.update(); }, 60 * 60 * 1000);
       })
       .catch((e) => {
         console.warn('Service Worker 登録に失敗しました', e);

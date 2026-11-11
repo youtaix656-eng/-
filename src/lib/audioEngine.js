@@ -11,6 +11,7 @@
 import { useSyncExternalStore } from 'react';
 import { speak, cancelSpeech, wait, speakCloned, cancelClonedSpeech } from './speech.js';
 import { nativeAudioStart, nativeAudioUpdate, nativeAudioStop, onNativeAudioControl } from './nativeBridge.js';
+import { setAudioPlaying } from './runtimeFlags.js';
 
 const listeners = new Set();
 let state = {
@@ -147,6 +148,10 @@ function stopKeepAlive() {
 
 function emit(patch) {
   state = { ...state, ...patch };
+  // 「実際に読み上げ中か」をmain.jsxへ伝える（Service Worker更新の反映保留判定、
+  // Pomodoro.jsxのsetPomoRunningと同じ理由。再生中に強制リロードされて
+  // セッションが断りなく消えるのを防ぐ）。
+  if ('playing' in patch) setAudioPlaying(state.playing);
   listeners.forEach((l) => l());
 }
 
