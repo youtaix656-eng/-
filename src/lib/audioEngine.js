@@ -289,6 +289,17 @@ export function skip(delta) {
   if (wasPlaying) setTimeout(() => runFrom(n), 120);
 }
 
+// 問題番号のバー（スクラバー）で、任意の位置へ直接ジャンプする（skipの「相対」ではなく「絶対」版、
+// 考え方は同じ：再生中なら一度止めてから、目的の位置から読み直す）。
+export function seekTo(targetIndex) {
+  if (!plan.length) return;
+  const wasPlaying = running;
+  stop();
+  const n = Math.max(0, Math.min(plan.length - 1, Math.round(targetIndex)));
+  emit({ index: n, phase: 'question', display: plan[n]?.display || null, finished: false });
+  if (wasPlaying) setTimeout(() => runFrom(n), 120);
+}
+
 export function resetToStart() {
   stop();
   emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: false });

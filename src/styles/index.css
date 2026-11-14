@@ -866,6 +866,57 @@ textarea {
   border-radius: 999px;
   transition: width 0.3s ease;
 }
+/* 問題番号バー（スクラバー）：.player-progressと同じ見た目の帯の上に、素のnative
+   <input type="range">を重ねて操作できるようにする（ドラッグ/タップで直接ジャンプ）。 */
+.player-seek-wrap {
+  position: relative;
+  height: 18px;
+  background: none;
+  overflow: visible;
+  padding: 6px 0;
+  margin: 2px 0 4px;
+}
+.player-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+.player-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.player-seek::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.player-seek::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
+}
+.player-seek-preview {
+  position: absolute;
+  top: -18px;
+  right: 0;
+  font-size: 11px;
+  color: #fff;
+  opacity: 0.85;
+  white-space: nowrap;
+}
 .player .now-subject {
   display: flex;
   align-items: center;

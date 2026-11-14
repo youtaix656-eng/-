@@ -369,9 +369,23 @@ export default function AudioMode({
   const [filterKeyword, setFilterKeyword] = useState(() => resumeFilters?.keyword || '');
   const [filterRound, setFilterRound] = useState(() => resumeFilters?.round || '');
   useEffect(() => {
-    if (resumeFilters) onConsumeResumeFilters?.();
+    // resumeFiltersは「前回の続きから」ダイアログのはいを押した時だけ渡される一度だけ消費する
+    // 中継stateだが、lastView復元（App.jsxのviewRestored）がこの画面を先に開いてしまっている場合、
+    // AudioModeは既にマウント済みのままダイアログのはいが後から押される——その場合、上のuseStateの
+    // 遅延初期化（resumeFilters?.subject等、マウント時の1回だけ評価される）はもう効かない。
+    // ここを依存配列[resumeFilters]にして、マウント後にresumeFiltersが(null→値)に変わった時にも
+    // 同じ内容を効かせる（最初からresumeFilters付きで新規マウントした場合は、遅延初期化と
+    // この効果の両方が同じ値を適用するだけで無害）。
+    if (!resumeFilters) return;
+    rebuildStop();
+    setSource('filter');
+    if (resumeFilters.subject) setFilterSubject(resumeFilters.subject);
+    if (resumeFilters.genre) setFilterGenre(resumeFilters.genre);
+    if (resumeFilters.keyword) setFilterKeyword(resumeFilters.keyword);
+    if (resumeFilters.round) setFilterRound(resumeFilters.round);
+    onConsumeResumeFilters?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [resumeFilters]);
   // アプリ起動時の「前回の続きから」ダイアログ（App.jsx）で「はい」を選んでこの画面を開いた
   // 場合だけ、プレーヤーの位置まで自動で画面をスクロールする（ユーザー指定・2026-11-11）。
   // resumeFiltersは上の効果で消費されnullに戻るため、初回描画時の値をrefに固定しておく。
@@ -1180,6 +1194,14 @@ export default function AudioMode({
     engine.toggle();
   };
   const skip = (delta) => engine.skip(delta);
+  // 問題番号バー（スクラバー）：ドラッグ中は見た目だけ動かし（音声の飛び先を連打しない）、
+  // 指を離した/クリックが確定した時だけ実際にジャンプする（engine.seekTo）。
+  const [seekPreview, setSeekPreview] = useState(null);
+  const commitSeek = () => {
+    if (seekPreview == null) return;
+    engine.seekTo(seekPreview - 1);
+    setSeekPreview(null);
+  };
   const resetToStart = () => {
     engine.resetToStart();
     storage.clearAudioProgress();
@@ -2253,10 +2275,39 @@ export default function AudioMode({
               </span>
             </div>
             {/* 視覚的な進捗バー（学習(10・60・300・900)の.progressと同じ考え方）。
-                文字の分数だけより、ちらっと見ただけで進み具合が分かる。 */}
-            {total > 0 && (
+                文字の分数だけより、ちらっと見ただけで進み具合が分かる。かつ、バーを動かして
+                任意の問題番号へ直接ジャンプできる（ユーザー指定・2026-11-14。例：解剖学102問の
+                時に53問や82問へ飛ばす）。ドラッグ中はonChangeで見た目（seekPreview）だけ更新し、
+                指を離した時（onPointerUp/onMouseUp/onTouchEnd/onKeyUp）にだけ実際にジャンプする
+                ——native rangeのonChangeはドラッグ中も連続発火するため、毎フレーム読み上げを
+                飛ばし直すと音声がガタつく。 */}
+            {total > 1 && (
+              <div className="player-progress player-seek-wrap">
+                <input
+                  type="range"
+                  className="player-seek"
+                  min={1}
+                  max={total}
+                  step={1}
+                  value={seekPreview ?? index + 1}
+                  onChange={(e) => setSeekPreview(Number(e.target.value))}
+                  onPointerUp={commitSeek}
+                  onMouseUp={commitSeek}
+                  onTouchEnd={commitSeek}
+                  onKeyUp={commitSeek}
+                  aria-label="問題番号（ドラッグして移動）"
+                  style={{
+                    background: `linear-gradient(to right, #fff ${((seekPreview ?? index + 1) / total) * 100}%, rgba(255,255,255,0.18) ${((seekPreview ?? index + 1) / total) * 100}%)`,
+                  }}
+                />
+                {seekPreview != null && (
+                  <span className="player-seek-preview">{seekPreview} / {total} へ移動</span>
+                )}
+              </div>
+            )}
+            {total === 1 && (
               <div className="player-progress">
-                <span style={{ width: `${Math.min(100, ((index + 1) / total) * 100)}%` }} />
+                <span style={{ width: '100%' }} />
               </div>
             )}
 
