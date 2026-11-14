@@ -252,6 +252,68 @@ export default function App() {
     }
   });
 
+  // 画面ロック（ユーザー指定・2026-11-14）：集中したい時に上下左右スクロール・他画面への
+  // 移動を止める「集中モード」。AuthGate（端末内ログイン・上のunlocked/UNLOCK_KEY）とは
+  // 無関係の別機能——用語が混ざらないよう意図的に`screenLocked`という別名にしている。
+  // ページ再読み込みで解除される仕様（settings/localStorageへ保存しない）。本当に出られなく
+  // なるリスクを避けるため、意図的にセッション内だけの状態にする（できないことをできる
+  // ふりに書かない方針どおり、この制限はUIの案内文にも明記する）。
+  const [screenLocked, setScreenLocked] = useState(false);
+  const LOCK_UNLOCK_MS = 600;
+  const lockUnlockTimerRef = useRef(null);
+  const lockUnlockFiredRef = useRef(false);
+  const clearLockUnlockTimer = () => {
+    if (lockUnlockTimerRef.current) {
+      clearTimeout(lockUnlockTimerRef.current);
+      lockUnlockTimerRef.current = null;
+    }
+  };
+  // 長押しで解除・タップでは解除しない（Home.jsxのuseLongPressと同じ考え方を
+  // ここだけで使うローカル実装として踏襲。誤って一瞬触れただけで解除されないように）。
+  const lockBadgeHandlers = {
+    onPointerDown: () => {
+      lockUnlockFiredRef.current = false;
+      clearLockUnlockTimer();
+      lockUnlockTimerRef.current = setTimeout(() => {
+        lockUnlockFiredRef.current = true;
+        setScreenLocked(false);
+        showToast('🔓 ロックを解除しました');
+      }, LOCK_UNLOCK_MS);
+    },
+    onPointerUp: clearLockUnlockTimer,
+    onPointerLeave: clearLockUnlockTimer,
+    onPointerCancel: clearLockUnlockTimer,
+    onContextMenu: (e) => e.preventDefault(),
+    onClick: () => {
+      if (lockUnlockFiredRef.current) {
+        lockUnlockFiredRef.current = false;
+        return;
+      }
+      showToast('🔒 長押し（0.6秒）で解除できます');
+    },
+  };
+  // ロック中は上下左右のスクロール・ホイール・矢印キー等によるページ移動を止める。
+  useEffect(() => {
+    if (!screenLocked) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    const preventDefault = (e) => e.preventDefault();
+    const SCROLL_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' '];
+    const preventKeyScroll = (e) => { if (SCROLL_KEYS.includes(e.key)) e.preventDefault(); };
+    window.addEventListener('touchmove', preventDefault, { passive: false });
+    window.addEventListener('wheel', preventDefault, { passive: false });
+    window.addEventListener('keydown', preventKeyScroll, { passive: false });
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouchAction;
+      window.removeEventListener('touchmove', preventDefault);
+      window.removeEventListener('wheel', preventDefault);
+      window.removeEventListener('keydown', preventKeyScroll);
+    };
+  }, [screenLocked]);
+
   const examDaysLeft = () => daysUntil(store.settings.examDate);
   const showToast = (msg) => setToast(msg);
   useEffect(() => {
@@ -878,19 +940,21 @@ export default function App() {
             <>🩺 鍼灸国試 対策アプリ</>
           ) : (
             <>
-              <button
-                onClick={() => setView('home')}
-                className="back-btn"
-                aria-label="ホームへ"
-              >
-                ‹
-              </button>
+              {!screenLocked && (
+                <button
+                  onClick={() => setView('home')}
+                  className="back-btn"
+                  aria-label="ホームへ"
+                >
+                  ‹
+                </button>
+              )}
               {headerTitle()}
             </>
           )}
         </h1>
         {view === 'home' && <p className="subtitle">過去問ベースで、合格まで着実に。</p>}
-        {view === 'home' && (
+        {view === 'home' && !screenLocked && (
           <button
             className="hist-open-btn"
             onClick={() => setShowHistory(true)}
@@ -898,6 +962,16 @@ export default function App() {
             title="直近の履歴"
           >
             🕘
+          </button>
+        )}
+        {!screenLocked && (
+          <button
+            className={`lock-toggle-btn${view === 'home' ? ' with-hist' : ''}`}
+            onClick={() => { setScreenLocked(true); showToast('🔒 画面をロックしました（長押しで解除）'); }}
+            aria-label="画面をロックする（スクロール・画面移動を止める）"
+            title="画面をロックする"
+          >
+            🔓
           </button>
         )}
       </header>
@@ -957,6 +1031,22 @@ export default function App() {
 
       {toast && <div className="toast">{toast}</div>}
 
+      {/* 画面ロック中の南京錠マーク（ユーザー指定）：常に画面上に表示し、長押し（0.6秒）
+          だけで解除できる。タップでは解除しない（誤って一瞬触れただけで解除されないように）。
+          スクロール・画面移動の封じ込め自体は上のuseEffect・ScrollArrows/roadmap-bar/
+          MiniPlayer/bottom-navの各箇所で行っており、この要素自体は目印＋解除ボタン。 */}
+      {screenLocked && (
+        <button
+          className="screen-lock-badge"
+          aria-label="画面はロック中です。長押し（0.6秒）で解除できます"
+          title="長押し（0.6秒）で解除"
+          {...lockBadgeHandlers}
+        >
+          <span className="screen-lock-badge-ico">🔒</span>
+          <span className="screen-lock-badge-label">ロック中<br />長押しで解除</span>
+        </button>
+      )}
+
       {/* 前回の続きからダイアログ（ユーザー指定・2026-11-08）：アプリを開いた直後、
           学習・一問一答・模試・復習・音声学習×連結学習のうち最後に触れていた1件だけを
           機能名・ジャンル名・キーワード名・残り◯問で確認する。 */}
@@ -980,18 +1070,20 @@ export default function App() {
       {/* 右端のスクロール矢印：長い画面を1画面ずつ動かす。
           **画面の分岐（renderView）の中に入れないこと**——入れるとその画面にしか出ない。
           動かない画面では自分で消える。 */}
-      <ScrollArrows view={view} />
+      {!screenLocked && <ScrollArrows view={view} />}
 
       {/* 音声ミニプレーヤー：常時表示（ユーザー指定・2026-11-08）。再生中は音声学習画面
           （フルプレーヤーと並ぶ形）も含めて全画面の下部に常に出す。hidden指定は行わず、
-          表示の有無はMiniPlayer自身のsnap.hasPlan/snap.startedの判定だけに委ねる。 */}
+          表示の有無はMiniPlayer自身のsnap.hasPlan/snap.startedの判定だけに委ねる。
+          画面ロック中はタップでの画面移動（音声学習画面を開く）を防ぐためhiddenにする。 */}
       <MiniPlayer
+        hidden={screenLocked}
         onOpen={() => setView('audio')}
         lifted={view !== 'roadmap'}
       />
 
       {/* 合格ロードマップ：どの画面からでも開ける常設バー（ロードマップ画面自体では非表示） */}
-      {view !== 'roadmap' && (
+      {view !== 'roadmap' && !screenLocked && (
         <button className="roadmap-bar" onClick={() => setView('roadmap')}>
           <span className="roadmap-bar-ico">🗺️</span>
           <span className="roadmap-bar-label">合格ロードマップ</span>
@@ -1004,6 +1096,7 @@ export default function App() {
           <button
             key={n.id}
             className={view === n.id ? 'active' : ''}
+            disabled={screenLocked}
             onClick={() => setView(n.id)}
           >
             <span className="ico" style={{ position: 'relative' }}>
