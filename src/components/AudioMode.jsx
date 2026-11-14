@@ -58,7 +58,7 @@ import { recordRephrase } from '../lib/rephraseLog.js';
 import { setBreakResumePending, clearBreakResumePending, loadBreakResumePending } from '../lib/audioBreakResumeFlag.js';
 import { BODY_LOCATION_SETS } from '../data/bodyLocationMethod.js';
 import { useKeiketsuCards } from '../lib/keiketsuCardsLoader.js';
-import { todaySubjectWrongPool } from '../lib/audioDailySubject.js';
+import { resolveDailySubjectIndex, subjectAt, subjectWrongPool } from '../lib/audioDailySubject.js';
 import { CONFUSING_PAIRS } from '../lib/confusingPairsChecklist.js';
 import { findIfThenScenario } from '../lib/ifThenScenarios.js';
 import { readingOrderHintFor } from '../lib/subjectReadingTemplates.js';
@@ -212,9 +212,21 @@ export default function AudioMode({
   // （学習10・60・300・900の#7と同じ定義・同じ考え方）。
   const audioLeechCount = useMemo(() => questions.filter((q) => isLeechState(srs[q.id])).length, [questions, srs]);
   // 一番上の赤い長丸ボタン：「国家試験の科目×過去に間違えたところ」。日替わりで進む
-  // 今日の科目（dayIndex方式、lib/audioDailySubject.jsが単一の正）の、誤答・△✕の問題だけに
-  // 絞り込んだプール。タップするだけでこのプールを即座に読み上げ始める（入力の手間ゼロ）。
-  const dailyWrongPick = useMemo(() => todaySubjectWrongPool(questions, srs), [questions, srs]);
+  // 今日の科目（settings.audioDailySubjectRotationに保存した状態から、日付が変わった時だけ
+  // 1つ進める。lib/audioDailySubject.jsが単一の正）の、誤答・△✕の問題だけに絞り込んだプール。
+  // タップするだけでこのプールを即座に読み上げ始める（入力の手間ゼロ）。
+  const dailySubjectState = useMemo(
+    () => resolveDailySubjectIndex(settings.audioDailySubjectRotation),
+    [settings.audioDailySubjectRotation]
+  );
+  useEffect(() => {
+    if (!dailySubjectState.changed) return;
+    updateSettings({ audioDailySubjectRotation: { index: dailySubjectState.index, dateKey: dailySubjectState.dateKey } });
+  }, [dailySubjectState.changed, dailySubjectState.index, dailySubjectState.dateKey, updateSettings]);
+  const dailyWrongPick = useMemo(
+    () => subjectWrongPool(questions, srs, subjectAt(dailySubjectState.index)),
+    [questions, srs, dailySubjectState.index]
+  );
   const { streak, studiedToday } = useMemo(() => studyStreak(history), [history]);
   const [mood, setMood] = useState(null);
   useEffect(() => { loadTodayMood().then(setMood); }, []);

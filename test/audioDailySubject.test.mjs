@@ -1,43 +1,55 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { todaySubject, todaySubjectWrongPool } from '../src/lib/audioDailySubject.js';
+import { resolveDailySubjectIndex, subjectAt, subjectWrongPool } from '../src/lib/audioDailySubject.js';
 import { SUBJECT_TAG_NAMES } from '../src/data/examScope.js';
 
-test('todaySubject：連続した日付で1科目ずつ進む（1▶2▶3▶4）', () => {
-  const d0 = new Date('2026-01-01T00:00:00Z');
-  const s0 = todaySubject(d0);
-  const idx0 = SUBJECT_TAG_NAMES.indexOf(s0);
-  for (let i = 1; i <= 4; i++) {
-    const d = new Date(d0.getTime() + i * 86400000);
-    const s = todaySubject(d);
-    const idx = SUBJECT_TAG_NAMES.indexOf(s);
-    assert.equal(idx, (idx0 + i) % SUBJECT_TAG_NAMES.length);
-  }
+test('resolveDailySubjectIndex：保存状態が無い最初の1回は「生理学」（解剖学の次）から始まる', () => {
+  const r = resolveDailySubjectIndex(null, new Date('2026-01-01T00:00:00'));
+  assert.equal(subjectAt(r.index), '生理学');
+  assert.equal(SUBJECT_TAG_NAMES.indexOf('生理学'), SUBJECT_TAG_NAMES.indexOf('解剖学') + 1);
+  assert.equal(r.changed, true);
 });
 
-test('todaySubject：14日経つと一周して元の科目に戻る', () => {
-  const d0 = new Date('2026-03-05T00:00:00Z');
-  const s0 = todaySubject(d0);
-  const d14 = new Date(d0.getTime() + 14 * 86400000);
-  assert.equal(todaySubject(d14), s0);
+test('resolveDailySubjectIndex：同じ日に何度呼んでも同じ添字のまま変わらない', () => {
+  const stored = { index: 5, dateKey: '2026-05-20' };
+  const r1 = resolveDailySubjectIndex(stored, new Date('2026-05-20T01:00:00'));
+  const r2 = resolveDailySubjectIndex(stored, new Date('2026-05-20T23:59:00'));
+  assert.equal(r1.index, 5);
+  assert.equal(r2.index, 5);
+  assert.equal(r1.changed, false);
+  assert.equal(r2.changed, false);
 });
 
-test('todaySubject：同じ日なら何回呼んでも同じ科目', () => {
-  const d = new Date('2026-05-20T09:00:00Z');
-  assert.equal(todaySubject(d), todaySubject(new Date(d)));
+test('resolveDailySubjectIndex：日付が変わると1つだけ進む（1▶2▶3▶4）', () => {
+  const stored = { index: 3, dateKey: '2026-05-20' }; // 解剖学
+  const r = resolveDailySubjectIndex(stored, new Date('2026-05-21T00:00:00'));
+  assert.equal(r.index, 4); // 生理学
+  assert.equal(r.changed, true);
+  assert.equal(r.dateKey, '2026-05-21');
 });
 
-test('todaySubject：必ずSUBJECT_TAG_NAMESの中の1件を返す', () => {
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(Date.now() + i * 86400000);
-    assert.ok(SUBJECT_TAG_NAMES.includes(todaySubject(d)));
-  }
+test('resolveDailySubjectIndex：14番目（きゅう理論）の次は1番目（医療概論）に一周する', () => {
+  const stored = { index: SUBJECT_TAG_NAMES.length - 1, dateKey: '2026-05-20' };
+  const r = resolveDailySubjectIndex(stored, new Date('2026-05-21T00:00:00'));
+  assert.equal(r.index, 0);
 });
 
-test('todaySubjectWrongPool：今日の科目かつisInReview（wrongCount>0かつ未マスター）だけに絞る', () => {
-  const date = new Date('2026-01-01T00:00:00Z');
-  const subject = todaySubject(date);
-  const otherSubject = SUBJECT_TAG_NAMES.find((s) => s !== subject);
+test('resolveDailySubjectIndex：数日分まとめて開いても1日1つしか進まない（2日空けたら2つだけ進む）', () => {
+  let stored = { index: 0, dateKey: '2026-05-20' };
+  stored = resolveDailySubjectIndex(stored, new Date('2026-05-21T00:00:00'));
+  stored = resolveDailySubjectIndex(stored, new Date('2026-05-22T00:00:00'));
+  assert.equal(stored.index, 2);
+});
+
+test('subjectAt：範囲外・負の添字でも循環して科目名を返す', () => {
+  assert.equal(subjectAt(0), SUBJECT_TAG_NAMES[0]);
+  assert.equal(subjectAt(SUBJECT_TAG_NAMES.length), SUBJECT_TAG_NAMES[0]);
+  assert.equal(subjectAt(-1), SUBJECT_TAG_NAMES[SUBJECT_TAG_NAMES.length - 1]);
+});
+
+test('subjectWrongPool：指定科目かつisInReview（wrongCount>0かつ未マスター）だけに絞る', () => {
+  const subject = '生理学';
+  const otherSubject = '解剖学';
   const questions = [
     { id: 'a', subject }, // 誤答あり→対象
     { id: 'b', subject }, // 誤答なし→対象外
@@ -50,33 +62,28 @@ test('todaySubjectWrongPool：今日の科目かつisInReview（wrongCount>0か�
     c: { wrongCount: 3, correctStreak: 0, due: 0 },
     d: { wrongCount: 1, correctStreak: 5, due: 0 },
   };
-  const { subject: pickedSubject, pool } = todaySubjectWrongPool(questions, srs, date);
+  const { subject: pickedSubject, pool } = subjectWrongPool(questions, srs, subject);
   assert.equal(pickedSubject, subject);
   assert.deepEqual(pool.map((q) => q.id), ['a']);
 });
 
-test('todaySubjectWrongPool：期限が来ている問題を先頭に出す', () => {
-  const date = new Date('2026-01-01T00:00:00Z');
-  const subject = todaySubject(date);
+test('subjectWrongPool：期限が来ている問題を先頭に出す', () => {
+  const subject = '生理学';
   const questions = [
     { id: 'notdue', subject },
     { id: 'due', subject },
   ];
-  // isDue()の既定nowは実行時の Date.now()（todaySubjectWrongPool は now を上書きしない）
-  // なので、due判定は実時刻基準で過去／未来にする。subjectの決定だけは date（テスト固定日）を使う。
   const now = Date.now();
   const srs = {
     notdue: { wrongCount: 1, correctStreak: 0, due: now + 999999999 },
     due: { wrongCount: 1, correctStreak: 0, due: now - 1 },
   };
-  const { pool } = todaySubjectWrongPool(questions, srs, date);
+  const { pool } = subjectWrongPool(questions, srs, subject);
   assert.deepEqual(pool.map((q) => q.id), ['due', 'notdue']);
 });
 
-test('todaySubjectWrongPool：対象が0件なら空のpoolを返す（黒いが行き止まりにはしない）', () => {
-  const date = new Date('2026-01-01T00:00:00Z');
-  const subject = todaySubject(date);
-  const { subject: pickedSubject, pool } = todaySubjectWrongPool([], {}, date);
-  assert.equal(pickedSubject, subject);
+test('subjectWrongPool：対象が0件なら空のpoolを返す（黒いが行き止まりにはしない）', () => {
+  const { subject: pickedSubject, pool } = subjectWrongPool([], {}, '生理学');
+  assert.equal(pickedSubject, '生理学');
   assert.deepEqual(pool, []);
 });

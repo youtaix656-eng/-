@@ -5226,6 +5226,37 @@ Home.jsxの`menu-grid`（2列グリッド）で、ちょうど「模擬試験」
   「経絡経穴概論・まだ誤答がありません」と表示され、ボタンがdisabledになることも確認。
   いずれもコンソールエラー0件。
 
+### バグ修正：日替わりローテーションが「実際に演習した科目」を追跡していなかった（同日追加）
+ユーザーから「機能は解剖学をやったのでその次から始められるようにして」「バグがないか確認して」と
+指摘された。調査の結果、上記の初版実装（`dayIndex(date) % 14`という**カレンダーの日付だけから
+決定的に求める**方式）には設計上のバグがあった——これは他の日替わり機能（`priorityFocus.js`等）を
+真似た方式だが、**「前日に演習した科目」を一切追跡していない**ため、実際にユーザーが解剖学を
+演習した日でも、ボタンには無関係な科目（経絡経穴概論）が出てしまっていた。「前日に演習した科目は
+次の日になると次の科目に切り替わる」という元の要件を文字どおり満たすには、持続化された状態
+（直近にセットした科目の添字＋その日付）が必要だった。
+- **`src/lib/audioDailySubject.js`を全面改訂**：`resolveDailySubjectIndex(stored, now)`が
+  `settings.audioDailySubjectRotation = {index, dateKey}`という保存状態から「今日使うべき添字」を
+  決める純関数（React非依存、node:testで検証可能）。**同じ日なら保存値のまま変えない**
+  （1日の中で何度開いても同じ科目）・**日付が変わった時だけ1つ進める**（1▶2▶3▶4▶…▶14▶1…、
+  数日分まとめて開いても1日1つしか進まない）。**保存状態がまだ無い最初の1回だけ**、
+  ユーザー指定の初期値（`DEFAULT_SUBJECT = '生理学'`＝解剖学の次）を使う。
+  `subjectAt(index)`（添字→科目名、範囲外・負の値も循環）・`subjectWrongPool(questions, srs,
+  subject)`（旧`todaySubjectWrongPool`を「科目を外から受け取る」形に分離）に改名。
+- **`src/components/AudioMode.jsx`**：`dailySubjectState`（useMemo、
+  `settings.audioDailySubjectRotation`から`resolveDailySubjectIndex`で計算）→
+  `changed`な時だけ`useEffect`で`updateSettings({audioDailySubjectRotation: {...}})`に
+  保存→次の再計算で`changed:false`に収束する（他の`updateSettings`呼び出しと同じ
+  `setSettings`の素直な再レンダー、無限ループにならないことを確認済み）。`dailyWrongPick`は
+  `subjectAt(dailySubjectState.index)`で求めた科目名を`subjectWrongPool`に渡すだけで、
+  JSX・`startDailyWrongPill()`側は変更不要だった。
+- 検証：`node --test`（2630件、新規9件に全面差し替え）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 750KB/756KB）はすべて通過。Playwright QAで
+  実機確認済み：①保存状態を消した状態（初回相当）で開くと「生理学・2問」（解剖学の次＋
+  種データの実在する誤答2問）が出ること②同日に再読み込みしても同じ「生理学」のまま
+  変わらないこと③保存状態を「前日＝生理学（index4）」に書き換えて再読み込みすると
+  「病理学概論（index5）・まだ誤答がありません」に正しく1つだけ進むこと。
+  いずれもコンソールエラー0件。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
