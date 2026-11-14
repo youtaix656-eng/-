@@ -334,16 +334,21 @@ export default function Calendar({ store, onToast, onNavigate, onStartAudioSubje
           <p className="inline-note" style={{ marginTop: 4 }}>
             🎧 この日は音声学習を実施済みです（{audioDetailByDay[selected]?.sessions ?? 0}回・計{audioDetailByDay[selected]?.total ?? 0}問
             {audioDetailByDay[selected]?.subjects.size > 0 && `・${Array.from(audioDetailByDay[selected].subjects).join('・')}`}）。
-            {/* 派生#56：長押し詳細（トースト）だけでなく、ここから同じ条件でもう一度始められるように */}
-            {onStartAudioSubject && audioDetailByDay[selected]?.subjects.size > 0 && (
-              <button
-                className="btn ghost sm"
-                style={{ marginLeft: 8 }}
-                onClick={() => onStartAudioSubject(Array.from(audioDetailByDay[selected].subjects)[0])}
-              >
-                🎧 同じ条件でもう一度
-              </button>
-            )}
+            {/* 派生#56：長押し詳細（トースト）だけでなく、ここから同じ条件でもう一度始められるように。
+                複数科目を記録した日は、どの科目を再開するのか分からないまま進めると意図しない科目に
+                なりうる（実際に再確認で気づいた点）ため、再開する科目をボタンの文言にも必ず出す。 */}
+            {onStartAudioSubject && audioDetailByDay[selected]?.subjects.size > 0 && (() => {
+              const firstSubject = Array.from(audioDetailByDay[selected].subjects)[0];
+              return (
+                <button
+                  className="btn ghost sm"
+                  style={{ marginLeft: 8 }}
+                  onClick={() => onStartAudioSubject(firstSubject)}
+                >
+                  🎧 「{firstSubject}」で同じ条件でもう一度
+                </button>
+              );
+            })()}
           </p>
         )}
         {selectedEvents.length === 0 ? (

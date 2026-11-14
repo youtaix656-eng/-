@@ -1569,6 +1569,10 @@ export default function AudioMode({
   const changeMode = (m) => {
     rebuildStop();
     setMode((cur) => (cur === m ? 0 : m));
+    // バグ修正（再確認で発見）：ここでquickMinuteActiveRefを戻さないと、「5分だけ」完了直後に
+    // 連結学習モードへ切り替えてそちらを最後まで聞き終えた時、無関係な完了画面にも
+    // 「もう5分だけ続ける」ボタンが残ってしまう（audioSessionKindRefと同じ場所で戻すべきだった）。
+    quickMinuteActiveRef.current = null;
     if (m > 0) {
       const usage = { ...(settings.audioModeUsage || {}) };
       usage[m] = (usage[m] || 0) + 1;
