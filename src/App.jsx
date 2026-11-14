@@ -6,7 +6,7 @@ import {
 } from './lib/storage.js';
 import { pickTopResumeCandidate } from './lib/resumeHub.js';
 import { daysUntil } from './lib/gamify.js';
-import { haripanReminder, daysSinceLastMockExam } from './data/haripan.js';
+import { haripanReminder, daysSinceLastMockExam, shiftReminderDue } from './data/haripan.js';
 import { daysSinceLastZero } from './lib/reviewZeroLog.js';
 import { loadAudioReviewLog, daysSinceLastAudioReview } from './lib/audioReviewLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
@@ -472,7 +472,8 @@ export default function App() {
         (store.dueReviewQuestions || []).length,
         daysSinceLastZero(store.reviewZeroLog),
         daysSinceLastMockExam(store.examResults),
-        daysSinceLastAudioReview(audioReviewLog)
+        daysSinceLastAudioReview(audioReviewLog),
+        shiftReminderDue(store.settings.shiftReminder)
       );
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {

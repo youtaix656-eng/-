@@ -56,6 +56,12 @@ import { loadLaterLookup, addLaterLookup, removeLaterLookup } from '../lib/later
 import { loadPronunciationReportLog, appendPronunciationReportLog } from '../lib/pronunciationReportLog.js';
 import { recordRephrase } from '../lib/rephraseLog.js';
 import { setBreakResumePending, clearBreakResumePending, loadBreakResumePending } from '../lib/audioBreakResumeFlag.js';
+import { BODY_LOCATION_SETS } from '../data/bodyLocationMethod.js';
+import { useKeiketsuCards } from '../lib/keiketsuCardsLoader.js';
+import { CONFUSING_PAIRS } from '../lib/confusingPairsChecklist.js';
+import { findIfThenScenario } from '../lib/ifThenScenarios.js';
+import { readingOrderHintFor } from '../lib/subjectReadingTemplates.js';
+import { phaseForDate } from '../data/roadmapPhases.js';
 
 // #7 二重符号化（Dual Coding）：問題文の中の自分のキーワード（curTags）だけを
 // 白地に黒の反転表示にする。聴覚（読み上げ）＋視覚（強調表示）の二重の符号化を狙う。
@@ -288,6 +294,14 @@ export default function AudioMode({
   const [laterLookup, setLaterLookup] = useState([]);
   useEffect(() => { loadLaterLookup().then(setLaterLookup); }, []);
   const [laterLookupOpen, setLaterLookupOpen] = useState(false);
+  // #1：体の場所法で読む経穴の組（既定は八会穴、増えたら選べるようにする）
+  const [bodyLocationSetId, setBodyLocationSetId] = useState(BODY_LOCATION_SETS[0]?.id || null);
+  // #28：宿題リプレイ。「あとで調べる」に登録してから12時間以上経ったものだけを対象にする
+  // （同日中に追加したものを「翌日の宿題」として即座に出さないよう、一晩ぶんの間隔を置く）。
+  const homeworkIds = useMemo(
+    () => laterLookup.filter((e) => e.questionId && Date.now() - (e.at || 0) >= 12 * 60 * 60 * 1000).map((e) => e.questionId),
+    [laterLookup]
+  );
 
   // 直近の学習セッション（10・60・300・900）で間違えた問題
   const lastSessionMisses = useMemo(() => {
@@ -329,6 +343,8 @@ export default function AudioMode({
   // あれば、科目/ジャンル/キーワード/回の検索結果読み上げモードで初期化する（一度だけ消費する中継state、
   // 既存のfocusFlashcardKeyword等と同じパターン）。
   const [source, setSource] = useState(() => (resumeFilters ? 'filter' : 'all')); // all|filter（旧: review|tagged|keyword|daily|weak）
+  // 体の場所法を選んだ瞬間だけ経穴カードデータを読み込む（起動時バンドルに含めないため）。
+  const keiketsuCards = useKeiketsuCards(source === 'bodyLocation');
   const [mode, setMode] = useState(0); // 連結モード（0=通常, 1〜10）
   const [selectedKeyword, setSelectedKeyword] = useState('');
   // 復習画面の絞り込み条件から渡された問題idだけに絞る場合に使う（未指定なら通常の復習プール全体）
@@ -384,6 +400,9 @@ export default function AudioMode({
   // #43：次のセットまでの小休止を選べる（続ける/1分/5分/手動）。トーストで知らせるだけだった
   // ものを、実際に選べるバナーに変える。
   const [breakPending, setBreakPending] = useState(false);
+  // 盲目の受験生からの改善提案#25・#29：区切りの理由（件数／時間／耳の疲労）で
+  // バナーの文言・ボタンを出し分ける（既存の件数区切りのバナーをそのまま再利用する）。
+  const [breakReason, setBreakReason] = useState('count');
   // 盲目の受験生からの改善提案#10：休憩バナーが出た時、フォーカスを自動で先頭の
   // ボタンへ移す（画面を見ずにタブ移動だけで選べるように）。
   const breakFirstBtnRef = useRef(null);
@@ -602,11 +621,82 @@ export default function AudioMode({
   const [reverse, setReverse] = useState(false); // #6 逆向き
   const [readSide, setReadSide] = useState('both'); // 読み上げる面: both | front | back
   const [readChoices, setReadChoices] = useState(false); // 表で選択肢（4択）も読む
+  const [firstLetterOnly, setFirstLetterOnly] = useState(false); // #3 頭文字法（選択肢の頭文字だけ読む）
+  const [storyPauseOn, setStoryPauseOn] = useState(false); // #4 ストーリー法（場面転換の間を長めに）
+  // #7〜#13：科目ごとの決まった読み上げ順（型）を、科目を選んだ時に一度だけ案内する
+  // （フリーテキストの解説文を機械的に分解すると誤った切り分けをしかねないため、
+  // 問題ごとに読み替えるのではなく型そのものを一言伝えるだけに留める）。
+  const [readingTemplateOn, setReadingTemplateOn] = useState(false);
+  const templateAnnouncedRef = useRef(null);
+  useEffect(() => {
+    if (!readingTemplateOn || !filterSubject) return;
+    if (templateAnnouncedRef.current === filterSubject) return;
+    const hint = readingOrderHintFor(filterSubject);
+    if (!hint) return;
+    templateAnnouncedRef.current = filterSubject;
+    onToast?.(`📐 ${hint}`);
+    if (!playing && isSpeechSupported()) {
+      cancelSpeech();
+      speak(hint, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readingTemplateOn, filterSubject]);
   const [recallMode, setRecallMode] = useState(false); // 記憶定着（想起→答え→反復）
   // 盲目の受験生からの改善提案#2：画面上の二重符号化（キーワードの反転表示）は声には
   // 乗らない。キーワードの前後に読点を入れて一拍おき、声の調子（リズム）だけで
   // 「ここが大事な語」と伝わるようにする（既定オフ。読み方自体が変わるため選べるように）。
   const [keywordEmphasisOn, setKeywordEmphasisOn] = useState(false);
+  // #27：倍速にしていても、まだ解いていない新しい問題の問題文だけは等速以下で読む。
+  const [newSlowdownOn, setNewSlowdownOn] = useState(false);
+  // #14：正解・誤答に関わらず、答えのあとに理解を確認する一言を加える。
+  const [whyOnAnswerOn, setWhyOnAnswerOn] = useState(false);
+  // #15：「もし〜なら」の逆シナリオ（正常の作用→障害されたときの所見）を読む。
+  const [ifThenOn, setIfThenOn] = useState(false);
+  // #26：開始時に復習を1問だけ挟む（新しい範囲ばかりに偏らせないため）。
+  const [prependReviewOn, setPrependReviewOn] = useState(false);
+  // #30：歩行中（モーションセンサーの簡易判定）は速度を少し落とす。既定オフ。
+  // 歩行そのものを正確に検知する技術ではなく、体の動きの大きさのばらつきを見る簡易判定
+  // （対応していない機種・ブラウザもある。できないことをできるふりに書かない）。
+  const [walkingDetectOn, setWalkingDetectOn] = useState(false);
+  const motionBufRef = useRef([]);
+  const walkingActiveRef = useRef(false);
+  useEffect(() => {
+    if (!walkingDetectOn || typeof window === 'undefined' || typeof window.DeviceMotionEvent === 'undefined') return;
+    let removed = false;
+    const handler = (e) => {
+      const a = e.accelerationIncludingGravity || e.acceleration;
+      if (!a) return;
+      const mag = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2);
+      const buf = motionBufRef.current;
+      buf.push(mag);
+      if (buf.length > 20) buf.shift();
+      if (buf.length < 10) return;
+      const mean = buf.reduce((s, v) => s + v, 0) / buf.length;
+      const variance = buf.reduce((s, v) => s + (v - mean) ** 2, 0) / buf.length;
+      const walking = variance > 2;
+      if (walking !== walkingActiveRef.current) {
+        walkingActiveRef.current = walking;
+        engine.configure({ rate: walking ? Math.max(0.7, rate * 0.85) : rate });
+      }
+    };
+    const start = async () => {
+      try {
+        if (typeof window.DeviceMotionEvent.requestPermission === 'function') {
+          const perm = await window.DeviceMotionEvent.requestPermission();
+          if (perm !== 'granted') { onToast?.('モーションの許可が得られませんでした'); return; }
+        }
+        if (!removed) window.addEventListener('devicemotion', handler);
+      } catch (e) { /* noop */ }
+    };
+    start();
+    return () => {
+      removed = true;
+      window.removeEventListener('devicemotion', handler);
+      walkingActiveRef.current = false;
+      engine.configure({ rate });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walkingDetectOn]);
 
   const [loop, setLoop] = useState(false);
   const [sleepMin, setSleepMin] = useState(0);
@@ -842,6 +932,29 @@ export default function AudioMode({
       return items;
     };
 
+    // #6：紛らわしい名前のペア専用チェックリスト（既存の比較読み上げと同じkind:'compare'構造）。
+    if (source === 'confusingPairs') {
+      return CONFUSING_PAIRS.map((c) => ({ kind: 'compare', comp: c }));
+    }
+    // #1・#2：体の場所法（八会穴等、体の上から下の順で経穴を読む）。
+    if (source === 'bodyLocation') {
+      const set = BODY_LOCATION_SETS.find((s) => s.id === bodyLocationSetId) || BODY_LOCATION_SETS[0];
+      if (!set || !keiketsuCards) return [];
+      return set.items.map(({ cardId, bodyPart }) => {
+        const card = keiketsuCards.find((k) => k.id === cardId);
+        if (!card) return null;
+        return {
+          kind: 'flashcard',
+          keyword: card.name,
+          text: `ここは${bodyPart}です。触って確認してください。${card.location || ''}${card.type ? `${card.type}。` : ''}`,
+        };
+      }).filter(Boolean);
+    }
+    // #28：宿題リプレイ（「あとで調べる」に登録してから12時間以上経ったものを優先して読み直す）。
+    if (source === 'homework') {
+      const ids = new Set(homeworkIds);
+      return applyTarget(questions.filter((q) => ids.has(q.id)));
+    }
     if (source === 'filter') {
       let base = filteredPool;
       // A1：新規:復習の割合（学習10・60・300・900と同じ考え方）。既定null＝未指定なら
@@ -854,6 +967,13 @@ export default function AudioMode({
       // 件数しぼり込みは「まだ解いていない問題だけ」限定ではなく、検索結果の読み上げ全般に効かせる
       // （reviewTarget/applyTargetは0件時に無反応なので、未指定のままなら従来どおり全件のまま）。
       base = applyTarget(base);
+      // #26：新しい問題ばかりに偏らないよう、開始時に復習を1問だけ挟む（既定オフ。
+      // 既に復習対象なら重複させない。newOnly時は既存の「まだ解いていない問題だけ」の
+      // 専用カードがあるため、そちら以外の普通の検索結果読み上げにも効くようにする）。
+      if (prependReviewOn && reviewPool.length > 0 && base.length > 0) {
+        const reviewQ = reviewPool.find((q) => !base.some((b) => b.id === q.id));
+        if (reviewQ) base = [reviewQ, ...base];
+      }
       return withProgressAnnounce(base);
     }
     if (source === 'keyword') {
@@ -895,12 +1015,14 @@ export default function AudioMode({
     base = applyTarget(base);
     return withProgressAnnounce(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState, audioNewPct]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState, audioNewPct, bodyLocationSetId, homeworkIds, prependReviewOn, keiketsuCards]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
   // 解答・解説を読み終えてから次の問題へ進むまでの間（秒）。「規定の時間がたったら次へ」の間隔。
   const [nextGap, setNextGap] = useState(settings.nextGapSeconds ?? 1);
+  // 👂 耳の疲労対策（#29）：30分再生で自動的に少し下げる音量（既定100%＝1）。
+  const [ttsVolume, setTtsVolume] = useState(1);
   const [voices, setVoices] = useState([]);
   const [tagOpen, setTagOpen] = useState(false);
   const [tagInput, setTagInput] = useState('');
@@ -962,11 +1084,13 @@ export default function AudioMode({
       return steps;
     }
     if (item.kind === 'compare') {
+      // #5：対比録音の定番テンプレート「くらべます。〜」「ちがいは、〜」を接続語として必ず入れる
+      // （ユーザー提供の音声学習ガイドの対比ペア法そのもの。中身は既存のCOMPARISONSデータのまま）。
       const c = item.comp;
-      steps.push({ phase: K, say: `比較。${c.title}。` });
+      steps.push({ phase: K, say: `くらべます。${c.title}。` });
       steps.push({ phase: G, waitGap: 'cap2' });
       steps.push({ phase: A, say: `${(c.members || []).join('。 ')}。` });
-      if (c.note) steps.push({ phase: A, say: `ポイント。${c.note}` });
+      steps.push({ phase: A, say: c.note ? `ちがいは、${c.note}` : 'ちがいは、それぞれの説明のとおりです。' });
       steps.push({ waitNextGap: true });
       return steps;
     }
@@ -996,7 +1120,7 @@ export default function AudioMode({
       let t = `${subj2}問題。${questionText(cq)}。`;
       if (needsFigureWarning(cq)) t = `注意。この問題は図を確認しないと判断できません。${t}`;
       if (carelessCaution(cq)) t = `${carelessCaution(cq)}${t}`;
-      if (cq.type !== 'ox') sc2.choices.forEach((c, i) => { t += `${i + 1}番、${c}。`; });
+      if (cq.type !== 'ox') sc2.choices.forEach((c, i) => { t += `${i + 1}番、${firstLetterOnly ? (c[0] || c) : c}。`; });
       else t += '正しいか、誤りか。';
       steps.push({ phase: Q, say: t });
       steps.push({ phase: G, waitGap: true });
@@ -1024,7 +1148,8 @@ export default function AudioMode({
     const front = [];
     if (item.intro) {
       front.push({ phase: K, say: item.intro });
-      front.push({ wait: 300 });
+      // #4：ストーリー法向けに、キーワード（場面）が変わる所の間を長めに取る（既定オフ）。
+      front.push({ wait: storyPauseOn ? 1200 : 300 });
     }
     const subj = readSubject && q.subject ? `${q.subject}。` : '';
     let frontText = `${subj}問題。${questionText(q)}。`;
@@ -1032,9 +1157,11 @@ export default function AudioMode({
     if (carelessCaution(q)) frontText = `${carelessCaution(q)}${frontText}`;
     const scFront = readChoices ? shuffledChoicesFor(q) : null;
     if (scFront && q.type !== 'ox' && Array.isArray(q.choices)) {
-      scFront.choices.forEach((c, i) => { frontText += `${i + 1}番、${c}。`; });
+      scFront.choices.forEach((c, i) => { frontText += `${i + 1}番、${firstLetterOnly ? (c[0] || c) : c}。`; });
     }
-    front.push({ phase: Q, say: frontText });
+    // 盲目の受験生からの改善提案#27：倍速にしていても、まだ解いたことが無い新しい問題の
+    // 問題文だけは等速以下に戻す（既定オフ。audioEngine.jsのstep.rateで1ステップだけ上書き）。
+    front.push({ phase: Q, say: frontText, rate: (newSlowdownOn && !answeredIds.has(q.id)) ? Math.min(1, rate) : undefined });
     // 裏（答え）
     const back = [];
     back.push({ phase: A, say: scFront ? answerTextFor(q, scFront.choices, scFront.answerIdx) : answerText(q) });
@@ -1043,6 +1170,14 @@ export default function AudioMode({
     const mnemonicTag = effectiveTags(q, links)[0];
     const mnemonicText = mnemonicTag && kwMeta[mnemonicTag]?.mnemonic;
     if (mnemonicText) back.push({ phase: N, say: `語呂合わせ。${mnemonicText}` });
+    // #14：正解時にも理解を確認する一言を加える（既定オフ。誤答時の自己説明ステップとは別に、
+    // 正解・誤答に関わらず毎回添える）。
+    if (whyOnAnswerOn) back.push({ phase: N, say: 'なぜこの答えか、自分の言葉でもう一度言ってみましょう。' });
+    // #15：「もし〜なら」の逆シナリオ（既定オフ。curTagsと同じeffectiveTagsから検索）。
+    if (ifThenOn) {
+      const scenario = findIfThenScenario(effectiveTags(q, links));
+      if (scenario) back.push({ phase: N, say: scenario.text });
+    }
 
     if (readSide === 'front') {
       steps.push(...front);
@@ -1094,7 +1229,7 @@ export default function AudioMode({
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn, newSlowdownOn, answeredIds, rate, firstLetterOnly, storyPauseOn, whyOnAnswerOn, ifThenOn] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
@@ -1214,6 +1349,8 @@ export default function AudioMode({
   useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);
   useEffect(() => { engine.configure({ nextGapSeconds: nextGap }); }, [nextGap]);
   useEffect(() => { engine.configure({ loop }); }, [loop]);
+  // 👂 耳の疲労対策（#29）：30分再生したら音量を少し下げる提案に使う音量（既定100%）。
+  useEffect(() => { engine.configure({ volume: ttsVolume }); }, [ttsVolume]);
   // 🔋 Wake Lock（画面点灯の維持）をオフにできる設定（バッテリーを気にする人向け）
   useEffect(() => { engine.configure({ wakeLockEnabled: settings.audioWakeLockOff !== true }); }, [settings.audioWakeLockOff]);
   useEffect(() => { engine.configure({ voice: selectedVoice(), pitch: settings.speechPitch || 1 }); }, [voices, settings.voiceURI, settings.speechPitch]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1337,9 +1474,48 @@ export default function AudioMode({
     if (total > BREAK_EVERY && (index + 1) % BREAK_EVERY === 0 && index + 1 < total && breakNotifiedRef.current !== index) {
       breakNotifiedRef.current = index;
       engine.stop();
+      setBreakReason('count');
       setBreakPending(true);
     }
   }, [index, playing, total, source, newOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 盲目の受験生からの改善提案#25・#29：実際に再生していた累積時間（一時停止・休憩中は
+  // 数えない）を1つのrefで持ち、「5分ごとに休憩を提案」「30分で耳を休める提案」の
+  // 両方の判定に使う（新しい時計の仕組みを増やさず、既存のbreakPendingバナーに相乗りする）。
+  const playingAccumRef = useRef(0);
+  const playingSinceRef = useRef(null);
+  const [timeBreakOn, setTimeBreakOn] = useState(false); // #25 既定オフ（5分ごと）
+  const [earRestOn, setEarRestOn] = useState(false); // #29 既定オフ（30分で耳を休める）
+  const timeBreakNotifiedAtRef = useRef(0);
+  const earRestNotifiedRef = useRef(false);
+  useEffect(() => {
+    if (playing) playingSinceRef.current = Date.now();
+    else if (playingSinceRef.current) {
+      playingAccumRef.current += Date.now() - playingSinceRef.current;
+      playingSinceRef.current = null;
+    }
+  }, [playing]);
+  useEffect(() => {
+    if (!playing || breakPending) return;
+    if (!timeBreakOn && !earRestOn) return;
+    const id = setInterval(() => {
+      const elapsed = playingAccumRef.current + (playingSinceRef.current ? Date.now() - playingSinceRef.current : 0);
+      if (timeBreakOn && elapsed - timeBreakNotifiedAtRef.current >= 5 * 60 * 1000) {
+        timeBreakNotifiedAtRef.current = elapsed;
+        engine.stop();
+        setBreakReason('time');
+        setBreakPending(true);
+        return;
+      }
+      if (earRestOn && !earRestNotifiedRef.current && elapsed >= 30 * 60 * 1000) {
+        earRestNotifiedRef.current = true;
+        engine.stop();
+        setBreakReason('ear');
+        setBreakPending(true);
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [playing, breakPending, timeBreakOn, earRestOn]);
   // #43：次のセットまでの小休止を選べる（続ける／1分／5分／ここで終了する）。
   // delayMinが無ければ即座に続け、あればその分だけ待ってから自動で再生を再開する。
   const resumeFromBreak = (delayMin) => {
@@ -1493,8 +1669,12 @@ export default function AudioMode({
     // 聞き流しただけ（一度も自己採点していない）件数
     const ungradedCount = Math.max(0, n - gradedN);
     const ungradedLine = ungradedCount > 0 ? `${ungradedCount}問は聞くだけで、○△✕を付けていません。付けると記録に残ります。` : '';
+    // #20：集計（ジャンル・タグ）だけでなく、具体的にまちがえた問題名まで声で要約する
+    // （「今日：胃経15問、正解12問、まちがい：足三里、豊隆、内庭」のように声でメモする記憶術）。
+    const wrongNames = sessionWrong.slice(0, 5).map((q) => effectiveTags(q, links)[0] || shortStem(q)).filter(Boolean);
+    const wrongNamesLine = wrongNames.length > 0 ? `まちがいは、${wrongNames.join('、')}でした。` : '';
     cancelSpeech();
-    const msg = `おつかれさまでした。${n}問、終わりました。${accuracyLine}${typeLine}${leechLine}${masteredLine}${ungradedLine}`;
+    const msg = `おつかれさまでした。${n}問、終わりました。${accuracyLine}${typeLine}${wrongNamesLine}${leechLine}${masteredLine}${ungradedLine}`;
     speak(msg, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
     recordAudioReviewFinish({ target: batchTarget, subject: subj, genre: gen, round: rnd, n, graded: gradedN, wrong: wrongN }).then(setAudioLog);
     // バックグラウンド時のローカル通知（既定オフのオプトイン。タブが生きている間だけ）。
@@ -1785,6 +1965,48 @@ export default function AudioMode({
     onToast?.(`🚃 約${min}分・${count}問のミニセッションを始めます`);
     setTimeout(() => togglePlay(), 300);
   };
+  // 盲目の受験生からの改善提案：体の場所法・紛らわしいペア・宿題リプレイのような
+  // 「検索条件を経由しない、単発の読み上げモード」をまとめて始めるための共通ヘルパー。
+  const startSimpleSource = (sourceVal, toastMsg) => {
+    rebuildStop();
+    setMode(0);
+    setCustomReviewIds(null);
+    setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
+    setReviewTarget(null);
+    setReviewOffsetPersist(0);
+    setSource(sourceVal);
+    setSessionGradedCount(0);
+    setSessionWrong([]);
+    setSessionWrongKinds({});
+    audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = null;
+    if (toastMsg) onToast?.(toastMsg);
+    setTimeout(() => togglePlay(), 300);
+  };
+  // #17・#18：就寝前まとめ復習。その日に解いた問題だけをまとめて読み直し、
+  // 15〜30分の自動終了タイマー（既存のスリープタイマーをそのまま使う）を既定でセットする。
+  const startBedtimeReview = (min) => {
+    const todayKey = dateKey();
+    const ids = [...new Set(
+      history.filter((h) => dateKey(new Date(h.at)) === todayKey).map((h) => h.questionId)
+    )];
+    if (ids.length === 0) { onToast?.('今日はまだ解いた問題がありません'); return; }
+    rebuildStop();
+    setMode(0);
+    setSource('review');
+    setCustomReviewIds(ids);
+    setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
+    setReviewTarget(null);
+    setReviewOffsetPersist(0);
+    setSleepMin(min);
+    setSessionGradedCount(0);
+    setSessionWrong([]);
+    setSessionWrongKinds({});
+    audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = null;
+    onToast?.(`🌙 今日解いた${ids.length}問をまとめて復習します（${min}分で自動終了）`);
+    setTimeout(() => togglePlay(), 300);
+  };
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）。
   // 前回との問題の重複率も見る（新規・模試の「前回の同モードとの問題重複率」と同じ考え方）。
@@ -1951,6 +2173,50 @@ export default function AudioMode({
     if (!q) return;
     toggleBookmark(q.id);
     onToast?.(bookmarks[q.id] ? 'ブックマークを解除しました' : '🔖 ブックマークに追加しました（後で見直す）');
+  };
+  // #16：自分の言葉で言い直す練習の録音（MediaRecorder、端末内のみ）。
+  const [selfVoiceNotes, setSelfVoiceNotes] = useState([]);
+  useEffect(() => { storage.loadSelfVoiceNotes().then(setSelfVoiceNotes); }, []);
+  const [recordingOn, setRecordingOn] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const startSelfVoiceRecording = async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      onToast?.('この端末・ブラウザは録音に対応していません');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) recordedChunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordedChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        const qid = current?.id;
+        if (qid) storage.saveSelfVoiceNote(qid, blob).then(setSelfVoiceNotes);
+        onToast?.('🎙️ 録音しました。「▶ 自分の説明を聞く」で聞き比べられます');
+      };
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setRecordingOn(true);
+    } catch (e) {
+      onToast?.('マイクを使えませんでした（許可を確認してください）');
+    }
+  };
+  const stopSelfVoiceRecording = () => {
+    try { mediaRecorderRef.current?.stop(); } catch (e) { /* noop */ }
+    setRecordingOn(false);
+  };
+  const playSelfVoiceNote = (questionId) => {
+    const note = selfVoiceNotes.find((n) => n.questionId === questionId);
+    if (!note) return;
+    try {
+      const url = URL.createObjectURL(note.blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      audio.play().catch(() => {});
+    } catch (e) { /* noop */ }
   };
   // 読み方の手動補正辞書（例：「経穴」→「けいけつ」）
   const addPronunciationFix = () => {
@@ -2237,6 +2503,48 @@ export default function AudioMode({
         <div className="btn-row">
           <button className="btn sm" onClick={() => startQuickMinute(5)}>5分だけ</button>
           <button className="btn sm" onClick={() => startQuickMinute(10)}>10分だけ</button>
+        </div>
+      </div>
+
+      {/* 盲目の受験生からの改善提案（2026-11-15）：検索条件を経由しない単発の記憶術モード */}
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div className="section-label" style={{ marginTop: 0 }}>🧠 記憶術モード</div>
+        <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+          <button
+            className="btn sm"
+            onClick={() => startSimpleSource('bodyLocation', '🧘 体の場所法で読み上げます。触って位置を確認しながら聞いてください')}
+          >
+            🧘 体の場所法（八会穴）
+          </button>
+          <button
+            className="btn sm"
+            onClick={() => startSimpleSource('confusingPairs', `😵 紛らわしい名前のペアを${CONFUSING_PAIRS.length}組確認します`)}
+          >
+            😵 紛らわしいペア（{CONFUSING_PAIRS.length}組）
+          </button>
+          {homeworkIds.length > 0 && (
+            <button
+              className="btn sm"
+              onClick={() => startSimpleSource('homework', `🏠 宿題リプレイ：あとで調べるに登録した${homeworkIds.length}問を読み直します`)}
+            >
+              🏠 宿題リプレイ（{homeworkIds.length}問）
+            </button>
+          )}
+        </div>
+        <p className="inline-note" style={{ marginTop: 6 }}>
+          体の場所法：頭→顔→首→肩→胸→お腹→腰→太もも→膝→すね→足の順に経穴を配置して読みます。
+          宿題リプレイ：「📌 あとで調べる」に登録してから一晩（12時間）以上経った問題だけを優先して読み直します。
+        </p>
+      </div>
+
+      {/* #17・#18：就寝前まとめ復習（その日に解いた問題だけを短く読み直し、自動終了タイマー付き） */}
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div className="section-label" style={{ marginTop: 0 }}>🌙 就寝前まとめ復習</div>
+        <p className="inline-note" style={{ marginTop: 0 }}>今日解いた問題だけを短く読み直します。寝る前の軽い復習に。睡眠を削ってまで続けないよう、時間になったら自動で終了します。</p>
+        <div className="btn-row">
+          <button className="btn sm" onClick={() => startBedtimeReview(15)}>15分で終了</button>
+          <button className="btn sm" onClick={() => startBedtimeReview(20)}>20分で終了</button>
+          <button className="btn sm" onClick={() => startBedtimeReview(30)}>30分で終了</button>
         </div>
       </div>
 
@@ -2710,9 +3018,21 @@ export default function AudioMode({
             {/* #43：60問区切りの小休止を選べる（以前はトーストで知らせるだけだった）。 */}
             {breakPending && (
               <div className="card" style={{ marginTop: 10 }} role="region" aria-label="休憩の選択" tabIndex={-1}>
-                <div className="section-label" style={{ marginTop: 0 }}>✋ {BREAK_EVERY}問区切りです。ひと休みしましょう</div>
+                <div className="section-label" style={{ marginTop: 0 }}>
+                  {breakReason === 'time' && '✋ 5分たちました。ひと休みしましょう'}
+                  {breakReason === 'ear' && '👂 30分再生しました。耳を休めませんか？'}
+                  {breakReason === 'count' && `✋ ${BREAK_EVERY}問区切りです。ひと休みしましょう`}
+                </div>
                 <div className="btn-row" style={{ flexWrap: 'wrap' }}>
                   <button ref={breakFirstBtnRef} className="btn accent sm" onClick={() => resumeFromBreak(0)}>▶ すぐ続ける</button>
+                  {breakReason === 'ear' && (
+                    <button
+                      className="btn ghost sm"
+                      onClick={() => { setTtsVolume((v) => Math.max(0.2, v - 0.2)); earRestNotifiedRef.current = false; playingAccumRef.current = 0; resumeFromBreak(0); }}
+                    >
+                      🔉 音量を少し下げて続ける
+                    </button>
+                  )}
                   <button className="btn ghost sm" onClick={() => resumeFromBreak(1)}>1分後に自動再開</button>
                   <button className="btn ghost sm" onClick={() => resumeFromBreak(5)}>5分後に自動再開</button>
                   <button className="btn ghost sm" onClick={() => setBreakPending(false)}>🏁 ここで終了する（あとで続きから）</button>
@@ -2756,6 +3076,27 @@ export default function AudioMode({
                   {bookmarks[current.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
                 </button>
                 <button className="sg-btn" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
+              </div>
+            )}
+            {/* #16：自分の言葉で言い直す練習を録音する（端末内保存のみ、直近20件）。 */}
+            {current && (
+              <div className="btn-row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+                {!recordingOn ? (
+                  <button className="btn ghost sm" onClick={startSelfVoiceRecording}>🎙️ 自分の声で言い直して録音</button>
+                ) : (
+                  <button className="btn accent sm" onClick={stopSelfVoiceRecording}>⏹ 録音を終える</button>
+                )}
+                {selfVoiceNotes.some((n) => n.questionId === current.id) && (
+                  <>
+                    <button className="btn ghost sm" onClick={() => playSelfVoiceNote(current.id)}>▶ 自分の説明を聞く</button>
+                    <button
+                      className="btn ghost sm"
+                      onClick={() => storage.deleteSelfVoiceNote(current.id).then(setSelfVoiceNotes)}
+                    >
+                      🗑 録音を削除
+                    </button>
+                  </>
+                )}
               </div>
             )}
             {/* A10：誤答理由をその場で選べるように（△・✕を選んだ直後だけ表示。
@@ -2896,6 +3237,29 @@ export default function AudioMode({
               <p className="inline-note" style={{ marginTop: 6 }}>
                 このボタンは今すぐ好きなタイミングで読み上げます。一周を最後まで聞き終えた時は、これとは別に自動で簡単な終了の知らせ（「一周終了です、お疲れ様でした」等）が流れます。
               </p>
+              {/* #21：まちがえた問題"名"だけの軽量な弱点リスト（ジャンル・タグの集計とは別に、
+                  個々の問題を聞き返せるようにする）。 */}
+              {sessionWrong.length > 0 && (
+                <details style={{ marginTop: 8 }}>
+                  <summary className="btn ghost sm" style={{ display: 'inline-block' }}>📋 まちがえた問題の名前一覧（{sessionWrong.length}問）</summary>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                    {sessionWrong.map((q) => (
+                      <li key={q.id} style={{ padding: '2px 0' }}>・{effectiveTags(q, links)[0] || shortStem(q)}</li>
+                    ))}
+                  </ul>
+                  <button
+                    className="btn ghost sm"
+                    style={{ marginTop: 6 }}
+                    onClick={() => {
+                      cancelSpeech();
+                      const names = sessionWrong.map((q) => effectiveTags(q, links)[0] || shortStem(q)).filter(Boolean);
+                      speak(`まちがえた問題は、${names.join('、')}でした。`, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
+                    }}
+                  >
+                    🔊 読み上げる
+                  </button>
+                </details>
+              )}
               {weaknessSummary.relatedComparisons.length > 0 && (
                 <>
                   <div className="section-label">関連する対比（混同しやすいポイント）</div>
@@ -3119,6 +3483,32 @@ export default function AudioMode({
                 )}
               </>
             )}
+          </div>
+        );
+      })()}
+
+      {/* #23・#24：仕上げ期（ロードマップのkind:'goal'フェーズ）に入ったら、文字の過去問を
+          増やす案内と倍速の総復習への切り替えを一度だけ声＋カードで案内する。 */}
+      {(() => {
+        const todayKey = dateKey();
+        const isGoalPhase = phaseForDate(todayKey)?.kind === 'goal';
+        if (!isGoalPhase || settings.goalPhaseAudioNoticeDate === todayKey) return null;
+        return (
+          <div className="card" style={{ marginBottom: 10 }}>
+            <div className="section-label" style={{ marginTop: 0 }}>🎯 仕上げ期に入りました</div>
+            <p className="inline-note" style={{ marginTop: 0 }}>
+              文字の過去問を解く練習を増やしましょう。本番は読んで解く形式なので、音だけで覚えた知識も文字で取り出せるようにしておく必要があります。
+            </p>
+            <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+              <button className="btn sm" onClick={() => onNavigate && onNavigate('exam')}>📝 模試（文字）を開く</button>
+              <button
+                className="btn sm"
+                onClick={() => { setRate((r) => Math.max(r, 1.5)); onToast?.('⏩ 倍速（1.5倍以上）の総復習に切り替えました'); }}
+              >
+                ⏩ 倍速の総復習に切り替える
+              </button>
+              <button className="btn ghost sm" onClick={() => updateSettings({ goalPhaseAudioNoticeDate: todayKey })}>今日は非表示にする</button>
+            </div>
           </div>
         );
       })()}
@@ -3560,6 +3950,14 @@ export default function AudioMode({
                 desc="「いつも3番が正解」のように位置で覚えてしまうのを防ぎます。読み上げる時だけ順番を入れ替え、正解の番号も読み替えます。"
               />
             )}
+            {(readChoices || mode === 6) && (
+              <Opt
+                on={firstLetterOnly}
+                onToggle={() => setFirstLetterOnly((v) => !v)}
+                title="🔤 選択肢は頭文字だけ読む（頭文字法）"
+                desc="各選択肢の最初の1文字だけを読みます。頭文字をつなげて覚える練習向け。"
+              />
+            )}
             <Opt
               on={recallMode}
               onToggle={() => setRecallMode((v) => !v)}
@@ -3575,6 +3973,18 @@ export default function AudioMode({
               onToggle={() => setSwipeNavOn((v) => !v)}
               title="👉 左右スワイプで前へ／次へ"
               desc="スクリーンリーダー（VoiceOver・TalkBack等）自身のスワイプ操作とぶつかる場合はオフにしてください（自動では判別できません）。"
+            />
+            <Opt
+              on={timeBreakOn}
+              onToggle={() => setTimeBreakOn((v) => !v)}
+              title="⏱ 5分ごとに休憩を提案する"
+              desc="ファイルを長時間にしすぎないための時間基準の区切り（既存の60問区切りとは別）。"
+            />
+            <Opt
+              on={earRestOn}
+              onToggle={() => setEarRestOn((v) => !v)}
+              title="👂 30分再生したら耳を休める提案をする"
+              desc="再生し続けた時間（一時停止中は数えません）が30分を超えたら、休憩と音量を少し下げる提案をします。"
             />
           </div>
 
@@ -3603,6 +4013,18 @@ export default function AudioMode({
               desc="1つの言葉が終わると、つながりの強い言葉へ自動で進みます。（キーワードで回す／今日の連結のとき）"
             />
             <Opt
+              on={storyPauseOn}
+              onToggle={() => setStoryPauseOn((v) => !v)}
+              title="📖 場面が変わる所の間を長めに取る（ストーリー法）"
+              desc="キーワード（場面）が切り替わる直前の間を長くして、話の場面転換として聞き取りやすくします。"
+            />
+            <Opt
+              on={readingTemplateOn}
+              onToggle={() => setReadingTemplateOn((v) => !v)}
+              title="📐 科目の決まった順番を声で確認する"
+              desc="科目を選んだ時に一度だけ、その科目の決まった読み上げ順（例：解剖学＝起始→停止→支配神経→作用）を案内します。問題ごとに自動で並べ替えるものではありません。"
+            />
+            <Opt
               on={readHint}
               onToggle={() => setReadHint((v) => !v)}
               title="答えの前にヒントを読む"
@@ -3613,6 +4035,36 @@ export default function AudioMode({
               onToggle={() => setKeywordEmphasisOn((v) => !v)}
               title="🔊 キーワードを声でも強調する"
               desc="画面の反転表示（二重符号化）は声には乗りません。キーワードの前後に一拍おいて、声だけでも「ここが大事な語」と伝わるようにします。"
+            />
+            <Opt
+              on={newSlowdownOn}
+              onToggle={() => setNewSlowdownOn((v) => !v)}
+              title="🐢 まだ解いていない新しい問題は等速で読む"
+              desc="再生速度を上げていても、一度も解いたことが無い問題の問題文だけは等速以下に戻します（倍速の上げすぎ対策）。"
+            />
+            <Opt
+              on={whyOnAnswerOn}
+              onToggle={() => setWhyOnAnswerOn((v) => !v)}
+              title="🤔 答えの後に「なぜ」を一言添える"
+              desc="正解・誤答に関わらず、答えのあとに「自分の言葉でもう一度言ってみましょう」を添えます。"
+            />
+            <Opt
+              on={ifThenOn}
+              onToggle={() => setIfThenOn((v) => !v)}
+              title="🔀 「もし〜なら」を読む"
+              desc="橈骨神経・正中神経など、代表的な神経が障害された時の所見（正常の逆）を答えのあとに読みます。"
+            />
+            <Opt
+              on={prependReviewOn}
+              onToggle={() => setPrependReviewOn((v) => !v)}
+              title="🔁 新しい問題の前に復習を1問"
+              desc="科目を選んで読み上げる時、始める前に復習対象を1問だけ挟みます（新しい範囲ばかりに偏らせない対策）。"
+            />
+            <Opt
+              on={walkingDetectOn}
+              onToggle={() => setWalkingDetectOn((v) => !v)}
+              title="🚶 歩行中は速度を少し落とす（モーション検知）"
+              desc="体の動きの大きさから簡易的に判定するだけで、歩行そのものを正確に検知する技術ではありません。対応していない機種・ブラウザもあります。iPhoneでは最初にモーションの許可を求めます。"
             />
             <Opt
               on={reverse}

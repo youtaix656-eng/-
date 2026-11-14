@@ -10,6 +10,7 @@ import { weakTagClusters, tagTrend } from '../lib/weakClusters.js';
 import { loadAudioReviewLog, audioReviewCountSince } from '../lib/audioReviewLog.js';
 import { loadLaterLookup, laterLookupCountSince } from '../lib/laterLookup.js';
 import { loadRephraseLog, rephraseCountSince } from '../lib/rephraseLog.js';
+import { isSpeechSupported, speak, cancelSpeech } from '../lib/speech.js';
 
 function formatWeekLabel(weekKeyStr) {
   const start = new Date(Number(weekKeyStr));
@@ -51,6 +52,18 @@ export default function WeeklyJournal({ store, onNavigate }) {
     () => buildWeeklyReport(history, missTypes, questions, links, Date.now(), roundLog),
     [history, missTypes, questions, links, roundLog]
   );
+  // #22：先週の正答数・正答率を声で比較するため、先週ぶんだけを境界をそろえて集計する。
+  // buildWeeklyReportは下限（since）しか見ないため、nowをずらして呼ぶと今週分まで
+  // 混ざって二重に数えてしまう（実装時に自己発見・修正）。ここでは[14日前, 7日前)の
+  // 範囲だけを直接数える、別の小さな集計にする。
+  const prevWeekStats = useMemo(() => {
+    const end = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const start = end - 7 * 24 * 60 * 60 * 1000;
+    const h = history.filter((x) => x.at >= start && x.at < end);
+    const total = h.length;
+    const correct = h.filter((x) => x.correct).length;
+    return { total, accuracy: total > 0 ? correct / total : null };
+  }, [history]);
 
   // #30：今週追加された問題（contentSeedLog.js）を「今週埋めた手薄科目」として一言候補にする。
   const contentSummary = useMemo(() => {
@@ -188,6 +201,31 @@ export default function WeeklyJournal({ store, onNavigate }) {
                 <div className="lbl">誤答した問題数</div>
               </div>
             </div>
+            {/* #22：盲目の受験生からの改善提案。今週と先週の正答数を声で比較する。 */}
+            {isSpeechSupported() && (
+              <button
+                className="btn ghost sm"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  cancelSpeech();
+                  const diff = prevWeekStats.total > 0 && report.accuracy != null && prevWeekStats.accuracy != null
+                    ? Math.round((report.accuracy - prevWeekStats.accuracy) * 100)
+                    : null;
+                  let line = `今週は${report.total}問解いて、正答率は${formatPercent(report.accuracy)}でした。`;
+                  if (prevWeekStats.total > 0) {
+                    line += `先週は${prevWeekStats.total}問、正答率は${formatPercent(prevWeekStats.accuracy)}でした。`;
+                    if (diff != null) {
+                      line += diff > 0 ? `先週よりおよそ${diff}ポイント上がりました。` : diff < 0 ? `先週よりおよそ${Math.abs(diff)}ポイント下がりました。` : '先週とほぼ同じです。';
+                    }
+                  } else {
+                    line += '先週の記録はありませんでした。';
+                  }
+                  speak(line, { rate: 1, pitch: 1 }).catch(() => {});
+                }}
+              >
+                🔊 今週と先週を声で比較
+              </button>
+            )}
             {report.topType && (
               <p className="inline-note" style={{ marginTop: 8 }}>
                 今週いちばん多かった誤答理由は「{missTypeLabel(report.topType)}」でした。

@@ -28,7 +28,7 @@ let state = {
 };
 
 let plan = []; // [{ steps:[{phase, say?, wait?(ms), waitGap?:true|'cap2'}], display }]
-const settings = { rate: 1, pitch: 1, gapSeconds: 2, nextGapSeconds: 1, voice: null, loop: false, cloneVoice: null, wakeLockEnabled: true };
+const settings = { rate: 1, pitch: 1, volume: 1, gapSeconds: 2, nextGapSeconds: 1, voice: null, loop: false, cloneVoice: null, wakeLockEnabled: true };
 // cloneVoice: { apiKey, voiceId } | null。設定されていればブラウザのspeechSynthesisの
 // 代わりにボイスクローン（BYOK・ElevenLabs）で読み上げる（AudioMode.jsxのトグルで切替）。
 
@@ -198,7 +198,9 @@ async function playOne(item, signal) {
       if (settings.cloneVoice?.apiKey && settings.cloneVoice?.voiceId) {
         await speakCloned(step.say, { apiKey: settings.cloneVoice.apiKey, voiceId: settings.cloneVoice.voiceId, signal });
       } else {
-        await speak(step.say, { rate: settings.rate, pitch: settings.pitch, voice: settings.voice, signal });
+        // step.rate：まだ解いていない新しい問題は等速以下で読む（#27）等、1ステップだけ
+        // 速度を上書きしたい時に使う（省略時は設定どおりの速度）。
+        await speak(step.say, { rate: step.rate ?? settings.rate, pitch: settings.pitch, volume: settings.volume, voice: settings.voice, signal });
       }
     }
     if (step.wait) await wait(step.wait, signal);

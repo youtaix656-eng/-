@@ -33,7 +33,7 @@ export function loadVoices() {
 
 // 1つのテキストを読み上げる Promise を返す。
 // controller に現在の utterance を登録し、外部から stop できるようにする。
-export function speak(text, { rate = 1, pitch = 1, voice = null, signal } = {}) {
+export function speak(text, { rate = 1, pitch = 1, volume = 1, voice = null, signal } = {}) {
   return new Promise((resolve, reject) => {
     if (!isSpeechSupported()) return reject(new Error('speechSynthesis 未対応'));
     if (!text || !text.trim()) return resolve();
@@ -42,6 +42,7 @@ export function speak(text, { rate = 1, pitch = 1, voice = null, signal } = {}) 
     u.lang = 'ja-JP';
     u.rate = rate;
     u.pitch = pitch;
+    u.volume = Math.max(0, Math.min(1, volume));
     if (voice) u.voice = voice;
 
     let done = false;

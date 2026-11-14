@@ -238,6 +238,29 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             </div>
           </div>
         )}
+        {/* 盲目の受験生からの改善提案#19：夜勤・交代勤務向けの勤務明けリマインド。
+            本人が設定した勤務終了時刻だけを使う（勤務形態の自動判定はしない）。 */}
+        <label className="switch-row" style={{ marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={!!(settings.shiftReminder && settings.shiftReminder.enabled)}
+            onChange={(e) => updateSettings({ shiftReminder: { ...(settings.shiftReminder || {}), enabled: e.target.checked } })}
+          />
+          <span>
+            夜勤・交代勤務の勤務明けリマインド
+            <small>設定した勤務終了時刻から90分以内にアプリを開くと「勤務明け復習」を一言添えます。</small>
+          </span>
+        </label>
+        {settings.shiftReminder && settings.shiftReminder.enabled && (
+          <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+            <label>勤務終了時刻</label>
+            <input
+              type="time"
+              value={(settings.shiftReminder && settings.shiftReminder.afterTime) || '08:00'}
+              onChange={(e) => updateSettings({ shiftReminder: { ...(settings.shiftReminder || {}), afterTime: e.target.value } })}
+            />
+          </div>
+        )}
       </div>
 
       {/* ===== アクセシビリティ ===== */}

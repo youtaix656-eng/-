@@ -34,6 +34,7 @@ export const KEYS = {
   unread: 'shinkyu:unread', // 読み取れなかったページ・問題の控え
   auth: 'shinkyu:auth', // 端末内のログイン鍵（ID・パスワードハッシュ・秘密の質問）
   pomoMusic: 'shinkyu:pomoMusic', // ポモドーロ開始Music（音声ファイルのBlob）
+  selfVoiceNotes: 'shinkyu:selfVoiceNotes', // 自分の声で言い直した説明の録音（questionId別、端末内のみ・バックアップ対象外）
   lastView: 'shinkyu:lastView', // 前回開いていた画面（アプリ再開時に復元）
   quizProgress: 'shinkyu:quizProgress', // 一問一答の途中経過（1問ごとに保存・続きから）
   reviewProgress: 'shinkyu:reviewProgress', // 復習の途中経過（1問ごとに保存・続きから）
@@ -349,6 +350,24 @@ export const clearAuth = () => remove(KEYS.auth);
 export const loadPomoMusic = () => read(KEYS.pomoMusic, null);
 export const savePomoMusic = (blob) => write(KEYS.pomoMusic, blob);
 export const clearPomoMusic = () => remove(KEYS.pomoMusic);
+
+// ---- 自分の声で言い直した説明の録音（questionId別、Blob）----
+// 「自分の言葉で言い直す」記憶術向け。端末の容量を使うため直近20件だけ保持する
+// （古いものから自動で消える。pomoMusicと同じくBlobはJSONバックアップに乗らないため対象外）。
+const SELF_VOICE_NOTES_CAP = 20;
+export const loadSelfVoiceNotes = () => read(KEYS.selfVoiceNotes, []);
+export async function saveSelfVoiceNote(questionId, blob) {
+  const list = (await loadSelfVoiceNotes()).filter((n) => n.questionId !== questionId);
+  list.unshift({ questionId, blob, at: Date.now() });
+  const capped = list.slice(0, SELF_VOICE_NOTES_CAP);
+  await write(KEYS.selfVoiceNotes, capped);
+  return capped;
+}
+export async function deleteSelfVoiceNote(questionId) {
+  const list = (await loadSelfVoiceNotes()).filter((n) => n.questionId !== questionId);
+  await write(KEYS.selfVoiceNotes, list);
+  return list;
+}
 
 // ---- 学習セッション（60/300/900 の続き位置） ----
 // session = { subject, ids:[qid], pos, target, round, startedAt, times:{qid:ms} }
