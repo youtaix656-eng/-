@@ -205,7 +205,11 @@ async function playOne(item, signal) {
     }
     if (step.wait) await wait(step.wait, signal);
     if (step.waitGap) {
-      const g = step.waitGap === 'cap2' ? Math.min(settings.gapSeconds, 2) : settings.gapSeconds;
+      // A2：数値を渡した時は、個人の解答ペースから計算した秒数をそのまま使う
+      // （設定のgapSecondsを上書きする1ステップだけの指定。既存のtrue/'cap2'と共存する）。
+      const g = typeof step.waitGap === 'number'
+        ? step.waitGap
+        : (step.waitGap === 'cap2' ? Math.min(settings.gapSeconds, 2) : settings.gapSeconds);
       await wait(g * 1000, signal);
     }
     // アウトプットモード：自動タイマーでは進めず、「解答を見る」（resumeManual）が
