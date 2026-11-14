@@ -33,7 +33,8 @@ export const KEYS = {
   session: 'shinkyu:session', // 学習セッション（60/300/900）の続き位置
   unread: 'shinkyu:unread', // 読み取れなかったページ・問題の控え
   auth: 'shinkyu:auth', // 端末内のログイン鍵（ID・パスワードハッシュ・秘密の質問）
-  pomoMusic: 'shinkyu:pomoMusic', // ポモドーロ開始Music（音声ファイルのBlob）
+  pomoMusic: 'shinkyu:pomoMusic', // ポモドーロ開始Music（音声ファイルのBlob、旧・単曲版。プレイリストへ移行済み）
+  pomoPlaylist: 'shinkyu:pomoPlaylist', // ポモドーロの曲プレイリスト（複数曲、端末内のみ・バックアップ対象外）
   selfVoiceNotes: 'shinkyu:selfVoiceNotes', // 自分の声で言い直した説明の録音（questionId別、端末内のみ・バックアップ対象外）
   lastView: 'shinkyu:lastView', // 前回開いていた画面（アプリ再開時に復元）
   quizProgress: 'shinkyu:quizProgress', // 一問一答の途中経過（1問ごとに保存・続きから）
@@ -346,10 +347,52 @@ export const loadAuth = () => read(KEYS.auth, null);
 export const saveAuth = (a) => write(KEYS.auth, a);
 export const clearAuth = () => remove(KEYS.auth);
 
-// ---- ポモドーロ開始Music（音声ファイルの Blob） ----
+// ---- ポモドーロ開始Music（音声ファイルの Blob、旧・単曲版） ----
 export const loadPomoMusic = () => read(KEYS.pomoMusic, null);
 export const savePomoMusic = (blob) => write(KEYS.pomoMusic, blob);
 export const clearPomoMusic = () => remove(KEYS.pomoMusic);
+
+// ---- ポモドーロの曲プレイリスト（複数曲、Blob） ----
+// 2026-11-14、ユーザー指定で「曲選択のところにプレイリストを作りたい。選択したら
+// 音楽が表示されるようにしたい」のため、単曲（pomoMusic）から複数曲へ拡張したもの。
+// playlist = [{id, name, blob}]（追加順）。この中から選んだ1曲（settings.pomodoro.
+// activeSongId）だけを勉強中にループ再生する——複数曲を自動で順に流す仕組みは持たない
+// （2026-11-08の「シャッフルは持たない」と同じ考え方で、常に「今選んでいる1曲」だけが
+// 流れる。オートアドバンスを足すとその考え方と矛盾するため、あえて増やさなかった）。
+const POMO_PLAYLIST_CAP = 30;
+export const loadPomoPlaylist = () => read(KEYS.pomoPlaylist, []);
+export async function addPomoPlaylistSongs(files) {
+  const list = await loadPomoPlaylist();
+  const added = files.map((f) => ({
+    id: 'pm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    name: f.name || '（名前未取得の曲）',
+    blob: f,
+  }));
+  const next = [...list, ...added].slice(-POMO_PLAYLIST_CAP);
+  await write(KEYS.pomoPlaylist, next);
+  return next;
+}
+export async function removePomoPlaylistSong(id) {
+  const list = (await loadPomoPlaylist()).filter((s) => s.id !== id);
+  await write(KEYS.pomoPlaylist, list);
+  return list;
+}
+export const clearPomoPlaylist = () => remove(KEYS.pomoPlaylist);
+// activeIdが一覧に無ければ先頭を返す（削除された曲が選ばれていた場合のフォールバック）。
+// 一覧が空ならnull。
+export async function loadActivePomoSong(activeId) {
+  const list = await loadPomoPlaylist();
+  if (!list.length) return null;
+  return list.find((s) => s.id === activeId) || list[0];
+}
+// 旧・単曲版（pomoMusic）からの一度だけの移行。プレイリストが既に1曲以上あれば何もしない。
+export async function migratePomoMusicToPlaylist() {
+  const existing = await loadPomoPlaylist();
+  if (existing.length > 0) return existing;
+  const legacyBlob = await loadPomoMusic();
+  if (!legacyBlob) return existing;
+  return addPomoPlaylistSongs([legacyBlob]);
+}
 
 // ---- 自分の声で言い直した説明の録音（questionId別、Blob）----
 // 「自分の言葉で言い直す」記憶術向け。端末の容量を使うため直近20件だけ保持する

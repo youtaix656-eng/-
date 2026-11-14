@@ -3174,6 +3174,10 @@ code.block {
 .pomo-config-grid label { font-size: 11px; color: var(--text-sub); font-weight: 700; display: flex; flex-direction: column; gap: 3px; }
 .pomo-music { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
 .pomo-music-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pomo-playlist { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.pomo-playlist-item { display: flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 4px 6px; }
+.pomo-playlist-item.active { border-color: var(--accent); }
+.pomo-playlist-pick { flex: 1; text-align: left; background: none; border: none; color: inherit; font-size: 12px; padding: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pomo-hint { font-size: 11px; color: var(--text-mute); margin-top: 6px; }
 .pomo-num-row { display: flex; align-items: center; gap: 4px; }
 .pomo-num-step {

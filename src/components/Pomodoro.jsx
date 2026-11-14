@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { loadPomoMusic } from '../lib/storage.js';
+import { loadActivePomoSong } from '../lib/storage.js';
 import { setPomoRunning } from '../lib/runtimeFlags.js';
 import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 
@@ -47,19 +47,20 @@ export default function Pomodoro({ store, onToast }) {
     if (!running) setRemaining(durationSec);
   }, [durationSec, running]);
 
-  // 保存済みの曲を読み込む（設定パネルで変更された時も読み直す）
+  // プレイリストで選ばれている曲を読み込む（設定パネルで追加・選択・削除された時も読み直す）
   useEffect(() => {
     let url = null;
-    loadPomoMusic().then((blob) => {
-      if (blob) {
-        url = URL.createObjectURL(blob);
+    loadActivePomoSong(cfg.activeSongId).then((song) => {
+      if (song) {
+        url = URL.createObjectURL(song.blob);
         setMusicUrl(url);
       } else {
         setMusicUrl(null);
       }
     });
     return () => { if (url) URL.revokeObjectURL(url); };
-  }, [musicVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicVersion, cfg.activeSongId]);
 
   // 音量スライダー（設定画面側で変更された時も即座に反映する）
   useEffect(() => {

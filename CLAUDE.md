@@ -5051,6 +5051,44 @@ Playwrightで実機確認し、確認の過程で1件のバグ（QA用モック�
   単体の判定関数（`voiceMatchLevel`／`normalizeForMatch`）の手計算による確認と、
   不一致パス（同じ`gradeCurrent('maru')`・`speak()`呼び出しを使う）の実機確認に留めた。
 
+## ポモドーロタイマー：曲のプレイリスト化（2026-11-14追加）
+ユーザーから「ポモドーロタイプの曲選択のところで音楽のプレイリストをつくりたい。選択したら
+音楽が表示されるようにしたい。追加して。」と依頼された。2026-11-08の全面リセット（①タイマー
+の時間+/-のみ②曲は1曲だけ設定してループ再生、の2つに絞った）から、曲の部分だけを単曲→
+複数曲のプレイリストへ拡張したもの（タイマー部分・「シャッフルは持たない」という
+2026-11-08の決定自体は変えていない）。
+- **`src/lib/storage.js`**：`loadPomoPlaylist`/`addPomoPlaylistSongs`/`removePomoPlaylistSong`/
+  `clearPomoPlaylist`/`loadActivePomoSong`/`migratePomoMusicToPlaylist`を新設（IndexedDBキー
+  `shinkyu:pomoPlaylist`、`{id, name, blob}`の配列、上限30曲）。旧・単曲版（`pomoMusic`）の
+  関数はそのまま残し、`migratePomoMusicToPlaylist()`がプレイリストが空の時だけ1回だけ
+  コピーする（既存ユーザーの曲を失わないための非破壊の移行。旧キー自体は消さない）。
+  **複数曲を自動で順に流す仕組み（オートアドバンス）は持たない**——プレイリストの中から
+  選んだ1曲（`settings.pomodoro.activeSongId`）だけを、従来と同じくループ再生する。
+  シャッフル・自動再生順を増やすと2026-11-08の「シャッフルは持たない」という決定と
+  矛盾するため、あえて増やさなかった。
+- **`src/components/PomodoroConfigFields.jsx`**：ファイル選択を`multiple`にして複数曲を
+  一度に追加できるようにし、追加された曲を一覧表示（選択中は🔊、それ以外は▫️で区別し、
+  各曲に「削除」ボタン）。**「🎵 現在の曲：◯◯」を常に表示**（ユーザー指定の「選択したら
+  音楽が表示されるようにしたい」はこの表示で実現）。曲が1つも無ければ「🎵 曲が選ばれて
+  いません」と正直に出す。音量スライダーは全曲共通（既存のまま）。
+- **`src/components/Pomodoro.jsx`**：`loadPomoMusic`から`loadActivePomoSong(cfg.activeSongId)`
+  へ切り替え、選ばれている曲が変わった時（`cfg.activeSongId`が変わった時）も曲を読み直すよう
+  依存配列に追加。
+- 検証：`node --test`（2616件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 737KB/742KB）はすべて通過。Playwright QAで
+  実機確認済み：曲を2曲追加すると自動で1曲目が選択され「🎵 現在の曲：◯◯」に表示される
+  こと、一覧に2曲とも表示されること、2曲目をタップすると選択が切り替わり表示も更新される
+  こと、1曲目を削除すると一覧から消え2曲目の選択が保たれること、`<audio>`要素のsrcが
+  実際にblob URLになっていること。コンソールエラー0件。
+  **QA中に気づいた点（アプリのバグではない）**：このクラウド環境のヘッドレスChromium
+  （`/opt/pw-browsers/chromium`）は、`setInputFiles`で日本語（非ASCII）のファイル名を渡すと
+  ファイルが一切添付されない（`files.length`が0のまま）という制約があることを、QAスクリプト
+  単独の検証で確認した。ASCIIファイル名では問題なく動作する。アプリ自身のファイル選択は
+  実際のブラウザ（本番環境）では日本語ファイル名でも問題なく動くはずで、これは**このQA環境
+  だけの制約**。以後、このアプリでファイル選択のPlaywright QAを行う時は、フィクスチャの
+  ファイル名をASCIIにすること（日本語ファイル名で「追加されない」という結果が出ても、
+  アプリのバグと即断しない）。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
