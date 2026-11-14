@@ -4,7 +4,8 @@ import { createYoutubePlayer } from '../lib/pomoYoutube.js';
 import { setPomoRunning } from '../lib/runtimeFlags.js';
 import { bellRing } from '../lib/sound.js';
 import * as audioEngine from '../lib/audioEngine.js';
-import { COURSE_PHASES, catchUpCourse, courseScheduledEnd, coursePhaseOrdinal, hhmmOf } from '../lib/pomoCourse.js';
+import { isSpeechSupported, speak } from '../lib/speech.js';
+import { COURSE_PHASES, catchUpCourse, courseScheduledEnd, coursePhaseOrdinal, courseCountdownText, hhmmOf } from '../lib/pomoCourse.js';
 import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 
 // タイマー（全画面の上部に固定表示）。
@@ -23,6 +24,10 @@ import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 // だけで、上記で削除した他の機能（短い休憩/長い休憩/サイクル回数の個別設定・通知等）を
 // 再び持たせたわけではない（2時間コースは25分/5分/4回に固定、設定できるのはモードの
 // 切り替えだけ）。
+// 同日、ユーザー指定で休憩開始・休憩終了それぞれの10秒前から「休憩開始まで10秒前、9、8…」
+// のような声のカウントダウンを追加（lib/speech.jsの既存speak()をそのまま使う。
+// 音声学習（AudioMode.jsx）が同時に読み上げ中の場合はブラウザのspeechSynthesisキューに
+// 順番待ちで積まれるだけで、強制的には割り込まない）。
 // 以前にあった多数の機能（プリセット・短い休憩/長い休憩/サイクル回数・勉強中の通知・
 // 1日の目標勉強時間・効果音・振動・画面常時点灯・集中モード自動最小化・バー位置の切替・
 // タブを閉じる時の確認・勉強内容メモ・週間統計グラフ/CSV書き出し・複数タブの幹事タブ判定
@@ -62,6 +67,9 @@ export default function Pomodoro({ store, onToast }) {
   // 休憩に入った時にaudioEngine（音声学習）を止めたかどうか。止めた場合だけ、次の
   // 勉強フェーズで再開する（止めていない＝元々使っていなかった場合は何もしない）。
   const audioPausedByBreakRef = useRef(false);
+  // 休憩開始・休憩終了の10秒前カウントダウンで、同じ秒を2回読み上げないようにするための記録
+  // （{phaseIndex, sec}。phaseIndexが変わったら新しいフェーズのカウントダウンとして扱う）。
+  const lastCountdownRef = useRef({ phaseIndex: null, sec: null });
 
   const audioRef = useRef(null);
   const barRef = useRef(null);
@@ -236,6 +244,7 @@ export default function Pomodoro({ store, onToast }) {
         setFinished(false);
         setCourseFinishedAt(null);
         audioPausedByBreakRef.current = false;
+        lastCountdownRef.current = { phaseIndex: null, sec: null };
         const dur = COURSE_PHASES[0].min * 60;
         setCoursePhaseIndex(0);
         setEndAt(Date.now() + dur * 1000);
@@ -266,6 +275,7 @@ export default function Pomodoro({ store, onToast }) {
     setCoursePhaseIndex(null);
     setCourseFinishedAt(null);
     audioPausedByBreakRef.current = false;
+    lastCountdownRef.current = { phaseIndex: null, sec: null };
     setRemaining(cfg.mode === 'course2h' ? COURSE_PHASES[0].min * 60 : durationSec);
     stopMusic();
   };
@@ -281,6 +291,18 @@ export default function Pomodoro({ store, onToast }) {
         if (coursePhaseIndex != null) advanceCourse();
         else finish();
         return;
+      }
+      if (coursePhaseIndex != null) {
+        const secLeft = Math.ceil((endAt - Date.now()) / 1000);
+        if (secLeft >= 1 && secLeft <= 10) {
+          const prev = lastCountdownRef.current;
+          if (prev.phaseIndex !== coursePhaseIndex || prev.sec !== secLeft) {
+            lastCountdownRef.current = { phaseIndex: coursePhaseIndex, sec: secLeft };
+            if (isSpeechSupported()) {
+              speak(courseCountdownText(COURSE_PHASES[coursePhaseIndex].type, secLeft)).catch(() => {});
+            }
+          }
+        }
       }
       setTick((t) => t + 1);
     }, 1000);

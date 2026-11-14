@@ -56,6 +56,17 @@ export function courseScheduledEnd(phaseIndex, currentPhaseEndAt) {
   return currentPhaseEndAt + restMs;
 }
 
+// 休憩開始・休憩終了の10秒前からのカウントダウン音声文言。
+// 10秒の時だけ「休憩開始まで10秒前」／「休憩終了まで10秒前」、9秒以降は数字だけを読む
+// （phaseTypeは「今いるフェーズ」の種類＝study中のカウントダウンは休憩開始の予告、
+// break中のカウントダウンは休憩終了の予告になる）。
+export function courseCountdownText(phaseType, sec) {
+  if (sec === 10) {
+    return phaseType === 'study' ? '休憩開始まで10秒前' : '休憩終了まで10秒前';
+  }
+  return String(sec);
+}
+
 export function hhmmOf(ms) {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

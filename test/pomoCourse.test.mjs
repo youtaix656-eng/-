@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   COURSE_PHASES, COURSE_TOTAL_MIN, coursePhaseLabel, coursePhaseOrdinal,
-  catchUpCourse, courseScheduledEnd, hhmmOf,
+  catchUpCourse, courseScheduledEnd, courseCountdownText, hhmmOf,
 } from '../src/lib/pomoCourse.js';
 
 test('COURSE_PHASES：25分勉強＋5分休憩が交互に4回ずつ、合計8コマ', () => {
@@ -77,6 +77,21 @@ test('courseScheduledEnd：コース開始直後（phase0）なら、ちょう�
 test('courseScheduledEnd：最後のコマ（休憩4）なら、そのコマの終わる時刻と同じ', () => {
   const endAt = Date.now() + 5 * 60 * 1000;
   assert.equal(courseScheduledEnd(7, endAt), endAt);
+});
+
+test('courseCountdownText：10秒の時だけ「休憩開始まで10秒前」（勉強中）', () => {
+  assert.equal(courseCountdownText('study', 10), '休憩開始まで10秒前');
+});
+
+test('courseCountdownText：10秒の時だけ「休憩終了まで10秒前」（休憩中）', () => {
+  assert.equal(courseCountdownText('break', 10), '休憩終了まで10秒前');
+});
+
+test('courseCountdownText：9秒以降は数字だけ（勉強中・休憩中どちらも同じ）', () => {
+  for (let sec = 9; sec >= 1; sec--) {
+    assert.equal(courseCountdownText('study', sec), String(sec));
+    assert.equal(courseCountdownText('break', sec), String(sec));
+  }
 });
 
 test('hhmmOf：HH:MM形式で返す', () => {
