@@ -1014,9 +1014,22 @@ export default function AudioMode({
     storage.loadAudioProgress().then((p) => {
       if (!alive) return;
       resumeAudioRef.current = p && typeof p.index === 'number' ? p : null;
+      // 画面を切り替えて戻った・バックグラウンドから復帰した（Androidがタブを回収した等で
+      // 実際にはページが再読み込みされた）場合、「前回の続きから」ダイアログ（resumeFilters）を
+      // 経由しない通常の再訪問でも、直前に読んでいた科目・ジャンル・キーワード・回の絞り込みを
+      // 自動で引き継ぐ（ユーザー指定・2026-11-14「さっきまで再生した音声の記憶が残るように」）。
+      // すでにresumeFiltersで復元済みの時は上書きしない（cameFromResumeRefと同じ判定）。
+      if (!resumeFilters && p && (p.subject || p.genre || p.keyword || p.round)) {
+        setSource('filter');
+        if (p.subject) setFilterSubject(p.subject);
+        if (p.genre) setFilterGenre(p.genre);
+        if (p.keyword) setFilterKeyword(p.keyword);
+        if (p.round) setFilterRound(p.round);
+      }
       setAudioReady(true);
     });
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 計画をエンジンへ（同じ署名なら位置を保持。保存位置があれば続きから）
