@@ -27,7 +27,11 @@ const INDEX_HTML = join(DIST, 'index.html');
 // 同日、mindmapData.jsの動的化・Pomodoro/AuthGateのlazy化等で実測591KB/95KBまで
 // 大幅に下がったため、予算を「これ以上増やさない」ガードレールとして引き下げ直した
 // （実測591KB+今後の余裕で700KB、CSS94KB+余裕で110KB。1MBのままだと再肥大化に気づけない）。
-const MAX_BUNDLE_SIZE = 700 * 1024; // 700KB
+// 2026-11-15、音声学習×連結学習への8件追加（二重符号化・スワイプ操作・あとで調べる・
+// 隙間時間ミニセッション・小休止の選択肢・誤読報告履歴・カレンダー長押し詳細・誤答直後の言い換え）で
+// 実測697KB→703KBとなり700KB予算をわずかに超えたため、710KBへ引き上げた
+// （ガードレールとしての役割は維持。実測+小さな余裕のみで、以前のように大きく余らせない）。
+const MAX_BUNDLE_SIZE = 710 * 1024; // 710KB
 const BUDGET_KB = { js: MAX_BUNDLE_SIZE / 1024, css: 110 };
 
 if (!existsSync(INDEX_HTML)) {

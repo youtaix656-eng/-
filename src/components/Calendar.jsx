@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { phaseForDate, phasesInMonth } from '../data/roadmapPhases.js';
 import { planStudySession, DEFAULT_BASE_RATIO } from '../lib/bufferSession.js';
 import { isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
@@ -92,6 +92,42 @@ export default function Calendar({ store, onToast, onNavigate }) {
     for (const e of audioLog) if (e.kind === 'finish' && e.at) set.add(ymd(new Date(e.at)));
     return set;
   }, [audioLog]);
+  // #56：長押しでその日の音声学習の内訳（科目・回数・件数）を見られるようにする
+  // （audioDoneDaysは「やったか」だけのboolean集合。こちらは集計の中身）。
+  const audioDetailByDay = useMemo(() => {
+    const map = {};
+    for (const e of audioLog) {
+      if (e.kind !== 'finish' || !e.at) continue;
+      const key = ymd(new Date(e.at));
+      if (!map[key]) map[key] = { subjects: new Set(), total: 0, sessions: 0 };
+      if (e.subject) map[key].subjects.add(e.subject);
+      map[key].total += e.n || 0;
+      map[key].sessions += 1;
+    }
+    return map;
+  }, [audioLog]);
+  // 月グリッドの各日セルは配列.map()の中で生成されるため、ここでReact Hookを個別に
+  // 呼ばず（Hooksのルール違反になる）、単一のrefに「今どのキーを長押し中か」だけを持たせる。
+  const cellLongPressRef = useRef({ timer: null, fired: false });
+  const startCellLongPress = (key) => {
+    cellLongPressRef.current.fired = false;
+    if (cellLongPressRef.current.timer) clearTimeout(cellLongPressRef.current.timer);
+    cellLongPressRef.current.timer = setTimeout(() => {
+      cellLongPressRef.current.fired = true;
+      const d = audioDetailByDay[key];
+      if (d) {
+        const subj = d.subjects.size ? Array.from(d.subjects).join('・') : '科目指定なし';
+        onToast(`🎧 ${key}：音声学習 ${d.sessions}回・計${d.total}問（${subj}）`);
+      }
+    }, 550);
+  };
+  const clearCellLongPress = () => {
+    if (cellLongPressRef.current.timer) { clearTimeout(cellLongPressRef.current.timer); cellLongPressRef.current.timer = null; }
+  };
+  const handleCellClick = (key) => {
+    if (cellLongPressRef.current.fired) { cellLongPressRef.current.fired = false; return; }
+    setSelected(key);
+  };
 
   const byDate = useMemo(() => {
     const m = {};
@@ -239,9 +275,15 @@ export default function Calendar({ store, onToast, onNavigate }) {
               key={key}
               className={`cal-cell ${inMonth ? '' : 'dim'} ${isToday ? 'today' : ''} ${isSel ? 'sel' : ''}`}
               style={ph ? { backgroundColor: hexToRgba(ph.color, inMonth ? 0.24 : 0.12) } : undefined}
-              onClick={() => setSelected(key)}
+              onPointerDown={() => startCellLongPress(key)}
+              onPointerUp={clearCellLongPress}
+              onPointerLeave={clearCellLongPress}
+              onPointerCancel={clearCellLongPress}
+              onContextMenu={(e) => e.preventDefault()}
+              onClick={() => handleCellClick(key)}
             >
               {ph && <span className="cal-phase" style={{ background: ph.color }} title={`フェーズ${ph.no} ${ph.label}`} />}
+              {audioDetailByDay[key] && <span className="cal-audio-mark" title="音声学習の記録あり（長押しで詳細）">🎧</span>}
               <span className={`cal-date ${d.getDay() === 0 ? 'sun' : ''} ${d.getDay() === 6 ? 'sat' : ''}`}>
                 {d.getDate()}
               </span>
