@@ -19,9 +19,15 @@ const NAV_WORDS = {
   next: ['つぎ', '次へ', '次', 'ネクスト'],
   prev: ['まえ', '前へ', '前', 'もどって', '戻って'],
   stop: ['とめて', '止めて', 'ストップ', '停止'],
+  // 盲目の受験生からの改善提案#9（2026-11-14）：詳細設定アコーディオンを画面を見ずに
+  // 開くための声コマンド（AudioMode.jsxのsetDetailSettingsOpen(true)へ配線）。
+  openSettings: ['詳細設定を開いて', '詳細設定を開けて', '設定を開いて'],
 };
+// 盲目の受験生からの改善提案#7（2026-11-14）：問題番号バー（ドラッグ操作）の代わりに、
+// 「53問目へ」のように数字＋「問目／番へ／問へ」で直接その番号へ飛べるようにする。
+const SEEK_RE = /(\d+)\s*(?:問目|番へ|問へ)/;
 
-// 聞き取ったテキストから、自己採点（grade）か操作（nav）かを判定する。
+// 聞き取ったテキストから、自己採点（grade）か操作（nav）か直接ジャンプ（seek）かを判定する。
 // customWordsは本人が登録した言い回し（settings.voiceCommandWords、新規#7）。
 // [{ word, type:'grade'|'nav', kind }] の形で、組み込みの言葉より先に判定する
 // （本人が「分かった」等を追加登録した時、組み込みの言葉とぶつかっても本人の登録を優先する）。
@@ -31,6 +37,11 @@ export function parseVoiceCommand(text, customWords = []) {
   if (!t) return null;
   for (const c of customWords || []) {
     if (c.word && t.includes(c.word)) return { type: c.type, kind: c.kind };
+  }
+  const seekMatch = t.match(SEEK_RE);
+  if (seekMatch) {
+    const n = parseInt(seekMatch[1], 10);
+    if (Number.isFinite(n) && n >= 1) return { type: 'seek', n };
   }
   // allDoneは「できた」を含む言い回しなのでGRADE_WORDSより先に判定する。
   if (NAV_WORDS.allDone.some((w) => t.includes(w))) return { type: 'nav', kind: 'allDone' };

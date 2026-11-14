@@ -31,7 +31,7 @@ const INDEX_HTML = join(DIST, 'index.html');
 // 隙間時間ミニセッション・小休止の選択肢・誤読報告履歴・カレンダー長押し詳細・誤答直後の言い換え）で
 // 実測697KB→703KBとなり700KB予算をわずかに超えたため、710KBへ引き上げた
 // （ガードレールとしての役割は維持。実測+小さな余裕のみで、以前のように大きく余らせない）。
-const MAX_BUNDLE_SIZE = 710 * 1024; // 710KB
+const MAX_BUNDLE_SIZE = 716 * 1024; // 716KB（2026-11-14：盲目の受験生向けアクセシビリティ10件の追加で実測709KBとなり、710KB予算にほぼ余裕が無くなったため引き上げ）
 const BUDGET_KB = { js: MAX_BUNDLE_SIZE / 1024, css: 110 };
 
 if (!existsSync(INDEX_HTML)) {

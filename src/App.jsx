@@ -206,6 +206,30 @@ export default function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.loaded]);
+  // 盲目の受験生からの改善提案#10：モーダル系の画面はフォーカスを自動で先頭へ移し、
+  // 画面を見ずにタブ移動だけで全部読み上げ・選択できるようにする。
+  const resumeDialogRef = useRef(null);
+  // useEffect/useLayoutEffectのどちらでも、このダイアログが出た直後の1回目の呼び出しでは
+  // resumeDialogRef.current がまだ null のまま（実機QAで発見。この巨大なApp.jsxには
+  // 他にも多数の副作用が同じタイミングで走るため、コミットの反映順が単純には読めない）。
+  // rAFで次の描画フレームまで待ってから.focus()するほうが確実で、他のUIライブラリでも
+  // モーダルの自動フォーカスに使われる定番の回避策。
+  useEffect(() => {
+    if (!resumeCandidate) return;
+    // この巨大なApp.jsxでは他の副作用と重なるためか、refへの反映がかなり遅れることが
+    // 実機QAで分かった（rAFを20フレーム待っても反映されないことがあった）。
+    // refを待つのではなく、実際にDOMへ現れた瞬間をMutationObserverで直接捉える方が確実。
+    if (document.querySelector('.modal[role="dialog"]')) {
+      resumeDialogRef.current?.focus();
+      return;
+    }
+    const obs = new MutationObserver(() => {
+      const el = document.querySelector('.modal[role="dialog"]');
+      if (el) { el.focus(); obs.disconnect(); }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [resumeCandidate]);
   const resumeDialogYes = () => {
     const c = resumeCandidate;
     if (!c) return;
@@ -1036,7 +1060,9 @@ export default function App() {
         )}
       </main>
 
-      {toast && <div className="toast">{toast}</div>}
+      {/* 盲目の受験生からの改善提案（2026-11-14・ユーザー承認済み）#1：トーストは画面にしか
+          出ておらず、スクリーンリーダーには伝わらなかった。role/aria-liveで読み上げさせる。 */}
+      {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
 
       {/* 画面ロック中の南京錠マーク（ユーザー指定）：常に画面上に表示し、長押し（0.6秒）
           だけで解除できる。タップでは解除しない（誤って一瞬触れただけで解除されないように）。
@@ -1059,8 +1085,16 @@ export default function App() {
           機能名・ジャンル名・キーワード名・残り◯問で確認する。 */}
       {resumeCandidate && (
         <div className="modal-backdrop" onClick={resumeDialogNo}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">前回の続きから</h3>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resume-dialog-title"
+            tabIndex={-1}
+            ref={resumeDialogRef}
+          >
+            <h3 className="modal-title" id="resume-dialog-title">前回の続きから</h3>
             <p>①科目名：{resumeCandidate.subject || 'なし'}</p>
             <p>②ジャンル名：{resumeCandidate.genre || 'なし'}</p>
             <p>③キーワード名：{resumeCandidate.keyword || 'なし'}</p>

@@ -362,6 +362,10 @@ export default function AudioMode({
   // 👆 画面を大きくタップして自己採点（タップ＝○・長押し＝✕）
   const [wideTapOn, setWideTapOn] = useState(false);
   const wideTapDownRef = useRef(0);
+  // 盲目の受験生からの改善提案#3：独自のスワイプ操作（左右で前へ/次へ）は、
+  // スクリーンリーダー自体のスワイプ操作（VoiceOver/TalkBack等）とぶつかる可能性がある。
+  // 自動検知はできないため、手動でオフにできるようにする（既定はON＝今までどおり）。
+  const [swipeNavOn, setSwipeNavOn] = useState(true);
   // 🎙️ 声で自己採点・操作（○/△/✕・次へ/前へ/止めて）。既定オフのオプトイン。
   const [voiceControlOn, setVoiceControlOn] = useState(false);
   // 🎧 イヤホン接続を確認できた時だけ自動再生する
@@ -380,6 +384,22 @@ export default function AudioMode({
   // #43：次のセットまでの小休止を選べる（続ける/1分/5分/手動）。トーストで知らせるだけだった
   // ものを、実際に選べるバナーに変える。
   const [breakPending, setBreakPending] = useState(false);
+  // 盲目の受験生からの改善提案#10：休憩バナーが出た時、フォーカスを自動で先頭の
+  // ボタンへ移す（画面を見ずにタブ移動だけで選べるように）。
+  const breakFirstBtnRef = useRef(null);
+  // App.jsxの前回の続きからダイアログで実機QAで発見した問題と同じ対処：refへの反映を
+  // 待つのではなく、実際にDOMへ現れた瞬間をMutationObserverで直接捉える方が確実。
+  useEffect(() => {
+    if (!breakPending) return;
+    const sel = '[role="region"][aria-label="休憩の選択"] button';
+    if (document.querySelector(sel)) { breakFirstBtnRef.current?.focus(); return; }
+    const obs = new MutationObserver(() => {
+      const el = document.querySelector(sel);
+      if (el) { el.focus(); obs.disconnect(); }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [breakPending]);
   const breakTimerRef = useRef(null);
   useEffect(() => () => { if (breakTimerRef.current) clearTimeout(breakTimerRef.current); }, []);
   // このセッションで自己採点した件数（声で読み上げる正答率の算出に使う。採点していなければnull扱い）
@@ -583,6 +603,10 @@ export default function AudioMode({
   const [readSide, setReadSide] = useState('both'); // 読み上げる面: both | front | back
   const [readChoices, setReadChoices] = useState(false); // 表で選択肢（4択）も読む
   const [recallMode, setRecallMode] = useState(false); // 記憶定着（想起→答え→反復）
+  // 盲目の受験生からの改善提案#2：画面上の二重符号化（キーワードの反転表示）は声には
+  // 乗らない。キーワードの前後に読点を入れて一拍おき、声の調子（リズム）だけで
+  // 「ここが大事な語」と伝わるようにする（既定オフ。読み方自体が変わるため選べるように）。
+  const [keywordEmphasisOn, setKeywordEmphasisOn] = useState(false);
 
   const [loop, setLoop] = useState(false);
   const [sleepMin, setSleepMin] = useState(0);
@@ -612,10 +636,29 @@ export default function AudioMode({
   const [pfTerm, setPfTerm] = useState('');
   const [pfReading, setPfReading] = useState('');
 
+  // 盲目の受験生からの改善提案#2：キーワードの前後に読点を入れて一拍おくだけの
+  // 純粋な文字列変換（audioEngine.js側の読み上げループやpronunciationの仕組みは変えない。
+  // どちらも最終的には1本の文字列を読むだけなので、安全に重ねられる）。
+  const emphasizeForSpeech = (text, tags) => {
+    if (!keywordEmphasisOn || !text || !Array.isArray(tags) || !tags.length) return text;
+    const uniq = Array.from(new Set(tags.filter((tg) => tg && tg.length >= 2))).sort((a, b) => b.length - a.length);
+    if (!uniq.length) return text;
+    // 複数のタグを順番にsplit/joinすると、短いタグが長いタグの一部（例「橈骨神経」の中の
+    // 「神経」）に重ねて当たり、前に入れたはずの読点が食われて壊れることがある（実際に発生を
+    // 確認した）。1本の正規表現にまとめて1回だけ置換すれば、同じ位置の重複当たりを防げる
+    // （長いタグを先に試すよう並べ替え済みなので、同じ開始位置では長い方が優先される）。
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(uniq.map(esc).join('|'), 'g');
+    return text.replace(re, (m) => `、${m}、`)
+      .replace(/、{2,}/g, '、')
+      .replace(/^、/, '')
+      .replace(/([。、])、/g, '$1')
+      .replace(/、([。、])/g, '$1');
+  };
   // ---- 読み上げ文の部品 ----
   const questionText = (q) => {
     if (!q) return '';
-    if (q.question) return q.question;
+    if (q.question) return emphasizeForSpeech(q.question, effectiveTags(q, links));
     if (q.image) return '図を見て答える問題です。画面をご確認ください。';
     return '';
   };
@@ -630,14 +673,14 @@ export default function AudioMode({
     const correct = q.choices[q.answer];
     const label = q.type === 'ox' ? '正解は、' : `正解は、${q.answer + 1}番、`;
     let t = `${label}${correct}。`;
-    if (q.explanation) t += ` 解説。${explanationLabel(q)}${q.explanation}`;
+    if (q.explanation) t += ` 解説。${explanationLabel(q)}${emphasizeForSpeech(q.explanation, effectiveTags(q, links))}`;
     return t;
   };
   const answerTextFor = (q, choices, answerIdx) => {
     const correct = choices[answerIdx];
     const label = q.type === 'ox' ? '正解は、' : `正解は、${answerIdx + 1}番、`;
     let t = `${label}${correct}。`;
-    if (q.explanation) t += ` 解説。${explanationLabel(q)}${q.explanation}`;
+    if (q.explanation) t += ` 解説。${explanationLabel(q)}${emphasizeForSpeech(q.explanation, effectiveTags(q, links))}`;
     return t;
   };
   const shortStem = (q) => {
@@ -1051,7 +1094,7 @@ export default function AudioMode({
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
@@ -1109,6 +1152,7 @@ export default function AudioMode({
   // 縦方向の移動（ページスクロール）の方が大きい時は無視し、画面スクロールの邪魔をしない。
   const swipeStartRef = useRef(null);
   const onPlayerTouchStart = (e) => {
+    if (!swipeNavOn) return;
     const t = e.touches && e.touches[0];
     if (!t) return;
     swipeStartRef.current = { x: t.clientX, y: t.clientY };
@@ -1116,6 +1160,7 @@ export default function AudioMode({
   const onPlayerTouchEnd = (e) => {
     const start = swipeStartRef.current;
     swipeStartRef.current = null;
+    if (!swipeNavOn) return;
     const t = e.changedTouches && e.changedTouches[0];
     if (!start || !t) return;
     const dx = t.clientX - start.x;
@@ -1350,6 +1395,10 @@ export default function AudioMode({
   // 「全部できた」（新規#9）は残りをまとめて○にしてそこで終える。
   useEffect(() => {
     if (!voiceControlOn || !current || phase !== PHASES.ANSWER) return;
+    // 盲目の受験生からの改善提案#4：既存の合図音（beepOn、フェーズ切り替え用）とは別に、
+    // 「今、聞いている最中」であることをはっきり伝える専用の合図音（高い二連音）を鳴らす。
+    // 声コマンド自体が明示的なオプトインの機能なので、この合図はbeepOnの設定に関わらず鳴らす。
+    beep(2, 1320, 60);
     const handle = listenOnce({
       onResult: (text) => {
         const cmd = parseVoiceCommand(text, voiceCommandWords);
@@ -1359,6 +1408,10 @@ export default function AudioMode({
         else if (cmd.type === 'nav' && cmd.kind === 'prev') skip(-1);
         else if (cmd.type === 'nav' && cmd.kind === 'stop') engine.stop();
         else if (cmd.type === 'nav' && cmd.kind === 'allDone') gradeRestAsMaru();
+        // 盲目の受験生からの改善提案#9：声で詳細設定アコーディオンを開く。
+        else if (cmd.type === 'nav' && cmd.kind === 'openSettings') { setDetailSettingsOpen(true); onToast?.('🔧 詳細設定を開きました'); }
+        // 盲目の受験生からの改善提案#7：「◯問目へ」で問題番号バーと同じ絶対位置ジャンプ。
+        else if (cmd.type === 'seek') { engine.seekTo(cmd.n - 1); onToast?.(`${cmd.n} / ${total} へ移動しました`); }
       },
       onError: () => {},
     });
@@ -1911,6 +1964,18 @@ export default function AudioMode({
     setPfTerm('');
     setPfReading('');
     onToast?.(`「${term}」→「${reading}」を登録しました`);
+  };
+  // 盲目の受験生からの改善提案#8：文字入力が必要な設定（読み方の手動補正等）を、
+  // 既存のlistenOnce（声コマンドと同じ仕組み）で声でも埋められるようにする。
+  // customWords/parseVoiceCommandを経由せず、聞き取った生のテキストをそのまま使う
+  // だけなので、voiceCommand.js側に新しい関数は要らない。
+  const dictateInto = (setter, label) => {
+    if (!isVoiceCommandSupported()) { onToast?.('この端末・ブラウザは音声入力に対応していません'); return; }
+    onToast?.(`🎙️ ${label}を話してください`);
+    listenOnce({
+      onResult: (text) => { if (text) setter(text.trim()); },
+      onError: () => onToast?.('聞き取れませんでした'),
+    });
   };
   const removePronunciationFix = (term) => {
     const cur = { ...(settings.pronunciationFixes || {}) };
@@ -2644,10 +2709,10 @@ export default function AudioMode({
             </div>
             {/* #43：60問区切りの小休止を選べる（以前はトーストで知らせるだけだった）。 */}
             {breakPending && (
-              <div className="card" style={{ marginTop: 10 }}>
+              <div className="card" style={{ marginTop: 10 }} role="region" aria-label="休憩の選択" tabIndex={-1}>
                 <div className="section-label" style={{ marginTop: 0 }}>✋ {BREAK_EVERY}問区切りです。ひと休みしましょう</div>
                 <div className="btn-row" style={{ flexWrap: 'wrap' }}>
-                  <button className="btn accent sm" onClick={() => resumeFromBreak(0)}>▶ すぐ続ける</button>
+                  <button ref={breakFirstBtnRef} className="btn accent sm" onClick={() => resumeFromBreak(0)}>▶ すぐ続ける</button>
                   <button className="btn ghost sm" onClick={() => resumeFromBreak(1)}>1分後に自動再開</button>
                   <button className="btn ghost sm" onClick={() => resumeFromBreak(5)}>5分後に自動再開</button>
                   <button className="btn ghost sm" onClick={() => setBreakPending(false)}>🏁 ここで終了する（あとで続きから）</button>
@@ -2671,7 +2736,11 @@ export default function AudioMode({
                 onPointerDown={() => { wideTapDownRef.current = Date.now(); }}
                 onPointerUp={() => {
                   const dt = Date.now() - (wideTapDownRef.current || Date.now());
-                  gradeCurrent(dt >= 600 ? 'batsu' : 'maru');
+                  const isBatsu = dt >= 600;
+                  // 盲目の受験生からの改善提案#5：見えない状態で採点すると、実際に
+                  // どちらが記録されたか確認する手段が無かった。○＝上昇音・✕＝下降音で区別する。
+                  beep(1, isBatsu ? 420 : 1200, 70);
+                  gradeCurrent(isBatsu ? 'batsu' : 'maru');
                 }}
               >
                 👆 タップ＝○　長押し（0.6秒）＝✕
@@ -2781,7 +2850,13 @@ export default function AudioMode({
             {current && pfQuickOpen && (
               <div className="kw-add" style={{ marginTop: 8, flexWrap: 'wrap' }}>
                 <input type="text" value={pfTerm} onChange={(e) => setPfTerm(e.target.value)} placeholder="誤って読まれた言葉" />
+                {isVoiceCommandSupported() && (
+                  <button className="btn ghost sm" aria-label="誤って読まれた言葉を声で入力" onClick={() => dictateInto(setPfTerm, '誤って読まれた言葉')}>🎙️</button>
+                )}
                 <input type="text" value={pfReading} onChange={(e) => setPfReading(e.target.value)} placeholder="正しい読み方（ひらがな）" />
+                {isVoiceCommandSupported() && (
+                  <button className="btn ghost sm" aria-label="正しい読み方を声で入力" onClick={() => dictateInto(setPfReading, '正しい読み方')}>🎙️</button>
+                )}
                 <button className="btn sm primary" onClick={() => { addPronunciationFix(); setPfQuickOpen(false); }}>登録</button>
               </div>
             )}
@@ -3132,16 +3207,17 @@ export default function AudioMode({
           <Opt
             on={voiceControlOn}
             onToggle={() => setVoiceControlOn((v) => !v)}
-            title="🎙️ 声で自己採点・操作する（○/△/✕・次へ/前へ/止めて/全部できた）"
-            desc="正解・解説を読み終えたタイミングで一度だけ聞き取ります。「全部できた」で残りをまとめて○にして終えられます。この端末のブラウザの音声認識機能を使うため、認識のために音声データが音声認識サーバーへ送られる場合があります（端末内保存方針の明示的な例外）。スピーカー再生中はマイクに読み上げ自体が混ざり誤認識することがあるため、イヤホン使用がおすすめです。"
+            title="🎙️ 声で自己採点・操作する（○/△/✕・次へ/前へ/止めて/全部できた/◯問目へ/詳細設定を開いて）"
+            desc="正解・解説を読み終えたタイミングで一度だけ聞き取ります。「全部できた」で残りをまとめて○に、「53問目へ」で直接その番号へ、「詳細設定を開いて」で詳細設定を開けます。この端末のブラウザの音声認識機能を使うため、認識のために音声データが音声認識サーバーへ送られる場合があります（端末内保存方針の明示的な例外）。スピーカー再生中はマイクに読み上げ自体が混ざり誤認識することがあるため、イヤホン使用がおすすめです。"
             disabled={!isVoiceCommandSupported()}
           />
           {!isVoiceCommandSupported() && (
             <p className="inline-note">この端末・ブラウザは音声認識（SpeechRecognition）に対応していません。</p>
           )}
-          {/* 改善案i1：合図音と声コマンドを組み合わせるとタイミングが分かりやすいことを案内 */}
-          {voiceControlOn && !beepOn && (
-            <p className="inline-note">💡 上の「合図音」も一緒にONにすると、聞き取るタイミング（答えが来た直後）が分かりやすくなります。</p>
+          {/* 盲目の受験生からの改善提案#4：聞き取り開始時は専用の合図音（高い二連音）が
+              beepOnの設定に関わらず鳴るようになったため、案内文を更新した。 */}
+          {voiceControlOn && (
+            <p className="inline-note">💡 聞き取りが始まる直前に高い二連の合図音が鳴ります（この合図は上の「合図音」設定とは別で、常に鳴ります）。</p>
           )}
           {/* 新規#7：声コマンドの言い回しを自分で登録する辞書 */}
           {voiceControlOn && (
@@ -3151,7 +3227,7 @@ export default function AudioMode({
                 <ul className="pf-list" style={{ listStyle: 'none', padding: 0, margin: '0 0 8px' }}>
                   {voiceCommandWords.map((w, i) => (
                     <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                      <span>「{w.word}」→ {w.type === 'grade' ? { maru: '○', sankaku: '△', batsu: '✕' }[w.kind] : { next: '次へ', prev: '前へ', stop: '止めて', allDone: '全部できた' }[w.kind]}</span>
+                      <span>「{w.word}」→ {w.type === 'grade' ? { maru: '○', sankaku: '△', batsu: '✕' }[w.kind] : { next: '次へ', prev: '前へ', stop: '止めて', allDone: '全部できた', openSettings: '詳細設定を開く' }[w.kind]}</span>
                       <button
                         className="btn ghost sm"
                         onClick={() => updateSettings({ voiceCommandWords: voiceCommandWords.filter((_, j) => j !== i) })}
@@ -3177,6 +3253,7 @@ export default function AudioMode({
                   <option value="prev">◀ 前へ</option>
                   <option value="stop">■ 止めて</option>
                   <option value="allDone">全部できた</option>
+                  <option value="openSettings">詳細設定を開く</option>
                 </select>
                 <button
                   className="btn sm primary"
@@ -3305,6 +3382,21 @@ export default function AudioMode({
                 {snap.finished && audioGenreBreakdown && audioGenreBreakdown.length > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <div className="section-label" style={{ marginTop: 0 }}>ジャンル別正答率（苦手順）</div>
+                    {/* 盲目の受験生からの改善提案#6：色分けバー（赤黄緑）は声だけでは伝わらない
+                        ため、同じ内訳を読み上げるボタンを添える。 */}
+                    <button
+                      className="btn ghost sm"
+                      style={{ marginBottom: 6 }}
+                      onClick={() => {
+                        cancelSpeech();
+                        const txt = audioGenreBreakdown
+                          .map(([g, s]) => `${g}、${Math.round((s.correct / s.total) * 100)}パーセント、${s.total}問中${s.correct}問正解`)
+                          .join('。 ');
+                        speak(`ジャンル別正答率、苦手順です。${txt}。`, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
+                      }}
+                    >
+                      🔊 ジャンル別正答率を読み上げる
+                    </button>
                     {/* 学習(10・60・300・900)と同じ色付きバー（赤=低い・黄=中・緑=高い）で
                         苦手度を一目で見せる（以前は文字だけだった）。 */}
                     <ul className="genre-stats">
@@ -3474,6 +3566,16 @@ export default function AudioMode({
               title="🧠 記憶定着モード（想起→答え→反復）"
               desc="問題のあと「答えは？」と促して“思い出す間”を長めにとり、正解の核心をもう一度読みます。手が使えなくても記憶に残りやすくなります。"
             />
+            {/* 盲目の受験生からの改善提案#3（2026-11-14）：スワイプ操作自体は「間違えた問題」
+                限定ではなくどのモードのプレーヤーにも常に効くため、オフにする設定も同じく
+                常に見える位置（読み上げる面カード）に置く（以前は「間違えた問題」専用カードの
+                中にあり、他モードでは辿り着けなかった。実機QAで発見・修正）。 */}
+            <Opt
+              on={swipeNavOn}
+              onToggle={() => setSwipeNavOn((v) => !v)}
+              title="👉 左右スワイプで前へ／次へ"
+              desc="スクリーンリーダー（VoiceOver・TalkBack等）自身のスワイプ操作とぶつかる場合はオフにしてください（自動では判別できません）。"
+            />
           </div>
 
           {/* 2026-11-08追加：連結学習の工夫・再生モード（繰り返し/シャッフル/スリープ/今日の目標）・
@@ -3505,6 +3607,12 @@ export default function AudioMode({
               onToggle={() => setReadHint((v) => !v)}
               title="答えの前にヒントを読む"
               desc="思い出すきっかけ（キーワード）を先に読み上げます。思い出す力が鍛えられます。"
+            />
+            <Opt
+              on={keywordEmphasisOn}
+              onToggle={() => setKeywordEmphasisOn((v) => !v)}
+              title="🔊 キーワードを声でも強調する"
+              desc="画面の反転表示（二重符号化）は声には乗りません。キーワードの前後に一拍おいて、声だけでも「ここが大事な語」と伝わるようにします。"
             />
             <Opt
               on={reverse}
@@ -3707,6 +3815,9 @@ export default function AudioMode({
                 onChange={(e) => setPfTerm(e.target.value)}
                 placeholder="誤読される言葉（例：経穴）"
               />
+              {isVoiceCommandSupported() && (
+                <button className="btn ghost sm" aria-label="誤読される言葉を声で入力" onClick={() => dictateInto(setPfTerm, '誤読される言葉')}>🎙️</button>
+              )}
               <input
                 type="text"
                 value={pfReading}
@@ -3714,6 +3825,9 @@ export default function AudioMode({
                 onKeyDown={(e) => e.key === 'Enter' && addPronunciationFix()}
                 placeholder="正しい読み方（例：けいけつ）"
               />
+              {isVoiceCommandSupported() && (
+                <button className="btn ghost sm" aria-label="正しい読み方を声で入力" onClick={() => dictateInto(setPfReading, '正しい読み方')}>🎙️</button>
+              )}
               <button className="btn sm primary" onClick={addPronunciationFix}>追加</button>
             </div>
             {/* #52：誤読報告の履歴一覧（辞書は上書きされるため、いつ何を報告したかは別に残す） */}
