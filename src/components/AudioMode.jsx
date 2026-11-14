@@ -1294,7 +1294,13 @@ export default function AudioMode({
     onToast?.(`✋ ${delayMin}分後に自動で再生を再開します`);
     breakTimerRef.current = setTimeout(() => {
       breakTimerRef.current = null;
-      togglePlay();
+      // 待っている間にユーザーが自分で▶を押して先に再開しているかもしれない。
+      // ここで無条件にtogglePlay()を呼ぶと、そのtogglePlay自身は「予約した時点」の
+      // 古いplaying値（false）を閉じ込めたクロージャのため、実際にはもう再生中なのに
+      // 「止まっている」と誤認してengine.toggle()を呼び、結果として逆に止めてしまう
+      // （実装時に気づいて修正）。実際のエンジンの今の状態を直接見て、まだ本当に
+      // 止まっている時だけ再開する。
+      if (!engine.getSnapshot().playing) togglePlay();
     }, delayMin * 60000);
   };
 
@@ -1802,7 +1808,10 @@ export default function AudioMode({
       if (lastForQ && lastForQ.selfKind === 'batsu' && !rephrasedOnceRef.current.has(q.id)) {
         rephrasedOnceRef.current.add(q.id);
         setHadWrongStreak(true);
-        const comp = mindmapData ? (mindmapData.comparisonsForKeyword(curTags[0] || '')[0] || null) : null;
+        // comparisonsForKeywordは `c.title.includes(kw)` を含む判定のため、空文字を渡すと
+        // 「すべての文字列に空文字は含まれる」でCOMPARISONS全件がヒットしてしまう
+        // （curTags[0]が無い問題で、無関係な対比が紛れ込むバグになるところだった。実装時に発見）。
+        const comp = mindmapData && curTags[0] ? (mindmapData.comparisonsForKeyword(curTags[0])[0] || null) : null;
         const others = comp ? (comp.members || []).filter((m) => m && !(q.question || '').includes(m)).slice(0, 2) : [];
         const angle = others.length ? `似ている「${others.join('」「')}」とはここが違います。` : '';
         setTimeout(() => {
