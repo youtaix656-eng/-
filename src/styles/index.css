@@ -3260,6 +3260,7 @@ code.block {
 .pomo-playlist-pick { flex: 1; text-align: left; background: none; border: none; color: inherit; font-size: 12px; padding: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pomo-yt-input { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 8px; font-size: 12px; }
 .pomo-hint { font-size: 11px; color: var(--text-mute); margin-top: 6px; }
+.pomo-mode-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .pomo-num-row { display: flex; align-items: center; gap: 4px; }
 .pomo-num-step {
   width: 28px; height: 28px; flex: 0 0 auto; border-radius: var(--radius-sm);

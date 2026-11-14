@@ -21,6 +21,9 @@ import { extractYoutubeId, fetchYoutubeTitle } from '../lib/pomoYoutube.js';
 // （File System Access API対応ブラウザのみ、ファイルを選んだままコピーしない）
 // ③🌐YouTube（動画URLを貼るだけ、音声ファイルは一切保存しない）。
 // 選んだ1曲だけを勉強中にループ再生する点は変えていない（storage.jsのコメント参照）。
+// 2026-11-16、ユーザー指定で「2時間コース」（25分勉強+5分休憩×4回）モードを追加した
+// （cfg.mode='simple'|'course2h'、実際のフェーズ進行・自動一時停止/再開はPomodoro.jsx側。
+// ここに置くのはモードの切り替えUIと、モードごとの説明文だけ）。
 // Pomodoro.jsx（バー自体の設定パネル）とSettings.jsx（バーがオフの間も調整できる場所）の
 // 両方から同じものを使う単一の正。
 const MIN_MIN = 1;
@@ -145,18 +148,40 @@ export function PomodoroConfigFields({ cfg, setCfg, onToast, onMusicChange }) {
     const cur = cfg.durationMin || 25;
     setCfg({ durationMin: Math.min(MAX_MIN, Math.max(MIN_MIN, cur + delta)) });
   };
+  const mode = cfg.mode === 'course2h' ? 'course2h' : 'simple';
   return (
     <>
       <div className="pomo-config-grid">
         <label>
-          タイマーの時間（分）
-          <span className="pomo-num-row">
-            <button type="button" className="pomo-num-step" onClick={() => bump(-STEP_MIN)} aria-label="時間を減らす">－</button>
-            <span style={{ flex: 1, textAlign: 'center', fontWeight: 800, fontSize: 16 }}>{cfg.durationMin || 25}分</span>
-            <button type="button" className="pomo-num-step" onClick={() => bump(STEP_MIN)} aria-label="時間を増やす">＋</button>
+          モード
+          <span className="pomo-mode-row">
+            <button type="button" className={`chip${mode !== 'course2h' ? ' active' : ''}`} onClick={() => setCfg({ mode: 'simple' })}>
+              ⏱️ シンプルタイマー
+            </button>
+            <button type="button" className={`chip${mode === 'course2h' ? ' active' : ''}`} onClick={() => setCfg({ mode: 'course2h' })}>
+              🔔 2時間コース
+            </button>
           </span>
         </label>
       </div>
+      {mode === 'course2h' ? (
+        <p className="pomo-hint">
+          25分勉強＋5分休憩を4回（合計2時間）。休憩に入ると音楽・音声学習を自動で一時停止し、
+          休憩が終わると自動で再開します。2時間経過するとベル音（チリリン）でお知らせし、
+          バーに終了予定時刻を表示します。
+        </p>
+      ) : (
+        <div className="pomo-config-grid">
+          <label>
+            タイマーの時間（分）
+            <span className="pomo-num-row">
+              <button type="button" className="pomo-num-step" onClick={() => bump(-STEP_MIN)} aria-label="時間を減らす">－</button>
+              <span style={{ flex: 1, textAlign: 'center', fontWeight: 800, fontSize: 16 }}>{cfg.durationMin || 25}分</span>
+              <button type="button" className="pomo-num-step" onClick={() => bump(STEP_MIN)} aria-label="時間を増やす">＋</button>
+            </span>
+          </label>
+        </div>
+      )}
       <div className="pomo-music">
         <p className="pomo-hint" style={{ marginTop: 0 }}>
           曲のプレイリスト（複数曲を追加できます。選んだ1曲だけを勉強中にループ再生します）

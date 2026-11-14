@@ -45,6 +45,48 @@ export function beep(times = 1, freq = 880, volumePct = 100, onBlocked) {
   }
 }
 
+// チリリンと鳴る鈴の音（beepの単音とは別に、複数の高い音を短い間隔・倍音つきで
+// 重ねて鳴らす。ポモドーロ「2時間コース」終了時の合図として使う）。
+export function bellRing(volumePct = 100, onBlocked) {
+  if (volumePct <= 0) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const peakGain = Math.max(0.0001, 0.5 * Math.min(100, volumePct) / 100);
+    const partials = [1, 2.4, 3.8]; // 整数倍から少しずらした倍音で金属的な鈴の音色にする
+    const rings = 7;
+    let t = ctx.currentTime;
+    for (let i = 0; i < rings; i++) {
+      const baseFreq = 1800 + (i % 2) * 300;
+      for (const p of partials) {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.frequency.value = baseFreq * p;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(peakGain / p, t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+        o.start(t);
+        o.stop(t + 0.32);
+      }
+      t += 0.16;
+    }
+    const totalMs = (t - ctx.currentTime) * 1000 + 300;
+    setTimeout(() => {
+      if (ctx.state === 'suspended' && !audioBlockWarned) {
+        audioBlockWarned = true;
+        onBlocked?.();
+      }
+      ctx.close().catch(() => {});
+    }, totalMs);
+  } catch (e) {
+    /* noop */
+  }
+}
+
 export function vibrate(pattern) {
   try { navigator.vibrate?.(pattern); } catch (e) { /* noop */ }
 }
