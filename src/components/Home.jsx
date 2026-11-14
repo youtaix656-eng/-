@@ -5,7 +5,9 @@ import { todayFocusSubjects } from '../lib/todayFocus.js';
 import { isNowBestTime } from '../lib/timeOfDay.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
-import { loadQuizProgress, clearQuizProgress, loadSyncMeta, loadExamProgress, clearExamProgress } from '../lib/storage.js';
+import { loadQuizProgress, clearQuizProgress, loadSyncMeta, loadExamProgress, clearExamProgress, loadGlossaryExtra, loadGlossaryRemovedIds } from '../lib/storage.js';
+import { buildTocEntries, filterToc } from '../data/toc.js';
+import { effectiveGlossary } from '../data/glossaryTerms.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import { maruStatusList, excludeMastered, maruSubjectBreakdown, lastMaruReviewAt } from '../lib/maruPool.js';
 import { phaseForDate, upcomingPhaseChange, parseMixRatio, ROADMAP_PHASES } from '../data/roadmapPhases.js';
@@ -89,7 +91,7 @@ function fmtRemainTime(sec) {
 
 const SYNC_STALE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
 
-export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz, onQuickReview, onGoAudioReview }) {
+export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, onInstall, onJumpToRoadmapLevel, onStartSubjectQuiz, onQuickReview, onGoAudioReview, onOpenGlossaryTerm }) {
   const { questions, history, reviewQuestions, dueReviewQuestions, session, unread, settings, srs, cloudSyncStatus, reviewZeroLog, examResults } = store;
 
   // 直近の同期試行が失敗続きでも、実際に最後に成功したのがいつかを別途持っておく
@@ -100,6 +102,26 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
     if (!settings.googleDriveAutoSync) return;
     loadSyncMeta().then((m) => setLastSuccessfulSyncAt(m?.updatedAt || null));
   }, [settings.googleDriveAutoSync, cloudSyncStatus]);
+
+  // 辞書スペース（ホーム、模試の横）：用語集（glossary）を使った簡易検索ボックス。
+  // 承認済みの候補追加分（glossaryExtra）・削除分（removedIds）もToc.jsxと同じ単一の正
+  // （effectiveGlossary）経由で反映する（本体データ=GLOSSARY_TERMSだけを見ると
+  // 候補フローで増えた用語がここでは検索できない、という食い違いを避ける）。
+  const [dictExtra, setDictExtra] = useState([]);
+  const [dictRemoved, setDictRemoved] = useState([]);
+  useEffect(() => {
+    Promise.all([loadGlossaryExtra(), loadGlossaryRemovedIds()]).then(([extra, removed]) => {
+      setDictExtra(extra);
+      setDictRemoved(removed);
+    });
+  }, []);
+  const dictEntries = useMemo(() => buildTocEntries(effectiveGlossary(dictExtra, dictRemoved)), [dictExtra, dictRemoved]);
+  const [dictQuery, setDictQuery] = useState('');
+  const dictResults = useMemo(
+    () => (dictQuery.trim() ? filterToc(dictEntries, { query: dictQuery }).slice(0, 4) : []),
+    [dictEntries, dictQuery]
+  );
+
   const overall = useMemo(() => overallStats(history), [history]);
   const level = estimateLevel({ srs, history });
   const focusSubjects = useMemo(() => {
@@ -900,6 +922,38 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           <span className="title">模擬試験</span>
           <span className="desc">本番想定の問題数・制限時間で通し演習。</span>
         </button>
+
+        <div className="menu-item dict-space">
+          <span className="ico">📔</span>
+          <span className="title">辞書</span>
+          <input
+            type="text"
+            className="dict-input"
+            value={dictQuery}
+            onChange={(e) => setDictQuery(e.target.value)}
+            placeholder="用語を検索"
+            aria-label="辞書で用語を検索"
+          />
+          {dictQuery.trim() === '' && (
+            <span className="desc">用語集の中から、気になる言葉をその場で調べられます。</span>
+          )}
+          {dictQuery.trim() !== '' && dictResults.length === 0 && (
+            <button type="button" className="dict-empty" onClick={() => onOpenGlossaryTerm?.(dictQuery)}>
+              見つかりませんでした。用語集で探す →
+            </button>
+          )}
+          {dictResults.length > 0 && (
+            <ul className="dict-results">
+              {dictResults.map((e) => (
+                <li key={e.id}>
+                  <button type="button" onClick={() => onOpenGlossaryTerm?.(e.title)}>
+                    {e.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <button className="menu-item wide featured" onClick={() => onNavigate('analytics')}>
           <span className="ico">📈</span>

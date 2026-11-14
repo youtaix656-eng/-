@@ -703,6 +703,7 @@ export default function App() {
               setAudioReview(true);
               setView('audio');
             }}
+            onOpenGlossaryTerm={openGlossaryTerm}
           />
         );
       case 'quiz':
