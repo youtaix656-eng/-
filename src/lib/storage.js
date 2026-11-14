@@ -352,25 +352,69 @@ export const loadPomoMusic = () => read(KEYS.pomoMusic, null);
 export const savePomoMusic = (blob) => write(KEYS.pomoMusic, blob);
 export const clearPomoMusic = () => remove(KEYS.pomoMusic);
 
-// ---- ポモドーロの曲プレイリスト（複数曲、Blob） ----
+// ---- ポモドーロの曲プレイリスト（複数曲） ----
 // 2026-11-14、ユーザー指定で「曲選択のところにプレイリストを作りたい。選択したら
 // 音楽が表示されるようにしたい」のため、単曲（pomoMusic）から複数曲へ拡張したもの。
-// playlist = [{id, name, blob}]（追加順）。この中から選んだ1曲（settings.pomodoro.
-// activeSongId）だけを勉強中にループ再生する——複数曲を自動で順に流す仕組みは持たない
-// （2026-11-08の「シャッフルは持たない」と同じ考え方で、常に「今選んでいる1曲」だけが
-// 流れる。オートアドバンスを足すとその考え方と矛盾するため、あえて増やさなかった）。
+// 2026-11-15、ユーザー指定で「YouTubeか、端末内の音楽を取り込む・また接続して選択
+// できるようにしたい」のため、1曲ごとに3種類の入力元（kind）を持てるよう拡張した：
+//   'file'       取り込む。File/Blobの実体をIndexedDBへコピーして持つ（既存の方式）。
+//   'filehandle' 接続する。File System Access API（対応ブラウザのみ）で選んだ
+//                FileSystemFileHandleだけを持ち、ファイル本体はコピーしない
+//                （再生時に毎回`handle.getFile()`で読む。許可が切れていたら
+//                再度「選び直す」操作（ユーザー操作＝ジェスチャー）で許可を取り直す）。
+//   'youtube'    YouTubeの動画（音声ファイルは一切保存せず、動画IDとURLだけを持つ。
+//                再生時にYouTube側から読み込む——このアプリの「`src/lib`は
+//                ネットワークに触れない」という既定方針の、ユーザーが自分でYouTubeの
+//                URLを貼った時だけ発生する明示的な例外）。
+// playlist = [{id, kind, name, blob?, handle?, videoId?, url?}]（追加順）。
+// この中から選んだ1曲（settings.pomodoro.activeSongId）だけを勉強中にループ再生する
+// ——複数曲を自動で順に流す仕組みは持たない（2026-11-08の「シャッフルは持たない」と
+// 同じ考え方で、常に「今選んでいる1曲」だけが流れる。オートアドバンスを足すとその
+// 考え方と矛盾するため、あえて増やさなかった）。
+// 古いデータ（kindを持たない）はnormalizePomoSongがkind:'file'として読む。
 const POMO_PLAYLIST_CAP = 30;
-export const loadPomoPlaylist = () => read(KEYS.pomoPlaylist, []);
-export async function addPomoPlaylistSongs(files) {
+function genPomoId() {
+  return 'pm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function normalizePomoSong(s) {
+  return s.kind ? s : { ...s, kind: 'file' };
+}
+export async function loadPomoPlaylist() {
+  const list = await read(KEYS.pomoPlaylist, []);
+  return list.map(normalizePomoSong);
+}
+async function appendPomoPlaylist(entries) {
   const list = await loadPomoPlaylist();
-  const added = files.map((f) => ({
-    id: 'pm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-    name: f.name || '（名前未取得の曲）',
-    blob: f,
-  }));
-  const next = [...list, ...added].slice(-POMO_PLAYLIST_CAP);
+  const next = [...list, ...entries].slice(-POMO_PLAYLIST_CAP);
   await write(KEYS.pomoPlaylist, next);
   return next;
+}
+export async function addPomoPlaylistFiles(files) {
+  return appendPomoPlaylist(files.map((f) => ({
+    id: genPomoId(),
+    kind: 'file',
+    name: f.name || '（名前未取得の曲）',
+    blob: f,
+  })));
+}
+// FileSystemFileHandle（File System Access API）は構造化複製できるためIndexedDBへ
+// そのまま保存できる。対応していないブラウザでは呼び出し側がそもそもボタンを出さない。
+export async function addPomoPlaylistFileHandles(handles) {
+  return appendPomoPlaylist(handles.map((h) => ({
+    id: genPomoId(),
+    kind: 'filehandle',
+    name: h.name || '（名前未取得の曲）',
+    handle: h,
+  })));
+}
+export async function addPomoPlaylistYoutube(videoId, name, url) {
+  return appendPomoPlaylist([{
+    id: genPomoId(),
+    kind: 'youtube',
+    name: name || url,
+    videoId,
+    url,
+  }]);
 }
 export async function removePomoPlaylistSong(id) {
   const list = (await loadPomoPlaylist()).filter((s) => s.id !== id);
@@ -391,7 +435,7 @@ export async function migratePomoMusicToPlaylist() {
   if (existing.length > 0) return existing;
   const legacyBlob = await loadPomoMusic();
   if (!legacyBlob) return existing;
-  return addPomoPlaylistSongs([legacyBlob]);
+  return addPomoPlaylistFiles([legacyBlob]);
 }
 
 // ---- 自分の声で言い直した説明の録音（questionId別、Blob）----

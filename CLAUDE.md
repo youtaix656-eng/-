@@ -5089,6 +5089,69 @@ Playwrightで実機確認し、確認の過程で1件のバグ（QA用モック�
   ファイル名をASCIIにすること（日本語ファイル名で「追加されない」という結果が出ても、
   アプリのバグと即断しない）。
 
+## ポモドーロタイマー：プレイリストにYouTube・File System Access「接続」を追加（2026-11-15追加）
+ユーザーから「この音楽リストをYoutubeか端末内の音楽を取り込む・また接続して選択できる
+ようにしたい。何でもいいから機能追加して。」と依頼された（直前の「曲のプレイリスト化」の
+続き）。「取り込む」は既存のファイル選択（コピーして保存）で既に満たしていたため、
+本当に新しく足したのは**YouTube**と**File System Access APIでの「接続」**（コピーせず
+ファイルを参照し続ける方式）の2つ。曲のエントリに`kind`（`'file'`/`'filehandle'`/`'youtube'`）
+を持たせ、3種類の追加方法を併存させた。
+- **`src/lib/storage.js`**：`addPomoPlaylistSongs`を`addPomoPlaylistFiles`に改名し、
+  `addPomoPlaylistFileHandles`（FileSystemFileHandleの配列を保存。Handleは構造化複製できる
+  のでIndexedDBへそのまま保存できる）・`addPomoPlaylistYoutube(videoId, name, url)`を追加。
+  古いエントリ（`kind`を持たない）は`normalizePomoSong`が`kind:'file'`として読む
+  （後方互換、既存ユーザーの曲は壊れない）。
+- **`src/lib/pomoYoutube.js`（新設）**：YouTube IFrame Player APIの薄いラッパー。
+  `extractYoutubeId`（通常/短縮/embed/shorts URL・動画IDそのものから動画IDを抽出、
+  読み取れなければnull——当てずっぽうで何かを返さない）・`fetchYoutubeTitle`（APIキー不要の
+  公開oEmbedエンドポイントでタイトルだけ取得、失敗時は例外を投げずnull）・
+  `createYoutubePlayer`（`playerVars:{loop:1, playlist:videoId}`の組み合わせで単一動画を
+  ループ再生——YouTube IFrame APIの既知の仕様で`loop`単体では効かない）。
+  **外部ランタイム依存（npmパッケージ）は増やしていない**——実際にYouTubeの曲を選んで
+  再生する時だけ`<script src="https://www.youtube.com/iframe_api">`を動的に読み込むだけ
+  （Googleドライブ連携・ElevenLabsボイスクローンと同じ「ユーザーが実際にその機能を使った
+  時だけ発生するネットワーク通信」という位置づけで、`src/lib`の多くがネットワークに
+  触れない方針の、ユーザーが明示的にYouTubeを選んだ時だけの明示的な例外）。
+- **`src/components/Pomodoro.jsx`**：曲の読み込みを種類ごとに分岐——`kind:'file'`は
+  従来通りBlobから`URL.createObjectURL`、`kind:'filehandle'`は`handle.getFile()`で
+  取得してから同じくblob URL化（失敗時＝許可が切れている時は「設定でこの曲をもう一度
+  選ぶと直るかもしれません」とトースト、黙って諦めない）、`kind:'youtube'`は
+  `createYoutubePlayer`でYouTubeプレイヤーを作る。**YouTubeプレイヤーの差し込み先
+  （`ytContainerRef`）はReactに子要素を一切持たせない空のdiv**——YT APIがこの要素を
+  iframeへ外部から置き換えるため、Reactが次の再描画でこの要素を「diffして更新しよう」と
+  すると実際のDOMと食い違う恐れがある。空のまま（JSXの子要素を持たない）渡すことで
+  Reactの再描画がこの要素の内部に一切触れないようにした。再生/一時停止/音量は
+  `musicKind`で分岐し、YouTubeの時は`player.playVideo()`/`pauseVideo()`/`setVolume()`を呼ぶ
+  （音量スライダーも既存のまま両方に効く）。
+- **`src/components/PomodoroConfigFields.jsx`**：既存の「🎵 曲を選ぶ」ボタンを
+  「📥 曲を取り込む」に改名（取り込み＝コピーして保存、であることを明確化）。
+  **「🔗 曲に接続する」ボタン**（`window.showOpenFilePicker`が使える対応ブラウザだけ表示。
+  使えない端末・ブラウザでは**できないことをできるふりに書かず、ボタン自体を出さず
+  その旨を一文で説明する**）。**YouTubeのURL欄＋「🌐 追加」ボタン**
+  （`extractYoutubeId`で読み取れなければ「読み取れませんでした」と正直に出す。
+  タイトル取得はベストエフォートで、取れなければURLそのものを名前にする）。
+  一覧の各曲に種類のアイコン（📥取り込み／🔗接続／🌐YouTube）を追加して区別できるようにした。
+- 検証：`node --test`（2621件、`test/pomoYoutube.test.mjs`の5件を含む）・`npx vite build`・
+  `npm run validate`・`node scripts/check-bundle-size.mjs`（起動時JS 737KB/742KB、Pomodoro系は
+  元からlazy importのため起動時バンドルへの影響なし）はすべて通過。
+  **このクラウド環境ではyoutube.comへのネットワークアクセスがプロキシで遮断されている**
+  （`curl`で確認済み、403）ため、Playwright QAでは次を確認した：①「📥 曲を取り込む」
+  （改名後も既存の取り込みフローが壊れていないこと）②YouTube URLを貼って追加すると
+  （oEmbed・IFrame APIの読み込みがどちらもオフラインで失敗する状態でも）**クラッシュせず**
+  一覧に🌐アイコンつきで追加され、選択・再生ボタンを押しても例外が出ないこと
+  （コンソールの`pageerror`は0件——出ていたのはネットワーク遮断による
+  `net::ERR_TUNNEL_CONNECTION_FAILED`のリソース読み込みエラーのみで、JSの未処理例外では
+  ない）③`window.showOpenFilePicker`はこのヘッドレスChromiumでも`typeof`判定ではtrueを
+  返すため「🔗 曲に接続する」ボタン自体は表示されることを確認したが、**Playwrightの
+  `filechooser`イベントはこのAPI呼び出しを捕捉しなかった**（クリックしても1.5秒待っても
+  発火せず、一覧にも反映されなかった。例外も出ていない）——これはPlaywright/Chromiumの
+  バージョンに依存する既知の制約と見ており、実際のブラウザでのネイティブなファイル選択
+  ダイアログの動作そのものはこのQA環境では検証できていない。コード自体は標準的な
+  `showOpenFilePicker()`→`getFile()`→IndexedDB保存という素直な流れで、対応ブラウザ
+  （デスクトップ/Android版Chrome等）での実機確認が別途必要。実際のYouTube再生
+  （音が出るか・ループが機能するか）も、オフライン環境では確認できていない——ユーザーの
+  端末でインターネット接続がある状態での確認が必要。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
