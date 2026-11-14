@@ -5183,6 +5183,49 @@ Home.jsxの`menu-grid`（2列グリッド）で、ちょうど「模擬試験」
   候補をクリックすると実際に用語集画面へ遷移すること（本文に「用語集」の文字を確認）、
   コンソールエラー0件。
 
+## 音声学習×連結学習：一番上の赤い長丸ボタン「今日の科目×誤答・△✕」（2026-11-14追加）
+ユーザーから「一番上に長い丸（赤い丸）で国家試験の科目×過去に間違えたところがタップするだけで
+音声学習が始まるようにしたい」と依頼された。要件：①14科目（`examScope.js`の
+`SUBJECT_TAG_NAMES`）②前日に演習した科目は次の日になると次の科目に切り替わる（1▶2▶3▶4）
+③過去に誤答した・△✕の問題に絞り込む④インプットに特化（アウトプットモードの手動ゲートなし）
+⑤対象の科目名・問題数を表示⑥タップするだけで即開始、の6点。
+- **`src/lib/audioDailySubject.js`（新設・単一の正）**：`todaySubject(date)`は、他の日替わり機能
+  （`priorityFocus.js`／`coveragePriority.js`／`forgetting.js`の`dailyForgettingPick`）と
+  **同じdayIndex方式**（カレンダーの日付から決定的に求める、持続化する状態を持たない）で、
+  `SUBJECT_TAG_NAMES[dayIndex(date) % 14]`を返す。「前日に演習した科目は次の日になると
+  次の科目に切り替わる」を、**持続化が不要な決定的な方式**で満たす——日が変わるたび
+  必ず1科目ずつ進み（1▶2▶3▶4▶…▶14▶1…）、端末間で「前回どの科目だったか」を同期する
+  必要がない（同じ日なら必ず同じ科目になる）。`todaySubjectWrongPool(questions, srs, date)`は
+  今日の科目のうち`isInReview(srs[q.id])`（`wrongCount>0`かつ未マスター＝`srs.js`の既存定義）
+  だけに絞る——`reviewPoolFor`（`lib/reviewPool.js`）とは違い、一度も間違えていないが
+  忘却リスクが高い「念のため確認」は混ぜない（「過去に誤答した・△✕の問題に絞り込んで」を
+  文字どおり満たすため、既存のより広い定義をそのまま使わず厳密な方を選んだ）。期限が来ている
+  （`isDue`）問題を先頭に出す（`reviewPoolFor`と同じ優先順位の考え方）。
+- **`src/components/AudioMode.jsx`**：`dailyWrongPick`（useMemo、`todaySubjectWrongPool`を
+  `questions`/`srs`から計算）。`startDailyWrongPill()`は`startMockExam`等の既存の
+  「`customReviewIds`に明示的なid配列を渡し、`source:'review'`にして、300ms後に
+  `togglePlay()`」という既存パターンをそのまま踏襲——新しい出題の仕組みは作っていない。
+  **インプットに特化**（④）は`setOutputModeOn(false)`・`setPureRecallOn(false)`を開始時に
+  強制することで実現（他のモードで保存された設定値に関わらず、このボタン経由のセッションは
+  必ず自動で正解まで読み進める）。ボタンはJSXの先頭（`<h2 className="view-title">`の
+  `<p className="view-desc">`の直後、ストリークカードより前）に配置し、「一番上」の要件を
+  満たす。対象0件（今日の科目にまだ誤答が無い）の時はボタンを disabled にしつつ、
+  「経絡経穴概論・まだ誤答がありません」のように正直に表示する（黙って非表示にしない）。
+- **CSS（`src/styles/index.css`）**：`.daily-wrong-pill`（`border-radius: 999px`の長丸・
+  `background: var(--wrong)`＝既存の「誤答・要注意」で使われている赤系トークンを再利用、
+  新しい色は増やしていない）。
+- 検証：`node --test`（2628件、新規`test/audioDailySubject.test.mjs`7件を含む）・
+  `npx vite build`・`npm run validate`・`node scripts/check-bundle-size.mjs`
+  （起動時JS 750KB/756KB、AudioMode.jsxはlazy画面のためほぼ増加なし）はすべて通過。
+  Playwright QAで実機確認済み：IndexedDBへ経絡経穴概論の実在する問題2問（`kk-keiraku-a1`/
+  `kk-keiraku-a2`）を誤答状態（`wrongCount:3, due:過去`）として注入し、①ボタンが
+  `.view-desc`の直後（一番上）に表示されること②表示文言が
+  「🔴 今日の科目で誤答・△✕を聞く／経絡経穴概論・2問」と科目名・問題数つきで正しいこと
+  ③タップすると即座に音声学習が開始し、`1 / 2`・科目「経絡経穴概論」の表示で2問だけの
+  セッションが始まること、を確認。別途、srsを空に戻した状態では
+  「経絡経穴概論・まだ誤答がありません」と表示され、ボタンがdisabledになることも確認。
+  いずれもコンソールエラー0件。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

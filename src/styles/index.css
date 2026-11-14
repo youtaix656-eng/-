@@ -2345,6 +2345,37 @@ code.block {
 .exam-countdown .cd-days { margin-left: auto; font-size: 13px; text-align: right; }
 .exam-countdown .cd-days strong { font-size: 26px; margin: 0 3px; }
 
+/* 一番上の赤い長丸ボタン：国家試験の科目×過去に間違えたところ（タップで即開始） */
+.daily-wrong-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 999px;
+  background: var(--wrong);
+  color: #fff;
+  text-align: center;
+  cursor: pointer;
+}
+.daily-wrong-pill:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.daily-wrong-pill-main {
+  font-size: 15px;
+  font-weight: 800;
+}
+.daily-wrong-pill-sub {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
 /* 連続日数（ストリーク）カード */
 .streak-card {
   display: flex;

@@ -58,6 +58,7 @@ import { recordRephrase } from '../lib/rephraseLog.js';
 import { setBreakResumePending, clearBreakResumePending, loadBreakResumePending } from '../lib/audioBreakResumeFlag.js';
 import { BODY_LOCATION_SETS } from '../data/bodyLocationMethod.js';
 import { useKeiketsuCards } from '../lib/keiketsuCardsLoader.js';
+import { todaySubjectWrongPool } from '../lib/audioDailySubject.js';
 import { CONFUSING_PAIRS } from '../lib/confusingPairsChecklist.js';
 import { findIfThenScenario } from '../lib/ifThenScenarios.js';
 import { readingOrderHintFor } from '../lib/subjectReadingTemplates.js';
@@ -210,6 +211,10 @@ export default function AudioMode({
   // A7：要注意（リーチ、LEECH_THRESHOLD回以上の誤答）件数。開始前の画面で見えるようにする
   // （学習10・60・300・900の#7と同じ定義・同じ考え方）。
   const audioLeechCount = useMemo(() => questions.filter((q) => isLeechState(srs[q.id])).length, [questions, srs]);
+  // 一番上の赤い長丸ボタン：「国家試験の科目×過去に間違えたところ」。日替わりで進む
+  // 今日の科目（dayIndex方式、lib/audioDailySubject.jsが単一の正）の、誤答・△✕の問題だけに
+  // 絞り込んだプール。タップするだけでこのプールを即座に読み上げ始める（入力の手間ゼロ）。
+  const dailyWrongPick = useMemo(() => todaySubjectWrongPool(questions, srs), [questions, srs]);
   const { streak, studiedToday } = useMemo(() => studyStreak(history), [history]);
   const [mood, setMood] = useState(null);
   useEffect(() => { loadTodayMood().then(setMood); }, []);
@@ -2244,6 +2249,29 @@ export default function AudioMode({
     onToast?.(`🌙 今日解いた${ids.length}問をまとめて復習します（${min}分で自動終了）`);
     setTimeout(() => togglePlay(), 300);
   };
+  // 一番上の赤い長丸ボタン：「国家試験の科目×過去に間違えたところ」をタップするだけで開始する。
+  // インプットに特化（outputModeOn・pureRecallOnを強制的にOFF＝自動で正解まで読み進める）。
+  const startDailyWrongPill = () => {
+    if (dailyWrongPick.pool.length === 0) return;
+    rebuildStop();
+    setMode(0);
+    setCustomReviewIds(dailyWrongPick.pool.map((q) => q.id));
+    setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
+    setReviewTarget(null);
+    setReviewOffsetPersist(0);
+    setSource('review');
+    setOutputModeOn(false);
+    setPureRecallOn(false);
+    setSessionGradedCount(0);
+    setSessionWrong([]);
+    setSessionWrongKinds({});
+    setSessionLatencies([]);
+    setVoiceAnswerStats({ attempts: 0, matched: 0 });
+    audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = null;
+    onToast?.(`🔴 今日の科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`);
+    setTimeout(() => togglePlay(), 300);
+  };
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）。
   // 前回との問題の重複率も見る（新規・模試の「前回の同モードとの問題重複率」と同じ考え方）。
@@ -2591,6 +2619,20 @@ export default function AudioMode({
         「問題 →（間）→ 正解と解説」を自動で読み上げます。連結の工夫で、ひとつの言葉を
         いろいろな角度から耳で覚えられます。
       </p>
+
+      <button
+        type="button"
+        className="daily-wrong-pill"
+        disabled={dailyWrongPick.pool.length === 0}
+        onClick={startDailyWrongPill}
+      >
+        <span className="daily-wrong-pill-main">🔴 今日の科目で誤答・△✕を聞く</span>
+        <span className="daily-wrong-pill-sub">
+          {dailyWrongPick.pool.length > 0
+            ? `${dailyWrongPick.subject}・${dailyWrongPick.pool.length}問`
+            : `${dailyWrongPick.subject}・まだ誤答がありません`}
+        </span>
+      </button>
 
       {streak > 0 && (
         <div className={`streak-card${studiedToday ? ' lit' : ''}`} style={{ marginBottom: 12 }}>
