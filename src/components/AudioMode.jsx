@@ -54,6 +54,8 @@ import { conceptsOf } from '../lib/concepts.js';
 import { downloadFile } from '../lib/download.js';
 import { loadLaterLookup, addLaterLookup, removeLaterLookup } from '../lib/laterLookup.js';
 import { loadPronunciationReportLog, appendPronunciationReportLog } from '../lib/pronunciationReportLog.js';
+import { recordRephrase } from '../lib/rephraseLog.js';
+import { setBreakResumePending, clearBreakResumePending, loadBreakResumePending } from '../lib/audioBreakResumeFlag.js';
 
 // #7 二重符号化（Dual Coding）：問題文の中の自分のキーワード（curTags）だけを
 // 白地に黒の反転表示にする。聴覚（読み上げ）＋視覚（強調表示）の二重の符号化を狙う。
@@ -557,6 +559,7 @@ export default function AudioMode({
     setSessionWrong([]);
     setSessionWrongKinds({});
     audioSessionKindRef.current = fast ? 'maruFast' : 'maruReview';
+    quickMinuteActiveRef.current = null;
     if (fast) setSkipQuestionText(true);
     onToast?.(fast ? `⚡ ○の高速回転を音声で始めます（${pool.length}問）` : `📝 ○の見直しを音声で始めます（${pool.length}問）`);
     setTimeout(() => togglePlay(), 300);
@@ -1118,7 +1121,13 @@ export default function AudioMode({
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
     if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx < 0) { if (index < total - 1) skip(1); } else if (index > 0) skip(-1);
+    // 派生#11：スワイプ後に「◯問目に移動しました」と一言トースト（移動したこと自体のフィードバック）。
+    if (dx < 0) {
+      if (index < total - 1) { skip(1); onToast?.(`${index + 2} / ${total} へ移動しました`); }
+    } else if (index > 0) {
+      skip(-1);
+      onToast?.(`${index} / ${total} へ移動しました`);
+    }
   };
   useEffect(() => {
     if (!cameFromResumeRef.current || !audioReady || builtPlan.length === 0) return;
@@ -1187,6 +1196,7 @@ export default function AudioMode({
     setSessionWrong([]);
     setSessionWrongKinds({});
     audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = null;
   };
   useEffect(() => {
     if (!reviewPreset) return;
@@ -1290,10 +1300,15 @@ export default function AudioMode({
   const resumeFromBreak = (delayMin) => {
     setBreakPending(false);
     if (breakTimerRef.current) { clearTimeout(breakTimerRef.current); breakTimerRef.current = null; }
+    // 派生#43：予約していた自動再開（まだ鳴っていない分）があれば、ここで必ず見張りフラグを下ろす
+    // （すぐ続ける／ここで終了する、のどちらでも「待っていない」状態に戻すため）。
+    clearBreakResumePending().catch(() => {});
     if (!delayMin) { togglePlay(); return; }
     onToast?.(`✋ ${delayMin}分後に自動で再生を再開します`);
+    setBreakResumePending(delayMin).catch(() => {});
     breakTimerRef.current = setTimeout(() => {
       breakTimerRef.current = null;
+      clearBreakResumePending().catch(() => {});
       // 待っている間にユーザーが自分で▶を押して先に再開しているかもしれない。
       // ここで無条件にtogglePlay()を呼ぶと、そのtogglePlay自身は「予約した時点」の
       // 古いplaying値（false）を閉じ込めたクロージャのため、実際にはもう再生中なのに
@@ -1303,6 +1318,18 @@ export default function AudioMode({
       if (!engine.getSnapshot().playing) togglePlay();
     }, delayMin * 60000);
   };
+  // 派生#43：予約した自動再開が実際に発火する前にアプリが閉じられた／再読み込みされた場合
+  // （非ジェスチャー文脈からの自動再開が本当に鳴ったかは分からないため）、次に開いた時に
+  // 黙らず一言添える。正常に発火した時は上のclearBreakResumePending()で必ず消えるので、
+  // ここで見つかるのは「発火しなかった（かもしれない）」場合だけ。
+  useEffect(() => {
+    loadBreakResumePending().then((p) => {
+      if (!p) return;
+      clearBreakResumePending().catch(() => {});
+      onToast?.('⏸ 前回、休憩後の自動再開が完了しなかったかもしれません。必要なら▶を押して再生を続けてください');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 🔔 考える時間（間）の前後に短い合図音（#8）
   const prevPhaseForBeepRef = useRef(null);
@@ -1446,6 +1473,7 @@ export default function AudioMode({
         setSessionWrong([]);
         setSessionWrongKinds({});
         audioSessionKindRef.current = null;
+        quickMinuteActiveRef.current = null;
         requeuedRef.current = false;
         onToast?.(`▶ 次の束へ進みます（${nextItem.subject || '全科目'}×${nextItem.target ?? 'すべて'}）`);
         setTimeout(() => engine.play(), 300);
@@ -1483,6 +1511,7 @@ export default function AudioMode({
     setSessionWrong([]);
     setSessionWrongKinds({});
     audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = null;
     onToast?.(`🧩 基礎タスク（約${bufferPlan.baseTaskMinutes}分・${bufferPlan.baseTaskQuestionCount}問）を音声で始めます`);
     setTimeout(() => togglePlay(), 300);
   };
@@ -1532,6 +1561,7 @@ export default function AudioMode({
     setFilterKeyword('');
     setSource(s);
     audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = null;
     if (s === 'keyword' && !selectedKeyword && hasKeywords) setSelectedKeyword(kwNames[0]);
   };
 
@@ -1566,6 +1596,7 @@ export default function AudioMode({
   const clearFilter = () => {
     rebuildStop();
     audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = null;
     setFilterSubject('');
     setFilterGenre('');
     setFilterKeyword('');
@@ -1693,6 +1724,7 @@ export default function AudioMode({
     setSessionWrong([]);
     setSessionWrongKinds({});
     audioSessionKindRef.current = null;
+    quickMinuteActiveRef.current = min;
     onToast?.(`🚃 約${min}分・${count}問のミニセッションを始めます`);
     setTimeout(() => togglePlay(), 300);
   };
@@ -1735,6 +1767,10 @@ export default function AudioMode({
   //   startMaruAudioが設定し、他の明示的なセッション開始経路（科目/条件の変更・バッファ開始）で
   //   nullに戻す（これらの開始直後はもう○の見直しではないため）。
   const audioSessionKindRef = useRef(null);
+  // 派生#41：直前（または今）のセッションが「◯分だけ」ミニセッションなら、その分数を保持する。
+  //   完了画面の「もう5分だけ続ける」ボタン用。startQuickMinuteが設定し、他の明示的な
+  //   セッション開始経路（audioSessionKindRefと同じ場所）でnullに戻す。
+  const quickMinuteActiveRef = useRef(null);
   // planは自己採点でsrsが変わるたびに再計算される（srsが依存配列にあるため）が、問題の構成・
   // 順序そのものは変わらないことが大半なので、参照ではなく内容（id列）で比較する
   // （参照で比較すると、1問採点するたびにガードがリセットされ、二重記録防止が機能しなくなる）。
@@ -1808,6 +1844,7 @@ export default function AudioMode({
       if (lastForQ && lastForQ.selfKind === 'batsu' && !rephrasedOnceRef.current.has(q.id)) {
         rephrasedOnceRef.current.add(q.id);
         setHadWrongStreak(true);
+        recordRephrase(q.id).catch(() => {}); // 派生#64：週次の弱点ジャーナルの自動チップ化向け記録
         // comparisonsForKeywordは `c.title.includes(kw)` を含む判定のため、空文字を渡すと
         // 「すべての文字列に空文字は含まれる」でCOMPARISONS全件がヒットしてしまう
         // （curTags[0]が無い問題で、無関係な対比が紛れ込むバグになるところだった。実装時に発見）。
@@ -1964,6 +2001,16 @@ export default function AudioMode({
             <p className="view-desc" style={{ textAlign: 'center' }}>
               おつかれさまでした。全{total}問・自己採点{graded}問。
             </p>
+            {/* 派生#41：直前が「◯分だけ」のミニセッションだった時だけ出す */}
+            {quickMinuteActiveRef.current != null && (
+              <button
+                className="btn accent sm block"
+                style={{ marginTop: 8 }}
+                onClick={() => startQuickMinute(5)}
+              >
+                ▶ もう5分だけ続ける
+              </button>
+            )}
           </div>
         );
       })()}
@@ -2536,7 +2583,8 @@ export default function AudioMode({
                     ? current.choices[current.answer]
                     : `${current.answer + 1}. ${current.choices[current.answer]}`}
                 </strong>
-                {current.explanation && <div style={{ marginTop: 6 }}>{current.explanation}</div>}
+                {/* #7派生：二重符号化のキーワード反転表示を解説文にも広げる（問題文だけだった） */}
+                {current.explanation && <div style={{ marginTop: 6 }}>{highlightKeywordsInText(current.explanation, curTags)}</div>}
               </div>
             )}
             {phase === PHASES.ANSWER && currentItem?.kind === 'flashcard' && (

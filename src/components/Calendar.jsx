@@ -45,7 +45,7 @@ function monthGrid(year, month) {
   return cells;
 }
 
-export default function Calendar({ store, onToast, onNavigate }) {
+export default function Calendar({ store, onToast, onNavigate, onStartAudioSubject }) {
   const { schedule, setSchedule, reviewQuestions, srs, history, settings } = store;
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -331,7 +331,20 @@ export default function Calendar({ store, onToast, onNavigate }) {
           </p>
         )}
         {audioDoneDays.has(selected) && (
-          <p className="inline-note" style={{ marginTop: 4 }}>🎧 この日は音声学習を実施済みです。</p>
+          <p className="inline-note" style={{ marginTop: 4 }}>
+            🎧 この日は音声学習を実施済みです（{audioDetailByDay[selected]?.sessions ?? 0}回・計{audioDetailByDay[selected]?.total ?? 0}問
+            {audioDetailByDay[selected]?.subjects.size > 0 && `・${Array.from(audioDetailByDay[selected].subjects).join('・')}`}）。
+            {/* 派生#56：長押し詳細（トースト）だけでなく、ここから同じ条件でもう一度始められるように */}
+            {onStartAudioSubject && audioDetailByDay[selected]?.subjects.size > 0 && (
+              <button
+                className="btn ghost sm"
+                style={{ marginLeft: 8 }}
+                onClick={() => onStartAudioSubject(Array.from(audioDetailByDay[selected].subjects)[0])}
+              >
+                🎧 同じ条件でもう一度
+              </button>
+            )}
+          </p>
         )}
         {selectedEvents.length === 0 ? (
           <p className="inline-note">この日の予定はまだありません。</p>

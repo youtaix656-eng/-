@@ -4636,6 +4636,78 @@ Chromium/WebViewのJSタイマー間引きで止まる場合は読み上げシ�
   が元に戻り下部ナビが再び機能することを確認。`node --test`（2608件）・`npx vite build`・
   `npm run validate`・`node scripts/check-bundle-size.mjs`（起動時JS 696KB/700KB）もすべて通過。
 
+## 音声学習×連結学習の派生8項目を実装（2026-11-15追加）
+記憶科学・効率操作の8項目（直前セクション）の完了後、ユーザーに各項目の派生案を10個ずつ
+（計80個）提示し、その中からおすすめ8件（1項目ずつ）を推薦、ユーザー承認（「ではそれらを
+追加して」）で実装したもの。「動作確認→バグがないか確認」の指示どおり、実装直後に
+Playwrightで実機確認し、確認の過程で1件のバグ（QA用モック自体の不具合、下記）を発見・修正した。
+- **#7派生（二重符号化を解説文にも広げる）**：`highlightKeywordsInText`（既存関数、問題文にしか
+  使っていなかった）を解説文の表示（`.now-answer`内）にもそのまま適用。新しい関数は作らず、
+  既存の反転表示ロジックを再利用しただけ。
+- **#11派生（スワイプ後の移動トースト）**：`onPlayerTouchEnd`のスワイプ判定が成立した直後に
+  「◯ / ◯ へ移動しました」をトースト表示。
+- **#26派生（あとで調べるの週次チップ化）**：`laterLookup.js`に`laterLookupCountSince(list,
+  sinceMs)`を追加。`WeeklyJournal.jsx`の既存の自動チップ配列（手薄科目・復習停滞・要注意解消・
+  弱点改善・音声復習回数と同じ場所）に「今週は「あとで調べる」に◯件追加した。」を追加。
+- **#41派生（もう5分だけ続ける）**：`quickMinuteActiveRef`（新設のref）が「直前（または今）の
+  セッションが◯分だけミニセッションだったか」を保持する。`startQuickMinute`が設定し、
+  他の明示的なセッション開始経路（`startReviewSource`・プレイリストの次の束・
+  `startAudioBufferPlan`・`changeSource`・`clearFilter`・`startMaruAudio`——
+  `audioSessionKindRef`をnullに戻す場所と同じ5+1か所）でnullに戻す。完了時に出る
+  「#8」の目立つ見出しカード（`.sess-done`、どのsource分岐で終わったかに関わらず一括表示する
+  既存のカード）に、このrefが非nullの時だけ「▶ もう5分だけ続ける」ボタンを追加
+  （`startQuickMinute(5)`を呼び直すだけ）。
+- **#43派生（自動再開が鳴らなかった可能性の見張り）**：新設`src/lib/audioBreakResumeFlag.js`
+  （`setBreakResumePending`/`clearBreakResumePending`/`loadBreakResumePending`、IndexedDB
+  キー`shinkyu:audioBreakResumePending`）。`resumeFromBreak(delayMin)`が「1分後／5分後に
+  自動再開」を選んだ瞬間にフラグを立て、タイマーが実際に発火した時（「すぐ続ける」を選んだ時も）
+  必ず下ろす。**正常に発火すれば消えるので、次に開いた時にまだフラグが残っていれば
+  「発火しなかった（かもしれない）」ことだけが分かる**——非ジェスチャー文脈からの自動再開が
+  本当に鳴ったかはWebでは確かめる手段が無いため、黙らず一言添えるだけに留めた
+  （2026-11-12の`backgroundStopped`の知らせと同じ設計思想）。マウント時に一度だけ
+  `loadBreakResumePending()`を見て、見つかればトーストで知らせてからフラグを消す。
+- **#52派生（誤読報告履歴のバックアップ・クラウド同期対応）**：`pronunciationReportLog.js`に
+  `savePronunciationReportLogRaw(list)`を追加（`flashcardSrs.js`の`saveFlashcardSrsRaw`と
+  同じ「マージ結果の配列をそのまま置き換える」専用の書き戻し関数）。`storage.js`の
+  `exportAll`/`importAll`・`sync.js`の`buildSyncPayload`/`syncToBackup`（短縮キー`pr`）・
+  `progressMerge.js`の新設`mergeLogList`（term・reading・atの組み合わせで重複除去、
+  idを持たない追記型配列向け）・`useStore.js`の`runCloudSync`の4箇所に配線した。
+  **用語集4キーを同期対象に入れ忘れて機種変更で消えていた過去の実例と同じミスを、
+  新設時点から防ぐ**ために今回最初から対応した（過去は後から気づいて直したが、今回は
+  最初から含めた点が異なる）。
+- **#56派生（カレンダーから同じ条件でもう一度）**：`Calendar.jsx`の選択中の日の詳細パネル
+  （従来は「🎧 この日は音声学習を実施済みです。」の一文だけ）に、セッション回数・合計問題数・
+  科目（`audioDetailByDay[selected]`）を表示し、科目が分かる時だけ「🎧 同じ条件でもう一度」
+  ボタンを追加。新設`onStartAudioSubject`propを`App.jsx`から配線
+  （`setAudioResumeFilters({subject})` + `setView('audio')`——既存の「前回の続きから」
+  ダイアログの`はい`と全く同じ中継の仕組みをそのまま再利用。新しい中継は作っていない）。
+- **#64派生（言い換え発生の週次チップ化）**：新設`src/lib/rephraseLog.js`
+  （`recordRephrase(questionId)`/`rephraseCountSince(log, sinceMs)`、IndexedDBキー
+  `shinkyu:rephraseLog`、他の軽量ログと同じ「先頭に追加して上限でslice」パターン）。
+  `gradeCurrent`の連続2回外した判定が成立した瞬間（既存の`rephrasedOnceRef`に積む直後）に
+  `recordRephrase(q.id)`を1行追加するだけ。`WeeklyJournal.jsx`に「今週は連続で外した問題を
+  ◯問、別の角度から言い換えて読み直した。」チップを追加。
+- 動作確認で見つけた唯一の問題は**QA用のモック自体の不具合**（アプリのバグではない）——
+  Playwrightで`speechSynthesis`をモックする際、`getVoices()`がプレーンオブジェクトの
+  フェイク音声を返す実装にしたところ、`speak()`内の`u.voice = voice`（ネイティブの
+  `SpeechSynthesisUtterance`が本物の`SpeechSynthesisVoice`でない値を拒否する）が
+  `TypeError`を投げ、モックの`speak()`自体が一度も呼ばれず全ての確認がブロックされていた。
+  `getVoices()`を空配列に修正（`selectedVoice()`がnull/undefinedを返せば`speak()`の
+  `if (voice) u.voice = voice;`が代入自体をスキップする、既存コードの設計どおりの挙動）して解決。
+- 検証：`node --test`（2616件、新規8件追加：`mergeLogList`のユニットテスト3件・
+  `pronunciationReportLog`のマージ/変化検出テスト1件・`laterLookupCountSince`2件・
+  `rephraseCountSince`2件）・`npx vite build`・`npm run validate`・
+  `node scripts/check-bundle-size.mjs`（起動時JS 705KB/710KB）はすべて通過。Playwright QAで
+  実機確認済み（コンソールエラー0件、全項目）：#7は実データの問題（「足三里」が答えの経絡経穴
+  概論の設問）で解説文中に4箇所の`<mark class="kw-mark">`が実際に反転表示されること、
+  #11はタッチイベントでのスワイプ後に移動トーストが表示されること、#26・#64はIndexedDBへ
+  直接ログを注入し週次ジャーナルに両チップが表示されること、#41は実際に「5分だけ」で
+  25問のミニセッションを最後まで完了させ「もう5分だけ続ける」ボタンが表示され、
+  クリックすると新しいミニセッションが実際に再生開始（⏸表示）されること、#43は
+  フラグを注入してからの再読み込みでトーストが表示されフラグが消えること、#56は
+  IndexedDBへ音声学習の実施記録を注入してカレンダーの日別詳細にボタンが表示され、
+  クリックすると音声学習画面へ遷移し科目フィルタが正しく適用されることを確認。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

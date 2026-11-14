@@ -88,6 +88,19 @@ export function mergeIdSet(local, remote) {
   return [...new Set([...(local || []), ...(remote || [])])];
 }
 
+// 読み方の手動補正・誤読報告の履歴（lib/pronunciationReportLog.js）：追記型の配列でidを
+// 持たないため、term・reading・atの組み合わせで重複除去し、新しい順に並べ直す
+// （examResults等の「idでUNION」とは層が違う、historyのcompositeキー方式に近い）。
+export function mergeLogList(local, remote, max = 100) {
+  const seen = new Map();
+  for (const e of [...(local || []), ...(remote || [])]) {
+    if (!e) continue;
+    const key = `${e.term ?? ''}|${e.reading ?? ''}|${e.at ?? ''}`;
+    if (!seen.has(key)) seen.set(key, e);
+  }
+  return [...seen.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, max);
+}
+
 export function mergeResumeState(local, remote) {
   const l = local || {};
   const r = remote || {};
@@ -124,7 +137,8 @@ export function progressChanged(local, merged) {
     JSON.stringify(m.glossaryRemovedIds) !== JSON.stringify(l.glossaryRemovedIds) ||
     JSON.stringify(m.tocCandidates) !== JSON.stringify(l.tocCandidates) ||
     JSON.stringify(m.tocHistory) !== JSON.stringify(l.tocHistory) ||
-    JSON.stringify(m.flashcardSrs) !== JSON.stringify(l.flashcardSrs)
+    JSON.stringify(m.flashcardSrs) !== JSON.stringify(l.flashcardSrs) ||
+    JSON.stringify(m.pronunciationReportLog) !== JSON.stringify(l.pronunciationReportLog)
   );
 }
 
@@ -155,5 +169,7 @@ export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdated
     // 経穴カードのSRS：一問一答の本体SRSと同じ形（cardId単位、lastAnswered/dueが新しい方）なので
     // mergeSrsをそのまま再利用する。
     flashcardSrs: mergeSrs(local?.flashcardSrs, remote?.flashcardSrs),
+    // 読み方の手動補正・誤読報告の履歴：追記型なのでmergeLogListでUNION（2026-11-15追加）。
+    pronunciationReportLog: mergeLogList(local?.pronunciationReportLog, remote?.pronunciationReportLog),
   };
 }

@@ -817,7 +817,14 @@ export default function App() {
       case 'notegen':
         return <NoteGen store={store} onToast={showToast} onDone={() => setView('import')} />;
       case 'calendar':
-        return <CalendarScreen store={store} onToast={showToast} onNavigate={setView} />;
+        return (
+          <CalendarScreen
+            store={store}
+            onToast={showToast}
+            onNavigate={setView}
+            onStartAudioSubject={(subject) => { setAudioResumeFilters({ subject }); setView('audio'); }}
+          />
+        );
       case 'venues':
         return <Venues store={store} onToast={showToast} />;
       case 'examcontent':

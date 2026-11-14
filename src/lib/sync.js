@@ -63,6 +63,7 @@ export function buildSyncPayload(data, { includeHistory = true, summarizeHistory
   if (Array.isArray(data.tocCandidates) && data.tocCandidates.length) p.tc = data.tocCandidates;
   if (Array.isArray(data.tocHistory) && data.tocHistory.length) p.th = data.tocHistory;
   if (data.flashcardSrs && Object.keys(data.flashcardSrs).length) p.fc = data.flashcardSrs;
+  if (Array.isArray(data.pronunciationReportLog) && data.pronunciationReportLog.length) p.pr = data.pronunciationReportLog;
   return p;
 }
 
@@ -105,6 +106,7 @@ export function syncToBackup(p) {
   if (p.tc) b.tocCandidates = p.tc;
   if (p.th) b.tocHistory = p.th;
   if (p.fc) b.flashcardSrs = p.fc;
+  if (p.pr) b.pronunciationReportLog = p.pr;
   return b;
 }
 

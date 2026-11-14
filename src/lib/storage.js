@@ -14,6 +14,8 @@
 import { idbGet, idbSet, idbSetMany, idbDelete, idbGetAll, isIdbSupported } from './db.js';
 import { loadFlashcardSrs, saveFlashcardSrsRaw } from './flashcardSrs.js';
 export { loadFlashcardSrs, saveFlashcardSrsRaw };
+import { loadPronunciationReportLog, savePronunciationReportLogRaw } from './pronunciationReportLog.js';
+export { loadPronunciationReportLog, savePronunciationReportLogRaw };
 
 export const KEYS = {
   questions: 'shinkyu:questions',
@@ -445,6 +447,10 @@ export async function exportAll() {
     // 元々idbGet/idbSetを直接使う独立実装のため、バックアップ・QR・クラウド自動同期の
     // どこにも含まれていなかった（実際に確認して見つかったバグ、2026-09-03修正）。
     flashcardSrs: await loadFlashcardSrs(),
+    // 読み方の手動補正・誤読報告の履歴（lib/pronunciationReportLog.js）。用語集4キーを
+    // 同期対象に入れ忘れて機種変更で消えていた過去の実例と同じミスを防ぐため、
+    // 新設時から最初にバックアップ・QR・クラウド自動同期の対象に含める（2026-11-15）。
+    pronunciationReportLog: await loadPronunciationReportLog(),
   };
 }
 
@@ -477,6 +483,7 @@ export async function importAll(data) {
   if (Array.isArray(data.tocCandidates)) await saveTocCandidates(data.tocCandidates);
   if (Array.isArray(data.tocHistory)) await saveTocHistory(data.tocHistory);
   if (data.flashcardSrs && typeof data.flashcardSrs === 'object') await saveFlashcardSrsRaw(data.flashcardSrs);
+  if (Array.isArray(data.pronunciationReportLog)) await savePronunciationReportLogRaw(data.pronunciationReportLog);
 }
 
 // ---- 「前回の続きから」（一問一答・復習・模試・音声）のまとめ読み込み ----

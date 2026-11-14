@@ -8,6 +8,8 @@ import { zeroDaysSummary } from '../lib/reviewZeroLog.js';
 import { resolvedLeechesSince } from '../lib/reviewDwell.js';
 import { weakTagClusters, tagTrend } from '../lib/weakClusters.js';
 import { loadAudioReviewLog, audioReviewCountSince } from '../lib/audioReviewLog.js';
+import { loadLaterLookup, laterLookupCountSince } from '../lib/laterLookup.js';
+import { loadRephraseLog, rephraseCountSince } from '../lib/rephraseLog.js';
 
 function formatWeekLabel(weekKeyStr) {
   const start = new Date(Number(weekKeyStr));
@@ -28,11 +30,15 @@ export default function WeeklyJournal({ store, onNavigate }) {
   const [saved, setSaved] = useState(false);
   const [seedLog, setSeedLog] = useState([]); // #30：今週埋めた手薄科目の自動追記候補
   const [audioLog, setAudioLog] = useState([]); // 音声学習の実施ログ（AudioMode.jsxと同じ発生源）
+  const [laterLookupList, setLaterLookupList] = useState([]); // 派生#26：あとで調べる
+  const [rephraseLog, setRephraseLog] = useState([]); // 派生#64：連続2回外した問題の言い換え発生
 
   useEffect(() => { loadMissTypes().then(setMissTypes); }, []);
   useEffect(() => { loadRoundLog().then(setRoundLog); }, []);
   useEffect(() => { loadContentSeedLog().then(setSeedLog); }, []);
   useEffect(() => { loadAudioReviewLog().then(setAudioLog); }, []);
+  useEffect(() => { loadLaterLookup().then(setLaterLookupList); }, []);
+  useEffect(() => { loadRephraseLog().then(setRephraseLog); }, []);
   useEffect(() => {
     loadWeeklyNotes().then((all) => {
       setNotes(all);
@@ -87,6 +93,20 @@ export default function WeeklyJournal({ store, onNavigate }) {
     if (n === 0) return null;
     return `今週は音声だけでの復習を${n}回行った。`;
   }, [audioLog]);
+
+  // 派生#26：今週「あとで調べる」に追加した件数
+  const laterLookupSummary = useMemo(() => {
+    const n = laterLookupCountSince(laterLookupList, weekStartOf());
+    if (n === 0) return null;
+    return `今週は「あとで調べる」に${n}件追加した。`;
+  }, [laterLookupList]);
+
+  // 派生#64：今週、連続2回外した問題を言い換えて再読した回数（音声学習×連結学習）
+  const rephraseSummary = useMemo(() => {
+    const n = rephraseCountSince(rephraseLog, weekStartOf());
+    if (n === 0) return null;
+    return `今週は連続で外した問題を${n}問、別の角度から言い換えて読み直した。`;
+  }, [rephraseLog]);
 
   const thisWeekKey = weekKeyOf();
   const pastWeeks = useMemo(
@@ -203,9 +223,9 @@ export default function WeeklyJournal({ store, onNavigate }) {
 
       <div className="section-label">✍️ 来週の方針（一言）</div>
       <div className="card">
-        {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary, audioReviewSummary].filter(Boolean).length > 0 && (
+        {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary, audioReviewSummary, laterLookupSummary, rephraseSummary].filter(Boolean).length > 0 && (
           <div className="chip-row" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-            {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary, audioReviewSummary]
+            {[contentSummary, reviewStallSummary, resolvedLeechSummary, improvedClusterSummary, audioReviewSummary, laterLookupSummary, rephraseSummary]
               .filter(Boolean)
               .map((summary) => (
                 <button

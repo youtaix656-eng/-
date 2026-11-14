@@ -530,16 +530,17 @@ export function useStore() {
       const resumeState = await storage.loadResumeState();
       // 用語集（目次・索引）の候補フロー実行時データも、quizProgress等と同じ理由で
       // ReactのstoreではなくIndexedDBから直接読む（Toc.jsxがローカルstateで完結させているため）。
-      const [glossaryExtra, glossaryRemovedIds, tocCandidates, tocHistory, flashcardSrs] = await Promise.all([
+      const [glossaryExtra, glossaryRemovedIds, tocCandidates, tocHistory, flashcardSrs, pronunciationReportLog] = await Promise.all([
         storage.loadGlossaryExtra(),
         storage.loadGlossaryRemovedIds(),
         storage.loadTocCandidates(),
         storage.loadTocHistory(),
         storage.loadFlashcardSrs(),
+        storage.loadPronunciationReportLog(),
       ]);
       const localSnapshot = {
         srs, history, memos, links, examResults, settings, bookmarks, ...resumeState, session,
-        glossaryExtra, glossaryRemovedIds, tocCandidates, tocHistory, flashcardSrs,
+        glossaryExtra, glossaryRemovedIds, tocCandidates, tocHistory, flashcardSrs, pronunciationReportLog,
       };
       let merged = localSnapshot;
       let pulled = false;
@@ -576,6 +577,7 @@ export function useStore() {
           storage.saveTocCandidates(merged.tocCandidates),
           storage.saveTocHistory(merged.tocHistory),
           storage.saveFlashcardSrsRaw(merged.flashcardSrs),
+          storage.savePronunciationReportLogRaw(merged.pronunciationReportLog),
         ]);
         setCloudAutoSyncToast((n) => n + 1);
       }

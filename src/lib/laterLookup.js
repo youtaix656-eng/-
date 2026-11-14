@@ -28,3 +28,8 @@ export async function removeLaterLookup(id) {
   await idbSet(KEY, next);
   return next;
 }
+
+// 直近◯日の追加件数（週次の弱点ジャーナルの自動チップ化向け）。
+export function laterLookupCountSince(list, sinceMs) {
+  return (list || []).filter((e) => e.at >= sinceMs).length;
+}

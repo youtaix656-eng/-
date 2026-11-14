@@ -9,6 +9,7 @@ import {
   mergeProgress,
   progressChanged,
   mergeResumeState,
+  mergeLogList,
 } from '../src/lib/progressMerge.js';
 
 test('mergeSrs: 片方にしかない問題はそのまま残る', () => {
@@ -210,4 +211,38 @@ test('mergeProgress: quizProgress等・sessionもmergeResumeStateの結果とし
   const out = mergeProgress(local, remote, { localUpdatedAt: 0, remoteUpdatedAt: 0 });
   assert.deepEqual(out.quizProgress, remote.quizProgress);
   assert.deepEqual(out.session, local.session);
+});
+
+// 読み方の手動補正・誤読報告の履歴（lib/pronunciationReportLog.js）：追記型の配列でidを持たないため、
+// term・reading・atの組み合わせで重複除去する（2026-11-15追加）。
+test('mergeLogList: term・reading・atの組み合わせで重複除去し、新しい順に並べる', () => {
+  const local = [{ term: '経穴', reading: 'けいけつ', at: 100 }];
+  const remote = [
+    { term: '経穴', reading: 'けいけつ', at: 100 }, // localと同一（重複除去される）
+    { term: '募穴', reading: 'ぼけつ', at: 200 },
+  ];
+  const out = mergeLogList(local, remote);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].term, '募穴'); // 新しい順
+  assert.equal(out[1].term, '経穴');
+});
+
+test('mergeLogList: 件数の上限でslice する', () => {
+  const remote = Array.from({ length: 5 }, (_, i) => ({ term: `t${i}`, reading: 'r', at: i }));
+  const out = mergeLogList([], remote, 3);
+  assert.equal(out.length, 3);
+  assert.deepEqual(out.map((e) => e.term), ['t4', 't3', 't2']); // 新しい順の上位3件
+});
+
+test('mergeLogList: 空配列・未指定でも例外を投げない', () => {
+  assert.deepEqual(mergeLogList(undefined, undefined), []);
+});
+
+test('mergeProgress/progressChanged: pronunciationReportLogもマージ対象・変化検出対象に含まれる', () => {
+  const local = { pronunciationReportLog: [{ term: '経穴', reading: 'けいけつ', at: 100 }] };
+  const remote = { pronunciationReportLog: [{ term: '募穴', reading: 'ぼけつ', at: 200 }] };
+  const merged = mergeProgress(local, remote, { localUpdatedAt: 0, remoteUpdatedAt: 0 });
+  assert.equal(merged.pronunciationReportLog.length, 2);
+  assert.equal(progressChanged(local, merged), true);
+  assert.equal(progressChanged(local, local), false);
 });

@@ -17,3 +17,9 @@ export async function appendPronunciationReportLog(entry) {
   await idbSet(KEY, next);
   return next;
 }
+
+// バックアップ・QR・クラウド自動同期からの復元専用（マージ結果の配列をそのまま置き換える）。
+// flashcardSrs.jsのsaveFlashcardSrsRawと同じ考え方——通常の1件ずつの追記（append）とは別経路。
+export async function savePronunciationReportLogRaw(list) {
+  await idbSet(KEY, Array.isArray(list) ? list : []);
+}
