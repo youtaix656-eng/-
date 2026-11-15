@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import '../styles/clockWeather.css';
 import {
   MAX_PLACES, PLACE_OPTIONS, placeOptionLabel, makePlace, addPlace, removePlace, pushHistory,
-  fetchForecast, failureText, fmtTemp,
+  fetchForecast, failureText, fmtTemp, defaultPlacesPatch,
 } from '../lib/weather.js';
 
 // 天気（2026-11-15追加・ユーザー指定）。地域は3つまで登録でき、現在地も取得できる。
@@ -25,7 +25,7 @@ export default function Weather({ store, onToast }) {
   const active = places.find((p) => p.id === settings.weatherActiveId) || places[0] || null;
   const [state, setState] = useState({ status: 'idle' }); // idle | loading | ok | error
   const [adding, setAdding] = useState(false);
-  const [preset, setPreset] = useState('東京都');
+  const [preset, setPreset] = useState('岩手県');
   const [locating, setLocating] = useState(false);
   const reqRef = useRef(0);
 
@@ -52,6 +52,13 @@ export default function Weather({ store, onToast }) {
     load(active);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
+
+  // ユーザー指定の3地域（盛岡市・北上市・仙台市）を、一度だけ登録する
+  useEffect(() => {
+    const patch = defaultPlacesPatch(settings);
+    if (patch) updateSettings(patch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.weatherDefaultsVersion]);
 
   const select = (place) => {
     updateSettings({ weatherActiveId: place.id, weatherHistory: pushHistory(history, place) });

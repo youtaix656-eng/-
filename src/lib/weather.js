@@ -34,8 +34,15 @@ export const PRESET_PLACES = [
 // 岩手県は盛岡と北上で約45km離れていて、天気も気温も違う日がある（2026-11-15・北上市を追加）。
 // pref＝一覧で並べる位置（その都道府県のすぐ下）。座標は市役所付近のおおよその値。
 export const CITY_PLACES = [
+  { name: '岩手県盛岡市', pref: '岩手県', lat: 39.7, lon: 141.15 },
   { name: '岩手県北上市', pref: '岩手県', lat: 39.29, lon: 141.11 },
+  { name: '宮城県仙台市', pref: '宮城県', lat: 38.27, lon: 140.87 },
 ];
+
+// 最初から表示しておく3地域（2026-11-15・ユーザー指定「岩手県盛岡市／岩手県北上市／宮城県仙台市を
+// 表示するように」）。地域は3つまでなので、この3つで枠がちょうど埋まる。
+export const DEFAULT_PLACE_NAMES = ['岩手県盛岡市', '岩手県北上市', '宮城県仙台市'];
+export const DEFAULT_PLACES_VERSION = 1;
 
 // 選ぶ一覧（都道府県の並びのまま、市はその都道府県のすぐ下に入れる）
 export const PLACE_OPTIONS = PRESET_PLACES.flatMap((p) => [p, ...CITY_PLACES.filter((c) => c.pref === p.name)]);
@@ -79,14 +86,15 @@ export function weatherInfo(code, isDay = true) {
 const WET_ICON = { rain: '🌧️', snow: '🌨️', thunder: '⛈️' };
 const WET_LABEL = { rain: '雨', snow: '雪', thunder: '雷雨' };
 export function summarizeDay(codes) {
-  const kinds = (Array.isArray(codes) ? codes : [])
-    .filter((c) => typeof c === 'number' && Number.isFinite(c))
-    .map((c) => weatherInfo(c, true).kind)
-    .filter((k) => k !== 'unknown');
+  const valid = (Array.isArray(codes) ? codes : [])
+    .filter((c) => typeof c === 'number' && Number.isFinite(c) && weatherInfo(c, true).kind !== 'unknown');
+  const kinds = valid.map((c) => weatherInfo(c, true).kind);
   const n = kinds.length;
   if (n < 6) return null;
   const count = (k) => kinds.filter((x) => x === k).length;
-  const sunny = count('sunny');
+  // コード2（晴れ時々くもり）は、晴れ半分・くもり半分として数える
+  // （くもりに数えると、1日じゅう「晴れ時々くもり」の日が「くもり」になってしまう）
+  const sunny = count('sunny') + valid.filter((c) => c === 2).length * 0.5;
   const wetCounts = { rain: count('rain'), snow: count('snow'), thunder: count('thunder') };
   const wet = wetCounts.rain + wetCounts.snow + wetCounts.thunder;
   const dry = n - wet;
@@ -127,6 +135,23 @@ export function addPlace(places, place) {
   }
   if (list.length >= MAX_PLACES) return { places: list, ok: false, reason: 'full' };
   return { places: [...list, place], ok: true, reason: null };
+}
+
+// 指定の3地域を一度だけ登録する。settings.weatherDefaultsVersion が印で、済んだ端末では何もしない
+// （あとから本人が入れ替えた地域を、開くたびに戻さないため）。それまで登録していた地域は消さずに
+// 履歴へ回す（履歴からタップで再登録できる）。変更が要らなければ null、要る時は settings への差分を返す。
+export function defaultPlacesPatch(settings, now = Date.now()) {
+  const s = settings || {};
+  if ((s.weatherDefaultsVersion || 0) >= DEFAULT_PLACES_VERSION) return null;
+  const defaults = DEFAULT_PLACE_NAMES
+    .map((n) => CITY_PLACES.find((c) => c.name === n))
+    .filter(Boolean)
+    .map((c) => makePlace(c));
+  const old = Array.isArray(s.weatherPlaces) ? s.weatherPlaces : [];
+  let history = Array.isArray(s.weatherHistory) ? s.weatherHistory : [];
+  old.filter((p) => !defaults.some((d) => d.id === p.id)).forEach((p) => { history = pushHistory(history, p, now); });
+  const keepActive = defaults.some((d) => d.id === s.weatherActiveId) ? s.weatherActiveId : defaults[0].id;
+  return { weatherPlaces: defaults, weatherActiveId: keepActive, weatherHistory: history, weatherDefaultsVersion: DEFAULT_PLACES_VERSION };
 }
 
 export function removePlace(places, id) {

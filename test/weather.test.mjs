@@ -141,12 +141,12 @@ test('addPlace：現在地は1つだけ。取り直した時は枠を増やさ�
 test('北上市：一覧では岩手県のすぐ下に出て、盛岡とは別の地点になる', async () => {
   const { PLACE_OPTIONS, CITY_PLACES, placeOptionLabel } = await import('../src/lib/weather.js');
   const i = PLACE_OPTIONS.findIndex((p) => p.name === '岩手県');
-  assert.equal(PLACE_OPTIONS[i + 1].name, '岩手県北上市');
+  assert.equal(PLACE_OPTIONS[i + 2].name, '岩手県北上市');
   assert.equal(placeOptionLabel(PLACE_OPTIONS[i]), '岩手県（盛岡）');
-  assert.equal(placeOptionLabel(PLACE_OPTIONS[i + 1]), '岩手県北上市');
+  assert.equal(placeOptionLabel(PLACE_OPTIONS[i + 2]), '岩手県北上市');
   assert.equal(PLACE_OPTIONS.length, 47 + CITY_PLACES.length);
   assert.equal(new Set(PLACE_OPTIONS.map((p) => p.name)).size, PLACE_OPTIONS.length);
-  const k = makePlace(PLACE_OPTIONS[i + 1]);
+  const k = makePlace(PLACE_OPTIONS[i + 2]);
   assert.notEqual(k.id, makePlace(PLACE_OPTIONS[i]).id);
   assert.ok(k.lat > 39.2 && k.lat < 39.4 && k.lon > 141.0 && k.lon < 141.2);
 });
@@ -193,4 +193,28 @@ test('parseForecast：1時間ごとのデータが無い日は、天気サービ
     daily: { time: ['2026-11-15'], weather_code: [71] },
   });
   assert.equal(data.daily[0].label, '雪');
+});
+
+test('指定の3地域（盛岡市・北上市・仙台市）を一度だけ登録し、前の地域は履歴へ回す', async () => {
+  const { defaultPlacesPatch, makePlace, PLACE_OPTIONS, MAX_PLACES } = await import('../src/lib/weather.js');
+  const tokyo = makePlace({ name: '東京都', lat: 35.69, lon: 139.69 });
+  const patch = defaultPlacesPatch({ weatherPlaces: [tokyo], weatherActiveId: tokyo.id, weatherHistory: [] }, 1000);
+  assert.deepEqual(patch.weatherPlaces.map((p) => p.name), ['岩手県盛岡市', '岩手県北上市', '宮城県仙台市']);
+  assert.equal(patch.weatherPlaces.length, MAX_PLACES);
+  assert.equal(patch.weatherActiveId, patch.weatherPlaces[0].id);
+  assert.equal(patch.weatherHistory[0].name, '東京都');
+  // 済んだ端末では何もしない（本人があとから入れ替えた地域を戻さない）
+  assert.equal(defaultPlacesPatch({ ...patch, weatherPlaces: [tokyo] }), null);
+  // 一覧では、それぞれの県のすぐ下に並ぶ
+  const names = PLACE_OPTIONS.map((p) => p.name);
+  assert.equal(names[names.indexOf('岩手県') + 1], '岩手県盛岡市');
+  assert.equal(names[names.indexOf('宮城県') + 1], '宮城県仙台市');
+  assert.equal(new Set(names).size, names.length);
+});
+
+test('1日じゅう「晴れ時々くもり」（コード2）の日を「くもり」にしない', async () => {
+  const { summarizeDay } = await import('../src/lib/weather.js');
+  assert.equal(summarizeDay(Array(13).fill(2)).label, '晴れ時々くもり');
+  assert.equal(summarizeDay(Array(13).fill(3)).label, 'くもり');
+  assert.equal(summarizeDay(Array(13).fill(1)).label, '晴れ');
 });
