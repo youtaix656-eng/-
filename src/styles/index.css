@@ -157,6 +157,20 @@ button {
   font-weight: 400;
 }
 
+/* ホームの見出しのそば：時計・天気への入口 */
+.header-tools { display: flex; gap: 8px; margin-top: 8px; }
+.header-tool {
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.header-tool:active { transform: scale(0.95); }
+
 /* ホーム右上：直近の履歴ボタン */
 .hist-open-btn {
   position: absolute;

@@ -20,6 +20,7 @@ import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
 import ScrollArrows from './components/ScrollArrows.jsx';
+import { dueAlarms, markFired, snoozeAlarm, SNOOZE_MIN } from './lib/alarm.js';
 // AuthGate（ロック未設定なら使わない）・Pomodoro（オプトイン機能）は、必要な人にだけ
 // 起動時バンドルの負担が乗るようlazy化（他の30以上の画面と同じ扱い）。
 const AuthGate = lazy(() => import('./components/AuthGate.jsx'));
@@ -69,6 +70,9 @@ const KeizetsuIndex = lazy(() => import('./components/KeizetsuIndex.jsx'));
 const KeizetsuTextbook = lazy(() => import('./components/KeizetsuTextbook.jsx'));
 const KeizetsuPageImages = lazy(() => import('./components/KeizetsuPageImages.jsx'));
 const Faq = lazy(() => import('./components/Faq.jsx'));
+const Clock = lazy(() => import('./components/Clock.jsx'));
+const Weather = lazy(() => import('./components/Weather.jsx'));
+const AlarmRinger = lazy(() => import('./components/AlarmRinger.jsx'));
 const CognitiveStyleGuide = lazy(() => import('./components/CognitiveStyleGuide.jsx'));
 const CognitiveTraining = lazy(() => import('./components/CognitiveTraining.jsx'));
 const G100Guide = lazy(() => import('./components/G100Guide.jsx'));
@@ -134,6 +138,8 @@ const VIEW_TITLES = {
   mnemonics: '語呂合わせノート',
   features: '全機能一覧',
   faq: '鍼灸国試アプリ Q&A',
+  clock: '時計・アラーム',
+  weather: '天気',
   cognitivestyle: 'あなたの学習スタイル',
   cognitivetraining: '認知特性トレーニング',
   g100guide: 'G-100 1〜100周ガイド',
@@ -340,6 +346,38 @@ export default function App() {
 
   const examDaysLeft = () => daysUntil(store.settings.examDate);
   const showToast = (msg) => setToast(msg);
+
+  // 時計画面のアラームの見張り（2026-11-15追加）。アプリを開いている／バックグラウンドに
+  // ある間だけ、1秒ごと（＋タブに戻った時）に「鳴らす時刻か」を見る。判定はlib/alarm.js。
+  // アラームが1件もONでなければタイマー自体を回さない。
+  const [ringingAlarm, setRingingAlarm] = useState(null);
+  useEffect(() => {
+    const alarms = store.settings.alarms;
+    if (!store.loaded || ringingAlarm || !Array.isArray(alarms) || !alarms.some((a) => a.enabled)) return undefined;
+    const check = () => {
+      const now = Date.now();
+      const due = dueAlarms(alarms, now);
+      if (due.length === 0) return;
+      // 同じ時刻に複数あっても鳴らすのは1件。残りも「鳴らした」印だけ付けて重ねて鳴らさない。
+      const ids = new Set(due.map((a) => a.id));
+      store.updateSettings({ alarms: alarms.map((a) => (ids.has(a.id) ? markFired(a, now) : a)) });
+      setRingingAlarm(due[0]);
+    };
+    check();
+    const t = setInterval(check, 1000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [store.loaded, store.settings.alarms, ringingAlarm]); // eslint-disable-line react-hooks/exhaustive-deps
+  const snoozeRingingAlarm = () => {
+    const id = ringingAlarm?.id;
+    const alarms = Array.isArray(store.settings.alarms) ? store.settings.alarms : [];
+    store.updateSettings({ alarms: alarms.map((a) => (a.id === id ? snoozeAlarm(a) : a)) });
+    setRingingAlarm(null);
+    showToast(`😴 ${SNOOZE_MIN}分後にもう一度鳴らします`);
+  };
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2200);
@@ -899,6 +937,10 @@ export default function App() {
         return <FeatureIndex onNavigate={setView} />;
       case 'faq':
         return <Faq />;
+      case 'clock':
+        return <Clock store={store} onToast={showToast} />;
+      case 'weather':
+        return <Weather store={store} onToast={showToast} />;
       case 'cognitivestyle':
         return <CognitiveStyleGuide onNavigate={setView} onOpenTraining={jumpToTraining} />;
       case 'cognitivetraining':
@@ -987,6 +1029,13 @@ export default function App() {
           )}
         </h1>
         {view === 'home' && <p className="subtitle">過去問ベースで、合格まで着実に。</p>}
+        {/* ホームの横（見出しのそば）に時計・天気への入口（2026-11-15・ユーザー指定） */}
+        {view === 'home' && !screenLocked && (
+          <div className="header-tools">
+            <button type="button" className="header-tool" onClick={() => setView('clock')}>🕐 時計</button>
+            <button type="button" className="header-tool" onClick={() => setView('weather')}>🌤️ 天気</button>
+          </div>
+        )}
         {view === 'home' && !screenLocked && (
           <button
             className="hist-open-btn"
@@ -1065,6 +1114,18 @@ export default function App() {
       {/* 盲目の受験生からの改善提案（2026-11-14・ユーザー承認済み）#1：トーストは画面にしか
           出ておらず、スクリーンリーダーには伝わらなかった。role/aria-liveで読み上げさせる。 */}
       {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
+
+      {/* アラームが鳴っている間の画面（時計画面のアラーム。どの画面にいても上に出す） */}
+      {ringingAlarm && (
+        <Suspense fallback={null}>
+          <AlarmRinger
+            alarm={ringingAlarm}
+            volume={store.settings.alarmVolume ?? 1}
+            onStop={() => setRingingAlarm(null)}
+            onSnooze={snoozeRingingAlarm}
+          />
+        </Suspense>
+      )}
 
       {/* 画面ロック中の南京錠マーク（ユーザー指定）：常に画面上に表示し、長押し（0.6秒）
           だけで解除できる。タップでは解除しない（誤って一瞬触れただけで解除されないように）。

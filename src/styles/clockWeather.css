@@ -1,0 +1,115 @@
+/* 時計・アラーム・天気（2026-11-15追加）。どちらもlazyな画面なので、このCSSは
+   その画面を開いた時だけ読む（起動時のCSSには入れない）。背景は黒（ユーザー指定）。 */
+.cw-view { background: #000; color: #fff; border-radius: 16px; padding: 14px 12px 20px; }
+.cw-view .view-title { color: #fff; }
+.cw-panel { background: #0d0f14; border: 1px solid #262a33; border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.cw-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.cw-head h3, .cw-h3 { margin: 0 0 8px; font-size: 15px; color: #fff; }
+.cw-head h3 { margin: 0; }
+.cw-add { width: 40px; height: 40px; border-radius: 50%; border: none; background: #ff9f0a; color: #000; font-size: 24px; font-weight: 700; line-height: 1; cursor: pointer; }
+.cw-note { font-size: 12.5px; line-height: 1.7; color: #ffd60a; margin: 6px 0; }
+.cw-note.sub { color: #9aa3b2; font-size: 11.5px; }
+.cw-empty { font-size: 13px; color: #9aa3b2; margin: 8px 0; }
+.cw-field { display: block; font-size: 12.5px; color: #c7cdd8; margin: 12px 0 0; }
+.cw-field input[type='text'], .cw-field select { display: block; width: 100%; margin-top: 6px; padding: 10px; border-radius: 10px; border: 1px solid #3a3f4b; background: #000; color: #fff; font-size: 15px; }
+.cw-btn { padding: 10px 14px; border-radius: 12px; border: 1px solid #3a3f4b; background: #1c1f27; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+.cw-btn.primary { background: #ff9f0a; border-color: #ff9f0a; color: #000; }
+.cw-btn.danger { background: transparent; border-color: #ff453a; color: #ff453a; }
+.cw-btn.sm { padding: 6px 10px; font-size: 12px; }
+.cw-btn.big { padding: 14px 18px; font-size: 16px; width: 100%; }
+.cw-btn:disabled { opacity: 0.5; }
+.cw-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.cw-range { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.cw-range input { flex: 1; accent-color: #ff9f0a; }
+
+/* 時計 */
+.clock-panel { text-align: center; background: #000; }
+.clock-face { width: min(72vw, 280px); height: auto; display: block; margin: 0 auto; }
+.clock-num { fill: #fff; font-size: 19px; font-weight: 700; font-family: inherit; }
+.clock-digital { margin-top: 12px; font-size: 44px; font-weight: 800; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; color: #fff; }
+.clock-digital-sec { color: #ff9f0a; }
+.clock-date { font-size: 13px; color: #9aa3b2; margin-top: 2px; }
+
+/* アラーム */
+.alarm-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.alarm-item { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid #262a33; }
+.alarm-item.off .alarm-time, .alarm-item.off .alarm-sub { opacity: 0.45; }
+.alarm-main { flex: 1; min-width: 0; text-align: left; background: none; border: none; color: #fff; padding: 0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.alarm-time { font-size: 38px; font-weight: 300; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.alarm-sub { font-size: 12.5px; color: #c7cdd8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.alarm-next { font-size: 11.5px; color: #30d158; }
+.alarm-item.off .alarm-next { color: #6b7280; }
+.cw-switch { position: relative; flex: 0 0 auto; width: 52px; height: 32px; cursor: pointer; }
+.cw-switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.cw-switch-track { position: absolute; inset: 0; border-radius: 16px; background: #3a3f4b; transition: background 0.15s; pointer-events: none; }
+.cw-switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+.cw-switch input:checked + .cw-switch-track { background: #30d158; }
+.cw-switch input:checked + .cw-switch-track::after { transform: translateX(20px); }
+.cw-switch input:focus-visible + .cw-switch-track { outline: 2px solid #fff; outline-offset: 2px; }
+.alarm-editor { margin-top: 12px; padding: 14px; border-radius: 14px; background: #171a21; border: 1px solid #3a3f4b; }
+.alarm-editor h4 { margin: 0; font-size: 14px; color: #ff9f0a; }
+.alarm-time-input { display: block; margin-top: 6px; padding: 8px 12px; font-size: 30px; border-radius: 12px; border: 1px solid #3a3f4b; background: #000; color: #fff; color-scheme: dark; }
+.alarm-days { display: flex; gap: 6px; margin-top: 6px; }
+.alarm-day { flex: 1; height: 38px; border-radius: 50%; border: 1px solid #3a3f4b; background: #000; color: #c7cdd8; font-size: 13px; font-weight: 700; cursor: pointer; max-width: 38px; }
+.alarm-day.active { background: #ff9f0a; border-color: #ff9f0a; color: #000; }
+.alarm-sounds { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.alarm-sound { width: 100%; text-align: left; padding: 9px 8px; border-radius: 10px; border: 1px solid #3a3f4b; background: #000; color: #fff; font-size: 12.5px; cursor: pointer; }
+.alarm-sound.active { border-color: #ff9f0a; background: #2b1d00; }
+.alarm-sound-no { display: inline-block; min-width: 20px; color: #ff9f0a; font-weight: 800; }
+
+/* 鳴っている時の画面：トースト(50)・モーダル(70/100)より上 */
+.alarm-ring-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.alarm-ring { width: 100%; max-width: 360px; text-align: center; color: #fff; outline: none; }
+.alarm-ring-ico { font-size: 64px; animation: alarm-shake 0.5s ease-in-out infinite; }
+@keyframes alarm-shake { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(12deg); } }
+.app.reduce-motion .alarm-ring-ico { animation: none; }
+.alarm-ring-time { font-size: 64px; font-weight: 300; font-variant-numeric: tabular-nums; }
+.alarm-ring-label { font-size: 18px; font-weight: 700; }
+.alarm-ring-sound { font-size: 12.5px; color: #9aa3b2; margin: 4px 0 14px; }
+.alarm-ring-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+
+/* 天気 */
+.wx-places { display: flex; flex-wrap: wrap; gap: 8px; }
+.wx-place { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid #3a3f4b; background: #000; overflow: hidden; }
+.wx-place.active { border-color: #0a84ff; background: #0a2a4d; }
+.wx-place-pick { background: none; border: none; color: #fff; font-size: 14px; font-weight: 700; padding: 9px 4px 9px 14px; cursor: pointer; }
+.wx-place-del { background: none; border: none; color: #9aa3b2; font-size: 13px; padding: 9px 12px 9px 8px; cursor: pointer; }
+.wx-add { margin-top: 10px; padding-top: 4px; border-top: 1px solid #262a33; display: flex; flex-direction: column; gap: 10px; }
+.wx-add-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.wx-add-row select { margin-top: 0; flex: 1; }
+.wx-now { border-radius: 18px; padding: 18px 16px 12px; margin-bottom: 12px; color: #fff; background: linear-gradient(160deg, #1f6fd6, #0a2a6b); }
+.wx-now.wx-sunny { background: linear-gradient(160deg, #ff9f0a, #d6491f); }
+.wx-now.wx-night { background: linear-gradient(160deg, #3a2f8f, #0b1030); }
+.wx-now.wx-cloudy, .wx-now.wx-fog { background: linear-gradient(160deg, #6b7a90, #2b3442); }
+.wx-now.wx-rain { background: linear-gradient(160deg, #1f6fd6, #0a2a6b); }
+.wx-now.wx-snow { background: linear-gradient(160deg, #5ac8fa, #2a5f8f); }
+.wx-now.wx-thunder { background: linear-gradient(160deg, #5e3fbf, #1a1040); }
+.wx-now-place { font-size: 16px; font-weight: 700; }
+.wx-now-main { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 4px; }
+.wx-now-ico { font-size: 60px; line-height: 1; }
+.wx-now-temp { font-size: 68px; font-weight: 200; line-height: 1; }
+.wx-now-label { text-align: center; font-size: 17px; font-weight: 700; margin-top: 4px; }
+.wx-now-hl { display: flex; justify-content: center; gap: 14px; font-size: 14px; font-weight: 700; margin-top: 4px; }
+.wx-now .wx-max, .wx-now .wx-min { color: #fff; }
+.wx-max { color: #ff6b5e; font-weight: 700; }
+.wx-min { color: #5ac8fa; font-weight: 700; }
+.wx-now-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; font-size: 11.5px; text-align: center; background: rgba(0, 0, 0, 0.22); border-radius: 12px; padding: 8px 4px; }
+.wx-now-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; opacity: 0.9; }
+.wx-refresh { background: rgba(0, 0, 0, 0.25); border: none; color: #fff; border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+.wx-hours { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; }
+.wx-hour { flex: 0 0 52px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; }
+.wx-hour-t { color: #9aa3b2; }
+.wx-hour-ico { font-size: 22px; }
+.wx-hour-temp { font-weight: 700; color: #ffd60a; }
+.wx-hour-pop { font-size: 11px; color: #5ac8fa; }
+.wx-days { list-style: none; margin: 0; padding: 0; }
+.wx-day { display: grid; grid-template-columns: 78px 30px 1fr 40px 40px; align-items: center; gap: 6px; padding: 9px 0; border-top: 1px solid #262a33; font-size: 14px; }
+.wx-day:first-child { border-top: none; }
+.wx-day-ico { font-size: 20px; }
+.wx-day-pop { font-size: 12px; color: #5ac8fa; }
+.wx-day .wx-min, .wx-day .wx-max { text-align: right; }
+.wx-history { list-style: none; margin: 0; padding: 0; }
+.wx-history-item { width: 100%; display: flex; justify-content: space-between; gap: 8px; align-items: center; background: none; border: none; border-top: 1px solid #262a33; color: #fff; padding: 10px 0; font-size: 14px; cursor: pointer; text-align: left; }
+.wx-history-at { font-size: 11.5px; color: #9aa3b2; }
+
+@media print { .alarm-ring-backdrop { display: none; } }
