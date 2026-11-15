@@ -41,6 +41,7 @@ import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { LEECH_THRESHOLD } from '../lib/srs.js';
 import BreakTimer from './BreakTimer.jsx';
 import ManagerReview from './ManagerReview.jsx';
+import { recordAudioHistory } from '../lib/audioPlayHistory.js';
 import { resolveBufferUsage, bufferUsageLabel, planStudySession, DEFAULT_BASE_RATIO, estimatedAnswerSeconds } from '../lib/bufferSession.js';
 import BufferPlanCard from './BufferPlanCard.jsx';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
@@ -548,6 +549,10 @@ export default function AudioMode({
   const [vcKind, setVcKind] = useState('maru');
 
   // 上部の検索フィルタ（科目名 / ジャンル / キーワード、いずれも未選択OK）
+  // ミニプレーヤーの「続きから」「再生履歴」から飛んでくる位置（まだ飛び終えていないぶん）
+  const pendingJumpRef = useRef(null);
+  const [jumpNonce, setJumpNonce] = useState(0);
+  const togglePlayRef = useRef(null);
   const [filterSubject, setFilterSubject] = useState(() => resumeFilters?.subject || '');
   const [filterGenre, setFilterGenre] = useState(() => resumeFilters?.genre || '');
   const [filterKeyword, setFilterKeyword] = useState(() => resumeFilters?.keyword || '');
@@ -561,6 +566,32 @@ export default function AudioMode({
     // 同じ内容を効かせる（最初からresumeFilters付きで新規マウントした場合は、遅延初期化と
     // この効果の両方が同じ値を適用するだけで無害）。
     if (!resumeFilters) return;
+    if (resumeFilters.exact) {
+      // 下部ミニプレーヤーの「続きから」「再生履歴」から来た時（2026-11-15）：
+      // その履歴と同じ絞り込みにそろえ（空の項目は空へ戻す）、通常の読み上げにしてから、
+      // 計画が組み上がったあとで記録の位置へ飛ぶ（下の「履歴の位置へ飛ぶ」効果）。
+      const j = {
+        subject: resumeFilters.subject || '', genre: resumeFilters.genre || '',
+        keyword: resumeFilters.keyword || '', round: resumeFilters.round || '',
+        index: Number(resumeFilters.index) || 0, total: Number(resumeFilters.total) || 0,
+        autoPlay: !!resumeFilters.autoPlay,
+      };
+      j.source = j.subject || j.genre || j.keyword || j.round ? 'filter' : 'all';
+      const same = mode === 0 && source === j.source && filterSubject === j.subject
+        && filterGenre === j.genre && filterKeyword === j.keyword && String(filterRound || '') === j.round;
+      if (!same) rebuildStop();
+      setMode(0);
+      setSource(j.source);
+      setFilterSubject(j.subject);
+      setFilterGenre(j.genre);
+      setFilterKeyword(j.keyword);
+      setFilterRound(j.round);
+      pendingJumpRef.current = j;
+      cameFromResumeRef.current = true;
+      setJumpNonce((n) => n + 1);
+      onConsumeResumeFilters?.();
+      return;
+    }
     rebuildStop();
     setSource('filter');
     if (resumeFilters.subject) setFilterSubject(resumeFilters.subject);
@@ -1424,6 +1455,44 @@ export default function AudioMode({
     engine.load(builtPlan, { sig: planSig, startIndex });
   }, [builtPlan, planSig, audioReady]);
 
+  // 履歴の位置へ飛ぶ：絞り込みが履歴と同じになり、計画が読み込まれてから一度だけ（上の効果の後に走る）
+  useEffect(() => {
+    const j = pendingJumpRef.current;
+    if (!j || !audioReady || builtPlan.length === 0) return;
+    if (mode !== 0 || source !== j.source || filterSubject !== j.subject || filterGenre !== j.genre
+      || filterKeyword !== j.keyword || String(filterRound || '') !== j.round) return;
+    pendingJumpRef.current = null;
+    const target = Math.max(0, Math.min(builtPlan.length - 1, j.index));
+    engine.seekTo(target);
+    if (j.total && j.total !== builtPlan.length) {
+      onToast?.(`問題の数が前回（${j.total}問）と変わっているため、近い位置（${target + 1} / ${builtPlan.length}）から始めます`);
+    }
+    if (j.autoPlay) {
+      // seekToは再生中ならそのまま続きを読む。止まっていた時だけ、ここで再生を始める
+      setTimeout(() => { if (!engine.getSnapshot().playing) togglePlayRef.current?.(); }, 250);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpNonce, audioReady, builtPlan, planSig, mode, source, filterSubject, filterGenre, filterKeyword, filterRound]);
+
+  // 再生履歴（下部ミニプレーヤー用）：実際に再生している間だけ、どこまで聞いたかを残す。
+  // 残すのは通常の読み上げ（科目などを選んで読む／すべて読む）だけ——連結学習モードや
+  // 間違えた問題は同じ並びを再現できないので、押しても飛べない履歴を作らない。
+  useEffect(() => {
+    if (!audioReady || !snap.playing || pendingJumpRef.current) return;
+    if (mode !== 0 || (source !== 'filter' && source !== 'all') || builtPlan.length === 0) return;
+    const d = snap.display;
+    const q = d?.q;
+    recordAudioHistory({
+      subject: source === 'filter' ? filterSubject : '', genre: source === 'filter' ? filterGenre : '',
+      keyword: source === 'filter' ? filterKeyword : '', round: source === 'filter' ? filterRound : '',
+      index: snap.index || 0, total: builtPlan.length,
+      label: (q && q.subject) || '',
+      text: (q && q.question) || d?.keyword || '',
+      at: Date.now(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap.index, snap.playing, audioReady, builtPlan.length, mode, source, filterSubject, filterGenre, filterKeyword, filterRound]);
+
   // 「はい」で開いた時だけ、検索カード等を飛ばしてプレーヤーまで自動スクロールする。
   // 保存済みの続きから位置の反映（上の効果）を待ってから行う（1回だけ）。
   // 画面上部の固定ヘッダー（.app-header、position:sticky）の高さぶんは必ず差し引く——
@@ -1467,7 +1536,7 @@ export default function AudioMode({
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }, 50);
     return () => clearTimeout(t);
-  }, [audioReady, builtPlan.length]);
+  }, [audioReady, builtPlan.length, jumpNonce]);
 
   // 再生位置を1問ごとに保存（続きから用）。読み込み完了後のみ。
   // 二重記録防止の対象id（gradedIdsRef）も一緒に保存する——保存しないと、閉じて「続きから」
@@ -1594,6 +1663,7 @@ export default function AudioMode({
     }
     engine.toggle();
   };
+  togglePlayRef.current = togglePlay;
   const skip = (delta) => engine.skip(delta);
   // 問題番号バー（スクラバー）：ドラッグ中は見た目だけ動かし（音声の飛び先を連打しない）、
   // 指を離した/クリックが確定した時だけ実際にジャンプする（engine.seekTo）。

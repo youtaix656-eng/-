@@ -1180,6 +1180,14 @@ export default function App() {
       <MiniPlayer
         hidden={screenLocked}
         onOpen={() => setView('audio')}
+        onJump={(entry, autoPlay) => {
+          // 再生履歴・閉じる前の続きへ飛ぶ：同じ絞り込みにそろえて、その問題番号から
+          setAudioResumeFilters({
+            subject: entry.subject, genre: entry.genre, keyword: entry.keyword, round: entry.round,
+            index: entry.index, total: entry.total, exact: true, autoPlay: !!autoPlay,
+          });
+          setView('audio');
+        }}
         lifted={view !== 'roadmap'}
       />
 

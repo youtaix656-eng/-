@@ -3133,7 +3133,41 @@ code.block {
 .mini-texts { min-width: 0; display: flex; flex-direction: column; }
 .mini-title {
   font-size: 13px; font-weight: 700; color: #fff;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: baseline; gap: 6px; min-width: 0;
+}
+.mini-title-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 問題番号（いま何問目か）。科目名が長くても欠けないように縮めない */
+.mini-pos { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.mini-tag {
+  flex: 0 0 auto; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-sub);
+}
+/* 再生履歴（ミニプレーヤーのすぐ上に開く） */
+.mini-history {
+  position: absolute; left: 0; right: 0; bottom: 100%;
+  max-height: 52vh; overflow-y: auto;
+  background: var(--navy); border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.4); padding: 8px 10px;
+}
+.mini-history-head { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+.mini-history-head button, .mini-history-del {
+  background: none; border: none; color: var(--text-sub); font-size: 14px; width: 36px; height: 36px; cursor: pointer;
+}
+.mini-history ul { list-style: none; margin: 0; padding: 0; }
+.mini-history li { display: flex; align-items: center; gap: 4px; border-top: 1px solid var(--border); }
+.mini-history-item {
+  flex: 1; min-width: 0; text-align: left; background: none; border: none; color: #fff; cursor: pointer;
+  padding: 8px 2px; display: flex; flex-direction: column; gap: 2px;
+}
+.mini-history-title { font-size: 13px; font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+.mini-history-title b { color: var(--accent); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mini-history-sub { font-size: 12px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-history-at { font-size: 11px; color: var(--text-mute); }
+.mini-history-empty { font-size: 12px; color: var(--text-sub); margin: 6px 0; }
+.mini-history-foot { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--text-mute); padding-top: 8px; border-top: 1px solid var(--border); }
+.mini-history-foot button {
+  align-self: flex-start; background: none; border: 1px solid var(--border); color: var(--text-sub);
+  border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
 }
 .mini-sub {
   font-size: 11px; color: var(--text-sub);

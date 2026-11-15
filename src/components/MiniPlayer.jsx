@@ -1,36 +1,96 @@
+import { useEffect, useState } from 'react';
 import * as engine from '../lib/audioEngine.js';
 import { useAudioEngine } from '../lib/audioEngine.js';
+import {
+  loadAudioHistory, subscribeAudioHistory, deleteAudioHistory, clearAudioHistory,
+  historyTitle, positionText, historyTimeText,
+} from '../lib/audioPlayHistory.js';
 
 // どの画面からでも表示される音声ミニプレーヤー。
 // 音声学習で再生を始めた後に他の画面へ移っても、ここから停止・スキップできる。
-// （音声学習画面そのものにいる時は、フルプレーヤーがあるので非表示）
-export default function MiniPlayer({ hidden, onOpen, lifted }) {
+// 2026-11-15（ユーザー指定）：①問題番号を出す ②アプリを閉じて開き直しても、最後に聞いていた
+// ところを出す（▶でそこから再開） ③再生履歴を持ち、押すとその位置へ飛ぶ。
+// ※ アプリを閉じている間は音は鳴らない。開き直した時に「続きから」を出すだけ。
+export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
   const snap = useAudioEngine();
+  const [history, setHistory] = useState(() => loadAudioHistory());
+  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => subscribeAudioHistory(setHistory), []);
+  const live = snap.hasPlan && snap.started;
+  // 再生を始めたら、「閉じた」印は外す（次に止めた時にまた続きが出るように）
+  useEffect(() => { if (live) setDismissed(false); }, [live]);
+
   if (hidden) return null;
-  // 再生を始めた後だけ表示（読み込んだだけの停止状態では出さない）。
-  // 一時停止中も表示を保ち、✕（最初へ戻す）で消える。
-  if (!snap.hasPlan || !snap.started) return null;
+  const last = history[0] || null;
+  // 再生中・一時停止中はいまの内容。そうでなければ、最後に聞いていたところ（閉じる前の続き）。
+  if (!live && (!last || dismissed)) return null;
 
   const d = snap.display;
-  const label = labelOf(d);
-  const sub = subOf(d);
+  const label = live ? labelOf(d) : (last.label || historyTitle(last));
+  const sub = live ? subOf(d) : (last.text.length > 30 ? last.text.slice(0, 30) + '…' : last.text);
+  const pos = live ? (snap.total > 0 ? `${snap.index + 1} / ${snap.total}` : '') : positionText(last);
+
+  const jump = (entry, autoPlay) => { setOpen(false); onJump?.(entry, autoPlay); };
 
   return (
     <div className={`mini-player${lifted ? ' lifted' : ''}`} role="region" aria-label="音声ミニプレーヤー">
-      <button className="mini-open" onClick={onOpen} aria-label="音声学習を開く">
-        <span className={`mini-eq ${snap.playing ? 'on' : ''}`}><i /><i /><i /></span>
+      {open && (
+        <div className="mini-history" role="dialog" aria-label="音声の再生履歴">
+          <div className="mini-history-head">
+            <span>🕘 再生履歴（押すとその問題から再生）</span>
+            <button type="button" onClick={() => setOpen(false)} aria-label="履歴を閉じる">✕</button>
+          </div>
+          {history.length === 0 && <p className="mini-history-empty">まだ履歴はありません。科目などを選んで再生すると、ここに残ります。</p>}
+          <ul>
+            {history.map((h) => (
+              <li key={h.key}>
+                <button type="button" className="mini-history-item" onClick={() => jump(h, true)}>
+                  <span className="mini-history-title">{historyTitle(h)}<b>{positionText(h)}</b></span>
+                  <span className="mini-history-sub">{h.text || '（問題文なし）'}</span>
+                  <span className="mini-history-at">{historyTimeText(h.at)}</span>
+                </button>
+                <button type="button" className="mini-history-del" onClick={() => deleteAudioHistory(h.key)} aria-label={`${historyTitle(h)}の履歴を消す`}>🗑</button>
+              </li>
+            ))}
+          </ul>
+          <div className="mini-history-foot">
+            <span>連結学習モード・間違えた問題の読み上げは、同じ並びを再現できないため履歴に残りません。</span>
+            {history.length > 0 && <button type="button" onClick={() => clearAudioHistory()}>履歴をすべて消す</button>}
+          </div>
+        </div>
+      )}
+      <button
+        className="mini-open"
+        onClick={() => (live ? onOpen?.() : jump(last, false))}
+        aria-label={live ? '音声学習を開く' : '前回の続きを開く'}
+      >
+        <span className={`mini-eq ${live && snap.playing ? 'on' : ''}`}><i /><i /><i /></span>
         <span className="mini-texts">
-          <span className="mini-title">{label}</span>
+          <span className="mini-title">
+            {!live && <span className="mini-tag">続きから</span>}
+            <span className="mini-title-text">{label}</span>
+            {pos && <span className="mini-pos">{pos}</span>}
+          </span>
           <span className="mini-sub">{sub}</span>
         </span>
       </button>
       <div className="mini-controls">
-        <button onClick={() => engine.skip(-1)} disabled={snap.index === 0} aria-label="前へ">⏮</button>
-        <button className="mini-main" onClick={() => engine.toggle()} aria-label="再生 / 一時停止">
-          {snap.playing ? '⏸' : '▶'}
+        {live && <button onClick={() => engine.skip(-1)} disabled={snap.index === 0} aria-label="前へ">⏮</button>}
+        <button
+          className="mini-main"
+          onClick={() => (live ? engine.toggle() : jump(last, true))}
+          aria-label={live ? '再生 / 一時停止' : '前回の続きから再生'}
+        >
+          {live && snap.playing ? '⏸' : '▶'}
         </button>
-        <button onClick={() => engine.skip(1)} disabled={snap.index >= snap.total - 1} aria-label="次へ">⏭</button>
-        <button className="mini-close" onClick={() => engine.resetToStart()} aria-label="停止して閉じる">✕</button>
+        {live && <button onClick={() => engine.skip(1)} disabled={snap.index >= snap.total - 1} aria-label="次へ">⏭</button>}
+        <button className="mini-hist" onClick={() => setOpen((v) => !v)} aria-label="再生履歴" aria-expanded={open}>🕘</button>
+        <button
+          className="mini-close"
+          onClick={() => { setOpen(false); if (live) engine.resetToStart(); setDismissed(true); }}
+          aria-label="停止して閉じる"
+        >✕</button>
       </div>
     </div>
   );
