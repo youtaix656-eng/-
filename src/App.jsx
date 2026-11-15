@@ -1184,7 +1184,7 @@ export default function App() {
           // 再生履歴・閉じる前の続きへ飛ぶ：同じ絞り込みにそろえて、その問題番号から
           setAudioResumeFilters({
             subject: entry.subject, genre: entry.genre, keyword: entry.keyword, round: entry.round,
-            index: entry.index, total: entry.total, exact: true, autoPlay: !!autoPlay,
+            index: entry.index, total: entry.total, qid: entry.qid, done: entry.done, exact: true, autoPlay: !!autoPlay,
           });
           setView('audio');
         }}

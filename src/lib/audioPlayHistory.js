@@ -24,6 +24,11 @@ export function normalizeEntry(e) {
     label: str(e.label).slice(0, 40),
     text: str(e.text).slice(0, 60),
     at: Number.isFinite(Number(e.at)) ? Number(e.at) : 0,
+    // 聞いていた問題そのもののid。並びが変わっても（シャッフル・問題の追加・絞り込みの違い）、
+    // 番号ではなくこの問題を探して飛べるようにする。
+    qid: e.qid != null && e.qid !== '' ? String(e.qid) : '',
+    // 最後まで聞き終えた印。次は最初から始める（最後の1問だけ再生して終わらないように）。
+    done: !!e.done,
   };
   entry.key = historyKeyOf(entry);
   return entry;
@@ -48,7 +53,25 @@ export function historyTitle(e) {
 }
 
 export function positionText(e) {
-  return e && e.total > 0 ? `${e.index + 1} / ${e.total}` : '';
+  if (!e || !(e.total > 0)) return '';
+  return e.done ? `全${e.total}問・聞き終えた` : `${e.index + 1} / ${e.total}`;
+}
+
+// 飛び先を決める（純関数）。planIdsは今の並びの問題id（問題でない項目はnull）。
+// ①聞き終えた履歴は最初から ②同じ問題が今の並びにあればそこ ③無ければ番号を範囲内へ寄せる。
+// 戻り値 { index, moved }：movedは「記録と同じ問題へは行けず、近い番号へ寄せた」時だけtrue。
+export function resolveJumpIndex(entry, planIds) {
+  const ids = Array.isArray(planIds) ? planIds : [];
+  if (ids.length === 0) return { index: 0, moved: false };
+  if (entry?.done) return { index: 0, moved: false };
+  if (entry?.qid) {
+    const at = ids.findIndex((id) => id != null && String(id) === String(entry.qid));
+    if (at >= 0) return { index: at, moved: false };
+  }
+  const raw = Number(entry?.index) || 0;
+  const index = Math.max(0, Math.min(ids.length - 1, raw));
+  const moved = !!entry?.qid || index !== raw || (entry?.total > 0 && entry.total !== ids.length);
+  return { index, moved };
 }
 
 const pad2 = (n) => String(n).padStart(2, '0');

@@ -27,8 +27,10 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
   if (!live && (!last || dismissed)) return null;
 
   const d = snap.display;
-  const label = live ? labelOf(d) : (last.label || historyTitle(last));
-  const sub = live ? subOf(d) : (last.text.length > 30 ? last.text.slice(0, 30) + '…' : last.text);
+  const label = live ? labelOf(d) : historyTitle(last);
+  const sub = live ? subOf(d)
+    : last.done ? '▶ で最初から再生'
+      : (last.text.length > 30 ? last.text.slice(0, 30) + '…' : last.text);
   const pos = live ? (snap.total > 0 ? `${snap.index + 1} / ${snap.total}` : '') : positionText(last);
 
   const jump = (entry, autoPlay) => { setOpen(false); onJump?.(entry, autoPlay); };
@@ -47,7 +49,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
               <li key={h.key}>
                 <button type="button" className="mini-history-item" onClick={() => jump(h, true)}>
                   <span className="mini-history-title">{historyTitle(h)}<b>{positionText(h)}</b></span>
-                  <span className="mini-history-sub">{h.text || '（問題文なし）'}</span>
+                  <span className="mini-history-sub">{h.done ? '最後まで聞きました。押すと最初から再生します。' : (h.text || '（問題文なし）')}</span>
                   <span className="mini-history-at">{historyTimeText(h.at)}</span>
                 </button>
                 <button type="button" className="mini-history-del" onClick={() => deleteAudioHistory(h.key)} aria-label={`${historyTitle(h)}の履歴を消す`}>🗑</button>
@@ -68,7 +70,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
         <span className={`mini-eq ${live && snap.playing ? 'on' : ''}`}><i /><i /><i /></span>
         <span className="mini-texts">
           <span className="mini-title">
-            {!live && <span className="mini-tag">続きから</span>}
+            {!live && <span className="mini-tag">{last.done ? 'もう一度' : '続きから'}</span>}
             <span className="mini-title-text">{label}</span>
             {pos && <span className="mini-pos">{pos}</span>}
           </span>

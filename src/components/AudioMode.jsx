@@ -41,7 +41,7 @@ import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { LEECH_THRESHOLD } from '../lib/srs.js';
 import BreakTimer from './BreakTimer.jsx';
 import ManagerReview from './ManagerReview.jsx';
-import { recordAudioHistory } from '../lib/audioPlayHistory.js';
+import { recordAudioHistory, resolveJumpIndex, deleteAudioHistory, historyKeyOf } from '../lib/audioPlayHistory.js';
 import { resolveBufferUsage, bufferUsageLabel, planStudySession, DEFAULT_BASE_RATIO, estimatedAnswerSeconds } from '../lib/bufferSession.js';
 import BufferPlanCard from './BufferPlanCard.jsx';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
@@ -575,6 +575,7 @@ export default function AudioMode({
         keyword: resumeFilters.keyword || '', round: resumeFilters.round || '',
         index: Number(resumeFilters.index) || 0, total: Number(resumeFilters.total) || 0,
         autoPlay: !!resumeFilters.autoPlay,
+        qid: resumeFilters.qid || '', done: !!resumeFilters.done, at: Date.now(),
       };
       j.source = j.subject || j.genre || j.keyword || j.round ? 'filter' : 'all';
       const same = mode === 0 && source === j.source && filterSubject === j.subject
@@ -1434,7 +1435,7 @@ export default function AudioMode({
       // 経由しない通常の再訪問でも、直前に読んでいた科目・ジャンル・キーワード・回の絞り込みを
       // 自動で引き継ぐ（ユーザー指定・2026-11-14「さっきまで再生した音声の記憶が残るように」）。
       // すでにresumeFiltersで復元済みの時は上書きしない（cameFromResumeRefと同じ判定）。
-      if (!resumeFilters && p && (p.subject || p.genre || p.keyword || p.round)) {
+      if (!resumeFilters && !pendingJumpRef.current && p && (p.subject || p.genre || p.keyword || p.round)) {
         setSource('filter');
         if (p.subject) setFilterSubject(p.subject);
         if (p.genre) setFilterGenre(p.genre);
@@ -1458,14 +1459,29 @@ export default function AudioMode({
   // 履歴の位置へ飛ぶ：絞り込みが履歴と同じになり、計画が読み込まれてから一度だけ（上の効果の後に走る）
   useEffect(() => {
     const j = pendingJumpRef.current;
-    if (!j || !audioReady || builtPlan.length === 0) return;
-    if (mode !== 0 || source !== j.source || filterSubject !== j.subject || filterGenre !== j.genre
-      || filterKeyword !== j.keyword || String(filterRound || '') !== j.round) return;
+    if (!j || !audioReady) return;
+    const matched = mode === 0 && source === j.source && filterSubject === j.subject && filterGenre === j.genre
+      && filterKeyword === j.keyword && String(filterRound || '') === j.round;
+    if (!matched) {
+      // 絞り込みがそろわないまま時間が経った飛び先は捨てる（残しておくと、あとで本人が同じ科目を
+      // 選んだ時に急に飛ぶ・再生履歴の記録が止まったままになる）
+      if (Date.now() - j.at > 4000) pendingJumpRef.current = null;
+      return;
+    }
+    if (builtPlan.length === 0) {
+      pendingJumpRef.current = null;
+      // 0問のまま絞り込みを残さない（画面の選択欄と中身が食い違う）。飛べない履歴も消す。
+      setSource('all');
+      setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
+      deleteAudioHistory(historyKeyOf(j));
+      onToast?.('⚠️ この履歴の条件に合う問題が、今は見つかりませんでした（履歴から外しました）。');
+      return;
+    }
     pendingJumpRef.current = null;
-    const target = Math.max(0, Math.min(builtPlan.length - 1, j.index));
+    const { index: target, moved } = resolveJumpIndex(j, builtPlan.map((it) => it.display?.q?.id ?? null));
     engine.seekTo(target);
-    if (j.total && j.total !== builtPlan.length) {
-      onToast?.(`問題の数が前回（${j.total}問）と変わっているため、近い位置（${target + 1} / ${builtPlan.length}）から始めます`);
+    if (moved) {
+      onToast?.(`問題の並びが前回と変わっているため、近い位置（${target + 1} / ${builtPlan.length}）から始めます`);
     }
     if (j.autoPlay) {
       // seekToは再生中ならそのまま続きを読む。止まっていた時だけ、ここで再生を始める
@@ -1478,6 +1494,8 @@ export default function AudioMode({
   // 残すのは通常の読み上げ（科目などを選んで読む／すべて読む）だけ——連結学習モードや
   // 間違えた問題は同じ並びを再現できないので、押しても飛べない履歴を作らない。
   useEffect(() => {
+    // 取り残された飛び先（4秒たっても絞り込みがそろわなかったもの）は、ここで捨てる
+    if (pendingJumpRef.current && Date.now() - pendingJumpRef.current.at > 4000) pendingJumpRef.current = null;
     if (!audioReady || !snap.playing || pendingJumpRef.current) return;
     if (mode !== 0 || (source !== 'filter' && source !== 'all') || builtPlan.length === 0) return;
     const d = snap.display;
@@ -1488,10 +1506,22 @@ export default function AudioMode({
       index: snap.index || 0, total: builtPlan.length,
       label: (q && q.subject) || '',
       text: (q && q.question) || d?.keyword || '',
+      qid: q?.id ?? '',
       at: Date.now(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.index, snap.playing, audioReady, builtPlan.length, mode, source, filterSubject, filterGenre, filterKeyword, filterRound]);
+  // 最後まで聞き終えたら、その履歴に「聞き終えた」印を付ける（次は最初から始める）
+  useEffect(() => {
+    if (!snap.finished || !audioReady || pendingJumpRef.current) return;
+    if (mode !== 0 || (source !== 'filter' && source !== 'all') || builtPlan.length === 0) return;
+    recordAudioHistory({
+      subject: source === 'filter' ? filterSubject : '', genre: source === 'filter' ? filterGenre : '',
+      keyword: source === 'filter' ? filterKeyword : '', round: source === 'filter' ? filterRound : '',
+      index: 0, total: builtPlan.length, label: '', text: '', done: true, at: Date.now(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap.finished]);
 
   // 「はい」で開いた時だけ、検索カード等を飛ばしてプレーヤーまで自動スクロールする。
   // 保存済みの続きから位置の反映（上の効果）を待ってから行う（1回だけ）。

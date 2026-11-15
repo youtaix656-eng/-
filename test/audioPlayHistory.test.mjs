@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  upsertHistory, removeFromHistory, normalizeEntry, historyTitle, positionText, AUDIO_HISTORY_MAX,
+  upsertHistory, removeFromHistory, normalizeEntry, historyTitle, positionText, AUDIO_HISTORY_MAX, resolveJumpIndex,
 } from '../src/lib/audioPlayHistory.js';
 
 test('同じ科目は1件にまとめ、どこまで聞いたかを上書きして先頭へ寄せる', () => {
@@ -29,4 +29,16 @@ test('見出しと削除', () => {
   assert.equal(historyTitle({ subject: '解剖学', round: '第34回' }), '解剖学・34回');
   const list = upsertHistory([], { subject: '解剖学', index: 0, total: 3 });
   assert.equal(removeFromHistory(list, list[0].key).length, 0);
+});
+
+test('飛び先：並びが変わっても同じ問題へ。無ければ近い番号へ寄せて知らせる。聞き終えたものは最初から', () => {
+  const ids = ['a', null, 'b', 'c', 'd'];
+  assert.deepEqual(resolveJumpIndex({ qid: 'c', index: 0, total: 5 }, ids), { index: 3, moved: false });
+  assert.deepEqual(resolveJumpIndex({ qid: 'zz', index: 9, total: 20 }, ids), { index: 4, moved: true });
+  assert.deepEqual(resolveJumpIndex({ index: 2, total: 5 }, ids), { index: 2, moved: false });
+  assert.deepEqual(resolveJumpIndex({ index: 2, total: 9 }, ids), { index: 2, moved: true });
+  assert.deepEqual(resolveJumpIndex({ qid: 'c', index: 3, total: 5, done: true }, ids), { index: 0, moved: false });
+  assert.deepEqual(resolveJumpIndex({ qid: 'c', index: 3, total: 5 }, []), { index: 0, moved: false });
+  assert.equal(positionText({ index: 0, total: 130, done: true }), '全130問・聞き終えた');
+  assert.equal(normalizeEntry({ subject: 'x', index: 1, total: 3, qid: 7, done: 1 }).qid, '7');
 });
