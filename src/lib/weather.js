@@ -30,6 +30,20 @@ export const PRESET_PLACES = [
   ['鹿児島県', '鹿児島', 31.56, 130.56], ['沖縄県', '那覇', 26.21, 127.68],
 ].map(([name, city, lat, lon]) => ({ name, city, lat, lon }));
 
+// 都道府県（＝県庁所在地）では遠い時のための、市の地点（ユーザー指定で足す）。
+// 岩手県は盛岡と北上で約45km離れていて、天気も気温も違う日がある（2026-11-15・北上市を追加）。
+// pref＝一覧で並べる位置（その都道府県のすぐ下）。座標は市役所付近のおおよその値。
+export const CITY_PLACES = [
+  { name: '岩手県北上市', pref: '岩手県', lat: 39.29, lon: 141.11 },
+];
+
+// 選ぶ一覧（都道府県の並びのまま、市はその都道府県のすぐ下に入れる）
+export const PLACE_OPTIONS = PRESET_PLACES.flatMap((p) => [p, ...CITY_PLACES.filter((c) => c.pref === p.name)]);
+
+export function placeOptionLabel(p) {
+  return p.city ? `${p.name}（${p.city}）` : p.name;
+}
+
 // WMOの天気コード → 表示（Open-Meteoのweather_code）
 const CODE_TABLE = [
   [[0], '快晴', '☀️', 'sunny'],
@@ -55,6 +69,42 @@ export function weatherInfo(code, isDay = true) {
     }
   }
   return { label: '不明', icon: '❔', kind: 'unknown' };
+}
+
+// 1日ぶんの天気を、日中（6〜18時）の1時間ごとの天気コードからまとめる。
+// 天気サービスの「1日の天気コード」は、その日（夜中も含む）でいちばん強い天気を返すので、
+// 夜中に少し降っただけの日も「雨」「雪」と出てしまい、日中の実感と合わない（2026-11-15に見直し）。
+// 降る時間が日中の半分以上＝雨（雪）、4分の1以上＝時々、それ未満＝一時、とこのアプリの中で決めた
+// まとめ方（気象庁の発表そのものではない）。時間が足りない時はnullを返し、呼ぶ側が元のコードを使う。
+const WET_ICON = { rain: '🌧️', snow: '🌨️', thunder: '⛈️' };
+const WET_LABEL = { rain: '雨', snow: '雪', thunder: '雷雨' };
+export function summarizeDay(codes) {
+  const kinds = (Array.isArray(codes) ? codes : [])
+    .filter((c) => typeof c === 'number' && Number.isFinite(c))
+    .map((c) => weatherInfo(c, true).kind)
+    .filter((k) => k !== 'unknown');
+  const n = kinds.length;
+  if (n < 6) return null;
+  const count = (k) => kinds.filter((x) => x === k).length;
+  const sunny = count('sunny');
+  const wetCounts = { rain: count('rain'), snow: count('snow'), thunder: count('thunder') };
+  const wet = wetCounts.rain + wetCounts.snow + wetCounts.thunder;
+  const dry = n - wet;
+  const baseSunny = dry > 0 && sunny * 2 >= dry;
+  if (wet === 0) {
+    if (sunny * 4 >= n * 3) return { label: '晴れ', icon: '☀️', kind: 'sunny' };
+    if ((n - sunny) * 4 >= n * 3) return { label: 'くもり', icon: '☁️', kind: 'cloudy' };
+    return baseSunny
+      ? { label: '晴れ時々くもり', icon: '⛅', kind: 'sunny' }
+      : { label: 'くもり時々晴れ', icon: '⛅', kind: 'cloudy' };
+  }
+  // 降るものの種類は、時間のいちばん長いもの（同じなら雷雨＞雪＞雨の順で強いほう）
+  const wetKind = ['thunder', 'snow', 'rain'].reduce((best, k) => (wetCounts[k] > wetCounts[best] ? k : best), 'thunder');
+  const kind = wetCounts[wetKind] > 0 ? wetKind : 'rain';
+  if (wet * 2 >= n) return { label: WET_LABEL[kind], icon: WET_ICON[kind], kind };
+  const base = baseSunny ? '晴れ' : 'くもり';
+  const icon = kind === 'rain' && baseSunny ? '🌦️' : WET_ICON[kind];
+  return { label: `${base}${wet * 4 >= n ? '時々' : '一時'}${WET_LABEL[kind]}`, icon, kind };
 }
 
 export function makePlace({ name, lat, lon, current = false }) {
@@ -95,7 +145,7 @@ export function forecastUrl(place) {
     `latitude=${place.lat}`,
     `longitude=${place.lon}`,
     'current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m',
-    'hourly=temperature_2m,weather_code,precipitation_probability',
+    'hourly=temperature_2m,weather_code,precipitation_probability,is_day',
     'daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
     'wind_speed_unit=ms',
     'timezone=auto',
@@ -134,7 +184,10 @@ export function parseForecast(json) {
   const hourly = times.slice(start, start + 24).map((t, i) => {
     const k = start + i;
     const hour = Number(String(t).slice(11, 13));
-    const day = hour >= 6 && hour < 18;
+    // 昼か夜かは天気サービスの値（その地点の日の出・日の入りに合わせた値）を使う。
+    // 無い時だけ6〜18時を昼とみなす（冬の夕方17時に太陽の絵が出ていたのを直した）。
+    const flag = h.is_day?.[k];
+    const day = typeof flag === 'number' ? flag !== 0 : hour >= 6 && hour < 18;
     return {
       time: t,
       hour,
@@ -147,13 +200,18 @@ export function parseForecast(json) {
   const daily = (Array.isArray(d.time) ? d.time : []).map((t, i) => {
     const [y, m, dd] = String(t).split('-').map(Number);
     const dow = new Date(y, (m || 1) - 1, dd || 1).getDay();
+    const dayCodes = times
+      .map((tt, k) => ({ tt: String(tt), k }))
+      .filter(({ tt }) => tt.slice(0, 10) === String(t) && Number(tt.slice(11, 13)) >= 6 && Number(tt.slice(11, 13)) <= 18)
+      .map(({ k }) => h.weather_code?.[k]);
     return {
       date: t,
       dayLabel: i === 0 ? '今日' : `${m}/${dd}(${DOW[dow]})`,
       max: num(d.temperature_2m_max?.[i]),
       min: num(d.temperature_2m_min?.[i]),
       pop: num(d.precipitation_probability_max?.[i]),
-      ...weatherInfo(d.weather_code?.[i], true),
+      // 日中の1時間ごとの天気からまとめる。まとめられない時だけ、天気サービスの1日のコードを使う
+      ...(summarizeDay(dayCodes) || weatherInfo(d.weather_code?.[i], true)),
     };
   });
   return { current, hourly, daily };

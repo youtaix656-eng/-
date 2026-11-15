@@ -98,7 +98,7 @@ test('parseForecast：今の天気・現在時刻以降の24時間・日ごと�
   assert.equal(d.hourly[0].pop, 14);
   assert.equal(d.daily[0].dayLabel, '今日');
   assert.equal(d.daily[1].dayLabel, '11/16(月)');
-  assert.equal(d.daily[1].kind, 'snow');
+  assert.equal(d.daily[1].kind, 'rain'); // 1時間ごとの予報（日中ずっと雨）からまとめる。1日のコード（71）より優先
   assert.equal(d.daily[1].min, null); // 欠けている値を0にしない
   assert.equal(parseForecast({}), null);
   assert.equal(parseForecast(null), null);
@@ -136,4 +136,61 @@ test('addPlace：現在地は1つだけ。取り直した時は枠を増やさ�
   const full = addPlace(addPlace(a, makePlace(PRESET_PLACES[0])).places, here2);
   assert.equal(full.ok, true);
   assert.equal(full.places.length, 3);
+});
+
+test('北上市：一覧では岩手県のすぐ下に出て、盛岡とは別の地点になる', async () => {
+  const { PLACE_OPTIONS, CITY_PLACES, placeOptionLabel } = await import('../src/lib/weather.js');
+  const i = PLACE_OPTIONS.findIndex((p) => p.name === '岩手県');
+  assert.equal(PLACE_OPTIONS[i + 1].name, '岩手県北上市');
+  assert.equal(placeOptionLabel(PLACE_OPTIONS[i]), '岩手県（盛岡）');
+  assert.equal(placeOptionLabel(PLACE_OPTIONS[i + 1]), '岩手県北上市');
+  assert.equal(PLACE_OPTIONS.length, 47 + CITY_PLACES.length);
+  assert.equal(new Set(PLACE_OPTIONS.map((p) => p.name)).size, PLACE_OPTIONS.length);
+  const k = makePlace(PLACE_OPTIONS[i + 1]);
+  assert.notEqual(k.id, makePlace(PLACE_OPTIONS[i]).id);
+  assert.ok(k.lat > 39.2 && k.lat < 39.4 && k.lon > 141.0 && k.lon < 141.2);
+});
+
+test('summarizeDay：日中の1時間ごとの天気から1日をまとめる', async () => {
+  const { summarizeDay } = await import('../src/lib/weather.js');
+  const rep = (c, n) => Array(n).fill(c);
+  assert.equal(summarizeDay(rep(0, 13)).label, '晴れ');
+  assert.equal(summarizeDay(rep(3, 13)).label, 'くもり');
+  assert.equal(summarizeDay([...rep(1, 8), ...rep(3, 5)]).label, '晴れ時々くもり');
+  assert.equal(summarizeDay([...rep(1, 5), ...rep(3, 8)]).label, 'くもり時々晴れ');
+  assert.equal(summarizeDay([...rep(3, 12), 61]).label, 'くもり一時雨');
+  assert.equal(summarizeDay([...rep(3, 9), ...rep(61, 4)]).label, 'くもり時々雨');
+  assert.equal(summarizeDay([...rep(0, 9), ...rep(71, 4)]).label, '晴れ時々雪');
+  assert.equal(summarizeDay([...rep(3, 5), ...rep(63, 8)]).label, '雨');
+  assert.equal(summarizeDay([...rep(3, 5), ...rep(73, 8)]).label, '雪');
+  assert.equal(summarizeDay(rep(0, 3)), null); // 時間が足りない時はまとめない
+  assert.equal(summarizeDay([null, undefined]), null);
+});
+
+test('parseForecast：夜中だけの雨で1日を「雨」にしない／昼夜は天気サービスの値を使う', () => {
+  const time = []; const code = []; const isDay = []; const temp = []; const pop = [];
+  for (let hh = 0; hh < 24; hh += 1) {
+    time.push(`2026-11-15T${String(hh).padStart(2, '0')}:00`);
+    code.push(hh < 3 ? 63 : 1); // 夜中の0〜2時だけ雨、あとは晴れ
+    isDay.push(hh >= 7 && hh < 16 ? 1 : 0); // 冬：16時にはもう夜
+    temp.push(5); pop.push(10);
+  }
+  const data = parseForecast({
+    current: { time: '2026-11-15T15:00', temperature_2m: 5, is_day: 1, weather_code: 1 },
+    hourly: { time, weather_code: code, is_day: isDay, temperature_2m: temp, precipitation_probability: pop },
+    daily: { time: ['2026-11-15'], weather_code: [63], temperature_2m_max: [8], temperature_2m_min: [1], precipitation_probability_max: [80] },
+  });
+  assert.equal(data.daily[0].label, '晴れ'); // 天気サービスの1日コード（63＝雨）ではなく日中の実際
+  assert.equal(data.hourly[0].hour, 15);
+  assert.equal(data.hourly[0].icon, '🌤️');
+  assert.equal(data.hourly[2].hour, 17);
+  assert.equal(data.hourly[2].icon, '🌙'); // 17時は夜（6〜18時固定だと太陽になっていた）
+});
+
+test('parseForecast：1時間ごとのデータが無い日は、天気サービスの1日のコードを使う', () => {
+  const data = parseForecast({
+    current: { time: '2026-11-15T15:00', is_day: 1, weather_code: 1 },
+    daily: { time: ['2026-11-15'], weather_code: [71] },
+  });
+  assert.equal(data.daily[0].label, '雪');
 });

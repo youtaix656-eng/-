@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import '../styles/clockWeather.css';
 import {
-  MAX_PLACES, PRESET_PLACES, makePlace, addPlace, removePlace, pushHistory,
+  MAX_PLACES, PLACE_OPTIONS, placeOptionLabel, makePlace, addPlace, removePlace, pushHistory,
   fetchForecast, failureText, fmtTemp,
 } from '../lib/weather.js';
 
@@ -75,7 +75,7 @@ export default function Weather({ store, onToast }) {
   };
 
   const addPreset = () => {
-    const p = PRESET_PLACES.find((x) => x.name === preset);
+    const p = PLACE_OPTIONS.find((x) => x.name === preset);
     if (register(p ? makePlace(p) : null)) setAdding(false);
   };
 
@@ -155,10 +155,10 @@ export default function Weather({ store, onToast }) {
             ) : (
               <>
                 <label className="cw-field">
-                  都道府県から選ぶ（予報の地点は県庁所在地です）
+                  都道府県・市から選ぶ（都道府県の予報の地点は県庁所在地です）
                   <span className="wx-add-row">
                     <select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="地域を選ぶ">
-                      {PRESET_PLACES.map((p) => <option key={p.name} value={p.name}>{p.name}（{p.city}）</option>)}
+                      {PLACE_OPTIONS.map((p) => <option key={p.name} value={p.name}>{placeOptionLabel(p)}</option>)}
                     </select>
                     <button type="button" className="cw-btn primary" onClick={addPreset}>追加</button>
                   </span>
@@ -200,7 +200,7 @@ export default function Weather({ store, onToast }) {
               <span>体感 {fmtTemp(data.current.feels)}</span>
               <span>湿度 {data.current.humidity == null ? '—' : `${Math.round(data.current.humidity)}%`}</span>
               <span>風 {data.current.wind == null ? '—' : `${data.current.wind.toFixed(1)}m/s`}</span>
-              <span>降水 {today?.pop == null ? '—' : `${Math.round(today.pop)}%`}</span>
+              <span>降水確率 {data.hourly[0]?.pop == null ? '—' : `${Math.round(data.hourly[0].pop)}%`}</span>
             </div>
             <div className="wx-now-foot">
               <span>{fmtAt(state.at)} 取得</span>
@@ -229,7 +229,7 @@ export default function Weather({ store, onToast }) {
                 <li key={d.date} className="wx-day">
                   <span className="wx-day-label">{d.dayLabel}</span>
                   <span className="wx-day-ico" role="img" aria-label={d.label}>{d.icon}</span>
-                  <span className="wx-day-text">{d.pop == null ? null : <span className="wx-day-pop">☔{Math.round(d.pop)}%</span>}</span>
+                  <span className="wx-day-text">{d.label}{d.pop == null ? null : <span className="wx-day-pop"> ☔{Math.round(d.pop)}%</span>}</span>
                   <span className="wx-min">{fmtTemp(d.min)}</span>
                   <span className="wx-max">{fmtTemp(d.max)}</span>
                 </li>
@@ -265,7 +265,8 @@ export default function Weather({ store, onToast }) {
       <p className="cw-note sub">
         天気の予報は外部の天気サービス（Open-Meteo）から取得しています。そのため、選んだ地域・現在地の緯度と経度
         （小数第2位まで＝約1kmの粗さに丸めた値）がこのサービスへ送られます。通信するのはこの画面を開いている時だけです。
-        予報は目安で、実際の天気と違うことがあります。
+        予報は目安で、実際の天気と違うことがあります。週間予報の天気は日中（6〜18時）の1時間ごとの予報をこのアプリがまとめたもの、
+        ☔は1日（24時間）の中でいちばん高い降水確率です。気象庁の発表そのものではありません。
       </p>
     </div>
   );
