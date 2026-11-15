@@ -60,9 +60,12 @@ export function courseScheduledEnd(phaseIndex, currentPhaseEndAt) {
 // 10秒の時だけ「休憩開始まで10秒前」／「休憩終了まで10秒前」、9秒以降は数字だけを読む
 // （phaseTypeは「今いるフェーズ」の種類＝study中のカウントダウンは休憩開始の予告、
 // break中のカウントダウンは休憩終了の予告になる）。
-export function courseCountdownText(phaseType, sec) {
-  if (sec === 10) {
-    return phaseType === 'study' ? '休憩開始まで10秒前' : '休憩終了まで10秒前';
+// first＝このコマで最初に読む1回かどうか。ちょうど10秒の瞬間を拾えなかった時
+// （画面を消していた等で見直しが遅れた時）も、最初の1回は「休憩開始まで7秒前」のように
+// 何のカウントダウンかを言ってから数える。
+export function courseCountdownText(phaseType, sec, first = sec === 10) {
+  if (first) {
+    return phaseType === 'study' ? `休憩開始まで${sec}秒前` : `休憩終了まで${sec}秒前`;
   }
   return String(sec);
 }

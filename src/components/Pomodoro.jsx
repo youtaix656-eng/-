@@ -6,6 +6,7 @@ import { bellRing, beep } from '../lib/sound.js';
 import * as audioEngine from '../lib/audioEngine.js';
 import { isSpeechSupported, speak } from '../lib/speech.js';
 import { COURSE_PHASES, catchUpCourse, courseScheduledEnd, coursePhaseOrdinal, courseCountdownText, hhmmOf } from '../lib/pomoCourse.js';
+import { startTicker } from '../lib/pomoTicker.js';
 import { loadPomoRun, savePomoRun, clearPomoRun, restorePomoRun } from '../lib/pomoRunState.js';
 import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 
@@ -82,7 +83,6 @@ export default function Pomodoro({ store, onToast }) {
 
   const audioRef = useRef(null);
   const barRef = useRef(null);
-  const tickRef = useRef(null);
   const ytContainerRef = useRef(null); // YouTubeプレイヤーの差し込み先（Reactは子要素を持たせない）
   const ytPlayerRef = useRef(null);
 
@@ -204,13 +204,18 @@ export default function Pomodoro({ store, onToast }) {
   const displayRemaining = running ? Math.max(0, Math.ceil((endAt - Date.now()) / 1000)) : remaining;
   void tick; // tickはこのレンダーを起こすためだけに参照する
 
+  // 曲の操作は、いつ呼ばれても最新の曲・音量で動くようrefから読む（休憩に入る処理は
+  // 少し前の描画で作られた関数から呼ばれることがあり、その時点の値を抱えたままだと
+  // 「YouTubeの曲なのに止めに行く先が違う」ことが起き得る）。
+  const musicRef = useRef({ kind: null, url: null, volume: 1 });
+  musicRef.current = { kind: musicKind, url: musicUrl, volume: cfg.musicVolume ?? 1 };
   const playMusic = () => {
     duckMusic(false);
-    if (musicKind === 'youtube') {
+    if (musicRef.current.kind === 'youtube') {
       try { ytPlayerRef.current?.playVideo?.(); } catch (e) { /* noop */ }
       return;
     }
-    if (musicUrl && audioRef.current) {
+    if (musicRef.current.url && audioRef.current) {
       try {
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(() => {});
@@ -222,7 +227,7 @@ export default function Pomodoro({ store, onToast }) {
   // カウントダウンの声が曲に埋もれないよう、数えている間だけ曲の音量を下げる（duck=true）。
   // 戻す時（duck=false）は設定の音量へ戻す。
   const duckMusic = (duck) => {
-    const base = cfg.musicVolume ?? 1;
+    const base = musicRef.current.volume;
     const v = duck ? base * 0.2 : base;
     try { if (audioRef.current) audioRef.current.volume = v; } catch (e) { /* noop */ }
     try { ytPlayerRef.current?.setVolume?.(Math.round(v * 100)); } catch (e) { /* noop */ }
@@ -235,8 +240,10 @@ export default function Pomodoro({ store, onToast }) {
   //  ②曲に埋もれていた → 数えている間だけ曲の音量を下げる。
   //  ③シンプルタイマーでは数えていなかった → 終了（＝休憩の開始）の10秒前から数える。
   //  ④読み上げが使えない・失敗した時は黙らず、短い合図音で代える。
-  const announceCountdown = (phaseType, secLeft) => {
-    if (secLeft === 10) {
+  // first＝このコマのカウントダウンで最初の1回。ちょうど10秒の瞬間を拾えなくても
+  // （見直しが遅れても）、最初の1回で必ず音声学習を止め、曲を下げてから数える。
+  const announceCountdown = (phaseType, secLeft, first) => {
+    if (first) {
       if (phaseType === 'study') {
         duckMusic(true);
         if (audioEngine.getSnapshot().playing) {
@@ -247,18 +254,16 @@ export default function Pomodoro({ store, onToast }) {
       // 前の読み上げが列に残っていたら捨ててから数え始める
       try { window.speechSynthesis?.cancel(); window.speechSynthesis?.resume?.(); } catch (e) { /* noop */ }
     }
-    const fallback = () => beep(1, secLeft === 10 ? 1320 : 880, 70);
+    const fallback = () => beep(1, first ? 1320 : 880, 70);
     if (!isSpeechSupported()) { fallback(); return; }
-    speak(courseCountdownText(phaseType, secLeft), { rate: 1.15 }).catch((e) => {
+    speak(courseCountdownText(phaseType, secLeft, first), { rate: 1.15 }).catch((e) => {
       if (e?.name !== 'AbortError') fallback();
     });
   };
   const stopMusic = () => {
     duckMusic(false);
-    if (musicKind === 'youtube') {
-      try { ytPlayerRef.current?.pauseVideo?.(); } catch (e) { /* noop */ }
-      return;
-    }
+    // 種類の取り違えで止め損ねないよう、両方とも止める（鳴っていない側は何も起きない）
+    try { ytPlayerRef.current?.pauseVideo?.(); } catch (e) { /* noop */ }
     try { audioRef.current?.pause(); } catch (e) { /* noop */ }
   };
 
@@ -374,41 +379,48 @@ export default function Pomodoro({ store, onToast }) {
     stopMusic();
   };
 
-  // 1秒ごとの見直し（時刻ベース。表示はtickで再計算するだけ）
-  useEffect(() => {
-    if (!running) {
-      if (tickRef.current) clearInterval(tickRef.current);
-      return undefined;
+  // 1秒ごとの見直し（時刻ベース。表示はtickで再計算するだけ）。
+  // 中身は毎回の描画で作り直してrefに置く（曲の種類・音量・コマなど、いつも最新の値で動く）。
+  // 起こす側（下のstartTicker）は「動いているかどうか」だけで作り直す——以前は描画のたびに
+  // タイマーを作り直していたので、作り直しが続くと1秒の見直しが飛ぶことがあった。
+  const handledEndRef = useRef(0); // 同じ終わりの時刻を2回処理しない（Workerと本体の両方から起こされるため）
+  const tickHandlerRef = useRef(() => {});
+  tickHandlerRef.current = () => {
+    if (!running) return;
+    const now = Date.now();
+    if (now >= endAt) {
+      if (handledEndRef.current === endAt) return;
+      handledEndRef.current = endAt;
+      if (coursePhaseIndex != null) advanceCourse();
+      else finish();
+      return;
     }
-    tickRef.current = setInterval(() => {
-      if (Date.now() >= endAt) {
-        if (coursePhaseIndex != null) advanceCourse();
-        else finish();
-        return;
+    // 2時間コースは各コマの終わり、シンプルタイマーは終了（＝休憩の開始）の10秒前から数える
+    const key = coursePhaseIndex != null ? coursePhaseIndex : -1;
+    const phaseType = coursePhaseIndex != null ? COURSE_PHASES[coursePhaseIndex].type : 'study';
+    const secLeft = Math.ceil((endAt - now) / 1000);
+    if (secLeft >= 1 && secLeft <= 10) {
+      const prev = lastCountdownRef.current;
+      if (prev.phaseIndex !== key || prev.endAt !== endAt || prev.sec !== secLeft) {
+        const first = prev.phaseIndex !== key || prev.endAt !== endAt;
+        lastCountdownRef.current = { phaseIndex: key, endAt, sec: secLeft };
+        announceCountdown(phaseType, secLeft, first);
       }
-      {
-        // 2時間コースは各コマの終わり、シンプルタイマーは終了（＝休憩の開始）の10秒前から数える
-        const key = coursePhaseIndex != null ? coursePhaseIndex : -1;
-        const phaseType = coursePhaseIndex != null ? COURSE_PHASES[coursePhaseIndex].type : 'study';
-        const secLeft = Math.ceil((endAt - Date.now()) / 1000);
-        if (secLeft >= 1 && secLeft <= 10) {
-          const prev = lastCountdownRef.current;
-          if (prev.phaseIndex !== key || prev.sec !== secLeft) {
-            lastCountdownRef.current = { phaseIndex: key, sec: secLeft };
-            announceCountdown(phaseType, secLeft);
-          }
-        }
-      }
-      setTick((t) => t + 1);
-    }, 1000);
-    return () => clearInterval(tickRef.current);
-  }, [running, endAt, finish, advanceCourse, coursePhaseIndex]);
-
-  // タブが再表示された瞬間に即座に表示を追いつかせる
+    }
+    setTick((t) => t + 1);
+  };
   useEffect(() => {
-    const onVis = () => { if (document.visibilityState === 'visible' && running) setTick((t) => t + 1); };
+    if (!running) return undefined;
+    const stop = startTicker(() => tickHandlerRef.current());
+    // 画面へ戻った瞬間にも見直す（凍結されていた間に過ぎたぶんへ、すぐ追いつく）
+    const onVis = () => { if (document.visibilityState === 'visible') tickHandlerRef.current(); };
     document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onVis);
+    };
   }, [running]);
 
   // 最小化バーとフルバーで高さが違うため、ヘッダー側の--pomo-hへ実測値を反映する

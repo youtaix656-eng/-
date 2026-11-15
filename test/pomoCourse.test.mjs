@@ -94,6 +94,12 @@ test('courseCountdownText：9秒以降は数字だけ（勉強中・休憩中ど
   }
 });
 
+test('courseCountdownText：10秒を拾えなかった時も、最初の1回は何のカウントダウンかを言う', () => {
+  assert.equal(courseCountdownText('study', 7, true), '休憩開始まで7秒前');
+  assert.equal(courseCountdownText('break', 4, true), '休憩終了まで4秒前');
+  assert.equal(courseCountdownText('study', 6, false), '6');
+});
+
 test('hhmmOf：HH:MM形式で返す', () => {
   const d = new Date(2026, 0, 1, 9, 5, 0);
   assert.equal(hhmmOf(d.getTime()), '09:05');
