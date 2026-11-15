@@ -6,6 +6,7 @@ import { bellRing, beep } from '../lib/sound.js';
 import * as audioEngine from '../lib/audioEngine.js';
 import { isSpeechSupported, speak } from '../lib/speech.js';
 import { COURSE_PHASES, catchUpCourse, courseScheduledEnd, coursePhaseOrdinal, courseCountdownText, hhmmOf } from '../lib/pomoCourse.js';
+import { loadPomoRun, savePomoRun, clearPomoRun, restorePomoRun } from '../lib/pomoRunState.js';
 import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 
 // タイマー（全画面の上部に固定表示）。
@@ -49,10 +50,18 @@ export default function Pomodoro({ store, onToast }) {
   );
 
   const durationSec = (cfg.durationMin || 25) * 60;
-  const [running, setRunning] = useState(false);
-  const [endAt, setEndAt] = useState(0);
-  const [remaining, setRemaining] = useState(durationSec); // 停止中の残り秒数
-  const [finished, setFinished] = useState(false);
+  // アプリを閉じる前の状態（lib/pomoRunState.js）。最初の1回だけ読み、閉じている間に
+  // 進んだぶんを計算し直してから、下の各stateの初期値にする。
+  const restoredRef = useRef(undefined);
+  if (restoredRef.current === undefined) {
+    restoredRef.current = restorePomoRun(loadPomoRun(), Date.now(), cfg.mode);
+  }
+  const restored = restoredRef.current;
+  const [running, setRunning] = useState(() => !!restored?.running);
+  const [endAt, setEndAt] = useState(() => restored?.endAt || 0);
+  // 停止中の残り秒数
+  const [remaining, setRemaining] = useState(() => (restored && !(restored.finished && cfg.mode !== 'course2h') ? restored.remaining : durationSec));
+  const [finished, setFinished] = useState(() => !!restored?.finished);
   const [min, setMin] = useState(true); // 省スペース：既定は最小化
   const [open, setOpen] = useState(false);
   const [musicUrl, setMusicUrl] = useState(null); // 取り込み・接続（file/filehandle）用
@@ -62,8 +71,8 @@ export default function Pomodoro({ store, onToast }) {
   // 2時間コース：coursePhaseIndexがnull＝コース未開始（またはシンプルモード）。
   // 0〜7＝COURSE_PHASESの添字（study/breakが交互に4回ずつ）。courseFinishedAtは
   // コースが最後まで終わった時刻（完了バナー・終了時の通知に使う）。
-  const [coursePhaseIndex, setCoursePhaseIndex] = useState(null);
-  const [courseFinishedAt, setCourseFinishedAt] = useState(null);
+  const [coursePhaseIndex, setCoursePhaseIndex] = useState(() => restored?.coursePhaseIndex ?? null);
+  const [courseFinishedAt, setCourseFinishedAt] = useState(() => restored?.courseFinishedAt ?? null);
   // 休憩に入った時にaudioEngine（音声学習）を止めたかどうか。止めた場合だけ、次の
   // 勉強フェーズで再開する（止めていない＝元々使っていなかった場合は何もしない）。
   const audioPausedByBreakRef = useRef(false);
@@ -78,9 +87,46 @@ export default function Pomodoro({ store, onToast }) {
   const ytPlayerRef = useRef(null);
 
   // 停止中は分数設定の変更に合わせて残り時間を更新（2時間コース中はdurationMinを使わないため対象外）
+  // 分数・モードが実際に変わった時だけ反応する（一時停止しただけ・開き直しただけの時に
+  // 残り時間を満タンへ戻さない）。
+  const prevCfgRef = useRef({ durationSec, mode: cfg.mode });
   useEffect(() => {
-    if (!running && cfg.mode !== 'course2h') setRemaining(durationSec);
-  }, [durationSec, running, cfg.mode]);
+    const prev = prevCfgRef.current;
+    prevCfgRef.current = { durationSec, mode: cfg.mode };
+    if (prev.durationSec === durationSec && prev.mode === cfg.mode) return;
+    if (!running && cfg.mode !== 'course2h') {
+      setFinished(false);
+      setRemaining(durationSec);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durationSec, cfg.mode]);
+
+  // いまの状態を端末内へ残す（閉じて開き直しても続きから数えるため）。
+  // 待機中（まだ始めていない・リセット済み）は残さない。
+  useEffect(() => {
+    const full = cfg.mode === 'course2h' ? COURSE_PHASES[0].min * 60 : durationSec;
+    const idle = !running && !finished && coursePhaseIndex == null && remaining >= full;
+    if (idle) { clearPomoRun(); return; }
+    savePomoRun({
+      mode: cfg.mode === 'course2h' ? 'course2h' : 'simple',
+      running, endAt, remaining, coursePhaseIndex, finished, courseFinishedAt,
+    });
+  }, [running, endAt, remaining, coursePhaseIndex, finished, courseFinishedAt, cfg.mode, durationSec]);
+
+  // 開き直した時に、どうなったかを一度だけ知らせる（音は自動では鳴らせないので正直に書く）
+  useEffect(() => {
+    if (!cfg.enabled || !restored?.note) return;
+    if (restored.note === 'continued') {
+      onToast?.('⏱️ タイマーを続きから再開しました（曲は自動では鳴りません。一度止めて▶を押すと鳴ります）');
+    } else if (restored.note === 'ended') {
+      onToast?.(restored.courseFinishedAt
+        ? `🔔 アプリを閉じている間に2時間コースが終了していました（${hhmmOf(restored.courseFinishedAt)}）`
+        : '⏰ アプリを閉じている間にタイマーが終了していました');
+    } else if (restored.note === 'paused') {
+      onToast?.('⏸ タイマーは一時停止のまま残っています。▶で続きから始められます');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // シンプル→2時間コースへモードを切り替えた直後（まだコース未開始）は、表示を
   // 1コマ目（勉強25分）に合わせる。
@@ -218,7 +264,7 @@ export default function Pomodoro({ store, onToast }) {
 
   const finish = useCallback(() => {
     setRunning(false);
-    setRemaining(0);
+    setRemaining(durationSec); // 終了後の表示は次の1回ぶん（以前からの見え方のまま）
     setFinished(true);
     stopMusic();
     // シンプルタイマーは音声学習を止める仕様ではないので、カウントダウンのために
@@ -228,7 +274,7 @@ export default function Pomodoro({ store, onToast }) {
       audioEngine.play();
     }
     onToast?.('⏰ タイマーが終了しました');
-  }, [onToast]);
+  }, [onToast, durationSec]);
 
   // 2時間コースの1コマが終わる（または複数コマがまとめて終わっている）時に呼ぶ。
   // タブが長く裏に回っていても、catchUpCourseが「今本当はどのコマにいるべきか」を
