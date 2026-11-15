@@ -113,3 +113,18 @@ test('failureText・fmtTemp：理由ごとに次にすることまで書く。�
   assert.equal(fmtTemp(16.4), '16°');
   assert.equal(fmtTemp(null), '—');
 });
+
+test('addPlace：現在地は1つだけ。取り直した時は枠を増やさず入れ替える', () => {
+  const tokyo = makePlace(PRESET_PLACES[12]);
+  const here1 = makePlace({ name: '現在地', lat: 34.69, lon: 135.5, current: true });
+  const here2 = makePlace({ name: '現在地', lat: 34.75, lon: 135.52, current: true });
+  const a = addPlace(addPlace([], tokyo).places, here1).places;
+  const r = addPlace(a, here2);
+  assert.equal(r.ok, true);
+  assert.equal(r.replaced, true);
+  assert.deepEqual(r.places.map((p) => p.id), [tokyo.id, here2.id]);
+  // 3つ埋まっていても、現在地の入れ替えはできる
+  const full = addPlace(addPlace(a, makePlace(PRESET_PLACES[0])).places, here2);
+  assert.equal(full.ok, true);
+  assert.equal(full.places.length, 3);
+});

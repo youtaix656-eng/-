@@ -54,28 +54,34 @@ export function makeAlarm({ id, time, days, label, sound, enabled = true } = {},
   };
 }
 
-// その日（nowの日付）の予定時刻（ms）。曜日が合わない日はnull。
-function scheduledToday(alarm, now) {
+// いま鳴らすべき「予定の回」の印（「日付 時刻」）。無ければnull。
+// 今日ぶんだけでなく昨日ぶんも見る（23:55のアラームを、裏で遅れて0:02に拾えるように）。
+function dueOccurrenceKey(alarm, now) {
   const t = parseTime(alarm.time);
   if (!t) return null;
-  const d = new Date(now);
   const days = normalizeDays(alarm.days);
-  if (days.length > 0 && !days.includes(d.getDay())) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), t.h, t.min, 0, 0).getTime();
+  const base = new Date(now);
+  for (const back of [0, 1]) {
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() - back, t.h, t.min, 0, 0);
+    if (days.length > 0 && !days.includes(d.getDay())) continue;
+    const at = d.getTime();
+    if (now < at || now >= at + ALARM_GRACE_MS) continue;
+    // 作成・編集した時点ですでに過ぎていた予定時刻では鳴らさない（07:05に07:00を作っても即鳴らさない）
+    if ((alarm.updatedAt || 0) > at) continue;
+    const key = `${dayKey(d)} ${alarm.time}`;
+    if (alarm.lastFired === key) continue;
+    return key;
+  }
+  return null;
 }
 
 // いま鳴らすべきか。
 export function isAlarmDue(alarm, now = Date.now()) {
   if (!alarm || !alarm.enabled) return false;
-  if (alarm.snoozeUntil) {
-    return now >= alarm.snoozeUntil && now < alarm.snoozeUntil + ALARM_GRACE_MS;
-  }
-  const at = scheduledToday(alarm, now);
-  if (at == null) return false;
-  if (now < at || now >= at + ALARM_GRACE_MS) return false;
-  // 作成・編集した時点ですでに過ぎていた予定時刻では鳴らさない（07:05に07:00を作っても即鳴らさない）
-  if ((alarm.updatedAt || 0) > at) return false;
-  return alarm.lastFired !== `${dayKey(new Date(now))} ${alarm.time}`;
+  // スヌーズ中はスヌーズの時刻だけを見る。ただし拾えないまま過ぎたスヌーズ（アプリを閉じていた等）は
+  // 捨てて、ふつうの予定に戻す（残したままだと、そのアラームが二度と鳴らなくなる）。
+  if (alarm.snoozeUntil && now < alarm.snoozeUntil + ALARM_GRACE_MS) return now >= alarm.snoozeUntil;
+  return dueOccurrenceKey(alarm, now) != null;
 }
 
 export function dueAlarms(alarms, now = Date.now()) {
@@ -85,9 +91,15 @@ export function dueAlarms(alarms, now = Date.now()) {
 // 鳴らした印を付ける。くり返しの無いアラームは1回鳴らしたらオフにする。
 export function markFired(alarm, now = Date.now()) {
   const repeating = normalizeDays(alarm.days).length > 0;
+  // スヌーズから鳴った時は、元の回の印（lastFired）をそのまま残す（日付をまたいだスヌーズで
+  // 印が書き換わり、同じ回がもう一度鳴るのを防ぐ）。
+  const fromSnooze = !!alarm.snoozeUntil && now >= alarm.snoozeUntil && now < alarm.snoozeUntil + ALARM_GRACE_MS;
+  const key = fromSnooze && alarm.lastFired
+    ? alarm.lastFired
+    : dueOccurrenceKey(alarm, now) || `${dayKey(new Date(now))} ${alarm.time}`;
   return {
     ...alarm,
-    lastFired: `${dayKey(new Date(now))} ${alarm.time}`,
+    lastFired: key,
     snoozeUntil: null,
     enabled: repeating ? alarm.enabled : false,
   };

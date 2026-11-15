@@ -112,3 +112,33 @@ test('アラーム音：ちょうど20種類。id・名前が重複せず、ど�
   }
   assert.equal(alarmSoundById('nope').id, 'bell');
 });
+
+test('拾えないまま過ぎたスヌーズは捨てて、ふつうの予定に戻る（二度と鳴らなくならない）', () => {
+  const fired = at(2026, 11, 16, 7, 0, 1);
+  const daily = snoozeAlarm(markFired(makeAlarm({ time: '07:00', days: [0, 1, 2, 3, 4, 5, 6] }, created), fired), fired);
+  // スヌーズ（07:05）を拾えないまま翌朝になった
+  assert.equal(isAlarmDue(daily, at(2026, 11, 17, 6, 59)), false);
+  assert.equal(isAlarmDue(daily, at(2026, 11, 17, 7, 0, 0)), true);
+  assert.equal(nextRingAt(daily, at(2026, 11, 16, 12, 0)), at(2026, 11, 17, 7, 0));
+});
+
+test('日付をまたいでも10分以内なら拾い、同じ回を2度鳴らさない', () => {
+  const a = makeAlarm({ time: '23:55', days: [0, 1, 2, 3, 4, 5, 6] }, created);
+  const late = at(2026, 11, 17, 0, 2); // 11/16 23:55 の回を 0:02 に拾う
+  assert.equal(isAlarmDue(a, late), true);
+  const done = markFired(a, late);
+  assert.equal(done.lastFired, '2026-11-16 23:55');
+  assert.equal(isAlarmDue(done, late + 1000), false);
+  assert.equal(isAlarmDue(a, at(2026, 11, 17, 0, 6)), false); // 10分を過ぎたら拾わない
+});
+
+test('日付をまたぐスヌーズから鳴っても、元の回の印は変わらず二重に鳴らない', () => {
+  const a = makeAlarm({ time: '23:58', days: [0, 1, 2, 3, 4, 5, 6] }, created);
+  const t1 = at(2026, 11, 16, 23, 58, 1);
+  const snoozed = snoozeAlarm(markFired(a, t1), t1);
+  const t2 = at(2026, 11, 17, 0, 3, 2);
+  assert.equal(isAlarmDue(snoozed, t2), true);
+  const done = markFired(snoozed, t2);
+  assert.equal(done.lastFired, '2026-11-16 23:58');
+  assert.equal(isAlarmDue(done, t2 + 1000), false);
+});

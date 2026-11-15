@@ -65,6 +65,10 @@ export function addPlace(places, place) {
   const list = Array.isArray(places) ? places : [];
   if (!place) return { places: list, ok: false, reason: 'invalid' };
   if (list.some((p) => p.id === place.id)) return { places: list, ok: false, reason: 'duplicate' };
+  // 現在地は1つだけ持つ。少し移動して取り直した時は、枠を増やさず前の「現在地」と入れ替える。
+  if (place.current && list.some((p) => p.current)) {
+    return { places: list.map((p) => (p.current ? place : p)), ok: true, reason: null, replaced: true };
+  }
   if (list.length >= MAX_PLACES) return { places: list, ok: false, reason: 'full' };
   return { places: [...list, place], ok: true, reason: null };
 }

@@ -92,7 +92,15 @@ export function playAlarmSound(id, { volume = 1, loop = true } = {}) {
   if (!ctx) return { stop() {}, blocked: true, isBlocked: () => true };
   const out = ctx.createGain();
   out.gain.value = 1;
-  out.connect(ctx.destination);
+  // 和音・アルペジオ（ハープ・おだやかな和音など）は音が重なって音割れしやすいので、
+  // 出口でならしてから鳴らす。使えない環境ではそのままつなぐ。
+  let tail = out;
+  try {
+    const comp = ctx.createDynamicsCompressor();
+    out.connect(comp);
+    tail = comp;
+  } catch (e) { tail = out; }
+  tail.connect(ctx.destination);
   let live = schedulePhrase(ctx, sound, volume, out);
   let timer = null;
   if (loop) {
@@ -111,6 +119,7 @@ export function playAlarmSound(id, { volume = 1, loop = true } = {}) {
       try { out.gain.setValueAtTime(0, ctx.currentTime); } catch (e) { /* noop */ }
       for (const o of live) { try { o.stop(); } catch (e) { /* すでに止まっている */ } }
       try { out.disconnect(); } catch (e) { /* noop */ }
+      if (tail !== out) { try { tail.disconnect(); } catch (e) { /* noop */ } }
     },
   };
 }

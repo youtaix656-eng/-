@@ -70,7 +70,7 @@ export default function Weather({ store, onToast }) {
       return false;
     }
     updateSettings({ weatherPlaces: r.places, weatherActiveId: place.id, weatherHistory: pushHistory(history, place) });
-    onToast?.(`「${place.name}」を登録しました`);
+    onToast?.(r.replaced ? '現在地を新しい位置に更新しました' : `「${place.name}」を登録しました`);
     return true;
   };
 
@@ -117,7 +117,9 @@ export default function Weather({ store, onToast }) {
 
   const remove = (place) => {
     const next = removePlace(places, place.id);
-    updateSettings({ weatherPlaces: next, weatherActiveId: next[0]?.id || null });
+    // 表示中でない地域を消した時は、表示中の地域をそのまま保つ（勝手に先頭へ切り替えない）
+    const keep = active && active.id !== place.id ? active.id : next[0]?.id || null;
+    updateSettings({ weatherPlaces: next, weatherActiveId: keep });
     onToast?.(`「${place.name}」を削除しました（履歴には残ります）`);
   };
 

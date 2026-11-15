@@ -92,6 +92,9 @@ const UNLOCK_KEY = 'shinkyu:unlocked';
 
 const NAV = [
   { id: 'home', label: 'ホーム', ico: '🏠' },
+  // ホームの横に時計・天気（2026-11-15・ユーザー指定）。画面そのものはlazyのまま。
+  { id: 'clock', label: '時計', ico: '🕐' },
+  { id: 'weather', label: '天気', ico: '🌤️' },
   { id: 'calendar', label: 'カレンダー', ico: '🗓️' },
   { id: 'quiz', label: '一問一答', ico: '✏️' },
   { id: 'review', label: '復習', ico: '🔁' },
@@ -161,7 +164,7 @@ function triggerDownload(content, filename, type) {
 // PWAのホーム画面アイコン長押しショートカット（manifest.webmanifestのshortcuts）から
 // `?view=xxx` 付きで開かれた時に、その画面から起動する。
 // VIEW_TITLESは見出し表示用の一覧で全画面を網羅していない（journal等が漏れている）ため、
-// 許可リストにはできない。ショートカットの対象は下部ナビの6画面で十分なので、NAVのidだけを許可し、
+// 許可リストにはできない。ショートカットの対象は下部ナビの画面で十分なので、NAVのidだけを許可し、
 // 不正な値は既定の'home'にフォールバックする。
 function initialViewFromUrl() {
   try {
@@ -358,10 +361,11 @@ export default function App() {
       const now = Date.now();
       const due = dueAlarms(alarms, now);
       if (due.length === 0) return;
-      // 同じ時刻に複数あっても鳴らすのは1件。残りも「鳴らした」印だけ付けて重ねて鳴らさない。
-      const ids = new Set(due.map((a) => a.id));
-      store.updateSettings({ alarms: alarms.map((a) => (ids.has(a.id) ? markFired(a, now) : a)) });
-      setRingingAlarm(due[0]);
+      // 同じ時刻に複数あっても、一度に鳴らすのは1件だけ。印を付けるのも鳴らした1件だけにして、
+      // 残りは「止める」のあとに続けて鳴らす（印だけ付けて、鳴らさないまま消さない）。
+      const first = due[0];
+      store.updateSettings({ alarms: alarms.map((a) => (a.id === first.id ? markFired(a, now) : a)) });
+      setRingingAlarm(first);
     };
     check();
     const t = setInterval(check, 1000);
@@ -1029,13 +1033,6 @@ export default function App() {
           )}
         </h1>
         {view === 'home' && <p className="subtitle">過去問ベースで、合格まで着実に。</p>}
-        {/* ホームの横（見出しのそば）に時計・天気への入口（2026-11-15・ユーザー指定） */}
-        {view === 'home' && !screenLocked && (
-          <div className="header-tools">
-            <button type="button" className="header-tool" onClick={() => setView('clock')}>🕐 時計</button>
-            <button type="button" className="header-tool" onClick={() => setView('weather')}>🌤️ 天気</button>
-          </div>
-        )}
         {view === 'home' && !screenLocked && (
           <button
             className="hist-open-btn"
