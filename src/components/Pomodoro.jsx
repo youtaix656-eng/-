@@ -272,13 +272,15 @@ export default function Pomodoro({ store, onToast }) {
     setRemaining(durationSec); // 終了後の表示は次の1回ぶん（以前からの見え方のまま）
     setFinished(true);
     stopMusic();
-    // シンプルタイマーは音声学習を止める仕様ではないので、カウントダウンのために
-    // 10秒だけ止めていた音声学習はここで元に戻す
-    if (audioPausedByBreakRef.current) {
-      audioPausedByBreakRef.current = false;
-      audioEngine.play();
-    }
-    onToast?.('⏰ タイマーが終了しました');
+    // シンプルタイマーの終了＝休憩の開始。カウントダウンも「休憩開始まで」と数えているので、
+    // 2時間コースの休憩と同じく音声学習もここで止める（2026-11-15 ユーザー報告
+    // 「休憩に入るときに音声学習と音楽が止まらなかった」。以前はここで再開していた）。
+    // 止めるだけで、勝手には再開しない——次に▶を押すのは本人。
+    audioPausedByBreakRef.current = false;
+    try {
+      if (audioEngine.getSnapshot().playing) audioEngine.stop();
+    } catch (e) { /* noop */ }
+    onToast?.('⏰ タイマーが終了しました。休憩です（音楽・音声学習を止めました）');
   }, [onToast, durationSec]);
 
   // 2時間コースの1コマが終わる（または複数コマがまとめて終わっている）時に呼ぶ。
@@ -383,6 +385,7 @@ export default function Pomodoro({ store, onToast }) {
   // 中身は毎回の描画で作り直してrefに置く（曲の種類・音量・コマなど、いつも最新の値で動く）。
   // 起こす側（下のstartTicker）は「動いているかどうか」だけで作り直す——以前は描画のたびに
   // タイマーを作り直していたので、作り直しが続くと1秒の見直しが飛ぶことがあった。
+  const mediaTickAtRef = useRef(0); // 曲のtimeupdateから起こす見直しの間引き用
   const handledEndRef = useRef(0); // 同じ終わりの時刻を2回処理しない（Workerと本体の両方から起こされるため）
   const tickHandlerRef = useRef(() => {});
   tickHandlerRef.current = () => {
@@ -458,7 +461,21 @@ export default function Pomodoro({ store, onToast }) {
   // （YT APIがこのDOM要素をiframeへ置き換えるため、Reactに再描画で触らせない）。
   const musicEls = (
     <>
-      <audio ref={audioRef} src={musicUrl || undefined} preload="auto" loop />
+      {/* 曲が鳴っている間は、曲の再生位置の更新（timeupdate）からも見直しを起こす。
+          画面を消した・裏に回した時にページ側のタイマーが止められても、鳴っている曲の
+          イベントは届き続けるので、休憩に入る処理とカウントダウンを取りこぼしにくくなる。 */}
+      <audio
+        ref={audioRef}
+        src={musicUrl || undefined}
+        preload="auto"
+        loop
+        onTimeUpdate={() => {
+          const now = Date.now();
+          if (now - mediaTickAtRef.current < 900) return;
+          mediaTickAtRef.current = now;
+          tickHandlerRef.current();
+        }}
+      />
       <div ref={ytContainerRef} style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none', bottom: 0, right: 0 }} />
     </>
   );
