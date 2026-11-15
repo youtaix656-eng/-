@@ -25,7 +25,7 @@ export default function Weather({ store, onToast }) {
   const active = places.find((p) => p.id === settings.weatherActiveId) || places[0] || null;
   const [state, setState] = useState({ status: 'idle' }); // idle | loading | ok | error
   const [adding, setAdding] = useState(false);
-  const [preset, setPreset] = useState('東京');
+  const [preset, setPreset] = useState('東京都');
   const [locating, setLocating] = useState(false);
   const reqRef = useRef(0);
 
@@ -155,10 +155,10 @@ export default function Weather({ store, onToast }) {
             ) : (
               <>
                 <label className="cw-field">
-                  一覧から選ぶ
+                  都道府県から選ぶ（予報の地点は県庁所在地です）
                   <span className="wx-add-row">
                     <select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="地域を選ぶ">
-                      {PRESET_PLACES.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                      {PRESET_PLACES.map((p) => <option key={p.name} value={p.name}>{p.name}（{p.city}）</option>)}
                     </select>
                     <button type="button" className="cw-btn primary" onClick={addPreset}>追加</button>
                   </span>

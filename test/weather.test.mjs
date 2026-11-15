@@ -14,6 +14,15 @@ test('PRESET_PLACES：47件・名前の重複なし・日本の範囲に収ま�
   }
 });
 
+test('PRESET_PLACES：都道府県名で選べる（岩手県＝盛岡・宮城県＝仙台）', () => {
+  const iwate = PRESET_PLACES.find((p) => p.name === '岩手県');
+  const miyagi = PRESET_PLACES.find((p) => p.name === '宮城県');
+  assert.equal(iwate.city, '盛岡');
+  assert.equal(miyagi.city, '仙台');
+  assert.equal(makePlace(iwate).name, '岩手県');
+  for (const p of PRESET_PLACES) assert.ok(/[都道府県]$/.test(p.name) && p.city, p.name);
+});
+
 test('weatherInfo：コードを表示に直す。夜の晴れは月。知らないコードは不明', () => {
   assert.equal(weatherInfo(0).label, '快晴');
   assert.equal(weatherInfo(0, false).icon, '🌙');
