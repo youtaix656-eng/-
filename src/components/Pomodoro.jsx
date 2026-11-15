@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { loadActivePomoSong } from '../lib/storage.js';
 import { createYoutubePlayer } from '../lib/pomoYoutube.js';
 import { setPomoRunning } from '../lib/runtimeFlags.js';
-import { bellRing } from '../lib/sound.js';
+import { bellRing, beep } from '../lib/sound.js';
 import * as audioEngine from '../lib/audioEngine.js';
 import { isSpeechSupported, speak } from '../lib/speech.js';
 import { COURSE_PHASES, catchUpCourse, courseScheduledEnd, coursePhaseOrdinal, courseCountdownText, hhmmOf } from '../lib/pomoCourse.js';
@@ -26,8 +26,8 @@ import { PomodoroConfigFields } from './PomodoroConfigFields.jsx';
 // 切り替えだけ）。
 // 同日、ユーザー指定で休憩開始・休憩終了それぞれの10秒前から「休憩開始まで10秒前、9、8…」
 // のような声のカウントダウンを追加（lib/speech.jsの既存speak()をそのまま使う。
-// 音声学習（AudioMode.jsx）が同時に読み上げ中の場合はブラウザのspeechSynthesisキューに
-// 順番待ちで積まれるだけで、強制的には割り込まない）。
+// 当初は音声学習の読み上げと同じ列に並べるだけだったため、音声学習中は鳴らないまま
+// 休憩に入る瞬間に捨てられていた。今は10秒前に音声学習を先に止めてから数える＝announceCountdown）。
 // 以前にあった多数の機能（プリセット・短い休憩/長い休憩/サイクル回数・勉強中の通知・
 // 1日の目標勉強時間・効果音・振動・画面常時点灯・集中モード自動最小化・バー位置の切替・
 // タブを閉じる時の確認・勉強内容メモ・週間統計グラフ/CSV書き出し・複数タブの幹事タブ判定
@@ -159,6 +159,7 @@ export default function Pomodoro({ store, onToast }) {
   void tick; // tickはこのレンダーを起こすためだけに参照する
 
   const playMusic = () => {
+    duckMusic(false);
     if (musicKind === 'youtube') {
       try { ytPlayerRef.current?.playVideo?.(); } catch (e) { /* noop */ }
       return;
@@ -172,7 +173,42 @@ export default function Pomodoro({ store, onToast }) {
       }
     }
   };
+  // カウントダウンの声が曲に埋もれないよう、数えている間だけ曲の音量を下げる（duck=true）。
+  // 戻す時（duck=false）は設定の音量へ戻す。
+  const duckMusic = (duck) => {
+    const base = cfg.musicVolume ?? 1;
+    const v = duck ? base * 0.2 : base;
+    try { if (audioRef.current) audioRef.current.volume = v; } catch (e) { /* noop */ }
+    try { ytPlayerRef.current?.setVolume?.(Math.round(v * 100)); } catch (e) { /* noop */ }
+  };
+  // 10秒前からの声のカウントダウン（「休憩開始まで10秒前、9、8…」）。
+  // 2026-11-15 ユーザー報告「このカウントが鳴っていなかった」への修正：
+  //  ①音声学習の読み上げ中だと、同じ読み上げの列の後ろに並んだまま、休憩に入る瞬間に
+  //    まとめて捨てられていた → 10秒前の時点で音声学習を先に止めてから数える
+  //    （休憩が明けたら今までどおり自動で再開する）。
+  //  ②曲に埋もれていた → 数えている間だけ曲の音量を下げる。
+  //  ③シンプルタイマーでは数えていなかった → 終了（＝休憩の開始）の10秒前から数える。
+  //  ④読み上げが使えない・失敗した時は黙らず、短い合図音で代える。
+  const announceCountdown = (phaseType, secLeft) => {
+    if (secLeft === 10) {
+      if (phaseType === 'study') {
+        duckMusic(true);
+        if (audioEngine.getSnapshot().playing) {
+          audioPausedByBreakRef.current = true;
+          audioEngine.stop();
+        }
+      }
+      // 前の読み上げが列に残っていたら捨ててから数え始める
+      try { window.speechSynthesis?.cancel(); window.speechSynthesis?.resume?.(); } catch (e) { /* noop */ }
+    }
+    const fallback = () => beep(1, secLeft === 10 ? 1320 : 880, 70);
+    if (!isSpeechSupported()) { fallback(); return; }
+    speak(courseCountdownText(phaseType, secLeft), { rate: 1.15 }).catch((e) => {
+      if (e?.name !== 'AbortError') fallback();
+    });
+  };
   const stopMusic = () => {
+    duckMusic(false);
     if (musicKind === 'youtube') {
       try { ytPlayerRef.current?.pauseVideo?.(); } catch (e) { /* noop */ }
       return;
@@ -185,6 +221,12 @@ export default function Pomodoro({ store, onToast }) {
     setRemaining(0);
     setFinished(true);
     stopMusic();
+    // シンプルタイマーは音声学習を止める仕様ではないので、カウントダウンのために
+    // 10秒だけ止めていた音声学習はここで元に戻す
+    if (audioPausedByBreakRef.current) {
+      audioPausedByBreakRef.current = false;
+      audioEngine.play();
+    }
     onToast?.('⏰ タイマーが終了しました');
   }, [onToast]);
 
@@ -236,6 +278,11 @@ export default function Pomodoro({ store, onToast }) {
       setRemaining(Math.max(0, Math.ceil((endAt - Date.now()) / 1000)));
       setRunning(false);
       stopMusic();
+      // シンプルタイマーのカウントダウン中に止めた時は、数えるために止めていた音声学習を戻す
+      if (coursePhaseIndex == null && audioPausedByBreakRef.current) {
+        audioPausedByBreakRef.current = false;
+        audioEngine.play();
+      }
       return;
     }
     if (cfg.mode === 'course2h') {
@@ -263,6 +310,7 @@ export default function Pomodoro({ store, onToast }) {
       return;
     }
     const base = finished || remaining <= 0 ? durationSec : remaining;
+    lastCountdownRef.current = { phaseIndex: null, sec: null };
     setFinished(false);
     setEndAt(Date.now() + base * 1000);
     setRemaining(base);
@@ -292,15 +340,16 @@ export default function Pomodoro({ store, onToast }) {
         else finish();
         return;
       }
-      if (coursePhaseIndex != null) {
+      {
+        // 2時間コースは各コマの終わり、シンプルタイマーは終了（＝休憩の開始）の10秒前から数える
+        const key = coursePhaseIndex != null ? coursePhaseIndex : -1;
+        const phaseType = coursePhaseIndex != null ? COURSE_PHASES[coursePhaseIndex].type : 'study';
         const secLeft = Math.ceil((endAt - Date.now()) / 1000);
         if (secLeft >= 1 && secLeft <= 10) {
           const prev = lastCountdownRef.current;
-          if (prev.phaseIndex !== coursePhaseIndex || prev.sec !== secLeft) {
-            lastCountdownRef.current = { phaseIndex: coursePhaseIndex, sec: secLeft };
-            if (isSpeechSupported()) {
-              speak(courseCountdownText(COURSE_PHASES[coursePhaseIndex].type, secLeft)).catch(() => {});
-            }
+          if (prev.phaseIndex !== key || prev.sec !== secLeft) {
+            lastCountdownRef.current = { phaseIndex: key, sec: secLeft };
+            announceCountdown(phaseType, secLeft);
           }
         }
       }
