@@ -242,6 +242,8 @@ async function playOne(item, signal) {
   }
 }
 
+let completedSeq = 0;
+
 async function runFrom(start) {
   const controller = new AbortController();
   abort = controller;
@@ -259,11 +261,16 @@ async function runFrom(start) {
       emit({ index: i, display: plan[i]?.display || null });
       updateMediaMetadata();
       await playOne(plan[i], signal);
+      // 止めた・飛ばした（中断）のではなく、最後まで読み終えた1件だけを知らせる
+      // （誤答・△✕の「聞いた」印に使う。表面だけ・裏面だけの読み上げでも数えられるように）
+      if (signal.aborted) break;
+      completedSeq += 1;
+      emit({ completedId: plan[i]?.display?.q?.id ?? null, completedSeq });
       i += 1;
     }
     if (!settings.loop && i >= plan.length && running) {
       stop();
-      emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true });
+      emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true, finishedBy: 'end' });
     }
   } catch (e) {
     if (e.name !== 'AbortError') {
@@ -341,7 +348,7 @@ export function resetToStart() {
 // （新規#9）。自然に最後まで読み終えた時と同じ emit にして、終了検知の効果をそのまま使う。
 export function finishNow() {
   stop();
-  emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true });
+  emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true, finishedBy: 'now' });
 }
 
 // アウトプットモード：「✅ 解答を見る」ボタンから呼ぶ。待機中でなければ何もしない。

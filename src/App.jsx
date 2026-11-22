@@ -253,6 +253,8 @@ export default function App() {
       // 誤答・△✕の束なら、再生履歴に残した並び（まだ聞いていない問題だけ）へ戻す
       const rev = c.reviewKey ? loadAudioHistory().find((h) => h.key === c.reviewKey) : null;
       if (rev) setAudioResumeFilters({ ...rev, exact: true, autoPlay: true });
+      // 束の履歴が消されていた時は、題から取った科目名（「3科目」など）で絞り込まない
+      else if (c.reviewKey) showToast('この誤答・△✕の続きは履歴から消されていたため、音声学習の画面だけ開きます');
       else setAudioResumeFilters({ subject: c.subject, genre: c.genre, keyword: c.keyword, round: c.round });
     }
     setView(c.view);
@@ -345,7 +347,8 @@ export default function App() {
     // ロック中はキー操作でも画面を動かさない（Tab で別のボタンへ移って Enter で押す、も止める）。
     // 解除の目印（南京錠）にいる時の Enter／スペース長押しだけは通す。
     const preventKeyScroll = (e) => {
-      if (e.target && e.target.closest && e.target.closest('.screen-lock-badge')) return;
+      // 鳴っているアラームの「止める」も通す（ロックより手前に出る画面のため）
+      if (e.target && e.target.closest && e.target.closest('.screen-lock-badge, .alarm-ring-backdrop')) return;
       if (SCROLL_KEYS.includes(e.key) || e.key === 'Tab' || e.key === 'Enter') e.preventDefault();
     };
     window.addEventListener('touchmove', preventDefault, { passive: false });

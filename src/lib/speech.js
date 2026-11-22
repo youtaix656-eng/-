@@ -102,7 +102,8 @@ function speakOne(text, { rate, pitch, volume, voice, signal }) {
     u.onend = () => finish(resolve);
     u.onerror = (e) => {
       // cancel による中断は正常終了として扱う
-      if (e.error === 'canceled' || e.error === 'interrupted') return finish(resolve);
+      // （長い文の続きの区切りは読まない：resolve に 'canceled' を返して speak() に知らせる）
+      if (e.error === 'canceled' || e.error === 'interrupted') return finish(resolve, 'canceled');
       finish(reject, new Error('音声再生エラー: ' + e.error));
     };
 
@@ -114,9 +115,15 @@ function speakOne(text, { rate, pitch, volume, voice, signal }) {
     // 見張り：読み終わるはずの時間（1文字あたり約0.3秒÷速度＋余裕）を過ぎても終わりの知らせが
     // 来ず、しかも実際にはもう何も話していなければ、終わったものとして次へ進む（黙って止まらない）。
     const expectMs = (text.length * 300) / Math.max(0.3, rate || 1) + 6000;
-    const startedAt = Date.now();
+    // 前の読み上げの後ろに並んでいる間は数えない（話し始めた時から数える）。並んで待つだけで
+    // 「長すぎる」と判断して列ごと消してしまわないように。
+    let startedAt = Date.now();
+    u.onstart = () => { startedAt = Date.now(); };
     watch = setInterval(() => {
       if (Date.now() - startedAt < expectMs) return;
+      // 画面を消している・裏に回っている間は判断しない（ブラウザが読み上げを止めているだけのことが
+      // 多く、ここで「終わった」とすると聞いていない問題を次々に飛ばしてしまう）
+      if (typeof document !== 'undefined' && document.hidden) return;
       if (!synth.speaking && !synth.pending) finish(resolve);
       else if (Date.now() - startedAt > expectMs * 3) { synth.cancel(); finish(resolve); }
     }, 1000);
@@ -132,7 +139,10 @@ export async function speak(text, { rate = 1, pitch = 1, volume = 1, voice = nul
   if (!text || !text.trim()) return;
   for (const chunk of splitForSpeech(text)) {
     if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
-    await speakOne(chunk, { rate, pitch, volume, voice, signal });
+    const r = await speakOne(chunk, { rate, pitch, volume, voice, signal });
+    // 止められた（cancelSpeech・別の読み上げに割り込まれた）時は、残りの区切りを読まない。
+    // 以前は区切りごとに続きを話してしまい、止めたはずの長い解説が鳴り続けていた。
+    if (r === 'canceled') return;
   }
 }
 
