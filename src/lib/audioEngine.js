@@ -251,11 +251,16 @@ async function playOne(item, signal) {
     // 押されるまでここで待つ（止めた・スキップした時は中断扱いで即解除する）。
     if (step.waitManual) {
       if (signal.aborted) return;
+      // 待っている間だけ waitingManual を立てる（声で解答の聞き取り・「解答を見る」ボタンは、
+      // 実際にここで待ち始めてから動かす。以前は「答えは？思い出してみよう」を読んでいる最中から
+      // 聞き取りを始め、ここへ来る前に結果が出ると解除が空振りして止まったままになり得た）
+      emit({ waitingManual: true });
       await new Promise((resolve) => {
         const done = () => { manualResolve = null; resolve(); };
         manualResolve = done;
         signal.addEventListener('abort', done, { once: true });
       });
+      emit({ waitingManual: false });
     }
     // 解答・解説を読み終えてから次の問題へ移るまでの間（規定の時間で自動的に次へ進む）。
     if (step.waitNextGap) await wait(settings.nextGapSeconds * 1000, signal);

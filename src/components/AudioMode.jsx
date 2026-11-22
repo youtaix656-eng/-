@@ -110,7 +110,11 @@ function voiceMatchLevel(heard, target) {
   const h = normalizeForMatch(heard);
   const t = normalizeForMatch(target);
   if (!h || !t) return 'none';
-  if (h.includes(t) || t.includes(h)) return 'match';
+  // 聞き取りが正解を含む時だけ一致。以前は「正解が聞き取りを含む」でも一致にしていたため、
+  // 「足」「の」のように1〜2文字しか聞き取れなかっただけで、正解の一部なら自動で○になっていた。
+  // 正解の一部しか言えていない時は「惜しい」として言い直しの機会を出す（8割以上言えていれば一致）。
+  if (h.includes(t)) return 'match';
+  if (t.includes(h) && h.length >= Math.max(2, Math.ceil(t.length * 0.8))) return 'match';
   const tChars = Array.from(new Set(t.split('')));
   const hitCount = tChars.filter((c) => h.includes(c)).length;
   if (tChars.length > 0 && hitCount / tChars.length >= 0.6) return 'close';
@@ -912,16 +916,8 @@ export default function AudioMode({
         engine.configure({ rate: effectiveRateOf(rateRef.current) });
       }
     };
-    const start = async () => {
-      try {
-        if (typeof window.DeviceMotionEvent.requestPermission === 'function') {
-          const perm = await window.DeviceMotionEvent.requestPermission();
-          if (perm !== 'granted') { onToast?.('モーションの許可が得られませんでした'); return; }
-        }
-        if (!removed) window.addEventListener('devicemotion', handler);
-      } catch (e) { /* noop */ }
-    };
-    start();
+    // 許可（iPhone）はスイッチを押した時に求めておく（ここ＝描画のあとで求めると、操作の外なので必ず断られていた）
+    if (!removed) window.addEventListener('devicemotion', handler);
     return () => {
       removed = true;
       window.removeEventListener('devicemotion', handler);
@@ -934,7 +930,7 @@ export default function AudioMode({
   const [loop, setLoop] = useState(false);
   const [sleepMin, setSleepMin] = useState(0);
 
-  // 今日の目標（問題数）。0=未設定。再生位置(index)が目標に達したら1回だけ知らせる。
+  // 今日の目標（問題数）。0=未設定。聞き終えた問題の数が目標に達したら1回だけ知らせる（声とトースト）。
   const [goal, setGoal] = useState(0);
   const goalNotifiedRef = useRef(false);
 
@@ -1145,7 +1141,28 @@ export default function AudioMode({
       if (mode === 7) {
         const CATS = ['現代の医療と社会', '社会保障制度', '医療倫理', '医療と社会', '医療従事者', '医療・福祉施設', '医療経済', '医療保険のしくみ', '公費負担医療', '介護サービス行政', '医療倫理教育', '施術者としての倫理'];
         const order = CATS.filter((c) => cl.has(c));
-        return applyTarget(order.length ? readCluster(order) : fallback());
+        if (order.length) return applyTarget(readCluster(order));
+        // 上の一覧は医療概論のカテゴリだけなので、ほかの13科目では章ごとにならず、ただ順に読むだけだった。
+        // 出題基準のジャンル（q.genre）ごとにまとめて読む（ジャンルを持たない問題は最後にまとめる）。
+        const byGenre = new Map();
+        pool.forEach((q) => {
+          const g = q.genre || '';
+          if (!byGenre.has(g)) byGenre.set(g, []);
+          byGenre.get(g).push(q);
+        });
+        if (byGenre.size <= 1 && byGenre.has('')) return applyTarget(fallback());
+        const genres = [...byGenre.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ja'));
+        if (byGenre.has('')) genres.push('');
+        const items = [];
+        genres.forEach((g) => {
+          const qs = seqQ(byGenre.get(g));
+          qs.forEach((q, i) => items.push({
+            kind: 'question', q,
+            intro: i === 0 ? `章、${g || 'そのほか'}。${qs.length}問、続けて確認します。` : '',
+            note: (links[q.id]?.note || '').trim(),
+          }));
+        });
+        return applyTarget(items);
       }
       if (mode === 8) return applyTarget(poolKw.length ? readCluster(byCount, true) : fallback());
       if (mode === 9) return applyTarget(weakSort(pool).map((q) => ({ kind: 'question', q })));
@@ -1258,7 +1275,10 @@ export default function AudioMode({
       if (filterSubject) base = base.filter((q) => q.subject === filterSubject);
       if (filterGenre) base = base.filter((q) => q.genre === filterGenre);
       if (filterRound) base = base.filter((q) => isSameRound(q.round, filterRound));
-      base = applyNagameAndSnooze(base);
+      // 「念のため確認だけ／除外」「先送り中だけ／除外」は、誤答・△✕の一覧（reviewPool）をしぼる設定。
+      // 問題を名指しで渡した束（赤い長丸・本番想定・就寝前まとめ・○の見直し・復習画面の「この1問だけ聞く」）
+      // にまで効かせると、前に入れたままの設定のせいで問題が消え、0問になることがあった。
+      if (!customReviewIds) base = applyNagameAndSnooze(base);
     } else if (source === 'tagged') base = taggedQuestions;
     else base = questions;
     // A1：新規:復習の割合（全件読み上げの時だけ。誤った問題モード・タグ読み上げは対象外）
@@ -1373,12 +1393,19 @@ export default function AudioMode({
     }
     if (item.kind === 'cloze') {
       const cq = item.q;
-      const ans = cq.choices[cq.answer];
+      // 選択肢を持たない問題で落ちない。○×問題は「○」「×」を伏せても穴埋めにならないので普通に問う。
+      const ans = cq.type !== 'ox' && Array.isArray(cq.choices) ? cq.choices[cq.answer] : null;
       const base = cq.explanation || questionText(cq);
-      const blanked = ans && base.includes(ans) ? base.split(ans).join('○○（ピー）') : questionText(cq);
-      steps.push({ phase: Q, say: `穴埋め。${blanked}。○○に入るのは何でしょう。` });
-      steps.push({ phase: G, waitGap: true });
-      steps.push({ phase: A, say: `答えは、${ans}。` });
+      if (ans && base.includes(ans)) {
+        steps.push({ phase: Q, say: `穴埋め。${base.split(ans).join('○○（ピー）')}。○○に入るのは何でしょう。` });
+        steps.push({ phase: G, waitGap: true });
+        steps.push({ phase: A, say: `答えは、${ans}。` });
+      } else {
+        // 伏せる所が見つからない時に、伏せていない文を読んで「○○に入るのは」と聞いていた
+        steps.push({ phase: Q, say: `問題。${questionText(cq)}。${cq.type === 'ox' ? '正しいか、誤りか。' : '答えは何でしょう。'}` });
+        steps.push({ phase: G, waitGap: true });
+        steps.push({ phase: A, say: answerText(cq) || '答えは画面でご確認ください。' });
+      }
       steps.push({ waitNextGap: true });
       return steps;
     }
@@ -1944,6 +1971,8 @@ export default function AudioMode({
     setFilterSubject('');
     setFilterGenre('');
     setFilterKeyword('');
+    // 回も外す（以前は外し忘れていて、前に選んだ回だけが残り、誤答・△✕がその回の分しか流れなかった）
+    setFilterRound('');
     setMode(0);
     setSource('review');
     setCustomReviewIds(null);
@@ -1978,17 +2007,35 @@ export default function AudioMode({
   useEffect(() => { setJustGradedWrongId(null); }, [current?.id]);
 
   // 今日の目標（問題数）に達したら1回だけ知らせる
+  // 以前は「いま何番目にいるか」で数えていたため、問題番号バーで後ろへ飛ぶ・続きから再開するだけで
+  // 聞いていないのに「達成」になり、また「声で知らせる」と書いてあるのにトーストだけだった。
+  // 最後まで読み終えた問題の数（このセッション内・同じ問題は1回）で数え、達成したら声でも知らせる。
+  const goalHeardRef = useRef({ sig: null, seq: null, ids: new Set() });
+  const [goalHeardCount, setGoalHeardCount] = useState(0);
+  useEffect(() => {
+    const g = goalHeardRef.current;
+    if (g.sig !== snap.planSig) {
+      goalHeardRef.current = { sig: snap.planSig, seq: snap.completedSeq, ids: new Set() };
+      setGoalHeardCount(0);
+      return;
+    }
+    if (snap.completedId == null || snap.completedSeq === g.seq) return;
+    g.seq = snap.completedSeq;
+    if (!g.ids.has(snap.completedId)) { g.ids.add(snap.completedId); setGoalHeardCount(g.ids.size); }
+  }, [snap.completedSeq, snap.planSig]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!effectiveGoal) { goalNotifiedRef.current = false; return; }
-    if (index + 1 >= effectiveGoal) {
+    if (goalHeardCount >= effectiveGoal) {
       if (!goalNotifiedRef.current) {
         goalNotifiedRef.current = true;
+        const msg = `今日の目標、${effectiveGoal}問を達成しました。`;
         onToast?.(`🎯 今日の目標（${effectiveGoal}問）を達成しました！`);
+        speak(msg, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
       }
     } else {
       goalNotifiedRef.current = false;
     }
-  }, [index, effectiveGoal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [goalHeardCount, effectiveGoal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 件数チップ・まだ解いていない問題チップが対象にしている「束」の件数（なければnull＝すべて）
   const batchTarget = (source === 'review' || (source === 'filter' && newOnly)) ? reviewTarget : null;
@@ -2237,9 +2284,12 @@ export default function AudioMode({
         // 盲目の受験生からの改善提案#7：「◯問目へ」で問題番号バーと同じ絶対位置ジャンプ。
         // 範囲外の番号（例：全123問で「500問目へ」）は最後へ寄せ、実際に移った番号を知らせる
         else if (cmd.type === 'seek') {
-          const n = Math.max(1, Math.min(engine.getSnapshot().total || total, cmd.n));
-          engine.seekTo(n - 1);
-          onToast?.(n !== cmd.n ? `${cmd.n}問目はないため、${n} / ${total} へ移動しました` : `${n} / ${total} へ移動しました`);
+          // 「残り◯問です」の知らせの項目は数えない（以前は知らせを挟んでいると、その数だけ手前の問題へ着いていた）
+          const qIdx = engine.getPlanDisplays().map((d, i) => (d && d.kind !== 'progress' ? i : -1)).filter((i) => i >= 0);
+          const qTotal = qIdx.length || total;
+          const n = Math.max(1, Math.min(qTotal, cmd.n));
+          engine.seekTo(qIdx.length ? qIdx[n - 1] : n - 1);
+          onToast?.(n !== cmd.n ? `${cmd.n}問目はないため、${n} / ${qTotal}問目へ移動しました` : `${n} / ${qTotal}問目へ移動しました`);
         }
         // M25：「もう一度言う」。skip(0)は現在位置を変えずに止めて読み直すだけなので、
         // 新しい読み直しの仕組みは作らずそのまま再利用する。
@@ -2257,6 +2307,9 @@ export default function AudioMode({
   // （false negativeの誤判定による不公平な自動✕を避けるための、意図的な非対称設計）。
   useEffect(() => {
     if (!voiceAnswerOn || !current || phase !== PHASES.GAP || currentItem?.kind !== 'question') return;
+    // エンジンが実際に答えを待ち始めてから聞く（「答えは？思い出してみよう」を読んでいる間に聞き始めると、
+    // 自分の読み上げを拾ったり、待ち始める前に結果が出て解除が空振りし止まったままになっていた）
+    if (!snap.waitingManual) return;
     // 音声認識に対応していない端末・ブラウザでは、聞き取りを待ち続けて止まってしまわないよう
     // すぐに通常の答え合わせへ進める（行き止まりにしない）。
     if (!isVoiceCommandSupported()) { engine.resumeManual(); return; }
@@ -2331,7 +2384,7 @@ export default function AudioMode({
     doListen(false);
     return () => { stopped = true; try { activeHandle?.stop?.(); } catch (e) { /* noop */ } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, voiceAnswerOn, current?.id]);
+  }, [phase, voiceAnswerOn, current?.id, snap.waitingManual]);
   // 考え中に「声で解答」を切った時は、解答待ちで止まったままにしない（そのまま答え合わせへ進める）
   useEffect(() => {
     if (!voiceAnswerOn && !outputModeOn) engine.resumeManual();
@@ -2472,6 +2525,9 @@ export default function AudioMode({
         setPlaylistQueue(rest);
         setCustomReviewIds(null);
         setFilterSubject(nextItem.subject || '');
+        // 積んだ時のジャンル・回もそろえる（以前は科目しか覚えておらず、今のジャンル・回のまま別の問題を流していた）
+        setFilterGenre(nextItem.genre || '');
+        setFilterRound(nextItem.round || '');
         setReviewOffsetPersist(0);
         setReviewTarget(nextItem.target);
         setSessionGradedCount(0);
@@ -2569,6 +2625,7 @@ export default function AudioMode({
     setFilterSubject('');
     setFilterGenre('');
     setFilterKeyword('');
+    setFilterRound(''); // 回も外す（外し忘れて、前に選んだ回のまま誤答・△✕がしぼられていた）
     setSource(s);
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = null;
@@ -2853,6 +2910,15 @@ export default function AudioMode({
   const justRepeatedRef = useRef(false);
   const repeatWithNextBatch = () => {
     rebuildStop();
+    // 件数が「すべて」の時は次の束が無いので、同じ束を最初から流す。以前は位置を0だけ進めて何も起きず、
+    // 押しても無反応のうえ、重なりの知らせが次に条件を変えた時に場違いに出ていた。
+    if (!reviewTarget) {
+      justRepeatedRef.current = false;
+      engine.seekTo(0);
+      onToast?.('🔁 同じ束をもう一度、最初から再生します（件数が「すべて」のため別の問題はありません）');
+      requestAutoPlay();
+      return;
+    }
     prevBatchIdsRef.current = new Set(plan.filter((p) => p.kind === 'question' && p.q).map((p) => p.q.id));
     justRepeatedRef.current = true;
     setReviewOffsetPersist((o) => o + (reviewTarget || 0));
@@ -3775,7 +3841,7 @@ export default function AudioMode({
                 <span className="now-index">{index + 1} / {total}</span>
                 {effectiveGoal > 0 && (
                   <span className="now-index">
-                    🎯 目標 {Math.min(index + 1, effectiveGoal)} / {effectiveGoal}問
+                    🎯 目標 {Math.min(goalHeardCount, effectiveGoal)} / {effectiveGoal}問
                     {mood === 'tired' && goal > 0 && effectiveGoal < goal && '（少なめに調整中）'}
                   </span>
                 )}
@@ -3914,7 +3980,7 @@ export default function AudioMode({
             )}
             {/* アウトプットモード：GAP（考え中）で自動には進まず、ここで止まって待つ。
                 自分の中で解答を決めてから押すと正解・解説が読まれる。 */}
-            {outputModeOn && phase === PHASES.GAP && (
+            {outputModeOn && phase === PHASES.GAP && snap.waitingManual && (
               <button className="btn accent block" style={{ marginTop: 8 }} onClick={() => engine.resumeManual()}>
                 ✅ 解答を見る（自分の中で答えを決めてから押してください）
               </button>
@@ -4405,7 +4471,7 @@ export default function AudioMode({
                   className="btn ghost sm"
                   style={{ marginTop: 8 }}
                   onClick={() => {
-                    setPlaylistQueue((q) => [...q, { target: reviewTarget, subject: filterSubject || null }]);
+                    setPlaylistQueue((q) => [...q, { target: reviewTarget, subject: filterSubject || null, genre: filterGenre || null, round: filterRound || null }]);
                     onToast?.('🎵 プレイリストに積みました（今の束が終わると自動で次へ進みます）');
                   }}
                 >
@@ -4430,7 +4496,7 @@ export default function AudioMode({
                           onClick={() => setPlaylistQueue((q) => q.filter((_, j) => j !== i))}
                           title="タップで取り消し"
                         >
-                          {it.subject || '全科目'}×{it.target ?? 'すべて'} ✕
+                          {it.subject || '全科目'}{it.genre ? `・${it.genre}` : ''}{it.round ? `・${formatRound(it.round)}` : ''}×{it.target ?? 'すべて'} ✕
                         </button>
                       ))}
                     </div>
@@ -5081,7 +5147,21 @@ export default function AudioMode({
             />
             <Opt
               on={walkingDetectOn}
-              onToggle={() => setWalkingDetectOn((v) => !v)}
+              onToggle={async () => {
+                if (walkingDetectOn) { setWalkingDetectOn(false); return; }
+                if (typeof window === 'undefined' || typeof window.DeviceMotionEvent === 'undefined') {
+                  onToast?.('この端末・ブラウザはモーションの検知に対応していません');
+                  return;
+                }
+                // iPhone はタップした瞬間（ユーザー操作の中）に許可を求めないと、許可の画面が出ないまま断られる
+                if (typeof window.DeviceMotionEvent.requestPermission === 'function') {
+                  try {
+                    const perm = await window.DeviceMotionEvent.requestPermission();
+                    if (perm !== 'granted') { onToast?.('モーションの許可が得られませんでした'); return; }
+                  } catch (e) { onToast?.('モーションの許可が得られませんでした'); return; }
+                }
+                setWalkingDetectOn(true);
+              }}
               title="🚶 歩行中は速度を少し落とす（モーション検知）"
               desc="体の動きの大きさから簡易的に判定するだけで、歩行そのものを正確に検知する技術ではありません。対応していない機種・ブラウザもあります。iPhoneでは最初にモーションの許可を求めます。"
             />
