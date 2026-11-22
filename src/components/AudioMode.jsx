@@ -560,6 +560,29 @@ export default function AudioMode({
   const pendingJumpRef = useRef(null);
   const [jumpNonce, setJumpNonce] = useState(0);
   const togglePlayRef = useRef(null);
+  // 「選んだらそのまま再生」の予約。以前は setTimeout(300ms) で、その時の描画の togglePlay を
+  // 呼んでいたため、①直前に変えたスリープタイマー等が効かない（古い値のまま）②計画の組み直しが
+  // 300msに間に合わない（体の場所法の読み込み等）と古い束を再生し、すぐ読み込み直しで止まる、が起きた。
+  // 計画をエンジンへ読み込んだ直後に、最新の togglePlay で1回だけ再生する（組み直しが無い時は1.2秒後に再生）。
+  const autoPlayReqRef = useRef(0);
+  const latestPlanSigRef = useRef(null);
+  const requestAutoPlay = () => {
+    const at = Date.now();
+    autoPlayReqRef.current = at;
+    // 組み直しが起きない（同じ束をもう一度選んだ）時の受け皿。組み直し中（エンジンの束と
+    // 画面の束がまだ違う）なら待ち続け、古い束を再生しない（5秒で諦める）。
+    const check = () => {
+      if (autoPlayReqRef.current !== at) return;
+      const snapNow = engine.getSnapshot();
+      if (snapNow.planSig !== latestPlanSigRef.current || !snapNow.hasPlan) {
+        if (Date.now() - at < 5000) setTimeout(check, 300); else autoPlayReqRef.current = 0;
+        return;
+      }
+      autoPlayReqRef.current = 0;
+      if (!snapNow.playing) togglePlayRef.current?.();
+    };
+    setTimeout(check, 900);
+  };
   const [filterSubject, setFilterSubject] = useState(() => resumeFilters?.subject || '');
   const [filterGenre, setFilterGenre] = useState(() => resumeFilters?.genre || '');
   const [filterKeyword, setFilterKeyword] = useState(() => resumeFilters?.keyword || '');
@@ -719,27 +742,37 @@ export default function AudioMode({
     () => Array.from(new Set(afterKeyword.map((q) => roundKey(q.round)).filter((r) => r != null))).sort((a, b) => Number(b) - Number(a)),
     [afterKeyword]
   );
+  // 再生中（束を聞いている間）は、絞り込みに使う解答履歴・SRSを再生を始めた時点のまま固定する。
+  // 以前は「まだ解いていない問題だけ」（隙間時間の「5分だけ」も同じ）で1問自己採点するたびに
+  // その問題が対象から外れて件数が変わり、束が読み込み直されて再生がその場で止まっていた
+  // （誤答回数・忘却リスクでしぼっている時も同じ）。止まっている間はいつも最新を使う。
+  const engineStartedForFilter = useAudioEngine().started;
+  const filterDataRef = useRef({ history, srs });
+  if (!engineStartedForFilter) filterDataRef.current = { history, srs };
+  const filterHistory = filterDataRef.current.history;
+  const filterSrs = filterDataRef.current.srs;
   const recentWrongIds = useMemo(() => {
     if (!recentOnly) return null;
     const now = Date.now();
     const since = recentOnly === 'today' ? now - 24 * 60 * 60 * 1000 : now - 7 * 24 * 60 * 60 * 1000;
     const ids = new Set();
-    for (const h of history) if (!h.correct && h.at >= since) ids.add(h.questionId);
+    for (const h of filterHistory) if (!h.correct && h.at >= since) ids.add(h.questionId);
     return ids;
-  }, [recentOnly, history]);
+  }, [recentOnly, filterHistory]);
   // まだ一度も解いていない問題かどうかの判定用（#29「まだ解いていない問題だけ」）
   const answeredIds = useMemo(() => new Set(history.map((h) => h.questionId)), [history]);
+  const answeredIdsForFilter = useMemo(() => new Set(filterHistory.map((h) => h.questionId)), [filterHistory]);
   const filteredPool = useMemo(() => {
     let pool = filterRound ? afterKeyword.filter((q) => isSameRound(q.round, filterRound)) : afterKeyword;
     if (bookmarkOnly) pool = pool.filter((q) => bookmarks[q.id]);
-    if (newOnly) pool = pool.filter((q) => !answeredIds.has(q.id));
-    if (minWrong > 0) pool = pool.filter((q) => (normalize(srs[q.id]).wrongCount || 0) >= minWrong);
+    if (newOnly) pool = pool.filter((q) => !answeredIdsForFilter.has(q.id));
+    if (minWrong > 0) pool = pool.filter((q) => (normalize(filterSrs[q.id]).wrongCount || 0) >= minWrong);
     // 忘却リスクは「しきい値以上」（minRisk）と「リスク上位◯件」（riskTopN）のどちらか一方。
     // riskTopNを選んでいる時はminRiskのしきい値は使わず、リスクの高い順に並べて件数で切る。
     if (riskTopN) {
-      pool = [...pool].sort((a, b) => riskOf(b, srs) - riskOf(a, srs)).slice(0, riskTopN);
+      pool = [...pool].sort((a, b) => riskOf(b, filterSrs) - riskOf(a, filterSrs)).slice(0, riskTopN);
     } else if (minRisk > 0) {
-      pool = pool.filter((q) => Math.round(riskOf(q, srs) * 100) >= minRisk);
+      pool = pool.filter((q) => Math.round(riskOf(q, filterSrs) * 100) >= minRisk);
     }
     if (recentWrongIds) pool = pool.filter((q) => recentWrongIds.has(q.id));
     if (recentOnlyFilter) pool = pool.filter((q) => recentIds.has(q.id));
@@ -756,7 +789,7 @@ export default function AudioMode({
       });
     }
     return pool;
-  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIds, minWrong, minRisk, riskTopN, srs, recentWrongIds, recentOnlyFilter, recentIds, derivedOnly, oxOnly, filterTerm, links]);
+  }, [afterKeyword, filterRound, bookmarkOnly, bookmarks, newOnly, answeredIdsForFilter, minWrong, minRisk, riskTopN, filterSrs, recentWrongIds, recentOnlyFilter, recentIds, derivedOnly, oxOnly, filterTerm, links]);
   const filterActive = !!(filterSubject || filterGenre || filterKeyword || filterRound || filterTerm || bookmarkOnly || newOnly || minWrong > 0 || minRisk > 0 || riskTopN || recentOnly || recentOnlyFilter || derivedOnly || oxOnly || rotateSubjects.length > 0);
   // ○の見直し・○の高速回転（学習10・60・300・900と同じuseMaruReview/MaruReviewCardをそのまま使う）。
   // 検索の絞り込み（filteredPool）を引き継ぐ。
@@ -764,6 +797,7 @@ export default function AudioMode({
     maruExcludeMastered, setMaruExcludeMastered,
     maruStatusAll, maruUncertainCount, maruStatusFiltered, maruPool,
   } = useMaruReview(filteredPool, history, srs);
+  const fastSkipAutoRef = useRef(false);
   const startMaruAudio = (pool, fast) => {
     rebuildStop();
     setMode(0);
@@ -778,9 +812,11 @@ export default function AudioMode({
     setVoiceAnswerStats({ attempts: 0, matched: 0 });
     audioSessionKindRef.current = fast ? 'maruFast' : 'maruReview';
     quickMinuteActiveRef.current = null;
-    if (fast) setSkipQuestionText(true);
+    // 高速回転は問題文を省略して読む。自分でオンにしていなかった時は、この束が終わったら元に戻す
+    // （以前はオンのまま残り、ふつうの読み上げでも問題文が読まれなくなっていた）。
+    if (fast && !skipQuestionText) { setSkipQuestionText(true); fastSkipAutoRef.current = true; }
     onToast?.(fast ? `⚡ ○の高速回転を音声で始めます（${pool.length}問）` : `📝 ○の見直しを音声で始めます（${pool.length}問）`);
-    setTimeout(() => togglePlay(), 300);
+    requestAutoPlay();
   };
   // 弱点タグ（学習(10・60・300・900)のweakTagsと同じ単一の正=weakClusters.jsを移植。タップでキーワードしぼり）。
   const weakAudioTags = useMemo(
@@ -855,7 +891,8 @@ export default function AudioMode({
       const walking = variance > 2;
       if (walking !== walkingActiveRef.current) {
         walkingActiveRef.current = walking;
-        engine.configure({ rate: walking ? Math.max(0.7, rate * 0.85) : rate });
+        // 歩き始めてから速度を変えた時も、いまの速度から計算する（以前は検知を始めた時の速度のまま）
+        engine.configure({ rate: effectiveRateOf(rateRef.current) });
       }
     };
     const start = async () => {
@@ -872,7 +909,7 @@ export default function AudioMode({
       removed = true;
       window.removeEventListener('devicemotion', handler);
       walkingActiveRef.current = false;
-      engine.configure({ rate });
+      engine.configure({ rate: rateRef.current });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walkingDetectOn]);
@@ -948,9 +985,10 @@ export default function AudioMode({
   const explanationLabel = (q) => (latestMissType(missTypes[q.id])?.type === 'chishiki' ? '知識を補強する解説です。' : '');
   const carelessCaution = (q) => (latestMissType(missTypes[q.id])?.type === 'careless' ? '注意。ケアレスミスの多い問題です。選択肢を最後まで読み、引っかけに気をつけましょう。' : '');
   const answerText = (q) => {
-    const correct = q.choices[q.answer];
+    // 選択肢を持たない問題でも落ちない・「undefined」と読まないように
+    const correct = Array.isArray(q.choices) ? q.choices[q.answer] : null;
     const label = q.type === 'ox' ? '正解は、' : `正解は、${q.answer + 1}番、`;
-    let t = `${label}${correct}。`;
+    let t = correct != null && correct !== '' ? `${label}${correct}。` : '';
     if (q.explanation) t += ` 解説。${explanationLabel(q)}${emphasizeForSpeech(q.explanation, effectiveTags(q, links))}`;
     return t;
   };
@@ -1220,6 +1258,11 @@ export default function AudioMode({
   }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState, audioNewPct, bodyLocationSetId, homeworkIds, prependReviewOn, keiketsuCards, keiketsuRecallOn, frozenReviewIds]);
 
   const [rate, setRate] = useState(settings.speechRate);
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
+  // 歩いている間は少しゆっくり読む（歩行検知）。速度を設定し直す所はすべてこれを通す
+  // （以前は速度の変更・▶のたびに歩行中の減速が消えていた）。
+  const effectiveRateOf = (r) => (walkingActiveRef.current ? Math.max(0.7, r * 0.85) : r);
   const [gap, setGap] = useState(settings.gapSeconds);
   // 解答・解説を読み終えてから次の問題へ進むまでの間（秒）。「規定の時間がたったら次へ」の間隔。
   const [nextGap, setNextGap] = useState(settings.nextGapSeconds ?? 1);
@@ -1340,9 +1383,10 @@ export default function AudioMode({
     // 「わかっているのに間違えた」場合は問題文の読み直しが不要なため。
     if (skipQuestionText) {
       const sq = item.q;
-      const correct = sq.choices[sq.answer];
+      // 選択肢を持たない問題（図だけの問題など）で「正解は、undefined」と読まないように
+      const correct = Array.isArray(sq.choices) ? sq.choices[sq.answer] : null;
       const label = sq.type === 'ox' ? '正解は、' : `正解は、${sq.answer + 1}番、`;
-      let t = `${label}${correct}。`;
+      let t = correct != null && correct !== '' ? `${label}${correct}。` : answerText(sq);
       if (needsFigureWarning(sq)) t = `注意。この問題は図が必要です。${t}`;
       const firstSentence = sq.explanation ? sq.explanation.split('。')[0] : '';
       if (firstSentence) t += ` ${firstSentence}。`;
@@ -1403,6 +1447,12 @@ export default function AudioMode({
     // 記憶定着：想起をうながし、追加の間をとる（アクティブリコール）。A1：完全想起モードは
     // recallModeを兼ね、間をさらに長めにとる。
     const effectiveRecall = recallMode || pureRecallOn;
+    // ヒントは考える前に言う。以前は考える間（間）のあとに読んでいたため、ヒントを聞いた直後に
+    // 正解が流れ、ヒントを使って思い出す時間が無かった。
+    if (readHint) {
+      const hint = item.keyword || effectiveTags(q, links)[0] || '';
+      if (hint) { steps.push({ say: `ヒント。キーワードは、${hint}。` }); steps.push({ wait: 300 }); }
+    }
     if (effectiveRecall) steps.push({ phase: G, say: '……答えは？ 思い出してみよう。' });
     // A2：無音の長さを固定（settings.gapSeconds）ではなく、個人の解答ペースから計算し直す
     // （正確な「忘却までの秒数」ではなく、過去の解答テンポに合わせた目安であることを明記）。
@@ -1414,17 +1464,14 @@ export default function AudioMode({
       steps.push({ phase: G, waitGap: true });
     }
     if (effectiveRecall) steps.push({ wait: pureRecallOn ? 2500 : 1600 });
-    if (readHint) {
-      const hint = item.keyword || effectiveTags(q, links)[0] || '';
-      if (hint) { steps.push({ say: `ヒント。キーワードは、${hint}。` }); steps.push({ wait: 600 }); }
-    }
     steps.push(...back);
     // 記憶定着：答えの核心をもう一度（反復で刷り込む）
     if (effectiveRecall) {
       const key = shortAnswer(q) || '';
       if (key) { steps.push({ wait: 400 }); steps.push({ phase: A, say: `大事なところをもう一度。${key}。` }); }
     }
-    if (reverse) {
+    // ○×問題は「答えは、○」から問題を思い出せないので、逆向き確認は四択・一問一答だけにする
+    if (reverse && q.type !== 'ox' && shortAnswer(q)) {
       steps.push({ phase: Q, say: `逆に確認。答えは、${shortAnswer(q)}。これは何を問う問題だったか思い出しましょう。` });
       steps.push({ waitGap: true });
       steps.push({ say: `問題は、${questionText(q)}` });
@@ -1442,7 +1489,9 @@ export default function AudioMode({
     // アウトプットモードと同じwaitManualの仕組みに相乗りする（item.kind==='question'だけ
     // ――比較・数値・用語カード等は「声で何を答えるか」が定義できないため対象外）。
     const manualize = outputModeOn || (voiceAnswerOn && item.kind === 'question');
-    if (manualize && step.waitGap) {
+    // 手動で待つのは「考え中」の間だけ。逆向き確認（逆に確認→間→問題は）の間まで手動にすると、
+    // 「解答を見る」ボタンが出ない段で止まったままになっていた（声で解答も同じく聞き取りが始まらない）。
+    if (manualize && step.waitGap && step.phase === PHASES.GAP) {
       const { waitGap, ...rest } = step;
       step = { ...rest, waitManual: true };
     }
@@ -1530,6 +1579,27 @@ export default function AudioMode({
     if (snapNow.planSig !== planSig) breakNotifiedRef.current = -1;
     engine.load(builtPlan, { sig: planSig, startIndex });
   }, [builtPlan, planSig, audioReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ○の高速回転で自動的に入れた「問題文を省略」を、その束を聞き終えた・閉じた時に元へ戻す
+  const prevStartedRef = useRef(false);
+  useEffect(() => {
+    if (prevStartedRef.current && !snap.started && fastSkipAutoRef.current) {
+      fastSkipAutoRef.current = false;
+      setSkipQuestionText(false);
+    }
+    prevStartedRef.current = snap.started;
+  }, [snap.started]);
+
+  // 「選んだらそのまま再生」（requestAutoPlay）を、計画を読み込んだ直後に1回だけ実行する
+  useEffect(() => {
+    if (!autoPlayReqRef.current || !audioReady || builtPlan.length === 0) return;
+    const t = setTimeout(() => {
+      if (!autoPlayReqRef.current) return;
+      autoPlayReqRef.current = 0;
+      if (!engine.getSnapshot().playing) togglePlayRef.current?.();
+    }, 60);
+    return () => clearTimeout(t);
+  }, [builtPlan, planSig, audioReady]);
 
   // 履歴の位置へ飛ぶ：絞り込みが履歴と同じになり、計画が読み込まれてから一度だけ（上の効果の後に走る）
   useEffect(() => {
@@ -1824,10 +1894,11 @@ export default function AudioMode({
     };
     saveAudioProgressSync(prog); // 閉じる直前でも残るよう、同期で先に書く
     storage.saveAudioProgress(prog);
-  }, [snap.index, planSig, audioReady, builtPlan.length, source, filterSubject, filterGenre, filterKeyword, filterRound]);
+    // 自己採点した直後にも書く（以前は次の問題へ進むまで書かず、採点してすぐ閉じると二重記録防止が消えていた）
+  }, [snap.index, planSig, audioReady, builtPlan.length, source, filterSubject, filterGenre, filterKeyword, filterRound, sessionGradedCount]);
 
   // 再生設定をエンジンへ反映（再生中でも即時）
-  useEffect(() => { engine.configure({ rate }); }, [rate]);
+  useEffect(() => { engine.configure({ rate: effectiveRateOf(rate) }); }, [rate]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);
   useEffect(() => { engine.configure({ nextGapSeconds: nextGap }); }, [nextGap]);
   useEffect(() => { engine.configure({ loop }); }, [loop]);
@@ -1912,7 +1983,7 @@ export default function AudioMode({
         return;
       }
       updateSettings({ speechRate: rate, gapSeconds: gap, nextGapSeconds: nextGap });
-      engine.configure({ rate, gapSeconds: gap, nextGapSeconds: nextGap, loop, voice: selectedVoice(), pitch: settings.speechPitch || 1 });
+      engine.configure({ rate: effectiveRateOf(rate), gapSeconds: gap, nextGapSeconds: nextGap, loop, voice: selectedVoice(), pitch: settings.speechPitch || 1 });
       engine.setSleep(sleepMin);
       // ※ ここで60問区切りの印（breakNotifiedRef）を戻さない。戻すと、休憩バナーの「すぐ続ける」で
       //   再生した瞬間に同じ位置でもう一度休憩に入り、何を押しても続きが流れなかった（実際のバグ）。
@@ -2063,6 +2134,20 @@ export default function AudioMode({
       if (!engine.getSnapshot().playing) togglePlay();
     }, delayMin * 60000);
   };
+  // 休憩中に自分で▶（本体・下部バー・イヤホン）を押して再開した時は、休憩の案内と自動再開の予約を片付ける。
+  // 以前は案内が出たまま残り、そのあいだ「5分ごとの休憩」の見張りも止まったままだった。
+  // また予約が残ると、あとで自分で止めた時に予約の時刻が来て勝手に再生が始まっていた。
+  useEffect(() => {
+    // 実際のエンジンの状態で見る（同じ描画で60問区切りの休憩が止めた直後に、案内を消してしまわないように）
+    if (!playing || !engine.getSnapshot().playing) return;
+    if (breakPending) setBreakPending(false);
+    if (breakTimerRef.current) {
+      clearTimeout(breakTimerRef.current);
+      breakTimerRef.current = null;
+      clearBreakResumePending().catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
   // 派生#43：予約した自動再開が実際に発火する前にアプリが閉じられた／再読み込みされた場合
   // （非ジェスチャー文脈からの自動再開が本当に鳴ったかは分からないため）、次に開いた時に
   // 黙らず一言添える。正常に発火した時は上のclearBreakResumePending()で必ず消えるので、
@@ -2116,7 +2201,12 @@ export default function AudioMode({
         // 盲目の受験生からの改善提案#9：声で詳細設定アコーディオンを開く。
         else if (cmd.type === 'nav' && cmd.kind === 'openSettings') { setDetailSettingsOpen(true); onToast?.('🔧 詳細設定を開きました'); }
         // 盲目の受験生からの改善提案#7：「◯問目へ」で問題番号バーと同じ絶対位置ジャンプ。
-        else if (cmd.type === 'seek') { engine.seekTo(cmd.n - 1); onToast?.(`${cmd.n} / ${total} へ移動しました`); }
+        // 範囲外の番号（例：全123問で「500問目へ」）は最後へ寄せ、実際に移った番号を知らせる
+        else if (cmd.type === 'seek') {
+          const n = Math.max(1, Math.min(engine.getSnapshot().total || total, cmd.n));
+          engine.seekTo(n - 1);
+          onToast?.(n !== cmd.n ? `${cmd.n}問目はないため、${n} / ${total} へ移動しました` : `${n} / ${total} へ移動しました`);
+        }
         // M25：「もう一度言う」。skip(0)は現在位置を変えずに止めて読み直すだけなので、
         // 新しい読み直しの仕組みは作らずそのまま再利用する。
         else if (cmd.type === 'nav' && cmd.kind === 'replay') { skip(0); onToast?.('🔁 もう一度読み上げます'); }
@@ -2139,7 +2229,16 @@ export default function AudioMode({
     let stopped = false;
     let activeHandle = null;
     const q = current;
-    const target = q.type !== 'ox' && Array.isArray(q.choices) ? q.choices[q.answer] : (effectiveTags(q, links)[0] || '');
+    const isOx = q.type === 'ox';
+    // ○×問題は「まる／ばつ」で答える。以前は正解語の代わりにキーワードと突き合わせていたため、
+    // 正しく「まる」と言っても必ず不一致になり、「あとで調べる」にまで登録されていた。
+    const oxAnswer = (heard) => {
+      const t = (heard || '').replace(/\s/g, '');
+      if (/^(まる|マル|丸|○|〇|正しい|ただしい|はい|せいかい|正解)/.test(t)) return 0;
+      if (/^(ばつ|バツ|罰|✕|×|x|X|ペケ|ぺけ|誤り|あやまり|間違い|まちがい|いいえ)/.test(t)) return 1;
+      return null;
+    };
+    const target = !isOx && Array.isArray(q.choices) ? q.choices[q.answer] : (effectiveTags(q, links)[0] || '');
     const finishTurn = () => { if (!stopped) engine.resumeManual(); };
     const doListen = (isRetry) => {
       beep(1, isRetry ? 740 : 880, 70);
@@ -2147,7 +2246,19 @@ export default function AudioMode({
         onResult: (text) => {
           if (stopped) return;
           const heard = (text || '').trim();
-          const level = heard && target ? voiceMatchLevel(heard, target) : 'none';
+          let level;
+          if (isOx) {
+            const said = oxAnswer(heard);
+            if (said == null) {
+              // まる・ばつのどちらとも聞き取れない時は判定しない（誤りとして記録しない）
+              setVoiceAnswerHeard({ questionId: q.id, heard, matched: false });
+              finishTurn();
+              return;
+            }
+            level = said === q.answer ? 'match' : 'none';
+          } else {
+            level = heard && target ? voiceMatchLevel(heard, target) : 'none';
+          }
           if (level === 'match') {
             setVoiceAnswerHeard({ questionId: q.id, heard, matched: true });
             setVoiceAnswerStats((s) => ({ attempts: s.attempts + 1, matched: s.matched + 1 }));
@@ -2158,7 +2269,7 @@ export default function AudioMode({
             finishTurn();
             return;
           }
-          if (level === 'close' && !isRetry) {
+          if (level === 'close' && !isRetry && !isOx) {
             // C7：完全一致ではないが近い（惜しい）時だけ、もう一度だけ言い直すチャンスを与える。
             speak('惜しいです。もう一度言ってみましょう。', { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
             setTimeout(() => { if (!stopped) doListen(true); }, 1200);
@@ -2187,6 +2298,10 @@ export default function AudioMode({
     return () => { stopped = true; try { activeHandle?.stop?.(); } catch (e) { /* noop */ } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, voiceAnswerOn, current?.id]);
+  // 考え中に「声で解答」を切った時は、解答待ちで止まったままにしない（そのまま答え合わせへ進める）
+  useEffect(() => {
+    if (!voiceAnswerOn && !outputModeOn) engine.resumeManual();
+  }, [voiceAnswerOn, outputModeOn]);
 
   // 他のアプリへ切り替える等でタブが非表示になり、ブラウザ側の都合で読み上げが
   // 止まってしまった時（audioEngine.jsの`recoverFromBackground`）、黙って止まったままに
@@ -2309,6 +2424,8 @@ export default function AudioMode({
         setCustomReviewIds(ids);
         setReviewTarget(null);
         onToast?.(`🔁 △・✕にした${ids.length}問を、もう一度だけ読み上げます`);
+        // 以前は束を差し替えるだけで再生が始まらず、「もう一度読み上げます」と言ったまま黙っていた
+        requestAutoPlay();
       }, 400);
       return;
     }
@@ -2330,7 +2447,7 @@ export default function AudioMode({
         quickMinuteActiveRef.current = null;
         requeuedRef.current = false;
         onToast?.(`▶ 次の束へ進みます（${nextItem.subject || '全科目'}×${nextItem.target ?? 'すべて'}）`);
-        setTimeout(() => engine.play(), 300);
+        requestAutoPlay();
       }, 600);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2369,7 +2486,7 @@ export default function AudioMode({
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = null;
     onToast?.(`🧩 基礎タスク（約${bufferPlan.baseTaskMinutes}分・${bufferPlan.baseTaskQuestionCount}問）を音声で始めます`);
-    setTimeout(() => togglePlay(), 300);
+    requestAutoPlay();
   };
   // A6：明日の最初の1タスク（学習10・60・300・900の完了画面と同じ仕組み・同じ保存先）。
   const [audioNextTaskInput, setAudioNextTaskInput] = useState('');
@@ -2588,7 +2705,7 @@ export default function AudioMode({
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = min;
     onToast?.(`🚃 約${min}分・${count}問のミニセッションを始めます`);
-    setTimeout(() => togglePlay(), 300);
+    requestAutoPlay();
   };
   // 盲目の受験生からの改善提案：体の場所法・紛らわしいペア・宿題リプレイのような
   // 「検索条件を経由しない、単発の読み上げモード」をまとめて始めるための共通ヘルパー。
@@ -2608,7 +2725,7 @@ export default function AudioMode({
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = null;
     if (toastMsg) onToast?.(toastMsg);
-    setTimeout(() => togglePlay(), 300);
+    requestAutoPlay();
   };
   // #17・#18：就寝前まとめ復習。その日に解いた問題だけをまとめて読み直し、
   // 15〜30分の自動終了タイマー（既存のスリープタイマーをそのまま使う）を既定でセットする。
@@ -2634,7 +2751,7 @@ export default function AudioMode({
     audioSessionKindRef.current = 'bedtime'; // 再生履歴の題（就寝前まとめ）に使う
     quickMinuteActiveRef.current = null;
     onToast?.(`🌙 今日解いた${ids.length}問をまとめて復習します（${min}分で自動終了）`);
-    setTimeout(() => togglePlay(), 300);
+    requestAutoPlay();
   };
   // 一番上の赤い長丸ボタン：「国家試験の科目×過去に間違えたところ」をタップするだけで開始する。
   // インプットに特化（outputModeOn・pureRecallOnを強制的にOFF＝自動で正解まで読み進める）。
@@ -2657,7 +2774,7 @@ export default function AudioMode({
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = null;
     onToast?.(`🔴 今日の科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`);
-    setTimeout(() => togglePlay(), 300);
+    requestAutoPlay();
   };
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）。
@@ -2685,7 +2802,7 @@ export default function AudioMode({
     mockExamSessionRef.current = session;
     const warn = shortfalls.length ? `（収録不足のため一部調整しています）` : '';
     onToast?.(`⏱ 本番想定モード（${bp.label}・${order.length}問）を始めます。自己採点のみで進む参考スコアです${warn}`);
-    setTimeout(() => togglePlay(), 300);
+    requestAutoPlay();
   };
   // E9：混同しやすい科目の組をワンタップで複数科目ローテーションへ投入する。
   const pickSubjectPair = (pair) => {
@@ -2736,17 +2853,23 @@ export default function AudioMode({
   // planは自己採点でsrsが変わるたびに再計算される（srsが依存配列にあるため）が、問題の構成・
   // 順序そのものは変わらないことが大半なので、参照ではなく内容（id列）で比較する
   // （参照で比較すると、1問採点するたびにガードがリセットされ、二重記録防止が機能しなくなる）。
-  const planIdsKey = useMemo(() => plan.map((p) => p.q?.id || `_${p.kind}`).join('|'), [plan]);
   // 続きから再開した時、保存済みの二重記録防止idがあれば復元する（無ければ空にリセット）。
+  // 数え直すのは、エンジンが実際に別の束を読み込んだ時だけ（snap.planSig が変わった時）。
+  // 以前は並び（planIdsKey）が変わるたびに空にしていたため、間違えた問題（△✕）を聞いている途中で
+  // 1問マスターして並びが変わる（束はそのまま続く）と、二重記録防止がそこで消えていた。
+  const loadedSigForGradedRef = useRef(null);
   useEffect(() => {
+    if (!audioReady) return;
+    if (loadedSigForGradedRef.current === snap.planSig) return;
+    loadedSigForGradedRef.current = snap.planSig;
     const saved = resumeAudioRef.current;
-    if (audioReady && saved && saved.sig === planSig && Array.isArray(saved.graded)) {
+    if (saved && saved.sig === snap.planSig && Array.isArray(saved.graded)) {
       gradedIdsRef.current = new Set(saved.graded);
     } else {
       gradedIdsRef.current = new Set();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planIdsKey, audioReady, planSig]);
+  }, [snap.planSig, audioReady]);
   // A10：誤答理由をその場で選べるように（以前は完了画面でまとめてだけだった）。
   // △・✕を選んだ直後だけ、その問題のid分類チップを表示する。
   const [justGradedWrongId, setJustGradedWrongId] = useState(null);
@@ -2851,10 +2974,12 @@ export default function AudioMode({
     );
   };
   // 声コマンド「全部できた」：今の問題から最後までをまとめて○にし、そこで終える（新規#9）。
-  // 長い移動中に最後まで聞き終えた時用。既に自己採点した問題も含めて◯を重ねるだけなので、
-  // 個別に採点していたものがあっても害はない（改めて正解扱いに書き直されるだけ）。
+  // 長い移動中に最後まで聞き終えた時用。すでに△・✕を付けた問題を○で上書きしない
+  // （以前は「害はない」として重ねて記録しており、付けたばかりの✕が○に書き換わっていた）。
   const gradeRestAsMaru = () => {
-    const remaining = builtPlan.slice(index).map((item) => item.display).filter((d) => d?.q);
+    // エンジンが実際に読んでいる束から取る（間違えた問題を聞いている途中で画面側の束だけ変わっている時、
+    // 以前は聞いていない別の問題まで○にしていた）。すでに自己採点した問題は上書きしない。
+    const remaining = engine.getPlanDisplays().slice(index).filter((d) => d?.q && !gradedIdsRef.current.has(d.q.id));
     remaining.forEach((d) => { gradedIdsRef.current.add(d.q.id); recordAnswer(d.q, true, GRADES.easy, undefined, 'maru'); });
     setSessionGradedCount((n) => n + remaining.length);
     onToast?.(`○ 残り${remaining.length}問をまとめて記録しました`);
@@ -3093,7 +3218,7 @@ export default function AudioMode({
               setVoiceAnswerStats({ attempts: 0, matched: 0 });
               setAudioBufferPlan(null);
               setAudioBufferUsage(null);
-              setTimeout(() => togglePlay(), 300);
+              requestAutoPlay();
             }}
           >
             🧩 バッファ枠（約{audioBufferPlan.bufferMinutes}分・{audioBufferPlan.bufferQuestionCount}問）を音声で始める
@@ -4367,7 +4492,7 @@ export default function AudioMode({
           <div className="section-label" style={{ marginTop: 0 }}>⚡ 目を使わない高速インプット・アウトプットの工夫</div>
           <Opt
             on={skipQuestionText}
-            onToggle={() => setSkipQuestionText((v) => !v)}
+            onToggle={() => { fastSkipAutoRef.current = false; setSkipQuestionText((v) => !v); }}
             title="問題文を省略し、正解と一言だけ素早く読む"
             desc="わかっているのに間違えた（ケアレスミス）問題向け。問題文の読み直しを省き、正解と解説の最初の一文だけ読みます。"
           />

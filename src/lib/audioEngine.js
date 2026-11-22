@@ -38,6 +38,8 @@ let sleepTimer = null;
 let wakeLock = null;
 let visInit = false;
 let manualResolve = null; // アウトプットモード：「解答を見る」が押されるまで待つステップの解除関数
+let resumeTimer = null; // skip/seekTo の「少し待ってから読み直す」予約（連打で2本走らせないため）
+let sleepDeadline = 0; // スリープタイマーの止める時刻（0＝なし）。飛ばす・止めて再開しても残す
 
 // ---- バックグラウンド表示（メディアセッション＋無音キープアライブ） ----
 // 再生中に無音トラックを鳴らし、ロック画面/通知に「再生中」を表示する。
@@ -163,6 +165,11 @@ export function getSnapshot() {
   return state;
 }
 
+// いまエンジンが読んでいる束の表示用データ（画面の束と食い違う時があるため、こちらを正とする）
+export function getPlanDisplays() {
+  return plan.map((it) => it?.display || null);
+}
+
 export function configure(patch) {
   Object.assign(settings, patch);
 }
@@ -170,9 +177,22 @@ export function getSettings() {
   return { ...settings };
 }
 
+function itemKey(it) {
+  const d = it?.display;
+  if (!d) return '';
+  return `${d.kind || ''}|${d.q?.id || ''}|${d.keyword || ''}|${d.comp?.title || ''}|${d.num?.topic || ''}`;
+}
+
 // 読み上げ計画を読み込む。sig が現在と同じなら（＝画面再表示など）何もしない。
 export function load(newPlan, { sig = null, startIndex = 0 } = {}) {
-  if (sig != null && sig === state.planSig) return; // 同一計画：再生位置を保つ
+  if (sig != null && sig === state.planSig) {
+    // 同一計画：再生位置を保つ。ただし並びは同じで読み方だけ変わった時（キーワードを声でも強調・
+    // もし〜なら・頭文字法などの切り替え）は、中身だけ差し替える。以前はここで何もしなかったため、
+    // 再生中にこれらを切り替えても束を読み直すまで一切効かなかった（次の問題から新しい読み方になる）。
+    // 並び（どの問題をどの順で読むか）が1つでも違う時は差し替えない（読んでいる位置がずれるため）。
+    if (Array.isArray(newPlan) && newPlan.length === plan.length && newPlan.every((it, i) => itemKey(it) === itemKey(plan[i]))) plan = newPlan;
+    return;
+  }
   stop();
   plan = newPlan || [];
   const i = plan.length ? Math.min(Math.max(0, startIndex), plan.length - 1) : 0;
@@ -249,6 +269,7 @@ async function runFrom(start) {
   abort = controller;
   const signal = controller.signal;
   running = true;
+  armSleep();
   startKeepAlive(); // 再開時（スキップ等）も無音キープアライブ＆通知を維持
   emit({ playing: true });
   try {
@@ -283,6 +304,10 @@ async function runFrom(start) {
 
 export function play() {
   if (!plan.length) return;
+  // すでに読み上げ中なら何もしない。以前はロック画面・イヤホンの「再生」を再生中に押すと
+  // 読み上げのループが2本同時に走り、2つの問題が重なって読まれていた。
+  if (running) return;
+  clearResumeTimer();
   requestWakeLock();
   initVisibility();
   startKeepAlive();
@@ -300,6 +325,7 @@ export function clearBackgroundStopped() {
 export function stop() {
   releaseWakeLock();
   clearSleep();
+  clearResumeTimer();
   stopKeepAlive();
   running = false;
   if (abort) abort.abort();
@@ -320,23 +346,30 @@ export function toggle() {
   else play();
 }
 
-export function skip(delta) {
-  const wasPlaying = running;
+function clearResumeTimer() {
+  if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
+}
+// 止めてから少し待って index の位置から読み直す。連打した時は、前の予約を取り消して
+// 最後に押した位置から1本だけ読む（以前は2回目の押下で「止まっている」と判定されて
+// そのまま止まる・1回目の予約が古い位置から読み始める、の両方が起きていた）。
+function restartAfterJump(wasPlaying, n) {
+  const resume = wasPlaying || !!resumeTimer;
   stop();
-  const n = Math.max(0, Math.min(plan.length - 1, state.index + delta));
   emit({ index: n, phase: 'question', display: plan[n]?.display || null, finished: false });
-  if (wasPlaying) setTimeout(() => runFrom(n), 120);
+  if (resume) resumeTimer = setTimeout(() => { resumeTimer = null; runFrom(state.index); }, 120);
+}
+
+export function skip(delta) {
+  const n = Math.max(0, Math.min(plan.length - 1, state.index + delta));
+  restartAfterJump(running, n);
 }
 
 // 問題番号のバー（スクラバー）で、任意の位置へ直接ジャンプする（skipの「相対」ではなく「絶対」版、
 // 考え方は同じ：再生中なら一度止めてから、目的の位置から読み直す）。
 export function seekTo(targetIndex) {
   if (!plan.length) return;
-  const wasPlaying = running;
-  stop();
   const n = Math.max(0, Math.min(plan.length - 1, Math.round(targetIndex)));
-  emit({ index: n, phase: 'question', display: plan[n]?.display || null, finished: false });
-  if (wasPlaying) setTimeout(() => runFrom(n), 120);
+  restartAfterJump(running, n);
 }
 
 export function resetToStart() {
@@ -356,9 +389,21 @@ export function resumeManual() {
   if (manualResolve) manualResolve();
 }
 
+// スリープタイマー。以前は「再生中の時だけ」タイマーを仕掛けていたため、▶を押す直前に
+// 設定する通常の流れ（togglePlay）では一度も仕掛からず、また前へ/次へで止めて読み直すたびに
+// 消えていた。止める時刻を覚えておき、読み上げを始める（再開する）たびに残り時間で仕掛け直す。
 export function setSleep(min) {
   clearSleep();
-  if (running && min > 0) sleepTimer = setTimeout(() => stop(), min * 60 * 1000);
+  sleepDeadline = min > 0 ? Date.now() + min * 60 * 1000 : 0;
+  armSleep();
+}
+
+function armSleep() {
+  clearSleep();
+  if (!sleepDeadline || !running) return;
+  const left = sleepDeadline - Date.now();
+  if (left <= 0) { sleepDeadline = 0; return; }
+  sleepTimer = setTimeout(() => { sleepDeadline = 0; stop(); }, left);
 }
 
 function clearSleep() {

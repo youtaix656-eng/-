@@ -38,7 +38,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
   const sub = live ? subOf(d)
     : last.done ? '▶ で最初から再生'
       : last.kind === 'review' ? `▶ でまだ聞いていない${last.total - (last.heard || []).length}問を再生`
-      : (last.text.length > 30 ? last.text.slice(0, 30) + '…' : last.text);
+      : ((last.text || '').length > 30 ? last.text.slice(0, 30) + '…' : (last.text || ''));
   const pos = live ? (snap.total > 0 ? `${snap.index + 1} / ${snap.total}` : '') : positionText(last);
 
   const jump = (entry, autoPlay) => { setOpen(false); onJump?.(entry, autoPlay); };
