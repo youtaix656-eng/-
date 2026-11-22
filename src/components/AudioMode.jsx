@@ -42,7 +42,7 @@ import { LEECH_THRESHOLD } from '../lib/srs.js';
 import BreakTimer from './BreakTimer.jsx';
 import ManagerReview from './ManagerReview.jsx';
 import { recordAudioHistory, resolveJumpIndex, deleteAudioHistory, historyKeyOf, reviewReplayIds, loadAudioHistory, setCurrentAudioContext } from '../lib/audioPlayHistory.js';
-import { loadAudioProgressSync, saveAudioProgressSync, idsSignature, newerProgress } from '../lib/audioProgressSync.js';
+import { clearAudioProgressSync, loadAudioProgressSync, saveAudioProgressSync, idsSignature, newerProgress } from '../lib/audioProgressSync.js';
 import { resolveBufferUsage, bufferUsageLabel, planStudySession, DEFAULT_BASE_RATIO, estimatedAnswerSeconds } from '../lib/bufferSession.js';
 import BufferPlanCard from './BufferPlanCard.jsx';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
@@ -353,8 +353,9 @@ export default function AudioMode({
   const [bodyLocationSetId, setBodyLocationSetId] = useState(BODY_LOCATION_SETS[0]?.id || null);
   // #28：宿題リプレイ。「あとで調べる」に登録してから12時間以上経ったものだけを対象にする
   // （同日中に追加したものを「翌日の宿題」として即座に出さないよう、一晩ぶんの間隔を置く）。
+  // 同じ問題を何度「あとで調べる」に入れても1回だけ数える（件数の表示と読み上げが重ならないように）
   const homeworkIds = useMemo(
-    () => laterLookup.filter((e) => e.questionId && Date.now() - (e.at || 0) >= 12 * 60 * 60 * 1000).map((e) => e.questionId),
+    () => [...new Set(laterLookup.filter((e) => e.questionId && Date.now() - (e.at || 0) >= 12 * 60 * 60 * 1000).map((e) => e.questionId))],
     [laterLookup]
   );
 
@@ -613,11 +614,21 @@ export default function AudioMode({
         qid: resumeFilters.qid || '', done: !!resumeFilters.done, at: Date.now(),
         // 💾で保存したもの（pin|…）から来た時は、その行を消す（自動の履歴を取り違えて消さない）
         entryKey: resumeFilters.key || '',
+        // 件数しぼり込みの記録がある履歴だけ、その件数と位置へそろえる（無い古い履歴は今の設定のまま）
+        target: resumeFilters.target === undefined ? (reviewTarget || null) : (resumeFilters.target || null),
+        offset: resumeFilters.target === undefined ? (reviewOffset || 0) : (resumeFilters.offset || 0),
       };
       j.source = j.subject || j.genre || j.keyword || j.round ? 'filter' : 'all';
       const same = mode === 0 && source === j.source && filterSubject === j.subject
-        && filterGenre === j.genre && filterKeyword === j.keyword && String(filterRound || '') === j.round;
-      if (!same) rebuildStop();
+        && filterGenre === j.genre && filterKeyword === j.keyword && String(filterRound || '') === j.round
+        && (reviewTarget || null) === j.target && (reviewOffset || 0) === j.offset;
+      if ((reviewTarget || null) !== j.target) setReviewTarget(j.target);
+      if ((reviewOffset || 0) !== j.offset) setReviewOffsetPersist(j.offset);
+      if (!same) {
+        rebuildStop();
+        // 別の束へ移る時は、前の束の自己採点の数を持ち越さない（終わった時の「◯問のうち正答率…」がずれる）
+        setSessionGradedCount(0); setSessionWrong([]); setSessionWrongKinds({}); setSessionLatencies([]);
+      }
       setMode(0);
       setSource(j.source);
       setFilterSubject(j.subject);
@@ -631,11 +642,15 @@ export default function AudioMode({
       return;
     }
     rebuildStop();
+    // 渡された条件どおりにそろえる。以前は渡されなかった項目（ジャンル・キーワード等）と連結学習モードを
+    // そのまま残していたため、カレンダーの「同じ条件でもう一度」や前回の続きからで、前に選んでいた
+    // 別の絞り込み・読み方のまま始まっていた。
+    setMode(0);
     setSource('filter');
-    if (resumeFilters.subject) setFilterSubject(resumeFilters.subject);
-    if (resumeFilters.genre) setFilterGenre(resumeFilters.genre);
-    if (resumeFilters.keyword) setFilterKeyword(resumeFilters.keyword);
-    if (resumeFilters.round) setFilterRound(resumeFilters.round);
+    setFilterSubject(resumeFilters.subject || '');
+    setFilterGenre(resumeFilters.genre || '');
+    setFilterKeyword(resumeFilters.keyword || '');
+    setFilterRound(resumeFilters.round || '');
     onConsumeResumeFilters?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeFilters]);
@@ -646,6 +661,8 @@ export default function AudioMode({
       const playIds = reviewReplayIds(entry);
       const restart = !!entry.done;
       rebuildStop();
+      // 前の束の自己採点の数を持ち越さない（終わった時の正答率・「聞くだけ」の数がずれる）
+      setSessionGradedCount(0); setSessionWrong([]); setSessionWrongKinds({}); setSessionLatencies([]);
       setMode(0);
       setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
       setReviewTarget(null);
@@ -1189,8 +1206,9 @@ export default function AudioMode({
     }
     // #28：宿題リプレイ（「あとで調べる」に登録してから12時間以上経ったものを優先して読み直す）。
     if (source === 'homework') {
+      // 以前は問題そのものを並べて返していたため、読み上げの組み立てで item.q が無く画面ごと落ちていた
       const ids = new Set(homeworkIds);
-      return applyTarget(questions.filter((q) => ids.has(q.id)));
+      return withProgressAnnounce(applyTarget(questions.filter((q) => ids.has(q.id))));
     }
     if (source === 'filter') {
       let base = filteredPool;
@@ -1629,7 +1647,8 @@ export default function AudioMode({
       return;
     }
     const matched = mode === 0 && source === j.source && filterSubject === j.subject && filterGenre === j.genre
-      && filterKeyword === j.keyword && String(filterRound || '') === j.round;
+      && filterKeyword === j.keyword && String(filterRound || '') === j.round
+      && (reviewTarget || null) === (j.target ?? null) && (reviewOffset || 0) === (j.offset || 0);
     if (!matched) {
       // 絞り込みがそろわないまま時間が経った飛び先は捨てる（残しておくと、あとで本人が同じ科目を
       // 選んだ時に急に飛ぶ・再生履歴の記録が止まったままになる）
@@ -1675,6 +1694,7 @@ export default function AudioMode({
       label: (q && q.subject) || '',
       text: (q && q.question) || d?.keyword || '',
       qid: q?.id ?? '',
+      target: reviewTarget || null, offset: reviewOffset || 0,
       at: Date.now(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1686,7 +1706,8 @@ export default function AudioMode({
     recordAudioHistory({
       subject: source === 'filter' ? filterSubject : '', genre: source === 'filter' ? filterGenre : '',
       keyword: source === 'filter' ? filterKeyword : '', round: source === 'filter' ? filterRound : '',
-      index: 0, total: builtPlan.length, label: '', text: '', done: true, at: Date.now(),
+      index: 0, total: builtPlan.length, label: '', text: '', done: true,
+      target: reviewTarget || null, offset: reviewOffset || 0, at: Date.now(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.finished]);
@@ -1778,6 +1799,7 @@ export default function AudioMode({
         subject: source === 'filter' ? filterSubject : '', genre: source === 'filter' ? filterGenre : '',
         keyword: source === 'filter' ? filterKeyword : '', round: source === 'filter' ? filterRound : '',
         index: idx, total: builtPlan.length, label: q?.subject || '', text: q?.question || '', qid: q?.id ?? '',
+        target: reviewTarget || null, offset: reviewOffset || 0,
       };
     });
   });
@@ -1996,7 +2018,7 @@ export default function AudioMode({
         masteredAtStartRef.current = masteredCount;
         recordAudioReviewStart({
           target: batchTarget, subject: filterSubject || null,
-          genre: filterGenre || null, round: filterRound || null, n: total,
+          genre: filterGenre || null, round: filterRound || null, n: engine.getPlanDisplays().filter((d) => d?.q).length || total,
         }).then(setAudioLog);
       }
     }
@@ -2050,6 +2072,13 @@ export default function AudioMode({
   const resetToStart = () => {
     engine.resetToStart();
     storage.clearAudioProgress();
+    clearAudioProgressSync();
+    // 誤答・△✕の束を最初からにした時は「聞いた」印も外す（外さないと、次に開いた時に
+    // まだ聞いていない問題だけ流され、最初からにならなかった）
+    if (source === 'review' && reviewSessionRef.current) {
+      reviewSessionRef.current.heard = new Set();
+      writeReviewHistory(reviewSessionRef.current);
+    }
     resumeAudioRef.current = null;
     gradedIdsRef.current = new Set();
     setConfirmAudioReset(false);
@@ -2066,7 +2095,12 @@ export default function AudioMode({
     if (!(source === 'review' || (source === 'filter' && newOnly))) return;
     // 60問を「聞き終えた」ところ（61問目に入った瞬間）で休む。以前は60問目に入った瞬間に止めていて、
     // 60問目そのものが読まれないまま休憩になっていた。同じ区切りでは1回しか休まない。
-    if (total > BREAK_EVERY && index > 0 && index % BREAK_EVERY === 0 && breakNotifiedRef.current !== index) {
+    // 数えるのは問題だけ（「残り◯問です」の知らせを挟んでいると、以前は54問で休憩に入っていた）
+    const displays = engine.getPlanDisplays();
+    if (displays[index]?.kind === 'progress') return;
+    const qTotal = displays.filter((d) => d && d.kind !== 'progress').length;
+    const qDone = displays.slice(0, index).filter((d) => d && d.kind !== 'progress').length;
+    if (qTotal > BREAK_EVERY && qDone > 0 && qDone % BREAK_EVERY === 0 && breakNotifiedRef.current !== index) {
       breakNotifiedRef.current = index;
       engine.stop();
       setBreakReason('count');
@@ -2336,7 +2370,9 @@ export default function AudioMode({
       }
       return;
     }
-    const n = total;
+    // 問題の数だけを数える（「残り◯問です」の知らせを挟んでいると、以前はその分まで「◯問終わりました」
+    // 「◯問は聞くだけで…」に足していた）
+    const n = engine.getPlanDisplays().filter((d) => d?.q).length || total;
     if (n === 0) return;
     const gradedN = sessionGradedCount;
     const wrongN = sessionWrong.length;
@@ -2507,7 +2543,8 @@ export default function AudioMode({
     if (audioBufferPlan && !audioBufferUsage) setAudioBufferAwaitingReview(true);
     if (source === 'keyword' || source === 'daily' || source === 'weak') return;
     if (total === 0 || !audioSessionStartRef.current) return;
-    const target = toAudioRoundTarget(reviewTarget || total);
+    const qCount = engine.getPlanDisplays().filter((d) => d?.q).length || total;
+    const target = toAudioRoundTarget(reviewTarget || qCount);
     const ms = Date.now() - audioSessionStartRef.current;
     const graded = sessionGradedCount;
     const wrong = sessionWrong.length;
@@ -2515,8 +2552,8 @@ export default function AudioMode({
     loadRoundLog().then((log) => {
       const prev = previousForTarget(log, target, audioSessionStartRef.current);
       const roundNo = countForTarget(log, target) + 1;
-      setAudioLastRoundInfo({ target, count: total, ms, prev, roundNo });
-      appendRoundLog({ target, count: total, ms, at: audioSessionStartRef.current, graded, wrong, subject: subjectForLog });
+      setAudioLastRoundInfo({ target, count: qCount, ms, prev, roundNo });
+      appendRoundLog({ target, count: qCount, ms, at: audioSessionStartRef.current, graded, wrong, subject: subjectForLog });
     });
     // ジャンル別正答率（苦手順）。実際に自己採点した問題だけを対象にする。
     const wrongIds = new Set(sessionWrong.map((q) => q.id));
@@ -2594,6 +2631,8 @@ export default function AudioMode({
     setSnoozedOnly(false);
     setExcludeSnoozed(false);
     setReviewTarget(null);
+    // 覚えている件数も外す（外さないと、次に開いた時に消したはずの件数しぼり込みが戻っていた）
+    updateSettings({ lastAudioReviewTarget: null });
     setReviewOffsetPersist(0);
     setSource('all');
     changeAudioNewPct(null);

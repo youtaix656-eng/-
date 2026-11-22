@@ -38,6 +38,15 @@ export function normalizeEntry(e) {
     // 最後まで聞き終えた印。次は最初から始める（最後の1問だけ再生して終わらないように）。
     done: !!e.done,
   };
+  // 件数しぼり込み（10・60・300・900）と「もう一度」の位置。以前は持っていなかったため、
+  // 今の件数が記録と違うと（例：記録は全123問・今は10問）聞いていた問題が束に入らず、別の位置へ着いていた。
+  // 古い履歴（持っていないもの）は「分からない」として今の設定を変えない。
+  if (e.kind !== 'review' && e.target !== undefined) {
+    const t = Number(e.target);
+    entry.target = Number.isFinite(t) && t > 0 ? Math.floor(t) : null;
+    const o = Number(e.offset);
+    entry.offset = Number.isFinite(o) && o > 0 ? Math.floor(o) : 0;
+  }
   if (e.kind === 'review') {
     const ids = (Array.isArray(e.ids) ? e.ids : []).map(String).filter(Boolean);
     const uniq = [...new Set(ids)].slice(0, REVIEW_IDS_MAX);

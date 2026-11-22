@@ -30,6 +30,32 @@ const NAV_WORDS = {
 // 盲目の受験生からの改善提案#7（2026-11-14）：問題番号バー（ドラッグ操作）の代わりに、
 // 「53問目へ」のように数字＋「問目／番へ／問へ」で直接その番号へ飛べるようにする。
 const SEEK_RE = /(\d+)\s*(?:問目|番へ|問へ)/;
+const KANJI_SEEK_RE = /([〇零一二三四五六七八九十百千]+)\s*(?:問目|番へ|問へ)/;
+
+export function toHalfDigits(t) {
+  return String(t || '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+}
+
+// 漢数字（〜9999）を数にする。読めなければNaN。
+export function kanjiToNumber(str) {
+  const D = { 〇: 0, 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const U = { 十: 10, 百: 100, 千: 1000 };
+  const s = String(str || '');
+  if (!s) return NaN;
+  // 「一二三」のように桁の字が無い並びは、そのまま数字の並びとして読む
+  if (![...s].some((c) => U[c])) {
+    if (![...s].every((c) => c in D)) return NaN;
+    return Number([...s].map((c) => D[c]).join(''));
+  }
+  let total = 0;
+  let cur = 0;
+  for (const c of s) {
+    if (c in D) cur = D[c];
+    else if (U[c]) { total += (cur || 1) * U[c]; cur = 0; }
+    else return NaN;
+  }
+  return total + cur;
+}
 
 // 聞き取ったテキストから、自己採点（grade）か操作（nav）か直接ジャンプ（seek）かを判定する。
 // customWordsは本人が登録した言い回し（settings.voiceCommandWords、新規#7）。
@@ -42,9 +68,11 @@ export function parseVoiceCommand(text, customWords = []) {
   for (const c of customWords || []) {
     if (c.word && t.includes(c.word)) return { type: c.type, kind: c.kind };
   }
-  const seekMatch = t.match(SEEK_RE);
+  // 音声認識は「５３問目」（全角）や「五十三問目」（漢数字）で返すことがある。以前は半角の数字しか
+  // 拾えず、そのまま「目」→次へ…のような別の言葉にも当たらず黙って無視されていた。
+  const seekMatch = toHalfDigits(t).match(SEEK_RE) || t.match(KANJI_SEEK_RE);
   if (seekMatch) {
-    const n = parseInt(seekMatch[1], 10);
+    const n = /^\d+$/.test(seekMatch[1]) ? parseInt(seekMatch[1], 10) : kanjiToNumber(seekMatch[1]);
     if (Number.isFinite(n) && n >= 1) return { type: 'seek', n };
   }
   // allDoneは「できた」を含む言い回しなのでGRADE_WORDSより先に判定する。

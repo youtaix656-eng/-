@@ -35,3 +35,14 @@ test('parseVoiceCommand: 本人登録のcustomWordsは組み込みより先に�
   // customWordsに無い言葉は通常どおり組み込みの判定
   assert.deepEqual(parseVoiceCommand('まる', custom), { type: 'grade', kind: 'maru' });
 });
+
+import { parseVoiceCommand as pvc2, kanjiToNumber as k2n } from '../src/lib/voiceCommand.js';
+import { test as t2 } from 'node:test';
+import assert2 from 'node:assert/strict';
+t2('「◯問目へ」は全角数字・漢数字でも拾う', () => {
+  assert2.deepEqual(pvc2('５３問目へ'), { type: 'seek', n: 53 });
+  assert2.deepEqual(pvc2('五十三問目'), { type: 'seek', n: 53 });
+  assert2.equal(k2n('百二'), 102);
+  assert2.equal(k2n('千二百三十四'), 1234);
+  assert2.ok(Number.isNaN(k2n('あ')));
+});

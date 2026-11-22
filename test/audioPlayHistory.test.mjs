@@ -125,3 +125,15 @@ test('前回の続きから：誤答・△✕の束は「まだ聞いていな�
   assert.equal(c.remaining, 7);
   assert.equal(c.reviewKey, 'review|誤答・△✕ 解剖学');
 });
+
+import { normalizeEntry as ne2 } from '../src/lib/audioPlayHistory.js';
+import { test as t3 } from 'node:test';
+import assert3 from 'node:assert/strict';
+t3('件数しぼり込みの記録は残り、持っていない古い履歴には付けない', () => {
+  const a = ne2({ subject: '解剖学', index: 3, total: 10, target: 10, offset: 20 });
+  assert3.equal(a.target, 10); assert3.equal(a.offset, 20);
+  const b = ne2({ subject: '解剖学', index: 3, total: 10, target: null });
+  assert3.equal(b.target, null); assert3.equal(b.offset, 0);
+  const c = ne2({ subject: '解剖学', index: 3, total: 10 });
+  assert3.equal('target' in c, false);
+});

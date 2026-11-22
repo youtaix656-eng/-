@@ -8,6 +8,12 @@ export function saveAudioProgressSync(p) {
   try { localStorage.setItem(AUDIO_PROGRESS_SYNC_KEY, JSON.stringify(p)); } catch { /* 書けなくても再生は続ける */ }
 }
 
+// 「最初から（リセット）」の時に同期の控えも消す（消さないと、開き直した時に
+// IndexedDBより新しい控えとして古い続き・記録済みの印が戻ってきていた）
+export function clearAudioProgressSync() {
+  try { localStorage.removeItem(AUDIO_PROGRESS_SYNC_KEY); } catch { /* noop */ }
+}
+
 export function loadAudioProgressSync() {
   try {
     const raw = localStorage.getItem(AUDIO_PROGRESS_SYNC_KEY);
