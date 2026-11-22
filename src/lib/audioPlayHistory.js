@@ -7,7 +7,13 @@
 export const AUDIO_HISTORY_KEY = 'shinkyu:audioPlayHistory';
 export const AUDIO_HISTORY_MAX = 12;
 
+// 誤答・△✕などの読み上げ（kind:'review'）は、絞り込みではなく「聞いていた問題の並びそのもの」
+// （ids）で持つ（2026-11-15・ユーザー指定）。並びが毎回変わる復習プールでも、閉じる前と同じ問題・
+// 同じ順番から再開できるように。heard＝その中で解答まで聞き終えた問題（未聴だけ再開するのに使う）。
+export const REVIEW_IDS_MAX = 2000;
+
 export function historyKeyOf(e) {
+  if (e?.kind === 'review') return `review|${e?.title || ''}`;
   return [e?.subject || '', e?.genre || '', e?.keyword || '', e?.round || ''].join('|');
 }
 
@@ -30,8 +36,39 @@ export function normalizeEntry(e) {
     // 最後まで聞き終えた印。次は最初から始める（最後の1問だけ再生して終わらないように）。
     done: !!e.done,
   };
+  if (e.kind === 'review') {
+    const ids = (Array.isArray(e.ids) ? e.ids : []).map(String).filter(Boolean);
+    const uniq = [...new Set(ids)].slice(0, REVIEW_IDS_MAX);
+    if (uniq.length === 0) return null;
+    const idSet = new Set(uniq);
+    const heard = [...new Set((Array.isArray(e.heard) ? e.heard : []).map(String))].filter((id) => idSet.has(id));
+    entry.kind = 'review';
+    entry.title = str(e.title).slice(0, 40) || '誤答・△✕';
+    entry.sessionKind = str(e.sessionKind);
+    entry.ids = uniq;
+    entry.heard = heard;
+    entry.total = uniq.length;
+    entry.done = heard.length >= uniq.length;
+    // 表示の位置＝いま聞いている（次に聞く）問題の番号。並びの中のqidの場所を優先する。
+    const at = entry.qid ? uniq.indexOf(entry.qid) : -1;
+    entry.index = entry.done ? 0 : Math.min(uniq.length - 1, at >= 0 ? at : heard.length);
+  }
   entry.key = historyKeyOf(entry);
   return entry;
+}
+
+// 誤答・△✕の履歴から、次に流す問題idを決める（純関数）。
+// 聞き終えていれば最初から全部、そうでなければ「まだ聞いていない問題だけ」を元の順番のまま。
+export function reviewReplayIds(entry) {
+  const ids = Array.isArray(entry?.ids) ? entry.ids : [];
+  if (ids.length === 0) return [];
+  const heard = new Set(Array.isArray(entry?.heard) ? entry.heard : []);
+  const rest = ids.filter((id) => !heard.has(id));
+  return rest.length === 0 ? [...ids] : rest;
+}
+
+export function heardCount(e) {
+  return e?.kind === 'review' && Array.isArray(e.heard) ? e.heard.length : 0;
 }
 
 // 1件を記録する（同じ組み合わせは置き換えて先頭へ）。純関数。
@@ -48,13 +85,16 @@ export function removeFromHistory(list, key) {
 
 // 履歴の1行の見出し（「病理学概論」「すべての問題」など）
 export function historyTitle(e) {
+  if (e?.kind === 'review') return e.title || '誤答・△✕';
   const parts = [e?.subject, e?.genre, e?.keyword, e?.round ? `${String(e.round).replace(/^第|回$/g, '')}回` : ''].filter(Boolean);
   return parts.length ? parts.join('・') : 'すべての問題';
 }
 
 export function positionText(e) {
   if (!e || !(e.total > 0)) return '';
-  return e.done ? `全${e.total}問・聞き終えた` : `${e.index + 1} / ${e.total}`;
+  if (e.done) return `全${e.total}問・聞き終えた`;
+  if (e.kind === 'review') return `${e.index + 1} / ${e.total}（聞いた${heardCount(e)}問）`;
+  return `${e.index + 1} / ${e.total}`;
 }
 
 // 飛び先を決める（純関数）。planIdsは今の並びの問題id（問題でない項目はnull）。

@@ -30,6 +30,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
   const label = live ? labelOf(d) : historyTitle(last);
   const sub = live ? subOf(d)
     : last.done ? '▶ で最初から再生'
+      : last.kind === 'review' ? `▶ でまだ聞いていない${last.total - (last.heard || []).length}問を再生`
       : (last.text.length > 30 ? last.text.slice(0, 30) + '…' : last.text);
   const pos = live ? (snap.total > 0 ? `${snap.index + 1} / ${snap.total}` : '') : positionText(last);
 
@@ -49,7 +50,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
               <li key={h.key}>
                 <button type="button" className="mini-history-item" onClick={() => jump(h, true)}>
                   <span className="mini-history-title">{historyTitle(h)}<b>{positionText(h)}</b></span>
-                  <span className="mini-history-sub">{h.done ? '最後まで聞きました。押すと最初から再生します。' : (h.text || '（問題文なし）')}</span>
+                  <span className="mini-history-sub">{h.done ? '最後まで聞きました。押すと最初から再生します。' : h.kind === 'review' ? `まだ聞いていない${h.total - (h.heard || []).length}問を流します${h.text ? `・${h.text}` : ''}` : (h.text || '（問題文なし）')}</span>
                   <span className="mini-history-at">{historyTimeText(h.at)}</span>
                 </button>
                 <button type="button" className="mini-history-del" onClick={() => deleteAudioHistory(h.key)} aria-label={`${historyTitle(h)}の履歴を消す`}>🗑</button>
@@ -57,7 +58,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
             ))}
           </ul>
           <div className="mini-history-foot">
-            <span>連結学習モード・間違えた問題の読み上げは、同じ並びを再現できないため履歴に残りません。</span>
+            <span>間違えた問題（△✕）は、聞いていた並びのまま残り、押すとまだ聞いていない問題だけ流します。連結学習モード・キーワード単位の読み上げは履歴に残りません。</span>
             {history.length > 0 && <button type="button" onClick={() => clearAudioHistory()}>履歴をすべて消す</button>}
           </div>
         </div>

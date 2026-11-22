@@ -1182,10 +1182,8 @@ export default function App() {
         onOpen={() => setView('audio')}
         onJump={(entry, autoPlay) => {
           // 再生履歴・閉じる前の続きへ飛ぶ：同じ絞り込みにそろえて、その問題番号から
-          setAudioResumeFilters({
-            subject: entry.subject, genre: entry.genre, keyword: entry.keyword, round: entry.round,
-            index: entry.index, total: entry.total, qid: entry.qid, done: entry.done, exact: true, autoPlay: !!autoPlay,
-          });
+          // 誤答・△✕（kind:'review'）は聞いていた並び（ids）と聞いた印（heard）もそのまま渡す
+          setAudioResumeFilters({ ...entry, exact: true, autoPlay: !!autoPlay });
           setView('audio');
         }}
         lifted={view !== 'roadmap'}

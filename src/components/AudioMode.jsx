@@ -41,7 +41,8 @@ import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { LEECH_THRESHOLD } from '../lib/srs.js';
 import BreakTimer from './BreakTimer.jsx';
 import ManagerReview from './ManagerReview.jsx';
-import { recordAudioHistory, resolveJumpIndex, deleteAudioHistory, historyKeyOf } from '../lib/audioPlayHistory.js';
+import { recordAudioHistory, resolveJumpIndex, deleteAudioHistory, historyKeyOf, reviewReplayIds, loadAudioHistory } from '../lib/audioPlayHistory.js';
+import { loadAudioProgressSync, saveAudioProgressSync, idsSignature, newerProgress } from '../lib/audioProgressSync.js';
 import { resolveBufferUsage, bufferUsageLabel, planStudySession, DEFAULT_BASE_RATIO, estimatedAnswerSeconds } from '../lib/bufferSession.js';
 import BufferPlanCard from './BufferPlanCard.jsx';
 import { harioBufferEncourage, harioBaseTaskReminder } from '../data/haripan.js';
@@ -423,6 +424,12 @@ export default function AudioMode({
   const [selectedKeyword, setSelectedKeyword] = useState('');
   // 復習画面の絞り込み条件から渡された問題idだけに絞る場合に使う（未指定なら通常の復習プール全体）
   const [customReviewIds, setCustomReviewIds] = useState(null);
+  // 再生履歴から誤答・△✕を開き直した時の「並びをそのまま流す」印（2026-11-15）。
+  // customReviewIdsと同じ配列（参照）の時だけ有効——ほかの開始ボタンが新しい配列を入れた瞬間に自然に外れる。
+  // 有効な間は、念のため確認・先送り・シャッフル・要注意を先に・件数しぼり込みで並びを組み直さない。
+  const [frozenReviewIds, setFrozenReviewIds] = useState(null);
+  // いま聞いている誤答・△✕の束（再生履歴に残す単位）。{ key, title, sessionKind, ids, heard:Set, sig }
+  const reviewSessionRef = useRef(null);
   // 「間違えた問題を読み上げる」で、学習(10・60・300・900)と同じ目安件数に区切る場合に使う
   // （nullは「すべて」＝従来どおり対象プール全体を読み上げる）。前回選んだ件数を覚えておく
   // （settings.lastAudioReviewTarget、未指定ならnull＝従来どおり毎回「すべて」から）。
@@ -566,6 +573,34 @@ export default function AudioMode({
     // 同じ内容を効かせる（最初からresumeFilters付きで新規マウントした場合は、遅延初期化と
     // この効果の両方が同じ値を適用するだけで無害）。
     if (!resumeFilters) return;
+    if (resumeFilters.exact && resumeFilters.kind === 'review') {
+      // 誤答・△✕の再生履歴から来た時：聞いていた問題の並びそのものを、まだ聞いていない問題だけ流す。
+      const entry = resumeFilters;
+      const playIds = reviewReplayIds(entry);
+      const restart = !!entry.done;
+      rebuildStop();
+      setMode(0);
+      setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
+      setReviewTarget(null);
+      setReviewOffsetPersist(0);
+      setSource('review');
+      setCustomReviewIds(playIds);
+      setFrozenReviewIds(playIds);
+      audioSessionKindRef.current = entry.sessionKind === 'maruReview' || entry.sessionKind === 'maruFast' ? entry.sessionKind : null;
+      quickMinuteActiveRef.current = null;
+      reviewSessionRef.current = {
+        key: historyKeyOf(entry), title: entry.title, sessionKind: entry.sessionKind || '',
+        ids: [...(entry.ids || [])], heard: new Set(entry.done || restart ? [] : (entry.heard || [])), sig: null,
+      };
+      pendingJumpRef.current = {
+        review: true, playIds, key: historyKeyOf(entry), autoPlay: !!entry.autoPlay,
+        done: !!entry.done, heardCount: (entry.heard || []).length, at: Date.now(),
+      };
+      cameFromResumeRef.current = true;
+      setJumpNonce((n) => n + 1);
+      onConsumeResumeFilters?.();
+      return;
+    }
     if (resumeFilters.exact) {
       // 下部ミニプレーヤーの「続きから」「再生履歴」から来た時（2026-11-15）：
       // その履歴と同じ絞り込みにそろえ（空の項目は空へ戻す）、通常の読み上げにしてから、
@@ -1152,6 +1187,9 @@ export default function AudioMode({
     }
     let base;
     if (source === 'review') {
+      if (customReviewIds && customReviewIds === frozenReviewIds) {
+        return withProgressAnnounce(orderedByCustomIds(customReviewIds));
+      }
       base = customReviewIds ? orderedByCustomIds(customReviewIds) : reviewPool;
       // 「誤った問題」モード中でも科目・ジャンル・回でさらに絞り込める
       // （要望：科目選択＋誤った問題の組み合わせ、#24・#25でジャンル・回にも拡張）。
@@ -1173,7 +1211,7 @@ export default function AudioMode({
     base = applyTarget(base);
     return withProgressAnnounce(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState, audioNewPct, bodyLocationSetId, homeworkIds, prependReviewOn, keiketsuCards, keiketsuRecallOn]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState, audioNewPct, bodyLocationSetId, homeworkIds, prependReviewOn, keiketsuCards, keiketsuRecallOn, frozenReviewIds]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const [gap, setGap] = useState(settings.gapSeconds);
@@ -1417,9 +1455,13 @@ export default function AudioMode({
       readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound,
       reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn,
       questions.length, plan.length,
+      // 間違えた問題などの「id配列で渡された束」は、件数が同じでも中身が違えば別の計画として扱う
+      // （以前は件数しか見ておらず、同じ件数の別の束へ切り替えても前の束のまま読み続けていた）。
+      source === 'review' && customReviewIds ? idsSignature(customReviewIds) : '',
+      customReviewIds && customReviewIds === frozenReviewIds ? 'frozen' : '',
     ]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn, questions.length, plan.length]
+    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn, questions.length, plan.length, customReviewIds, frozenReviewIds]
   );
 
   // 保存済みの再生位置（続きから）。マウント時に一度だけ読み込む。
@@ -1427,8 +1469,9 @@ export default function AudioMode({
   const resumeAudioRef = useRef(null);
   useEffect(() => {
     let alive = true;
-    storage.loadAudioProgress().then((p) => {
+    storage.loadAudioProgress().then((idbP) => {
       if (!alive) return;
+      const p = newerProgress(idbP, loadAudioProgressSync());
       resumeAudioRef.current = p && typeof p.index === 'number' ? p : null;
       // 画面を切り替えて戻った・バックグラウンドから復帰した（Androidがタブを回収した等で
       // 実際にはページが再読み込みされた）場合、「前回の続きから」ダイアログ（resumeFilters）を
@@ -1460,6 +1503,29 @@ export default function AudioMode({
   useEffect(() => {
     const j = pendingJumpRef.current;
     if (!j || !audioReady) return;
+    if (j.review) {
+      // 誤答・△✕：束（id配列）が入れ替わり、計画が組み上がってから最初の問題へ
+      const ready = mode === 0 && source === 'review' && customReviewIds === j.playIds && frozenReviewIds === j.playIds;
+      if (!ready) {
+        if (Date.now() - j.at > 4000) pendingJumpRef.current = null;
+        return;
+      }
+      pendingJumpRef.current = null;
+      if (builtPlan.length === 0) {
+        reviewSessionRef.current = null;
+        setFrozenReviewIds(null);
+        setCustomReviewIds(null);
+        deleteAudioHistory(j.key);
+        onToast?.('⚠️ この履歴の問題が、今は見つかりませんでした（履歴から外しました）。');
+        return;
+      }
+      if (reviewSessionRef.current) reviewSessionRef.current.sig = planSig;
+      engine.seekTo(0);
+      if (j.done) onToast?.(`前回は最後まで聞き終えていたので、最初から（全${builtPlan.length}問）流します`);
+      else if (j.heardCount > 0) onToast?.(`聞き終えた${j.heardCount}問を除いて、まだ聞いていない${builtPlan.length}問を流します`);
+      if (j.autoPlay) setTimeout(() => { if (!engine.getSnapshot().playing) togglePlayRef.current?.(); }, 250);
+      return;
+    }
     const matched = mode === 0 && source === j.source && filterSubject === j.subject && filterGenre === j.genre
       && filterKeyword === j.keyword && String(filterRound || '') === j.round;
     if (!matched) {
@@ -1488,7 +1554,7 @@ export default function AudioMode({
       setTimeout(() => { if (!engine.getSnapshot().playing) togglePlayRef.current?.(); }, 250);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpNonce, audioReady, builtPlan, planSig, mode, source, filterSubject, filterGenre, filterKeyword, filterRound]);
+  }, [jumpNonce, audioReady, builtPlan, planSig, mode, source, filterSubject, filterGenre, filterKeyword, filterRound, customReviewIds, frozenReviewIds]);
 
   // 再生履歴（下部ミニプレーヤー用）：実際に再生している間だけ、どこまで聞いたかを残す。
   // 残すのは通常の読み上げ（科目などを選んで読む／すべて読む）だけ——連結学習モードや
@@ -1522,6 +1588,90 @@ export default function AudioMode({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.finished]);
+
+  // 誤答・△✕などの束（source==='review'）の再生履歴（2026-11-15・ユーザー指定）。
+  // 並びそのもの（ids）と、解答まで聞き終えた問題（heard）を1問ごとにその場で残す
+  // （localStorageへ同期で書くので、閉じる直前の1問も取りこぼさない）。
+  const REVIEW_TITLE_PREFIX = { maruReview: '○の見直し', maruFast: '○の高速回転', mockExam: '本番想定', bedtime: '就寝前まとめ' };
+  const lastReviewWriteRef = useRef('');
+  const writeReviewHistory = (sess, extra = {}) => {
+    if (!sess) return;
+    const d = snap.display;
+    const q = d?.q;
+    recordAudioHistory({
+      kind: 'review', title: sess.title, sessionKind: sess.sessionKind,
+      ids: sess.ids, heard: [...sess.heard],
+      index: 0, total: sess.ids.length,
+      label: (q && q.subject) || '', text: (q && q.question) || '',
+      qid: q?.id ?? '', at: Date.now(), ...extra,
+    });
+  };
+  useEffect(() => {
+    if (!audioReady || pendingJumpRef.current) return;
+    if (mode !== 0 || source !== 'review' || builtPlan.length === 0) return;
+    if (!snap.playing && !snap.started) return;
+    const ids = builtPlan.map((it) => it.display?.q?.id).filter((id) => id != null).map(String);
+    if (ids.length === 0) return;
+    let sess = reviewSessionRef.current;
+    // 同じ束の一部（まだ聞いていない問題だけ流している・条件で絞った等）へ組み直しただけなら、
+    // 元の並びと聞いた印はそのまま持ち続ける（新しい束として作り直すと、聞いた印が消える）
+    if (sess && sess.sig && sess.sig !== planSig) {
+      const all = new Set(sess.ids);
+      if (ids.every((id) => all.has(id))) sess.sig = planSig;
+    }
+    if (!sess || (sess.sig && sess.sig !== planSig)) {
+      // 新しい束。題は「誤答・△✕ 解剖学」のように、束の中の科目から作る
+      const subjects = [...new Set(builtPlan.map((it) => it.display?.q?.subject).filter(Boolean))];
+      const subjLabel = subjects.length === 0 ? '' : subjects.length <= 2 ? subjects.join('・') : `${subjects.length}科目`;
+      const kind = audioSessionKindRef.current || '';
+      const title = `${REVIEW_TITLE_PREFIX[kind] || '誤答・△✕'}${subjLabel ? ` ${subjLabel}` : ''}`;
+      const key = historyKeyOf({ kind: 'review', title });
+      // 同じ題の束が組み直されただけ（自己採点で復習対象から外れた等）なら、聞いた印を引き継ぐ
+      // （閉じて開き直した直後に同じボタンから始め直した時も、12時間以内の同じ題の記録なら引き継ぐ）
+      const prevSame = sess && sess.key === key ? sess
+        : loadAudioHistory().find((h) => h.key === key && !h.done && Date.now() - (h.at || 0) < 12 * 3600 * 1000);
+      const prevHeard = prevSame ? new Set([...(prevSame.heard || [])]) : new Set();
+      sess = { key, title, sessionKind: kind, ids, heard: new Set(ids.filter((id) => prevHeard.has(id))), sig: planSig };
+      reviewSessionRef.current = sess;
+    } else if (!sess.sig) sess.sig = planSig;
+    if (!snap.playing) return;
+    // 今の問題の解答（または解説）まで読み進んだら「聞いた」に入れる
+    const curId = snap.display?.q?.id;
+    if (curId != null && (snap.phase === PHASES.ANSWER || snap.phase === PHASES.NOTE)) sess.heard.add(String(curId));
+    // 変わった時だけ書く（読み上げの段が切り替わるたびに大きな履歴を書き直さない）
+    const mark = `${sess.key}|${curId}|${sess.heard.size}|${sess.ids.length}`;
+    if (lastReviewWriteRef.current === mark) return;
+    lastReviewWriteRef.current = mark;
+    writeReviewHistory(sess);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap.index, snap.playing, snap.phase, audioReady, builtPlan, planSig, mode, source]);
+  // 誤答・△✕の束を最後まで聞き終えた
+  useEffect(() => {
+    if (!snap.finished || source !== 'review' || mode !== 0) return;
+    const sess = reviewSessionRef.current;
+    if (!sess) return;
+    sess.ids.forEach((id) => sess.heard.add(id));
+    writeReviewHistory(sess, { qid: '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap.finished]);
+  // 並びをそのまま流している間に、本人が科目・件数・並べ方などの条件を変えたら、その条件を効かせる
+  // （固定したままだと、選んだ科目や件数チップが何も効かないように見える）。
+  const frozenCtxRef = useRef('');
+  const reviewCtx = JSON.stringify([filterSubject, filterGenre, filterRound, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, shuffleOn, leechFirst, reviewTarget, reviewOffset]);
+  useEffect(() => {
+    if (!frozenReviewIds) { frozenCtxRef.current = ''; return; }
+    if (!frozenCtxRef.current) { frozenCtxRef.current = reviewCtx; return; }
+    if (frozenCtxRef.current !== reviewCtx) { frozenCtxRef.current = ''; setFrozenReviewIds(null); }
+  }, [reviewCtx, frozenReviewIds]);
+  // 誤答・△✕から離れたら、束の記録はそこで区切る（履歴そのものは残る）
+  // ※「誤答・△✕だった状態から離れた」時だけ。初回の描画（履歴から開いた直後はまだsourceが
+  //   'filter'のまま）で消すと、履歴から組み直した束の記録がその場で消えてしまう。
+  const wasReviewRef = useRef(false);
+  useEffect(() => {
+    const isReview = source === 'review' && mode === 0;
+    if (wasReviewRef.current && !isReview) reviewSessionRef.current = null;
+    wasReviewRef.current = isReview;
+  }, [source, mode]);
 
   // 「はい」で開いた時だけ、検索カード等を飛ばしてプレーヤーまで自動スクロールする。
   // 保存済みの続きから位置の反映（上の効果）を待ってから行う（1回だけ）。
@@ -1574,7 +1724,7 @@ export default function AudioMode({
   // （Session.jsxのsession.recordedIdsはセッション自体に保存されるため、この問題が無い）。
   useEffect(() => {
     if (!audioReady || !planSig) return;
-    storage.saveAudioProgress({
+    const prog = {
       sig: planSig,
       index: snap.index || 0,
       at: Date.now(),
@@ -1587,7 +1737,9 @@ export default function AudioMode({
       genre: source === 'filter' ? (filterGenre || null) : null,
       keyword: source === 'filter' ? (filterKeyword || null) : null,
       round: source === 'filter' ? (filterRound || null) : null,
-    });
+    };
+    saveAudioProgressSync(prog); // 閉じる直前でも残るよう、同期で先に書く
+    storage.saveAudioProgress(prog);
   }, [snap.index, planSig, audioReady, builtPlan.length, source, filterSubject, filterGenre, filterKeyword, filterRound]);
 
   // 再生設定をエンジンへ反映（再生中でも即時）
@@ -2356,7 +2508,7 @@ export default function AudioMode({
     setSessionWrongKinds({});
     setSessionLatencies([]);
     setVoiceAnswerStats({ attempts: 0, matched: 0 });
-    audioSessionKindRef.current = null;
+    audioSessionKindRef.current = 'bedtime'; // 再生履歴の題（就寝前まとめ）に使う
     quickMinuteActiveRef.current = null;
     onToast?.(`🌙 今日解いた${ids.length}問をまとめて復習します（${min}分で自動終了）`);
     setTimeout(() => togglePlay(), 300);
