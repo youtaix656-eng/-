@@ -1758,6 +1758,12 @@ export default function AudioMode({
     if (!swipeNavOn) return;
     const t = e.touches && e.touches[0];
     if (!t) return;
+    // 問題番号バー・ボタンの上で指を動かした時はスワイプにしない（バーを横へドラッグすると
+    // 「スワイプで次へ」まで同時に起きて、飛んだ先からさらに1問ずれていた）
+    if (e.target && e.target.closest && e.target.closest('.player-seek-wrap, .player-controls, input, button')) {
+      swipeStartRef.current = null;
+      return;
+    }
     swipeStartRef.current = { x: t.clientX, y: t.clientY };
   };
   const onPlayerTouchEnd = (e) => {
@@ -1930,10 +1936,45 @@ export default function AudioMode({
   // 問題番号バー（スクラバー）：ドラッグ中は見た目だけ動かし（音声の飛び先を連打しない）、
   // 指を離した/クリックが確定した時だけ実際にジャンプする（engine.seekTo）。
   const [seekPreview, setSeekPreview] = useState(null);
+  // 指を離した時に pointerup・mouseup・touchend が続けて来るので、最新の値を ref で持ち、
+  // 1回だけ飛ぶ（state の値だと同じ描画の中で2回目にも古い値が見え、2回飛び直していた）
+  const seekPreviewRef = useRef(null);
+  const previewSeek = (v) => { seekPreviewRef.current = v; setSeekPreview(v); };
   const commitSeek = () => {
-    if (seekPreview == null) return;
-    engine.seekTo(seekPreview - 1);
+    const v = seekPreviewRef.current;
+    seekPreviewRef.current = null;
     setSeekPreview(null);
+    if (v == null) return;
+    if (v - 1 !== engine.getSnapshot().index) engine.seekTo(v - 1);
+  };
+  // 問題番号バーの6等分の区切り（赤い点）。両端（1問目・最後）は点を描かないが、◀▶の行き先には含める。
+  const seekMarks = useMemo(() => {
+    const t = snap.total || builtPlan.length;
+    if (!(t > 2)) return [];
+    const seen = new Set([1, t]);
+    const out = [];
+    for (let k = 1; k <= 5; k++) {
+      const n = 1 + Math.round(((t - 1) * k) / 6);
+      if (seen.has(n)) continue;
+      seen.add(n);
+      out.push({ n, ratio: (n - 1) / (t - 1) });
+    }
+    return out;
+  }, [snap.total, builtPlan.length]);
+  // ◀▶の行き先（1始まりの問題番号）。今いる問題より前／後ろの区切りのうち、いちばん近いもの
+  const markTarget = (dir) => {
+    const t = snap.total || builtPlan.length;
+    if (!(t > 1)) return null;
+    const cur = (snap.index || 0) + 1;
+    const pts = [1, ...seekMarks.map((m) => m.n), t];
+    if (dir < 0) { const c = pts.filter((p) => p < cur); return c.length ? c[c.length - 1] : null; }
+    const c = pts.filter((p) => p > cur); return c.length ? c[0] : null;
+  };
+  const jumpMark = (dir) => {
+    const n = markTarget(dir);
+    if (n == null) return;
+    engine.seekTo(n - 1);
+    onToast?.(`${dir < 0 ? '◀' : '▶'} ${n} / ${snap.total || builtPlan.length} へ移動しました`);
   };
   const resetToStart = () => {
     engine.resetToStart();
@@ -3588,7 +3629,19 @@ export default function AudioMode({
                 ——native rangeのonChangeはドラッグ中も連続発火するため、毎フレーム読み上げを
                 飛ばし直すと音声がガタつく。 */}
             {total > 1 && (
-              <div className="player-progress player-seek-wrap">
+              <div className={`player-progress player-seek-wrap${seekMarks.length ? ' has-marks' : ''}${seekPreview != null ? ' dragging' : ''}`}>
+                {/* 6等分の目印（赤い点＋真上に問題番号）。ドラッグ中の吹き出しに近い番号は薄くして重ねない。
+                    span にしない（.player-progress > span の帯の塗りが当たって白い棒になる） */}
+                {seekMarks.map((m) => (
+                  <div
+                    key={m.n}
+                    className={`player-seek-mark${seekPreview != null && Math.abs(m.ratio - (seekPreview - 1) / (total - 1)) < 0.12 ? ' dim' : ''}`}
+                    style={{ left: `calc(8px + (100% - 16px) * ${m.ratio})` }}
+                    aria-hidden="true"
+                  >
+                    <span className="player-seek-mark-label">{m.n}</span>
+                  </div>
+                ))}
                 <input
                   type="range"
                   className="player-seek"
@@ -3596,19 +3649,34 @@ export default function AudioMode({
                   max={total}
                   step={1}
                   value={seekPreview ?? index + 1}
-                  onChange={(e) => setSeekPreview(Number(e.target.value))}
+                  onChange={(e) => previewSeek(Number(e.target.value))}
                   onPointerUp={commitSeek}
+                  onPointerCancel={commitSeek}
                   onMouseUp={commitSeek}
                   onTouchEnd={commitSeek}
                   onKeyUp={commitSeek}
+                  onBlur={() => { if (seekPreviewRef.current != null) commitSeek(); }}
                   aria-label="問題番号（ドラッグして移動）"
+                  aria-valuetext={`${seekPreview ?? index + 1}問目 / 全${total}問`}
                   style={{
-                    background: `linear-gradient(to right, #fff ${((seekPreview ?? index + 1) / total) * 100}%, rgba(255,255,255,0.18) ${((seekPreview ?? index + 1) / total) * 100}%)`,
+                    background: `linear-gradient(to right, #fff ${((seekPreview ?? index + 1) - 1) / (total - 1) * 100}%, rgba(255,255,255,0.18) ${((seekPreview ?? index + 1) - 1) / (total - 1) * 100}%)`,
                   }}
                 />
-                {seekPreview != null && (
-                  <span className="player-seek-preview">{seekPreview} / {total} へ移動</span>
-                )}
+                {seekPreview != null && (() => {
+                  const r = (seekPreview - 1) / (total - 1);
+                  // 右端に近い時は吹き出しを左上へ（はみ出さない）
+                  const flip = r > 0.82;
+                  return (
+                    <div
+                      className={`player-seek-bubble${flip ? ' flip' : ''}`}
+                      style={{ left: `calc(8px + (100% - 16px) * ${r})` }}
+                      aria-hidden="true"
+                    >
+                      {seekPreview}
+                      <small>/{total}</small>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {total === 1 && (
@@ -3747,10 +3815,29 @@ export default function AudioMode({
             </div>
 
             <div className="player-controls">
+              {total > 1 && (
+                <button
+                  className="mark-jump"
+                  onClick={() => jumpMark(-1)}
+                  disabled={index === 0}
+                  aria-label={`戻る（前の区切り${markTarget(-1) != null ? `・${markTarget(-1)}問目` : ''}へ）`}
+                >◀</button>
+              )}
               <button onClick={() => skip(-1)} disabled={index === 0} aria-label="前へ">⏮</button>
               <button className="main" onClick={togglePlay} aria-label="再生 / 一時停止">{playing ? '⏸' : '▶'}</button>
               <button onClick={() => skip(1)} disabled={index >= total - 1} aria-label="次へ">⏭</button>
+              {total > 1 && (
+                <button
+                  className="mark-jump"
+                  onClick={() => jumpMark(1)}
+                  disabled={index >= total - 1}
+                  aria-label={`進む（次の区切り${markTarget(1) != null ? `・${markTarget(1)}問目` : ''}へ）`}
+                >▶</button>
+              )}
             </div>
+            {total > 1 && (
+              <div className="mark-jump-hint">赤い◀▶：バーの赤い点（区切り）へ戻る・進む／⏮⏭：1問ずつ</div>
+            )}
             {/* #43：60問区切りの小休止を選べる（以前はトーストで知らせるだけだった）。 */}
             {breakPending && (
               <div className="card" style={{ marginTop: 10 }} role="region" aria-label="休憩の選択" tabIndex={-1}>

@@ -919,14 +919,74 @@ textarea {
   border-radius: 999px;
   background: transparent;
 }
-.player-seek-preview {
+/* 赤い点を帯の真ん中に乗せるため、枠を一定の高さの横並びにして帯を上下中央に置く */
+.player-seek-wrap { display: flex; align-items: center; height: 28px; padding: 0; box-sizing: border-box; }
+.player-seek-wrap .player-seek { display: block; margin: 0; }
+/* 吹き出しと赤い点の番号のぶん、上を最初から空けておく（ドラッグ中だけ空けるとバーが動いて押しにくい。
+   上の問題番号の行にも重ねない） */
+.player-seek-wrap { margin-top: 36px; }
+/* 6等分の目印：赤い点＋真上に問題番号（バーの帯と同じ高さに重ねる） */
+.player-seek-mark {
   position: absolute;
-  top: -18px;
-  right: 0;
-  font-size: 11px;
-  color: #fff;
-  opacity: 0.85;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #ff4d4d;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.15s;
+}
+.player-seek-mark-label {
+  position: absolute;
+  bottom: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: #ff8a8a;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.player-seek-mark.dim { opacity: 0.25; }
+.player-seek { position: relative; z-index: 2; }
+/* ドラッグ中の吹き出し：つまみの斜め上。赤い点の番号より高い位置に出して重ねない */
+.player-seek-bubble {
+  position: absolute;
+  bottom: 30px;
+  transform: translateX(4px);
+  background: #fff;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px 8px 8px 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.player-seek-bubble small { font-size: 10px; font-weight: 600; opacity: 0.7; margin-left: 1px; }
+.player-seek-bubble.flip {
+  transform: translateX(calc(-100% - 4px));
+  border-radius: 8px 8px 2px 8px;
+}
+.player-controls button.mark-jump {
+  background: #e53935;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+.mark-jump-hint {
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 6px;
 }
 .player .now-subject {
   display: flex;
@@ -3997,3 +4057,7 @@ code.block {
 /* 下部バー：いま聞いているところを保存（2026-11-22） */
 .mini-saved-note { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); background: var(--navy-dark); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 8px; text-align: center; }
 .mini-pin { margin-right: 4px; }
+/* 赤い◀▶を足して5つ並ぶので、幅の狭い端末ではすき間を詰める（はみ出さない） */
+@media (max-width: 360px) {
+  .player-controls { gap: 8px; }
+}
