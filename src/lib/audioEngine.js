@@ -195,12 +195,27 @@ async function playOne(item, signal) {
     if (signal.aborted) return;
     if (step.phase) emit({ phase: step.phase });
     if (step.say) {
-      if (settings.cloneVoice?.apiKey && settings.cloneVoice?.voiceId) {
-        await speakCloned(step.say, { apiKey: settings.cloneVoice.apiKey, voiceId: settings.cloneVoice.voiceId, signal });
-      } else {
-        // step.rate：まだ解いていない新しい問題は等速以下で読む（#27）等、1ステップだけ
-        // 速度を上書きしたい時に使う（省略時は設定どおりの速度）。
-        await speak(step.say, { rate: step.rate ?? settings.rate, pitch: settings.pitch, volume: settings.volume, voice: settings.voice, signal });
+      // 1つの読み上げが失敗しても（音声エンジンの一時的なエラー・通信の失敗など）、そこで
+      // 全体を止めない。以前は1回のエラーで再生のループごと抜け、画面は「再生中」のまま
+      // 何も聞こえなくなっていた（途中で止まる原因の1つ）。中断（AbortError）だけは本当に止める。
+      try {
+        if (settings.cloneVoice?.apiKey && settings.cloneVoice?.voiceId) {
+          try {
+            await speakCloned(step.say, { apiKey: settings.cloneVoice.apiKey, voiceId: settings.cloneVoice.voiceId, signal });
+          } catch (e) {
+            if (e?.name === 'AbortError') throw e;
+            // クローン音声が使えない時は、端末の声で読む
+            await speak(step.say, { rate: step.rate ?? settings.rate, pitch: settings.pitch, volume: settings.volume, voice: settings.voice, signal });
+          }
+        } else {
+          // step.rate：まだ解いていない新しい問題は等速以下で読む（#27）等、1ステップだけ
+          // 速度を上書きしたい時に使う（省略時は設定どおりの速度）。
+          await speak(step.say, { rate: step.rate ?? settings.rate, pitch: settings.pitch, volume: settings.volume, voice: settings.voice, signal });
+        }
+      } catch (e) {
+        if (e?.name === 'AbortError') throw e;
+        console.warn('読み上げを1つ飛ばしました', e);
+        await wait(400, signal);
       }
     }
     if (step.wait) await wait(step.wait, signal);
@@ -251,7 +266,11 @@ async function runFrom(start) {
       emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true });
     }
   } catch (e) {
-    if (e.name !== 'AbortError') console.warn('audio engine error', e);
+    if (e.name !== 'AbortError') {
+      console.warn('audio engine error', e);
+      // 想定外のエラーで止まった時は「再生中」の表示のまま黙らない（▶で続きから押し直せる状態に戻す）
+      if (abort === controller) stop();
+    }
   }
 }
 
@@ -280,6 +299,13 @@ export function stop() {
   cancelSpeech();
   cancelClonedSpeech();
   emit({ playing: false });
+}
+
+// 下部バーの✕：止めて閉じる。以前は resetToStart（最初の問題へ戻す）を使っていたため、
+// ✕で閉じると聞いていた位置まで消えていた。位置はそのまま残し、「再生中の束」だけを終える。
+export function close() {
+  stop();
+  emit({ started: false, finished: false });
 }
 
 export function toggle() {

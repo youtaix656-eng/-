@@ -73,6 +73,17 @@ function reviewCandidate(p, questions) {
 
 function audioCandidate(p) {
   if (!p || typeof p.index !== 'number' || typeof p.total !== 'number' || p.total <= 0) return null;
+  // 誤答・△✕の束：残りは「まだ聞いていない問題」の数。科目名は題（「誤答・△✕ 解剖学」）から取る。
+  if (p.reviewKey) {
+    const remaining = Number(p.reviewRemaining) || 0;
+    if (remaining <= 0) return null;
+    const title = String(p.reviewTitle || '誤答・△✕');
+    const subject = title.replace(/^(誤答・△✕|○の見直し|○の高速回転|本番想定|就寝前まとめ)\s*/, '') || null;
+    return {
+      key: 'audio', ...RESUME_FEATURES.audio, reviewKey: p.reviewKey,
+      subject, genre: null, keyword: null, remaining, at: p.at || 0, round: null,
+    };
+  }
   const remaining = p.total - p.index;
   if (remaining <= 0) return null;
   return {

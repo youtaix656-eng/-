@@ -19,6 +19,8 @@ import Review from './components/Review.jsx';
 import AudioMode from './components/AudioMode.jsx';
 import Exam from './components/Exam.jsx';
 import MiniPlayer from './components/MiniPlayer.jsx';
+import { loadAudioHistory } from './lib/audioPlayHistory.js';
+import { loadAudioProgressSync, newerProgress } from './lib/audioProgressSync.js';
 import ScrollArrows from './components/ScrollArrows.jsx';
 import { dueAlarms, markFired, snoozeAlarm, SNOOZE_MIN } from './lib/alarm.js';
 // AuthGate（ロック未設定なら使わない）・Pomodoro（オプトイン機能）は、必要な人にだけ
@@ -206,7 +208,9 @@ export default function App() {
         if (!alive) return;
         setResumeCandidate(
           pickTopResumeCandidate({
-            session: store.session, quizProgress, examProgress, reviewProgress, audioProgress,
+            session: store.session, quizProgress, examProgress, reviewProgress,
+            // 閉じる直前の1問も取りこぼさないよう、同期で書いた控えと比べて新しい方を使う
+            audioProgress: newerProgress(audioProgress, loadAudioProgressSync()),
             questions: store.questions,
           })
         );
@@ -246,7 +250,10 @@ export default function App() {
     if (c.key === 'exam') setExamAutoResume(true);
     if (c.key === 'review') setReviewAutoResume(true);
     if (c.key === 'audio') {
-      setAudioResumeFilters({ subject: c.subject, genre: c.genre, keyword: c.keyword, round: c.round });
+      // 誤答・△✕の束なら、再生履歴に残した並び（まだ聞いていない問題だけ）へ戻す
+      const rev = c.reviewKey ? loadAudioHistory().find((h) => h.key === c.reviewKey) : null;
+      if (rev) setAudioResumeFilters({ ...rev, exact: true, autoPlay: true });
+      else setAudioResumeFilters({ subject: c.subject, genre: c.genre, keyword: c.keyword, round: c.round });
     }
     setView(c.view);
     setResumeCandidate(null);
@@ -292,6 +299,7 @@ export default function App() {
   // なるリスクを避けるため、意図的にセッション内だけの状態にする（できないことをできる
   // ふりに書かない方針どおり、この制限はUIの案内文にも明記する）。
   const [screenLocked, setScreenLocked] = useState(false);
+  const lockHintAtRef = useRef(0);
   const LOCK_UNLOCK_MS = 600;
   const lockUnlockTimerRef = useRef(null);
   const lockUnlockFiredRef = useRef(false);
@@ -334,7 +342,12 @@ export default function App() {
     document.body.style.touchAction = 'none';
     const preventDefault = (e) => e.preventDefault();
     const SCROLL_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' '];
-    const preventKeyScroll = (e) => { if (SCROLL_KEYS.includes(e.key)) e.preventDefault(); };
+    // ロック中はキー操作でも画面を動かさない（Tab で別のボタンへ移って Enter で押す、も止める）。
+    // 解除の目印（南京錠）にいる時の Enter／スペース長押しだけは通す。
+    const preventKeyScroll = (e) => {
+      if (e.target && e.target.closest && e.target.closest('.screen-lock-badge')) return;
+      if (SCROLL_KEYS.includes(e.key) || e.key === 'Tab' || e.key === 'Enter') e.preventDefault();
+    };
     window.addEventListener('touchmove', preventDefault, { passive: false });
     window.addEventListener('wheel', preventDefault, { passive: false });
     window.addEventListener('keydown', preventKeyScroll, { passive: false });
@@ -1128,6 +1141,25 @@ export default function App() {
           だけで解除できる。タップでは解除しない（誤って一瞬触れただけで解除されないように）。
           スクロール・画面移動の封じ込め自体は上のuseEffect・ScrollArrows/roadmap-bar/
           MiniPlayer/bottom-navの各箇所で行っており、この要素自体は目印＋解除ボタン。 */}
+      {/* ロック中は画面全体を覆う透明な幕で、タップ・クリックを南京錠以外どこにも届かせない
+          （以前はスクロールと下部ナビだけ止めていて、画面の中のボタンは押せてしまっていた）。 */}
+      {screenLocked && (
+        <div
+          className="screen-lock-shield"
+          aria-hidden="true"
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const now = Date.now();
+            if (now - (lockHintAtRef.current || 0) > 2500) {
+              lockHintAtRef.current = now;
+              showToast('🔒 ロック中です。右下の南京錠を長押し（0.6秒）すると解除できます');
+            }
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+      )}
       {screenLocked && (
         <button
           className="screen-lock-badge"

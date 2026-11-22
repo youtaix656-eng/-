@@ -41,7 +41,7 @@ import { buildGenreBreakdown } from '../lib/genreBreakdown.js';
 import { LEECH_THRESHOLD } from '../lib/srs.js';
 import BreakTimer from './BreakTimer.jsx';
 import ManagerReview from './ManagerReview.jsx';
-import { recordAudioHistory, resolveJumpIndex, deleteAudioHistory, historyKeyOf, reviewReplayIds, loadAudioHistory } from '../lib/audioPlayHistory.js';
+import { recordAudioHistory, resolveJumpIndex, deleteAudioHistory, historyKeyOf, reviewReplayIds, loadAudioHistory, setCurrentAudioContext } from '../lib/audioPlayHistory.js';
 import { loadAudioProgressSync, saveAudioProgressSync, idsSignature, newerProgress } from '../lib/audioProgressSync.js';
 import { resolveBufferUsage, bufferUsageLabel, planStudySession, DEFAULT_BASE_RATIO, estimatedAnswerSeconds } from '../lib/bufferSession.js';
 import BufferPlanCard from './BufferPlanCard.jsx';
@@ -574,30 +574,7 @@ export default function AudioMode({
     // この効果の両方が同じ値を適用するだけで無害）。
     if (!resumeFilters) return;
     if (resumeFilters.exact && resumeFilters.kind === 'review') {
-      // 誤答・△✕の再生履歴から来た時：聞いていた問題の並びそのものを、まだ聞いていない問題だけ流す。
-      const entry = resumeFilters;
-      const playIds = reviewReplayIds(entry);
-      const restart = !!entry.done;
-      rebuildStop();
-      setMode(0);
-      setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
-      setReviewTarget(null);
-      setReviewOffsetPersist(0);
-      setSource('review');
-      setCustomReviewIds(playIds);
-      setFrozenReviewIds(playIds);
-      audioSessionKindRef.current = entry.sessionKind === 'maruReview' || entry.sessionKind === 'maruFast' ? entry.sessionKind : null;
-      quickMinuteActiveRef.current = null;
-      reviewSessionRef.current = {
-        key: historyKeyOf(entry), title: entry.title, sessionKind: entry.sessionKind || '',
-        ids: [...(entry.ids || [])], heard: new Set(entry.done || restart ? [] : (entry.heard || [])), sig: null,
-      };
-      pendingJumpRef.current = {
-        review: true, playIds, key: historyKeyOf(entry), autoPlay: !!entry.autoPlay,
-        done: !!entry.done, heardCount: (entry.heard || []).length, at: Date.now(),
-      };
-      cameFromResumeRef.current = true;
-      setJumpNonce((n) => n + 1);
+      applyReviewEntry(resumeFilters, !!resumeFilters.autoPlay);
       onConsumeResumeFilters?.();
       return;
     }
@@ -637,6 +614,33 @@ export default function AudioMode({
     onConsumeResumeFilters?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeFilters]);
+  // 誤答・△✕の履歴（kind:'review'）を開き直す：聞いていた並びのうち、まだ聞いていない問題だけを流す。
+  // 再生履歴・前回の続きからダイアログ・閉じて開き直した時の自動復元の3か所から使う（単一の正）。
+  function applyReviewEntry(entry, autoPlayIt) {
+      // 誤答・△✕の再生履歴から来た時：聞いていた問題の並びそのものを、まだ聞いていない問題だけ流す。
+      const playIds = reviewReplayIds(entry);
+      const restart = !!entry.done;
+      rebuildStop();
+      setMode(0);
+      setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
+      setReviewTarget(null);
+      setReviewOffsetPersist(0);
+      setSource('review');
+      setCustomReviewIds(playIds);
+      setFrozenReviewIds(playIds);
+      audioSessionKindRef.current = entry.sessionKind === 'maruReview' || entry.sessionKind === 'maruFast' ? entry.sessionKind : null;
+      quickMinuteActiveRef.current = null;
+      reviewSessionRef.current = {
+        key: historyKeyOf(entry), title: entry.title, sessionKind: entry.sessionKind || '',
+        ids: [...(entry.ids || [])], heard: new Set(entry.done || restart ? [] : (entry.heard || [])), sig: null,
+      };
+      pendingJumpRef.current = {
+        review: true, playIds, key: historyKeyOf(entry), autoPlay: !!autoPlayIt,
+        done: !!entry.done, heardCount: (entry.heard || []).length, at: Date.now(),
+      };
+      cameFromResumeRef.current = true;
+      setJumpNonce((n) => n + 1);
+  }
   // アプリ起動時の「前回の続きから」ダイアログ（App.jsx）で「はい」を選んでこの画面を開いた
   // 場合だけ、プレーヤーの位置まで自動で画面をスクロールする（ユーザー指定・2026-11-11）。
   // resumeFiltersは上の効果で消費されnullに戻るため、初回描画時の値をrefに固定しておく。
@@ -1464,6 +1468,9 @@ export default function AudioMode({
     [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn, questions.length, plan.length, customReviewIds, frozenReviewIds]
   );
 
+  // 件数（plan.length）以外の条件だけの署名（件数だけ変わったかを見分ける）
+  const loadedBaseRef = useRef('');
+  const planSigBase = (sig) => { try { const a = JSON.parse(sig); a[24] = null; return JSON.stringify(a); } catch { return sig; } };
   // 保存済みの再生位置（続きから）。マウント時に一度だけ読み込む。
   const [audioReady, setAudioReady] = useState(false);
   const resumeAudioRef = useRef(null);
@@ -1478,7 +1485,13 @@ export default function AudioMode({
       // 経由しない通常の再訪問でも、直前に読んでいた科目・ジャンル・キーワード・回の絞り込みを
       // 自動で引き継ぐ（ユーザー指定・2026-11-14「さっきまで再生した音声の記憶が残るように」）。
       // すでにresumeFiltersで復元済みの時は上書きしない（cameFromResumeRefと同じ判定）。
-      if (!resumeFilters && !pendingJumpRef.current && p && (p.subject || p.genre || p.keyword || p.round)) {
+      // 誤答・△✕を聞いていた時は、その束（まだ聞いていない問題だけ）へ静かに戻す（勝手に再生はしない）
+      const revEntry = !resumeFilters && !pendingJumpRef.current && p && p.reviewKey
+        ? loadAudioHistory().find((h) => h.key === p.reviewKey && !h.done) : null;
+      if (revEntry) {
+        applyReviewEntry(revEntry, false);
+        cameFromResumeRef.current = false;
+      } else if (!resumeFilters && !pendingJumpRef.current && p && (p.subject || p.genre || p.keyword || p.round)) {
         setSource('filter');
         if (p.subject) setFilterSubject(p.subject);
         if (p.genre) setFilterGenre(p.genre);
@@ -1496,8 +1509,17 @@ export default function AudioMode({
     if (!audioReady) return;
     const saved = resumeAudioRef.current;
     const startIndex = saved && saved.sig === planSig ? saved.index : 0;
+    // 間違えた問題（△✕）を聞いている最中に自己採点すると、マスターした問題が復習対象から外れる・
+    // 念のため確認が増える等で「件数だけ」が変わる。以前はこれで計画が読み込み直され、
+    // 再生が途中で止まっていた（実際のバグ）。条件は同じで件数だけ変わった時は、聞いている束をそのまま続ける。
+    const base = planSigBase(planSig);
+    const snapNow = engine.getSnapshot();
+    if (snapNow.started && source === 'review' && mode === 0 && loadedBaseRef.current === base && snapNow.planSig !== planSig) {
+      return;
+    }
+    loadedBaseRef.current = base;
     engine.load(builtPlan, { sig: planSig, startIndex });
-  }, [builtPlan, planSig, audioReady]);
+  }, [builtPlan, planSig, audioReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 履歴の位置へ飛ぶ：絞り込みが履歴と同じになり、計画が読み込まれてから一度だけ（上の効果の後に走る）
   useEffect(() => {
@@ -1605,6 +1627,11 @@ export default function AudioMode({
       label: (q && q.subject) || '', text: (q && q.question) || '',
       qid: q?.id ?? '', at: Date.now(), ...extra,
     });
+    // 「前回の続きから」の残り◯問も、聞いた印に合わせてその場で直す（同期の控えだけ書き換える）
+    const p = loadAudioProgressSync();
+    if (p && p.reviewKey === sess.key) {
+      saveAudioProgressSync({ ...p, reviewRemaining: Math.max(0, sess.ids.length - sess.heard.size), at: Date.now() });
+    }
   };
   useEffect(() => {
     if (!audioReady || pendingJumpRef.current) return;
@@ -1645,6 +1672,30 @@ export default function AudioMode({
     writeReviewHistory(sess);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.index, snap.playing, snap.phase, audioReady, builtPlan, planSig, mode, source]);
+  // 下部バーの「💾 ここを保存」用：いま聞いているところを、再生履歴の1件の形で渡す。
+  // 通常の読み上げ（科目などを選んで読む／すべて読む）と、誤答・△✕などの束だけが保存できる。
+  useEffect(() => {
+    setCurrentAudioContext(() => {
+      const q = engine.getSnapshot().display?.q;
+      const idx = engine.getSnapshot().index || 0;
+      if (mode !== 0 || builtPlan.length === 0) return null;
+      if (source === 'review') {
+        const sess = reviewSessionRef.current;
+        if (!sess) return null;
+        return {
+          kind: 'review', title: sess.title, sessionKind: sess.sessionKind, ids: sess.ids, heard: [...sess.heard],
+          index: 0, total: sess.ids.length, label: q?.subject || '', text: q?.question || '', qid: q?.id ?? '',
+        };
+      }
+      if (source !== 'filter' && source !== 'all') return null;
+      return {
+        subject: source === 'filter' ? filterSubject : '', genre: source === 'filter' ? filterGenre : '',
+        keyword: source === 'filter' ? filterKeyword : '', round: source === 'filter' ? filterRound : '',
+        index: idx, total: builtPlan.length, label: q?.subject || '', text: q?.question || '', qid: q?.id ?? '',
+      };
+    });
+  });
+  useEffect(() => () => setCurrentAudioContext(null), []);
   // 誤答・△✕の束を最後まで聞き終えた
   useEffect(() => {
     if (!snap.finished || source !== 'review' || mode !== 0) return;
@@ -1737,6 +1788,12 @@ export default function AudioMode({
       genre: source === 'filter' ? (filterGenre || null) : null,
       keyword: source === 'filter' ? (filterKeyword || null) : null,
       round: source === 'filter' ? (filterRound || null) : null,
+      // 誤答・△✕の束：閉じて開き直した時・前回の続きからダイアログで同じ束へ戻るための目印
+      ...(source === 'review' && mode === 0 && reviewSessionRef.current ? {
+        reviewKey: reviewSessionRef.current.key,
+        reviewTitle: reviewSessionRef.current.title,
+        reviewRemaining: Math.max(0, reviewSessionRef.current.ids.length - reviewSessionRef.current.heard.size),
+      } : {}),
     };
     saveAudioProgressSync(prog); // 閉じる直前でも残るよう、同期で先に書く
     storage.saveAudioProgress(prog);
@@ -1829,7 +1886,8 @@ export default function AudioMode({
       updateSettings({ speechRate: rate, gapSeconds: gap, nextGapSeconds: nextGap });
       engine.configure({ rate, gapSeconds: gap, nextGapSeconds: nextGap, loop, voice: selectedVoice(), pitch: settings.speechPitch || 1 });
       engine.setSleep(sleepMin);
-      breakNotifiedRef.current = -1;
+      // ※ ここで60問区切りの印（breakNotifiedRef）を戻さない。戻すと、休憩バナーの「すぐ続ける」で
+      //   再生した瞬間に同じ位置でもう一度休憩に入り、何を押しても続きが流れなかった（実際のバグ）。
       // A5：周回速度ログ（音声版）の所要時間計測用。最初の再生の時刻を覚える
       // （一時停止・再開を挟んでも、最初に再生した時刻からの経過時間として記録する＝
       //   学習10・60・300・900のsession.startedAtと同じ考え方）。
@@ -1872,13 +1930,17 @@ export default function AudioMode({
   useEffect(() => {
     if (!playing) return;
     if (!(source === 'review' || (source === 'filter' && newOnly))) return;
-    if (total > BREAK_EVERY && (index + 1) % BREAK_EVERY === 0 && index + 1 < total && breakNotifiedRef.current !== index) {
+    // 60問を「聞き終えた」ところ（61問目に入った瞬間）で休む。以前は60問目に入った瞬間に止めていて、
+    // 60問目そのものが読まれないまま休憩になっていた。同じ区切りでは1回しか休まない。
+    if (total > BREAK_EVERY && index > 0 && index % BREAK_EVERY === 0 && breakNotifiedRef.current !== index) {
       breakNotifiedRef.current = index;
       engine.stop();
       setBreakReason('count');
       setBreakPending(true);
     }
   }, [index, playing, total, source, newOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 別の束に切り替わったら、区切りの印は新しく数え直す
+  useEffect(() => { breakNotifiedRef.current = -1; }, [planSig]);
 
   // 盲目の受験生からの改善提案#25・#29：実際に再生していた累積時間（一時停止・休憩中は
   // 数えない）を1つのrefで持ち、「5分ごとに休憩を提案」「30分で耳を休める提案」の

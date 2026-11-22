@@ -201,11 +201,18 @@ button {
 /* 画面ロック中に常に出す南京錠マーク（ユーザー指定）。長押し（0.6秒）でのみ解除される。
    z-index 45：下部ナビ(30)・ミニプレーヤー(29)・ロードマップバー(28)より上、
    トースト(50)・モーダル(50/70/100)より下（安全な未使用帯31〜49を使用）。 */
+.screen-lock-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 190; /* ポモドーロ・ミニプレーヤー・モーダルより上。アラームの鳴動画面（200）は押せるまま */
+  background: transparent;
+  touch-action: none;
+}
 .screen-lock-badge {
   position: fixed;
   right: 16px;
   bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
-  z-index: 45;
+  z-index: 195;
   background: var(--navy-dark);
   color: #fff;
   border: none;
@@ -3176,7 +3183,7 @@ code.block {
 .mini-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
 .mini-controls button {
   background: none; border: none; color: #fff;
-  font-size: 16px; width: 34px; height: 34px; border-radius: 8px;
+  font-size: 16px; width: 31px; height: 34px; border-radius: 8px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .mini-controls button:disabled { opacity: 0.35; }
@@ -3986,3 +3993,7 @@ code.block {
 .toc-candidate-row { display: flex; flex-direction: column; gap: 6px; }
 .toc-candidate-errors { color: var(--wrong); font-size: 12px; }
 .toc-history-row { font-size: 12px; opacity: 0.75; padding: 4px 0; border-bottom: 1px solid rgba(128,128,128,0.15); }
+
+/* 下部バー：いま聞いているところを保存（2026-11-22） */
+.mini-saved-note { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); background: var(--navy-dark); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 8px; text-align: center; }
+.mini-pin { margin-right: 4px; }

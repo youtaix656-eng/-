@@ -3,7 +3,7 @@ import * as engine from '../lib/audioEngine.js';
 import { useAudioEngine } from '../lib/audioEngine.js';
 import {
   loadAudioHistory, subscribeAudioHistory, deleteAudioHistory, clearAudioHistory,
-  historyTitle, positionText, historyTimeText,
+  historyTitle, positionText, historyTimeText, saveCurrentAsPinned,
 } from '../lib/audioPlayHistory.js';
 
 // どの画面からでも表示される音声ミニプレーヤー。
@@ -16,13 +16,20 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
   const [history, setHistory] = useState(() => loadAudioHistory());
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [savedNote, setSavedNote] = useState('');
+  const saveHere = () => {
+    const e = saveCurrentAsPinned();
+    setSavedNote(e ? `💾 保存しました（${positionText(e)}）` : 'この読み上げ方は保存できません（連結学習モード・キーワード単位の読み上げ）');
+    setTimeout(() => setSavedNote(''), 2600);
+  };
   useEffect(() => subscribeAudioHistory(setHistory), []);
   const live = snap.hasPlan && snap.started;
   // 再生を始めたら、「閉じた」印は外す（次に止めた時にまた続きが出るように）
   useEffect(() => { if (live) setDismissed(false); }, [live]);
 
   if (hidden) return null;
-  const last = history[0] || null;
+  // 「続きから」に出すのは自動の履歴の先頭（本人が保存したものは🕘の一覧から開く）
+  const last = history.find((h) => !h.pinned) || history[0] || null;
   // 再生中・一時停止中はいまの内容。そうでなければ、最後に聞いていたところ（閉じる前の続き）。
   if (!live && (!last || dismissed)) return null;
 
@@ -49,7 +56,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
             {history.map((h) => (
               <li key={h.key}>
                 <button type="button" className="mini-history-item" onClick={() => jump(h, true)}>
-                  <span className="mini-history-title">{historyTitle(h)}<b>{positionText(h)}</b></span>
+                  <span className="mini-history-title">{h.pinned && <span className="mini-pin" aria-label="保存したもの">💾</span>}{historyTitle(h)}<b>{positionText(h)}</b></span>
                   <span className="mini-history-sub">{h.done ? '最後まで聞きました。押すと最初から再生します。' : h.kind === 'review' ? `まだ聞いていない${h.total - (h.heard || []).length}問を流します${h.text ? `・${h.text}` : ''}` : (h.text || '（問題文なし）')}</span>
                   <span className="mini-history-at">{historyTimeText(h.at)}</span>
                 </button>
@@ -58,11 +65,12 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
             ))}
           </ul>
           <div className="mini-history-foot">
-            <span>間違えた問題（△✕）は、聞いていた並びのまま残り、押すとまだ聞いていない問題だけ流します。連結学習モード・キーワード単位の読み上げは履歴に残りません。</span>
+            <span>間違えた問題（△✕）は、聞いていた並びのまま残り、押すとまだ聞いていない問題だけ流します。連結学習モード・キーワード単位の読み上げは履歴に残りません。💾は下部バーの「💾」で本人が保存したもので、消すまで残ります。</span>
             {history.length > 0 && <button type="button" onClick={() => clearAudioHistory()}>履歴をすべて消す</button>}
           </div>
         </div>
       )}
+      {savedNote && <div className="mini-saved-note" role="status">{savedNote}</div>}
       <button
         className="mini-open"
         onClick={() => (live ? onOpen?.() : jump(last, false))}
@@ -88,11 +96,12 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
           {live && snap.playing ? '⏸' : '▶'}
         </button>
         {live && <button onClick={() => engine.skip(1)} disabled={snap.index >= snap.total - 1} aria-label="次へ">⏭</button>}
+        {live && <button className="mini-save" onClick={saveHere} aria-label="いま聞いているところを保存">💾</button>}
         <button className="mini-hist" onClick={() => setOpen((v) => !v)} aria-label="再生履歴" aria-expanded={open}>🕘</button>
         <button
           className="mini-close"
-          onClick={() => { setOpen(false); if (live) engine.resetToStart(); setDismissed(true); }}
-          aria-label="停止して閉じる"
+          onClick={() => { setOpen(false); if (live) engine.close(); setDismissed(true); }}
+          aria-label="停止して閉じる（聞いた位置は残ります）"
         >✕</button>
       </div>
     </div>

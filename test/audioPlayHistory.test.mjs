@@ -77,3 +77,51 @@ test('newerProgress：新しい方を使う・壊れた方は無視', () => {
   assert.equal(newerProgress(null, { index: 2, at: 5 }).index, 2);
   assert.equal(newerProgress({ index: 'x' }, null), null);
 });
+
+import { saveCurrentAsPinned, setCurrentAudioContext, AUDIO_PINNED_MAX } from '../src/lib/audioPlayHistory.js';
+import { splitForSpeech } from '../src/lib/speech.js';
+import { pickTopResumeCandidate } from '../src/lib/resumeHub.js';
+
+test('保存したもの（pinned）は自動の履歴に押し出されない', () => {
+  let list = [];
+  list = upsertHistory(list, { subject: '解剖学', index: 3, total: 10, pinned: true, pinId: 'p1', at: 1 });
+  for (let i = 0; i < 20; i++) list = upsertHistory(list, { subject: `科目${i}`, index: 0, total: 5, at: 10 + i });
+  assert.ok(list.some((x) => x.key === 'pin|p1'));
+  assert.equal(list.filter((x) => !x.pinned).length, AUDIO_HISTORY_MAX);
+  // 同じ科目の自動の履歴が来ても、保存したものは上書きされない
+  list = upsertHistory(list, { subject: '解剖学', index: 8, total: 10, at: 99 });
+  assert.equal(list.find((x) => x.key === 'pin|p1').index, 3);
+});
+
+test('saveCurrentAsPinned：画面が渡した今の状態を保存。渡せない時は null', () => {
+  setCurrentAudioContext(null);
+  assert.equal(saveCurrentAsPinned(), null);
+  setCurrentAudioContext(() => ({ subject: '生理学', index: 4, total: 20 }));
+  const e = saveCurrentAsPinned(1234);
+  assert.equal(e.pinned, true);
+  assert.equal(e.key, 'pin|1234');
+  setCurrentAudioContext(null);
+});
+
+test('splitForSpeech：長い文は句点で区切る・短い文はそのまま', () => {
+  assert.deepEqual(splitForSpeech('短い文。'), ['短い文。']);
+  const long = 'あ'.repeat(70) + '。' + 'い'.repeat(70) + '。';
+  const parts = splitForSpeech(long);
+  assert.equal(parts.length, 2);
+  assert.ok(parts.every((p) => p.length <= 120));
+  assert.equal(parts.join(''), long);
+  const noStop = 'う'.repeat(300);
+  assert.ok(splitForSpeech(noStop).every((p) => p.length <= 120));
+  assert.equal(splitForSpeech(noStop).join(''), noStop);
+});
+
+test('前回の続きから：誤答・△✕の束は「まだ聞いていない問題」の数で出る', () => {
+  const c = pickTopResumeCandidate({
+    audioProgress: { index: 0, total: 8, at: 5, reviewKey: 'review|誤答・△✕ 解剖学', reviewTitle: '誤答・△✕ 解剖学', reviewRemaining: 7 },
+    questions: [],
+  });
+  assert.equal(c.key, 'audio');
+  assert.equal(c.subject, '解剖学');
+  assert.equal(c.remaining, 7);
+  assert.equal(c.reviewKey, 'review|誤答・△✕ 解剖学');
+});

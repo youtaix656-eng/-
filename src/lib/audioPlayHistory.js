@@ -6,6 +6,8 @@
 //   （押しても飛べない履歴を作らない）。
 export const AUDIO_HISTORY_KEY = 'shinkyu:audioPlayHistory';
 export const AUDIO_HISTORY_MAX = 12;
+// 下部バーの「💾 ここを保存」で本人が意図的に残したもの。自動の履歴に押し出されず、消すまで残る。
+export const AUDIO_PINNED_MAX = 20;
 
 // 誤答・△✕などの読み上げ（kind:'review'）は、絞り込みではなく「聞いていた問題の並びそのもの」
 // （ids）で持つ（2026-11-15・ユーザー指定）。並びが毎回変わる復習プールでも、閉じる前と同じ問題・
@@ -54,6 +56,11 @@ export function normalizeEntry(e) {
     entry.index = entry.done ? 0 : Math.min(uniq.length - 1, at >= 0 ? at : heard.length);
   }
   entry.key = historyKeyOf(entry);
+  if (e.pinned) {
+    entry.pinned = true;
+    entry.pinId = String(e.pinId || entry.at || Date.now());
+    entry.key = `pin|${entry.pinId}`;
+  }
   return entry;
 }
 
@@ -76,7 +83,12 @@ export function upsertHistory(list, entry) {
   const e = normalizeEntry(entry);
   const base = (Array.isArray(list) ? list : []).map(normalizeEntry).filter(Boolean);
   if (!e) return base;
-  return [e, ...base.filter((x) => x.key !== e.key)].slice(0, AUDIO_HISTORY_MAX);
+  const rest = base.filter((x) => x.key !== e.key);
+  // 自動の履歴（最大12件）と、本人が保存したもの（最大20件）は別々に数える
+  const autos = [e, ...rest].filter((x) => !x.pinned).slice(0, AUDIO_HISTORY_MAX);
+  const pins = [e, ...rest].filter((x) => x.pinned).slice(0, AUDIO_PINNED_MAX);
+  const keep = new Set([...autos, ...pins].map((x) => x.key));
+  return [e, ...rest].filter((x) => keep.has(x.key));
 }
 
 export function removeFromHistory(list, key) {
@@ -145,4 +157,18 @@ export function deleteAudioHistory(key) {
   return next;
 }
 export function clearAudioHistory() { saveAudioHistory([]); return []; }
+// いま聞いているところを「保存」するための口。音声学習の画面（AudioMode）が、
+// 今の状態を履歴1件の形にして返す関数を登録する（下部バーは画面の絞り込みを知らないため）。
+let currentContextProvider = null;
+export function setCurrentAudioContext(fn) { currentContextProvider = typeof fn === 'function' ? fn : null; }
+// 戻り値：保存した1件（保存できない読み上げ方なら null）
+export function saveCurrentAsPinned(now = Date.now()) {
+  let ctx = null;
+  try { ctx = currentContextProvider ? currentContextProvider() : null; } catch { ctx = null; }
+  if (!ctx) return null;
+  const entry = normalizeEntry({ ...ctx, pinned: true, pinId: String(now), at: now });
+  if (!entry) return null;
+  saveAudioHistory(upsertHistory(loadAudioHistory(), entry));
+  return entry;
+}
 export function subscribeAudioHistory(fn) { listeners.add(fn); return () => listeners.delete(fn); }
