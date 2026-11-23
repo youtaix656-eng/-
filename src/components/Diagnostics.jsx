@@ -38,7 +38,8 @@ export default function Diagnostics({ store, onToast }) {
       const r = await repairData(storage);
       if (r.skipped) onToast?.('問題データが読めないため修復を見送りました');
       else if (r.removed === 0) onToast?.('孤立データはありませんでした（正常）');
-      else { onToast?.(`孤立データ ${r.removed} 件を掃除しました。再読み込みします`); setTimeout(() => window.location.reload(), 900); }
+      else { await storage.flushNow(); onToast?.(`孤立データ ${r.removed} 件を掃除しました。再読み込みします`); setTimeout(() => window.location.reload(), 900); }
+    } catch (e) { onToast?.(`修復できませんでした（${(e && e.message) || '不明なエラー'}）`);
     } finally { setBusy(false); }
   };
 

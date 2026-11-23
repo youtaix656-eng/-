@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { qrMatrix } from '../lib/qr.js';
 import { buildSyncPayload, encodeSync, syncUrl, SYNC_TTL_MS, HISTORY_SUMMARY_CUTOFF_MS } from '../lib/sync.js';
 import { loadResumeState } from '../lib/storage.js';
@@ -36,6 +36,10 @@ export default function SyncQR({ store, onToast }) {
   const [frameIdx, setFrameIdx] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [intervalMs, setIntervalMs] = useState(1200);
+  // 発行した時点の記録で作る。開いている間に記録・設定が変わるたびに作り直していたため、
+  // 相手が複数枚を読み取っている途中で束ごと入れ替わり、いつまでも揃わないことがあった。
+  const dataRef = useRef(null);
+  dataRef.current = { srs, history, memos, links, examResults, settings, bookmarks, session };
 
   // 発行（＝いまの進捗でQR/URLを作り直し、5分の有効期限を張り直す）
   const issue = () => {
@@ -65,7 +69,7 @@ export default function SyncQR({ store, onToast }) {
       // IndexedDBから直接読む（bookmarks/sessionはstoreにあるのでそのまま使う）。
       const resumeState = await loadResumeState();
       if (!alive) return;
-      const data = { srs, history, memos, links, examResults, settings, bookmarks, session, ...resumeState };
+      const data = { ...dataRef.current, ...resumeState };
       const payload = buildSyncPayload(data, { includeHistory: withHistory, summarizeHistory });
       const encoded = await encodeSync(payload);
       if (!alive) return;
@@ -76,7 +80,7 @@ export default function SyncQR({ store, onToast }) {
     })();
     return () => { alive = false; };
     // issuedAt を依存に含めることで「再発行」時に焼き直す
-  }, [open, issuedAt, withHistory, summarizeHistory, srs, history, memos, links, examResults, settings, bookmarks, session]);
+  }, [open, issuedAt, withHistory, summarizeHistory]);
 
   const multi = chunks && chunks.length > 1;
   const currentUrl = chunks ? chunks[frameIdx] : '';

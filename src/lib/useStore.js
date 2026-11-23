@@ -84,6 +84,8 @@ export function useStore() {
   const [contentSeedToast, setContentSeedToast] = useState(null); // 同梱データの版上げで追加された問題（{ total, bySubject }）
   const [syncToast, setSyncToast] = useState(0); // 別端末からの進捗取り込み
   const [settings, setSettings] = useState(storage.DEFAULT_SETTINGS);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const [cloudAutoSyncToast, setCloudAutoSyncToast] = useState(0); // クラウド自動同期で他端末の進捗を取り込んだ回数
   const [cloudSyncStatus, setCloudSyncStatus] = useState(null); // { ok, at, pulled, error } | null（CloudBackup.jsxの状態表示用）
   const [cloudAuthPaused, setCloudAuthPaused] = useState(false); // サイレント再ログイン失敗で自動同期を一時停止中か
@@ -1023,15 +1025,27 @@ export function useStore() {
     setUserDict((prev) => (prev.includes(t) ? prev : [...prev, t]));
   }, []);
 
-  const resetProgress = useCallback(() => {
-    storage.resetProgress();
+  // 呼び出し側（設定画面）は終わったら画面を読み込み直す（各画面が持っている記録も入れ替えるため）
+  const resetProgress = useCallback(async () => {
     setSrs({});
     setHistory([]);
+    await storage.resetProgress();
   }, []);
 
-  const restoreSamples = useCallback(() => {
-    storage.saveQuestions(sampleQuestions);
+  // 「同梱の問題に戻す」。以前は sampleQuestions（約30問）を保存するだけだったので、
+  // 同梱の約3300問が消え、版の印（cfg.*Version）が残っているため二度と戻らなかった。
+  // 印を外して保存し、読み込み直した時に同梱データを最初から入れ直させる（取り込んだ問題は消える）。
+  const restoreSamples = useCallback(async () => {
+    const seedReset = { iryouSeeded: false };
+    for (const k of Object.keys(settingsRef.current || {})) {
+      if (/^[a-z]+Version$/.test(k) && k !== 'mnemonicsVersion') seedReset[k] = 0;
+    }
+    const next = { ...(settingsRef.current || {}), ...seedReset };
+    setSettings(next);
+    await storage.saveSettings(next);
+    await storage.saveQuestions(sampleQuestions);
     setQuestions(sampleQuestions);
+    await storage.flushNow();
   }, []);
 
   // 端末内の解答履歴（history）は追記型で無制限に増え続けるため、既定オフの
@@ -1058,6 +1072,7 @@ export function useStore() {
   // バックアップから全復元し、state に反映
   const importBackup = useCallback(async (data) => {
     await storage.importAll(data);
+    await storage.flushNow();
     const [q, s, h, m, lk, sch, vn, ec, sn, km, ud, cfg] = await Promise.all([
       storage.loadQuestions(),
       storage.loadSrs(),

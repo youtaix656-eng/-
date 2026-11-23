@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { exportAll } from '../lib/storage.js';
+import { canNativeSaveFile } from '../lib/nativeBridge.js';
 import {
   requestAccessToken,
   uploadBackup,
@@ -106,6 +107,13 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
 
   return (
     <div className="card">
+      {canNativeSaveFile() && (
+        <p className="inline-note" style={{ marginBottom: 10, color: 'var(--warn)' }}>
+          ⚠️ アプリ版では、Googleのログイン画面がアプリの中では開けない場合があります
+          （Googleが、アプリに組み込まれた画面からのログインを制限しているため）。
+          端末を移すときは、上の「バックアップと復元」のファイルか、ブラウザ版のこの機能を使ってください。
+        </p>
+      )}
       <p className="inline-note" style={{ marginBottom: 10 }}>
         <strong>⚠️ この機能だけは、Googleのサーバー（Googleアカウント・Google Drive）と通信します。</strong>
         {' '}アプリの基本方針（サーバー不要・外部に送信しない）の明示的な例外です。使うかどうかは任意で、

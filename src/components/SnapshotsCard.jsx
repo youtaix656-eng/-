@@ -25,10 +25,14 @@ export default function SnapshotsCard({ onToast }) {
   const restore = async (id) => {
     if (!window.confirm('この世代に巻き戻します。現在の進捗は上書きされます。よろしいですか？')) return;
     setBusy(true);
-    try { await restoreSnapshot(storage, id); onToast?.('復元しました。再読み込みします'); setTimeout(() => window.location.reload(), 900); }
+    try { await restoreSnapshot(storage, id); await storage.flushNow(); onToast?.('復元しました。再読み込みします'); setTimeout(() => window.location.reload(), 900); }
+    catch (e) { onToast?.(`復元できませんでした（${(e && e.message) || '不明なエラー'}）`); }
     finally { setBusy(false); }
   };
-  const remove = async (id) => { await deleteSnapshot(id); await load(); };
+  const remove = async (id) => {
+    if (!window.confirm('この世代を削除します。削除すると、この時点へは巻き戻せなくなります。よろしいですか？')) return;
+    await deleteSnapshot(id); await load(); onToast?.('世代を削除しました');
+  };
 
   return (
     <div className="card" style={{ marginTop: 12 }}>

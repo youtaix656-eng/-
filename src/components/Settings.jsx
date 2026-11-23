@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { importFile, exportCsv, exportJson } from '../lib/importer.js';
+import { importFile, exportCsv, exportJson, dedupeAgainst } from '../lib/importer.js';
+import { canNativeSaveFile } from '../lib/nativeBridge.js';
+import { flushNow } from '../lib/storage.js';
 import { loadVoices } from '../lib/speech.js';
 import {
   validateEmail,
@@ -63,6 +65,17 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     );
   };
 
+  // 書き出しの結果を必ず知らせる（アプリ版ではどこに保存されたかも）
+  const saveFile = async (content, filename, mime) => {
+    const r = await downloadFile(content, filename, mime);
+    if (!r.ok) onToast(`保存できませんでした（${r.error}）`);
+    else onToast(r.native ? `「${r.location}」に ${filename} を保存しました` : `${filename} を保存しました`);
+  };
+  const reloadSoon = async () => {
+    await flushNow();
+    setTimeout(() => { try { window.location.reload(); } catch (e) { /* noop */ } }, 1200);
+  };
+
   const fileRef = useRef(null);
   const [importMode, setImportMode] = useState('append'); // append | replace
   const [preview, setPreview] = useState(null); // { questions, errors, warnings, fileName }
@@ -85,13 +98,34 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
     }
   }, [importText]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // アプリ全体のバックアップ（学習記録つき）を、ここ（問題の取り込み）で選んでしまった時。
+  // そのまま取り込むと、問題が二重に入るだけで学習記録は戻らない。
+  const looksLikeBackup = (text) => {
+    try {
+      const d = JSON.parse(String(text).replace(/^\uFEFF/, ''));
+      return !!d && !Array.isArray(d) && typeof d === 'object' && ('srs' in d || 'history' in d || 'settings' in d);
+    } catch (e) {
+      return false;
+    }
+  };
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    const text = await file.text();
+    let text;
+    try {
+      text = await file.text();
+    } catch (err) {
+      onToast('ファイルを読み込めませんでした');
+      return;
+    }
+    if (looksLikeBackup(text)) {
+      setPreview(null);
+      onToast('これは学習データのバックアップです。上の「バックアップと復元」の「復元（読み込み）」から読み込んでください');
+      return;
+    }
     const result = importFile(text, file.name);
     setPreview({ ...result, fileName: file.name });
-    e.target.value = '';
   };
 
   const confirmImport = () => {
@@ -101,18 +135,42 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       ? preview.questions.map((q) => ({ ...q, deck: q.deck || deckName.trim() }))
       : preview.questions;
     if (importMode === 'replace') {
+      if (!confirm(`今ある${questions.length}問をすべて消して、この${qs.length}問に置き換えます。よろしいですか？`)) return;
       replaceQuestions(qs);
       onToast(`${qs.length}問に置き換えました`);
     } else {
-      appendQuestions(qs);
-      onToast(`${qs.length}問を追加しました`);
+      // 同じ問題文は入れない（同じファイルを2回取り込むと全部二重になっていた）。
+      // 問題文は違うのにidがぶつかるものは、学習記録が混ざらないようidを付け直す。
+      const { unique, duplicates } = dedupeAgainst(qs, questions);
+      const usedIds = new Set(questions.map((q) => q.id));
+      const fresh = unique.map((q, i) => {
+        if (q.id && !usedIds.has(q.id)) { usedIds.add(q.id); return q; }
+        let id = `imp-${Date.now().toString(36)}-${i}`;
+        while (usedIds.has(id)) id += 'x';
+        usedIds.add(id);
+        return { ...q, id };
+      });
+      if (fresh.length === 0) {
+        onToast(`${duplicates.length}問すべてが取り込み済みでした（追加はありません）`);
+        setPreview(null);
+        return;
+      }
+      appendQuestions(fresh);
+      onToast(duplicates.length
+        ? `${fresh.length}問を追加しました（取り込み済みの${duplicates.length}問は飛ばしました）`
+        : `${fresh.length}問を追加しました`);
     }
     setPreview(null);
   };
 
   const importPaste = () => {
     if (!pasteText.trim()) return;
-    const result = importFile(pasteText, pasteText.trim().startsWith('[') ? 'paste.json' : 'paste.csv');
+    if (looksLikeBackup(pasteText)) {
+      onToast('これは学習データのバックアップです。「バックアップと復元」の「復元（読み込み）」から読み込んでください');
+      return;
+    }
+    // 形式は中身から判定する（以前は「[」始まりだけをJSON扱いにしていて、{…} のJSONがCSVとして読まれていた）
+    const result = importFile(pasteText, '');
     setPreview({ ...result, fileName: '貼り付けデータ' });
     setPasteOpen(false);
   };
@@ -212,10 +270,18 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             checked={!!(settings.reminder && settings.reminder.enabled)}
             onChange={(e) => {
               const on = e.target.checked;
-              if (on && typeof Notification !== 'undefined' && Notification.permission === 'default') {
-                Notification.requestPermission().catch(() => {});
-              }
               updateSettings({ reminder: { ...(settings.reminder || {}), enabled: on } });
+              if (!on) return;
+              // 端末の通知が出せない時は黙らない（アプリ内のお知らせと読み上げは出る）
+              if (typeof Notification === 'undefined') {
+                onToast('この端末・アプリでは端末の通知が使えません。時刻を過ぎて開いた時に、画面のお知らせと声で伝えます');
+              } else if (Notification.permission === 'denied') {
+                onToast('通知が「ブロック」になっています。端末の設定で許可すると通知も出ます（画面のお知らせは出ます）');
+              } else if (Notification.permission === 'default') {
+                Notification.requestPermission().then((r) => {
+                  if (r !== 'granted') onToast('通知は許可されませんでした。画面のお知らせと声で伝えます');
+                }).catch(() => {});
+              }
             }}
           />
           <span>
@@ -344,7 +410,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       </div>
 
       {/* ===== バックアップと復元（端末間の持ち運び） ===== */}
-      <div className="section-label" style={{ marginTop: 0 }}>
+      <div className="section-label">
         バックアップと復元
       </div>
       {onNavigate && (
@@ -410,7 +476,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         <input
           ref={fileRef}
           type="file"
-          accept=".csv,.json,text/csv,application/json"
+          accept={canNativeSaveFile() ? undefined : '.csv,.json,.txt,text/csv,application/json,text/plain'}
           onChange={handleFile}
           style={{ display: 'none' }}
         />
@@ -453,6 +519,11 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
 
         {preview && (
           <div style={{ marginTop: 14 }}>
+            {preview.questions.length === 0 && (
+              <button className="btn ghost sm" style={{ marginBottom: 8 }} onClick={() => setPreview(null)}>
+                ✕ この結果を閉じる
+              </button>
+            )}
             <div className="explanation">
               <span className="label">読み込み結果：{preview.fileName}</span>
               取り込み可能：<strong>{preview.questions.length}問</strong>
@@ -523,14 +594,14 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         <div className="btn-row">
           <button
             className="btn"
-            onClick={() => downloadFile(exportCsv(questions), 'shinkyu_questions.csv', 'text/csv')}
+            onClick={() => saveFile(exportCsv(questions), 'shinkyu_questions.csv', 'text/csv')}
           >
             CSVで保存
           </button>
           <button
             className="btn"
             onClick={() =>
-              downloadFile(exportJson(questions), 'shinkyu_questions.json', 'application/json')
+              saveFile(exportJson(questions), 'shinkyu_questions.json', 'application/json')
             }
           >
             JSONで保存
@@ -548,7 +619,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           className="btn"
           onClick={async () => {
             const [missTypes, selfKindCounts] = await Promise.all([loadMissTypes(), loadSelfKindCounts()]);
-            downloadFile(exportHistoryCsv(history, questions, { missTypes, selfKindCounts }), 'shinkyu_history.csv', 'text/csv');
+            saveFile(exportHistoryCsv(history, questions, { missTypes, selfKindCounts }), 'shinkyu_history.csv', 'text/csv');
           }}
         >
           解答履歴をCSVで保存
@@ -557,7 +628,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         <button
           className="btn"
           style={{ marginTop: 8 }}
-          onClick={() => downloadFile(reviewZeroLogToCsv(reviewZeroLog), 'shinkyu_review_zero_log.csv', 'text/csv')}
+          onClick={() => saveFile(reviewZeroLogToCsv(reviewZeroLog), 'shinkyu_review_zero_log.csv', 'text/csv')}
           disabled={Object.keys(reviewZeroLog || {}).length === 0}
         >
           復習ゼロ達成ログをCSVで保存
@@ -639,23 +710,27 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       <div className="card">
         <button
           className="btn block"
-          onClick={() => {
-            if (confirm('サンプル問題に戻します。取り込んだ問題は失われます。よろしいですか？')) {
-              restoreSamples();
-              onToast('サンプル問題を復元しました');
-            }
+          onClick={async () => {
+            if (!confirm('問題データを、アプリに入っている問題（全科目）に戻します。自分で取り込んだ問題は消えます。学習の記録は残ります。よろしいですか？')) return;
+            await restoreSamples();
+            onToast('同梱の問題に戻しています。画面を読み込み直します…');
+            reloadSoon();
           }}
         >
-          サンプル問題に戻す
+          問題データを同梱の問題に戻す
         </button>
         <button
           className="btn danger block"
           style={{ marginTop: 10 }}
-          onClick={() => {
-            if (confirm('学習の進捗・誤答履歴をすべて消去します。問題データは残ります。よろしいですか？')) {
-              resetProgress();
-              onToast('学習の進捗をリセットしました');
-            }
+          onClick={async () => {
+            if (!confirm(
+              '学習の進捗をすべて消去します（解答の記録・復習の予定・誤答理由・先送り・続きからの位置・音声学習の記録）。\n' +
+              '問題データ・メモ・ブックマーク・語呂合わせ・模試の結果・設定は残ります。\n' +
+              '消したものは戻せません。先に「バックアップを保存」をおすすめします。よろしいですか？'
+            )) return;
+            await resetProgress();
+            onToast('学習の進捗をリセットしました。画面を読み込み直します…');
+            reloadSoon();
           }}
         >
           学習の進捗をリセット
@@ -707,10 +782,11 @@ function LoginSettings({ store, onToast }) {
     }
     const q = question.trim();
     if (!q) return setMsg('秘密の質問を入力してください。');
+    if (!has && !answer.trim()) return setMsg('秘密の質問の答えを入力してください。');
     // 答え：新規は必須、変更時は空なら据え置き
     setBusy(true);
+    try {
     if (!has) {
-      if (!answer.trim()) { setBusy(false); return setMsg('秘密の質問の答えを入力してください。'); }
       const rec = await makeAuthRecord({ email, password: newPw, question: q, answer });
       setAuth(rec);
     } else {
@@ -728,10 +804,14 @@ function LoginSettings({ store, onToast }) {
       }
       setAuth(rec);
     }
+    } catch (e) {
+      setBusy(false);
+      return setMsg(`保存できませんでした（${(e && e.message) || '不明なエラー'}）。`);
+    }
     setBusy(false);
     setCurPw(''); setPw(''); setPw2(''); setAnswer('');
     setOpen(false);
-    onToast?.(has ? 'ログイン情報を変更しました' : 'ログインを設定しました');
+    onToast?.(has ? 'ログイン情報を変更しました' : 'ログインを設定しました（この端末では今は開いたままにします）');
   };
 
   const remove = async () => {
@@ -757,7 +837,13 @@ function LoginSettings({ store, onToast }) {
         <br />※ サーバー認証ではなく端末内のロックです。外部には送信されません。
       </p>
       {!open ? (
-        <button className="btn primary" onClick={() => { setOpen(true); setMsg(''); }}>
+        <button className="btn primary" onClick={() => {
+          // 開くたびに今の設定から入れ直す（復元などで変わった後に古い内容が残っていた）
+          setEmail(auth?.email || '');
+          setQuestion(auth?.question || '');
+          setCurPw(''); setPw(''); setPw2(''); setAnswer('');
+          setOpen(true); setMsg('');
+        }}>
           {has ? '🔒 ログイン情報を変更' : '🔒 ログインを設定'}
         </button>
       ) : (

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cloneVoice, synthesizeSpeech, deleteVoice } from '../lib/voiceClone.js';
 
 const SAMPLE_TEXT = 'これは試聴です。合谷は手陽明大腸経の原穴です。';
@@ -8,17 +8,25 @@ const SAMPLE_TEXT = 'これは試聴です。合谷は手陽明大腸経の原�
 // ユーザー自身のElevenLabsアカウント・APIキーを使う（端末内保存方針の明示的な例外）。
 // APIキーは settings とは別の secret ストレージに保存し、バックアップ/QR/クラウド同期には含めない
 // （lib/storage.js の loadVoiceCloneSecret 参照）。
-export default function VoiceClone({ settings, updateSettings, apiKey, onSaveApiKey, onToast }) {
+export default function VoiceClone({ settings, updateSettings, apiKey: rawApiKey, onSaveApiKey, onToast }) {
+  const apiKey = rawApiKey || '';
   const voiceClone = settings.voiceClone || { enabled: false, voiceId: '', voiceName: '' };
   const [keyInput, setKeyInput] = useState(apiKey || '');
   const [name, setName] = useState('');
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
+  // APIキーは画面を開いた後に読み込まれることがある。最初に空のまま固定していたので、
+  // 保存済みでも欄が空に見え、そのまま「保存」を押すとキーが消えていた。
+  const keyTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!keyTouchedRef.current) setKeyInput(apiKey);
+  }, [apiKey]);
 
   const saveKey = () => {
-    onSaveApiKey(keyInput.trim());
-    onToast?.('APIキーを保存しました（この端末にのみ保存）');
+    const k = keyInput.trim();
+    onSaveApiKey(k);
+    onToast?.(k ? 'APIキーを保存しました（この端末にのみ保存）' : 'APIキーを消しました');
   };
 
   const handleFile = (e) => {
@@ -70,15 +78,18 @@ export default function VoiceClone({ settings, updateSettings, apiKey, onSaveApi
   const doDelete = async () => {
     if (!confirm('このボイスクローンを削除しますか？（ElevenLabs側からも削除されます）')) return;
     setBusy(true);
+    let remoteOk = true;
     try {
       await deleteVoice({ apiKey, voiceId: voiceClone.voiceId });
     } catch (e) {
-      onToast?.(e.message || '削除に失敗しました（ElevenLabs側）');
-    } finally {
-      updateSettings({ voiceClone: { enabled: false, voiceId: '', voiceName: '' } });
-      setBusy(false);
-      onToast?.('ボイスクローンを削除しました');
+      remoteOk = false;
     }
+    updateSettings({ voiceClone: { enabled: false, voiceId: '', voiceName: '' } });
+    setBusy(false);
+    // 以前は失敗の知らせのすぐあとに「削除しました」も出ていて、どちらが本当か分からなかった
+    onToast?.(remoteOk
+      ? 'ボイスクローンを削除しました'
+      : 'この端末からは外しましたが、ElevenLabs側では削除できませんでした（ElevenLabsのサイトで削除してください）');
   };
 
   return (
@@ -99,7 +110,7 @@ export default function VoiceClone({ settings, updateSettings, apiKey, onSaveApi
           id="voiceclone-apikey"
           type="password"
           value={keyInput}
-          onChange={(e) => setKeyInput(e.target.value)}
+          onChange={(e) => { keyTouchedRef.current = true; setKeyInput(e.target.value); }}
           placeholder="xi-api-key"
         />
       </div>

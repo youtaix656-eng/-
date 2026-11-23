@@ -506,9 +506,22 @@ export const saveSettings = (s) => write(KEYS.settings, s);
 export { DEFAULT_SETTINGS };
 
 // ---- リセット ----
+// 「学習の進捗をリセット」で消すもの。解答の記録と、それをもとにした記録・続きの位置だけ。
+// 問題・メモ・ブックマーク・語呂合わせ・模試の結果・設定は残す（画面の確認文と一致させる）。
+export const PROGRESS_KEYS = [
+  KEYS.srs, KEYS.history, KEYS.session, KEYS.quizProgress, KEYS.reviewProgress,
+  KEYS.examProgress, KEYS.audioProgress,
+  'shinkyu:missTypes', 'shinkyu:selfKindCounts', 'shinkyu:snoozeLog', 'shinkyu:reviewZeroLog',
+  'shinkyu:roundLog', 'shinkyu:roundStartLog', 'shinkyu:audioReviewLog', 'shinkyu:rephraseLog',
+  'shinkyu:voiceAnswerLog', 'shinkyu:streakBreakLog',
+];
+const PROGRESS_LS_KEYS = ['shinkyu:audioPlayHistory', 'shinkyu:audioProgressSync'];
 export async function resetProgress() {
-  await remove(KEYS.srs);
-  await remove(KEYS.history);
+  for (const k of PROGRESS_KEYS) await remove(k);
+  for (const k of PROGRESS_LS_KEYS) {
+    try { localStorage.removeItem(k); } catch (e) { /* noop */ }
+  }
+  await flushNow();
 }
 export async function resetAll() {
   for (const k of Object.values(KEYS)) await remove(k);
@@ -526,6 +539,8 @@ const EXTRA_EXCLUDE = new Set([
   KEYS.voiceCloneSecret, // APIキー
   KEYS.cloudAuthPaused, KEYS.syncMeta, KEYS.migrated, KEYS.lastView, // この端末だけの状態
   'shinkyu:unlocked', 'shinkyu:pomoRun', 'shinkyu:errorLog',
+  // 世代バックアップは exportAll 自身から作るので、入れると世代ごとに前の世代を抱えて膨らみ続ける
+  'shinkyu:snapshots',
 ]);
 const isExtraKey = (k) => typeof k === 'string' && k.startsWith('shinkyu:') && !EXTRA_EXCLUDE.has(k);
 

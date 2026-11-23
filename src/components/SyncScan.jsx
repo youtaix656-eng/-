@@ -63,7 +63,17 @@ export default function SyncScan({ onToast }) {
       return false;
     }
     stopCamera();
-    await storage.importAll(syncToBackup(payload));
+    try {
+      await storage.importAll(syncToBackup(payload));
+      // 書き込みは少し遅れて確定する作りなので、確定させてから読み込み直す
+      // （以前はすぐ読み込み直していて、取り込んだ記録が保存されないことがあった）
+      await storage.flushNow();
+    } catch (e) {
+      onToast?.(`取り込みに失敗しました（${(e && e.message) || '不明なエラー'}）`);
+      reassemblerRef.current.reset();
+      setProgress(null);
+      return false;
+    }
     window.location.reload();
     return true;
   };

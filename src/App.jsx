@@ -509,7 +509,8 @@ export default function App() {
       const r = store.settings.reminder;
       if (!r || !r.enabled) return;
       const now = new Date();
-      const today = now.toISOString().slice(0, 10);
+      // 端末の日付（toISOString は UTC なので、日本時間の朝9時より前は前日になり、1日に2回知らせていた）
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       if (r.lastNotified === today) return;
       const [hh, mm] = String(r.time || '07:00').split(':').map((x) => parseInt(x, 10));
       const target = new Date(now);
@@ -680,6 +681,17 @@ export default function App() {
     }
     setUnlocked(true);
   };
+
+  // 使っている最中に設定画面でログインを新しく設定した時は、その場ではロックしない
+  // （以前は「ログインを設定しました」の直後にログイン画面へ飛ばされていた）。
+  // 解除した時も、次に設定した時に備えて解錠の印をそろえる。
+  const prevAuthRef = useRef(undefined);
+  useEffect(() => {
+    if (!store.loaded) return;
+    const prev = prevAuthRef.current;
+    prevAuthRef.current = store.auth || null;
+    if (prev === null && store.auth) unlock();
+  }, [store.loaded, store.auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- 初期ロード中 ----
   if (!store.loaded) {
