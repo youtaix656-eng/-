@@ -663,9 +663,16 @@ export async function importAll(data) {
   if (data.kwMeta && typeof data.kwMeta === 'object') await saveKwMeta(data.kwMeta);
   if (Array.isArray(data.userDict)) await saveUserDict(data.userDict);
   if (Array.isArray(data.unread)) await saveUnread(data.unread);
-  if (data.auth && typeof data.auth === 'object') await saveAuth(data.auth);
+  // ログイン（端末内の鍵）は端末ごとのものなので、復元・受け渡しでは上書きしない。
+  // 以前はバックアップ元のログインを持ち込んでいたため、ブラウザ版でログインを設定していると
+  // 復元した瞬間に画面がログイン設定に切り替わり、読み込み直すと元の端末のIDとパスワードを
+  // 求められて「復元できない」ように見えていた（data.auth は読まない）。
   if (Array.isArray(data.examResults)) await saveExamResults(data.examResults);
-  if (data.settings && typeof data.settings === 'object') await saveSettings(data.settings);
+  if (data.settings && typeof data.settings === 'object') {
+    // 「ログイン設定をスキップした」もこの端末の選択なので、今の端末の値を残す
+    const cur = await loadSettings();
+    await saveSettings({ ...data.settings, authSkipped: !!(cur && cur.authSkipped) });
+  }
   if (data.bookmarks && typeof data.bookmarks === 'object') await saveBookmarks(data.bookmarks);
   if (Array.isArray(data.keiketsuLibrary)) await saveKeiketsuLibrary(data.keiketsuLibrary);
   if (data.quizProgress && typeof data.quizProgress === 'object') await saveQuizProgress(data.quizProgress);

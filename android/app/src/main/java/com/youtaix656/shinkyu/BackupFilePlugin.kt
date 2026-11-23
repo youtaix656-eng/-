@@ -5,11 +5,15 @@ import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
+import androidx.activity.result.ActivityResult
+import android.app.Activity
 import androidx.core.content.FileProvider
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.File
 
@@ -22,6 +26,9 @@ import java.io.File
  * - save：端末の「ダウンロード」フォルダへ保存（Android 10 以上は MediaStore、
  *   9 以下はこのアプリ専用のダウンロードフォルダ）。
  * - share：共有シート（Google ドライブ・LINE・メール等）へ渡す。
+ * - pick：端末のファイル選択画面を開き、選んだファイルの中身を文字で返す
+ *   （WebView の <input type="file"> を通さない復元用。WebView 経由だと
+ *   選んでも何も起きないことがあったため）。
  */
 @CapacitorPlugin(name = "BackupFile")
 class BackupFilePlugin : Plugin() {
@@ -102,6 +109,64 @@ class BackupFilePlugin : Plugin() {
             call.resolve()
         } catch (e: Exception) {
             call.reject(e.message ?: "共有に失敗しました")
+        }
+    }
+
+    @PluginMethod
+    fun pick(call: PluginCall) {
+        try {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                // 種類で絞ると、LINE・ドライブ経由のファイルが灰色になって選べないことがある
+                type = "*/*"
+            }
+            startActivityForResult(call, intent, "pickResult")
+        } catch (e: Exception) {
+            call.reject(e.message ?: "ファイル選択の画面を開けませんでした")
+        }
+    }
+
+    @ActivityCallback
+    private fun pickResult(call: PluginCall?, result: ActivityResult) {
+        if (call == null) return
+        if (result.resultCode != Activity.RESULT_OK) {
+            val ret = JSObject()
+            ret.put("canceled", true)
+            call.resolve(ret)
+            return
+        }
+        val uri = result.data?.data
+        if (uri == null) {
+            call.reject("ファイルを受け取れませんでした")
+            return
+        }
+        try {
+            val resolver = context.contentResolver
+            var name = ""
+            var size = -1L
+            resolver.query(uri, null, null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val ni = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (ni >= 0) name = c.getString(ni) ?: ""
+                    val si = c.getColumnIndex(OpenableColumns.SIZE)
+                    if (si >= 0 && !c.isNull(si)) size = c.getLong(si)
+                }
+            }
+            if (size > 60L * 1024 * 1024) {
+                call.reject("ファイルが大きすぎます（60MBまで）")
+                return
+            }
+            val text = resolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+            if (text == null) {
+                call.reject("ファイルを開けませんでした")
+                return
+            }
+            val ret = JSObject()
+            ret.put("content", text)
+            ret.put("name", name)
+            call.resolve(ret)
+        } catch (e: Exception) {
+            call.reject(e.message ?: "ファイルを読めませんでした")
         }
     }
 

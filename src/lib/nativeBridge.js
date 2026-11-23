@@ -123,3 +123,16 @@ export async function nativeShareTextFile(content, filename, mime) {
   if (!p) throw new Error('アプリ版ではありません');
   return p.share({ content: String(content), filename, mime: mime || 'application/json' });
 }
+
+// ファイル選択画面を開き、選んだファイルの中身を文字で受け取る（復元用）。
+// 戻り値は { content, name } か、やめた時は { canceled: true }。失敗は例外。
+export function canNativePickFile() {
+  const p = filePlugin();
+  return !!(p && typeof p.pick === 'function');
+}
+
+export async function nativePickTextFile() {
+  const p = filePlugin();
+  if (!p || typeof p.pick !== 'function') throw new Error('アプリ版ではありません');
+  return p.pick({});
+}
