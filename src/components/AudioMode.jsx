@@ -121,6 +121,10 @@ function voiceMatchLevel(heard, target) {
   return 'none';
 }
 
+// 四択（選択肢が3つ以上ある、○×でない問題）。画面に選択肢を出し、問題を読んだあと3秒止まる（ユーザー指定）。
+const FOUR_CHOICE_GAP_SEC = 3;
+const isFourChoice = (q) => !!q && q.type !== 'ox' && Array.isArray(q.choices) && q.choices.length >= 3;
+
 // E9：混同しやすい科目の組（紛らわしい名前のペア＝CONFUSING_PAIRSと同じ考え方を
 // 科目単位に広げたもの）。既存の複数科目ローテーション（rotateSubjects）へそのまま渡す。
 const CONFUSING_SUBJECT_PAIRS = [
@@ -337,9 +341,16 @@ export default function AudioMode({
 
   // 選択肢の順番をシャッフルして読む（「いつも3番」のように位置で覚えてしまうのを防ぐ）
   const [shuffleChoicesOn, setShuffleChoicesOn] = useState(false);
+  // 並べ替えは問題ごとに決まった順（この画面を開いている間は同じ）。以前は読み上げを組み直すたびに
+  // 乱数で並べ直していたので、画面に出す選択肢の番号と声の「正解は◯番」を合わせられなかった。
+  const choiceSeedRef = useRef(Math.floor(Math.random() * 1e9));
   const shuffledChoicesFor = (q) => {
     if (!shuffleChoicesOn || q.type === 'ox' || !Array.isArray(q.choices)) return { choices: q.choices, answerIdx: q.answer };
-    const order = shuffle(q.choices.map((_, i) => i));
+    let h = choiceSeedRef.current;
+    for (const ch of String(q.id)) h = (Math.imul(h ^ ch.charCodeAt(0), 2654435761) >>> 0);
+    const rand = () => { h = (Math.imul(h, 1103515245) + 12345) >>> 0; return h / 4294967296; };
+    const order = q.choices.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
     return { choices: order.map((i) => q.choices[i]), answerIdx: order.indexOf(q.answer) };
   };
 
@@ -1505,6 +1516,9 @@ export default function AudioMode({
       const estSec = estimatedAnswerSeconds(history, q.subject);
       const gapSec = Math.min(8, Math.max(1.5, estSec / 6));
       steps.push({ phase: G, waitGap: gapSec });
+    } else if (isFourChoice(q)) {
+      // 四択は、問題を読んだあと3秒止まってから解答・解説へ進む（ユーザー指定。選択肢は画面に出し、読まない）
+      steps.push({ phase: G, waitGap: FOUR_CHOICE_GAP_SEC });
     } else {
       steps.push({ phase: G, waitGap: true });
     }
@@ -2003,6 +2017,16 @@ export default function AudioMode({
   // 「今日の調子」がしんどい日は目標を自動で軽くする（Review.jsxと同じ考え方）
   const effectiveGoal = goal > 0 && mood === 'tired' ? Math.max(5, Math.round(goal * 0.5)) : goal;
   const curTags = current ? effectiveTags(current, links) : [];
+  // 画面に出す四択の選択肢（声と同じ順）。通常の問題と「選択肢読み上げ→解答」だけ（穴埋めは答えが見えるので出さない）。
+  // 並べ替えるのは、声でも並べ替えて読んでいる時だけ（読まない時は収録どおりの番号で「正解は◯番」と読むため）。
+  const shownChoices = (() => {
+    if (!isFourChoice(current) || !currentItem) return null;
+    if (currentItem.kind === 'choices') return shuffledChoicesFor(current);
+    if (currentItem.kind !== 'question') return null;
+    // 問題文を省略する高速読みは収録どおりの番号で読む（buildStepsRaw の skipQuestionText と同じ条件）
+    if (readChoices && !pureRecallOn && !skipQuestionText) return shuffledChoicesFor(current);
+    return { choices: current.choices, answerIdx: current.answer };
+  })();
   // A10：問題が切り替わったら、前の問題の「誤答理由をその場で選ぶ」チップを消す
   useEffect(() => { setJustGradedWrongId(null); }, [current?.id]);
 
@@ -3964,6 +3988,23 @@ export default function AudioMode({
                 ? highlightKeywordsInText(current.question, curTags)
                 : current?.image ? '図を見て答える問題' : ''}
             </div>
+            {/* 四択の選択肢は画面に出す（読み上げはしない。ユーザー指定）。並べ替えて読む設定の時は、
+                声の「正解は◯番」と同じ順で出す。正解・解説の段では正解に印を付ける。
+                完全想起モード（選択肢を見ずに思い出す練習）では、答えが出るまで出さない。 */}
+            {shownChoices && (!pureRecallOn || phase === PHASES.ANSWER || phase === PHASES.NOTE) && (
+              <ol className="now-choices" aria-label="選択肢">
+                {shownChoices.choices.map((c, i) => {
+                  const isAns = (phase === PHASES.ANSWER || phase === PHASES.NOTE) && i === shownChoices.answerIdx;
+                  return (
+                    <li key={i} className={isAns ? 'correct' : ''}>
+                      <span className="now-choice-no">{i + 1}</span>
+                      <span>{c}</span>
+                      {isAns && <span className="now-choice-mark" aria-label="正解">✓</span>}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
 
             {/* C5〜C7：声で解答モード。GAP中は自動で聞き取り中なので、その場で透明性を出す
                 （聞き取れなければ自動では✕にせず、そのまま正解を読む流れへ進むことも明記）。 */}
@@ -3990,8 +4031,12 @@ export default function AudioMode({
               <div className="now-answer">
                 <strong>
                   正解：
-                  {current.type === 'ox'
+                  {!Array.isArray(current.choices)
+                    ? '画面の図・解説を確認してください'
+                    : current.type === 'ox'
                     ? current.choices[current.answer]
+                    : shownChoices
+                    ? `${shownChoices.answerIdx + 1}. ${shownChoices.choices[shownChoices.answerIdx]}`
                     : `${current.answer + 1}. ${current.choices[current.answer]}`}
                 </strong>
                 {/* #7派生：二重符号化のキーワード反転表示を解説文にも広げる（問題文だけだった） */}
@@ -5328,7 +5373,7 @@ export default function AudioMode({
                 />
                 <span className="range-val">{gap}秒</span>
               </div>
-              <div className="hint">解答を思い出す時間として使えます。</div>
+              <div className="hint">解答を思い出す時間として使えます。四択の問題は、選択肢を画面に出したうえで3秒で固定です（○×問題・比較・数字などはこの設定に従います）。</div>
             </div>
             <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
               <label>解答・解説のあと、次の問題まで待つ時間（秒）</label>

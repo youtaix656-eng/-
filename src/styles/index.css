@@ -1011,6 +1011,18 @@ textarea {
   border-radius: 3px;
   font-weight: 800;
 }
+/* 四択の選択肢（画面に出すだけで読まない） */
+.player .now-choices { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.player .now-choices li {
+  display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 8px; font-size: 15px; line-height: 1.5;
+}
+.player .now-choices li.correct { background: #fff; color: var(--navy, #0a1a33); font-weight: 700; border-color: #fff; }
+.player .now-choice-no {
+  flex: 0 0 auto; min-width: 1.6em; height: 1.6em; border-radius: 50%; display: inline-flex;
+  align-items: center; justify-content: center; border: 1px solid currentColor; font-size: 13px; font-weight: 700;
+}
+.player .now-choice-mark { margin-left: auto; font-weight: 800; }
 .player .now-answer {
   margin-top: 12px;
   padding-top: 12px;
