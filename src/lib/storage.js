@@ -515,6 +515,76 @@ export async function resetAll() {
 }
 
 // ---- 全データのバックアップ / 復元 ----
+// ---- 名前つきの項目に入っていない記録もまとめて持ち出す ----
+// 誤答理由・復習ゼロの記録・先送り・週次ジャーナル・今日の調子・音声学習の実施ログ・
+// 再生履歴など、各 lib が直接 idbGet/idbSet（または localStorage）で持っている記録は、
+// 上の名前つきの項目に入っておらず、バックアップから復元しても戻らなかった
+// （2026-11-23、アプリ版への引き継ぎで見つけた）。'shinkyu:' で始まるキーを丸ごと拾う。
+// 入れないもの：大きい・端末にしか意味がない・秘密のもの。
+const EXTRA_EXCLUDE = new Set([
+  KEYS.pomoMusic, KEYS.pomoPlaylist, KEYS.selfVoiceNotes, KEYS.keizetsuPageImages, // 音声・写真（大きい）
+  KEYS.voiceCloneSecret, // APIキー
+  KEYS.cloudAuthPaused, KEYS.syncMeta, KEYS.migrated, KEYS.lastView, // この端末だけの状態
+  'shinkyu:unlocked', 'shinkyu:pomoRun', 'shinkyu:errorLog',
+]);
+const isExtraKey = (k) => typeof k === 'string' && k.startsWith('shinkyu:') && !EXTRA_EXCLUDE.has(k);
+
+async function collectExtras(namedKeys) {
+  const idb = {};
+  const ls = {};
+  try {
+    await flushNow();
+    if (useIdb) {
+      const all = await idbGetAll();
+      for (const [k, v] of Object.entries(all)) {
+        if (!isExtraKey(k) || namedKeys.has(k)) continue;
+        if (typeof Blob !== 'undefined' && v instanceof Blob) continue;
+        idb[k] = v;
+      }
+    }
+  } catch (e) { /* 拾えなくても名前つきの項目は出す */ }
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!isExtraKey(k) || namedKeys.has(k) || k in idb) continue;
+      ls[k] = localStorage.getItem(k);
+    }
+  } catch (e) { /* noop */ }
+  return { idb, ls };
+}
+
+async function restoreExtras(extras) {
+  if (!extras || typeof extras !== 'object') return;
+  const idb = extras.idb && typeof extras.idb === 'object' ? extras.idb : {};
+  const ls = extras.ls && typeof extras.ls === 'object' ? extras.ls : {};
+  const entries = Object.entries(idb).filter(([k]) => isExtraKey(k));
+  if (entries.length) {
+    let done = false;
+    if (useIdb) {
+      try { await idbSetMany(entries); done = true; } catch (e) { /* localStorage へ */ }
+    }
+    if (!done) {
+      for (const [k, v] of entries) {
+        try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* noop */ }
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(ls)) {
+    if (!isExtraKey(k) || typeof v !== 'string') continue;
+    try { localStorage.setItem(k, v); } catch (e) { /* noop */ }
+  }
+}
+
+// 名前つきで書き出しているキー（extras に二重に入れない）
+const NAMED_EXPORT_KEYS = new Set([
+  KEYS.questions, KEYS.srs, KEYS.history, KEYS.memos, KEYS.links, KEYS.schedule, KEYS.venues,
+  KEYS.examContent, KEYS.selfNotes, KEYS.kwMeta, KEYS.userDict, KEYS.unread, KEYS.auth,
+  KEYS.examResults, KEYS.settings, KEYS.bookmarks, KEYS.keiketsuLibrary, KEYS.quizProgress,
+  KEYS.reviewProgress, KEYS.examProgress, KEYS.audioProgress, KEYS.session, KEYS.glossaryExtra,
+  KEYS.glossaryRemovedIds, KEYS.tocCandidates, KEYS.tocHistory,
+  'shinkyu:flashcardSrs', 'shinkyu:pronunciationReportLog',
+]);
+
 export async function exportAll() {
   return {
     version: 1,
@@ -557,11 +627,15 @@ export async function exportAll() {
     // 同期対象に入れ忘れて機種変更で消えていた過去の実例と同じミスを防ぐため、
     // 新設時から最初にバックアップ・QR・クラウド自動同期の対象に含める（2026-11-15）。
     pronunciationReportLog: await loadPronunciationReportLog(),
+    // 上の名前に入っていない記録（誤答理由・復習ゼロの記録・週次ジャーナル・再生履歴など）
+    extras: await collectExtras(NAMED_EXPORT_KEYS),
   };
 }
 
 export async function importAll(data) {
   if (!data || typeof data !== 'object') throw new Error('不正なバックアップデータです');
+  // 先に名前の無い記録を戻し、名前つきの項目があとから上書きする（名前つきが正）
+  await restoreExtras(data.extras);
   if (Array.isArray(data.questions)) await saveQuestions(data.questions);
   if (data.srs && typeof data.srs === 'object') await saveSrs(data.srs);
   if (Array.isArray(data.history)) await saveHistory(data.history);

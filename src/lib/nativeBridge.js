@@ -91,3 +91,35 @@ export function onNativeAudioControl(handler) {
     return () => {};
   }
 }
+
+// ── ファイルの書き出し（アプリ版だけ） ──────────────────────────────
+// Android の WebView は <a download> でファイルを保存しない（押しても何も起きない）ので、
+// アプリ版ではネイティブ側（android/ の BackupFilePlugin.kt）に代わりに書かせる。
+function filePlugin() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const cap = window.Capacitor;
+    if (!cap || typeof cap.isNativePlatform !== 'function' || !cap.isNativePlatform()) return null;
+    return cap.Plugins?.BackupFile || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function canNativeSaveFile() {
+  return filePlugin() != null;
+}
+
+// 「ダウンロード」フォルダへ保存する。成功すれば { location, filename } を返し、失敗は例外。
+export async function nativeSaveTextFile(content, filename, mime) {
+  const p = filePlugin();
+  if (!p) throw new Error('アプリ版ではありません');
+  return p.save({ content: String(content), filename, mime: mime || 'application/json' });
+}
+
+// 共有シート（Googleドライブ・LINE・メール等）へ渡す。
+export async function nativeShareTextFile(content, filename, mime) {
+  const p = filePlugin();
+  if (!p) throw new Error('アプリ版ではありません');
+  return p.share({ content: String(content), filename, mime: mime || 'application/json' });
+}

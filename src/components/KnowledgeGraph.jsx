@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { downloadFile } from '../lib/download.js';
 import { buildGraphFromSolved, todaysLinks } from '../lib/kgService.js';
 import { graphStats, neighbors } from '../lib/knowledgeGraph.js';
 import { nodeDegrees, isolatedConcepts } from '../lib/learnerModel.js';
@@ -211,12 +212,7 @@ export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts, 
 
   // グラフのエクスポート（#30）：JSON と 簡易SVG をダウンロード
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify(graph, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'knowledge-graph.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadFile(JSON.stringify(graph, null, 2), 'knowledge-graph.json', 'application/json');
   };
   const exportSvg = () => {
     const ids = hubs.map((h) => h.id);
@@ -233,12 +229,7 @@ export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts, 
     }
     const dots = ids.map((id) => `<circle cx="${pos[id].x.toFixed(1)}" cy="${pos[id].y.toFixed(1)}" r="5" fill="#37b6cc"/><text x="${(pos[id].x + 6).toFixed(1)}" y="${pos[id].y.toFixed(1)}" font-size="9" fill="#fff">${id}</text>`);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="#000"/>${lines.join('')}${dots.join('')}</svg>`;
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'knowledge-graph.svg';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadFile(svg, 'knowledge-graph.svg', 'image/svg+xml');
   };
 
   if (solved.length === 0) {

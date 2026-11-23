@@ -1,43 +1,61 @@
-import { useRef } from 'react';
-import { exportAll } from '../lib/storage.js';
+import { useRef, useState } from 'react';
+import { exportAll, flushNow } from '../lib/storage.js';
+import { downloadFile, browserDownload, backupFileName } from '../lib/download.js';
+import { canNativeSaveFile, nativeShareTextFile } from '../lib/nativeBridge.js';
+import { parseBackupText } from '../lib/backupText.js';
 
 // 全データ（問題・進捗・メモ・設定）のバックアップファイルによる保存・共有・復元。
 // Settings.jsx（設定画面）・MigrationGuide.jsx（機種変更ガイド）で共用する。
+// アプリ版（Android の WebView）では <a download> と navigator.share が効かないので、
+// 保存・共有はネイティブ側（android/ の BackupFilePlugin.kt）に任せる。
 export default function FileBackupCard({ settings, updateSettings, markBackedUp, importBackup, onToast }) {
   const backupRef = useRef(null);
-
-  const download = (content, filename, type) => {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const [busy, setBusy] = useState(false);
+  const native = canNativeSaveFile();
+  // 種類で絞りすぎると、LINE・ドライブ経由や「.json.txt」になったファイルが灰色になって選べない。
+  // アプリ版では絞らない。
 
   // バックアップの中身（JSON文字列とファイル名）を作る（保存・共有で共用）
   const buildBackupFile = async () => {
     const data = await exportAll();
-    const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `shinkyu_backup_${stamp}.json`;
-    const content = JSON.stringify(data, null, 2);
-    return { content, filename };
+    return { content: JSON.stringify(data), filename: backupFileName() };
   };
 
   const backupAll = async () => {
-    const { content, filename } = await buildBackupFile();
-    download(content, filename, 'application/json');
-    markBackedUp();
-    onToast('バックアップを書き出しました');
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { content, filename } = await buildBackupFile();
+      const r = await downloadFile(content, filename, 'application/json');
+      if (!r.ok) {
+        onToast(`保存できませんでした（${r.error}）。「📤 共有」から Googleドライブ等へ送ってください`);
+        return;
+      }
+      markBackedUp();
+      onToast(r.native
+        ? `「${r.location}」に ${filename} を保存しました`
+        : `${filename} を保存しました（ダウンロードを確認してください）`);
+    } catch (e) {
+      onToast(`保存できませんでした（${(e && e.message) || '不明なエラー'}）`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   // 対応端末では共有シート（AirDrop/LINE/Google Drive等）へ直接渡す。
   // 非対応（Web Share APIやファイル共有に未対応のブラウザ）は通常のダウンロードにフォールバック。
   const hasShareApi = typeof navigator !== 'undefined' && !!navigator.share;
+  const canShare = native || hasShareApi;
   const shareBackup = async () => {
-    const { content, filename } = await buildBackupFile();
-    if (hasShareApi) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { content, filename } = await buildBackupFile();
+      if (native) {
+        await nativeShareTextFile(content, filename, 'application/json');
+        markBackedUp();
+        return;
+      }
       const file = new File([content], filename, { type: 'application/json' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -54,23 +72,40 @@ export default function FileBackupCard({ settings, updateSettings, markBackedUp,
           // それ以外の失敗はダウンロードにフォールバック
         }
       }
+      browserDownload(content, filename, 'application/json');
+      markBackedUp();
+      onToast('この端末は共有に未対応のため、ダウンロードしました');
+    } catch (e) {
+      onToast(`共有できませんでした（${(e && e.message) || '不明なエラー'}）`);
+    } finally {
+      setBusy(false);
     }
-    download(content, filename, 'application/json');
-    markBackedUp();
-    onToast('この端末は共有に未対応のため、ダウンロードしました');
   };
 
   const restoreAll = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
     e.target.value = '';
-    if (!confirm('現在の学習データをバックアップの内容で上書きします。よろしいですか？')) return;
+    if (!file) return;
+    let data;
     try {
-      const data = JSON.parse(await file.text());
-      await importBackup(data);
-      onToast('バックアップから復元しました');
+      data = parseBackupText(await file.text());
     } catch (err) {
-      onToast('復元に失敗しました（ファイル形式をご確認ください）');
+      onToast(`復元できませんでした：${err.message}`);
+      return;
+    }
+    const when = data.exportedAt ? new Date(data.exportedAt).toLocaleString('ja-JP') : '日時不明';
+    const n = Array.isArray(data.history) ? data.history.length : 0;
+    if (!confirm(`${when} のバックアップ（解答記録 ${n} 件）で、今の学習データを上書きします。よろしいですか？`)) return;
+    setBusy(true);
+    try {
+      await importBackup(data);
+      await flushNow();
+      onToast('復元しました。画面を読み込み直します…');
+      // 画面ごとに読み込んだ記録（誤答理由・再生履歴など）も確実に入れ替えるため、読み込み直す
+      setTimeout(() => { try { window.location.reload(); } catch (e2) { /* noop */ } }, 1500);
+    } catch (err) {
+      onToast(`復元の途中で失敗しました（${(err && err.message) || '不明なエラー'}）`);
+      setBusy(false);
     }
   };
 
@@ -80,25 +115,27 @@ export default function FileBackupCard({ settings, updateSettings, markBackedUp,
         問題・学習進捗・メモ・設定をまとめて1つのファイルに書き出せます。
         別の端末で「復元」すれば、そのまま学習を引き継げます（クラウド保存やUSB、
         Google Drive 等のファイル共有経由で持ち運べます）。
-        {hasShareApi && '「共有」を使うとAirDropやLINEなどの共有シートへ直接渡せます。'}
+        {native
+          ? '「保存」は端末の「ダウンロード」フォルダへ、「共有」は Googleドライブ・LINE・メール等へ送れます。'
+          : hasShareApi && '「共有」を使うとAirDropやLINEなどの共有シートへ直接渡せます。'}
       </p>
       <div className="btn-row">
-        <button className="btn primary" onClick={backupAll}>
+        <button className="btn primary" onClick={backupAll} disabled={busy}>
           💾 バックアップを保存
         </button>
-        {hasShareApi && (
-          <button className="btn" onClick={shareBackup}>
+        {canShare && (
+          <button className="btn" onClick={shareBackup} disabled={busy}>
             📤 共有
           </button>
         )}
-        <button className="btn" onClick={() => backupRef.current?.click()}>
+        <button className="btn" onClick={() => backupRef.current?.click()} disabled={busy}>
           復元（読み込み）
         </button>
       </div>
       <input
         ref={backupRef}
         type="file"
-        accept="application/json,.json"
+        accept={native ? undefined : 'application/json,.json,text/plain,.txt'}
         onChange={restoreAll}
         style={{ display: 'none' }}
       />

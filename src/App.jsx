@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
+import { downloadFile, backupFileName } from './lib/download.js';
 import { useStore } from './lib/useStore.js';
 import {
   exportAll, loadLastView, saveLastView,
@@ -153,15 +154,6 @@ const VIEW_TITLES = {
   settings: '設定',
 };
 
-function triggerDownload(content, filename, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 // PWAのホーム画面アイコン長押しショートカット（manifest.webmanifestのshortcuts）から
 // `?view=xxx` 付きで開かれた時に、その画面から起動する。
@@ -570,14 +562,13 @@ export default function App() {
   // 全データバックアップ（reminder / 自動バックアップ共通）
   const doBackup = async (silent = false) => {
     const data = await exportAll();
-    const stamp = new Date().toISOString().slice(0, 10);
-    triggerDownload(
-      JSON.stringify(data, null, 2),
-      `shinkyu_backup_${stamp}.json`,
-      'application/json'
-    );
+    const r = await downloadFile(JSON.stringify(data), backupFileName(), 'application/json');
+    if (!r.ok) {
+      if (!silent) showToast(`バックアップを保存できませんでした（${r.error}）`);
+      return;
+    }
     store.markBackedUp();
-    if (!silent) showToast('バックアップを保存しました');
+    if (!silent) showToast(r.native ? `バックアップを「${r.location}」に保存しました` : 'バックアップを保存しました');
   };
 
   // 起動時の自動バックアップ（1日1回まで）

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { downloadFile } from '../lib/download.js';
 import { normalize, isLeech, LEECH_THRESHOLD } from '../lib/srs.js';
 
 // 間違いノートの自動生成
@@ -48,14 +49,11 @@ export default function MistakeNote({ store, onToast }) {
 
   const downloadText = () => {
     if (list.length === 0) return;
-    const blob = new Blob([buildText()], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `間違いノート_${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    onToast?.('テキストで保存しました');
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    downloadFile(buildText(), `間違いノート_${stamp}.txt`, 'text/plain').then((r) => {
+      onToast?.(r.ok ? 'テキストで保存しました' : `保存できませんでした（${r.error}）`);
+    });
   };
 
   const escapeHtml = (s) =>
