@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { isSpeechSupported, loadVoices, speak, cancelSpeech } from '../lib/speech.js';
 import * as storage from '../lib/storage.js';
 import * as engine from '../lib/audioEngine.js';
@@ -8,7 +8,11 @@ import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { useMindmapData } from '../lib/mindmapDataLoader.js';
-import { buildKanaIndex, foldKana } from '../lib/yomi.js';
+import { buildKanaIndex, foldKana, TERM_READINGS } from '../lib/yomi.js';
+import { useSpeechText } from '../lib/speechTextLoader.js';
+
+const SpeechStyleCard = lazy(() => import('./SpeechStyleCard.jsx'));
+const ReadingDictTools = lazy(() => import('./SpeechStyleCard.jsx').then((m) => ({ default: m.ReadingDictTools })));
 import { reviewPoolFor, buildWeaknessSummary, weaknessSummaryToText, recommendNewPct } from '../lib/reviewPool.js';
 import { studyStreak, subjectBalanceWarning, formatPercent, getSubjects } from '../lib/stats.js';
 import { normalize, MASTER_STREAK, isLeech as isLeechState, GRADES } from '../lib/srs.js';
@@ -435,7 +439,9 @@ export default function AudioMode({
   // 既存のfocusFlashcardKeyword等と同じパターン）。
   const [source, setSource] = useState(() => (resumeFilters ? 'filter' : 'all')); // all|filter（旧: review|tagged|keyword|daily|weak）
   // 体の場所法を選んだ瞬間だけ経穴カードデータを読み込む（起動時バンドルに含めないため）。
-  const keiketsuCards = useKeiketsuCards(source === 'bodyLocation');
+  // 経穴カードの読み（361穴）は読み上げの誤読対策にも使うので、音声の画面を開いたら読み込む
+  // （起動時の束には入らない。動的importの別チャンク）。
+  const keiketsuCards = useKeiketsuCards(true);
   const [mode, setMode] = useState(0); // 連結モード（0=通常, 1〜10）
   const [selectedKeyword, setSelectedKeyword] = useState('');
   // 復習画面の絞り込み条件から渡された問題idだけに絞る場合に使う（未指定なら通常の復習プール全体）
@@ -965,7 +971,7 @@ export default function AudioMode({
   const [hadWrongStreak, setHadWrongStreak] = useState(false);
   // まぎらわしい対比・数値まとめ（mindmapData.js）は連結モード2/3や弱点分析（3問以上）でしか
   // 使わないため、そのタイミングで遅延読み込みする（起動時バンドルから約14万字ぶんを外すため）。
-  const mindmapData = useMindmapData(mode === 2 || mode === 3 || sessionWrong.length >= 3 || hadWrongStreak);
+  const mindmapData = useMindmapData(mode === 2 || mode === 3 || sessionWrong.length >= 3 || hadWrongStreak || !!(settings.audioSpeech && (settings.audioSpeech.compareAfter || settings.audioSpeech.numberFact)));
   const weaknessSummary = useMemo(
     () => buildWeaknessSummary(sessionWrong, links, mindmapData ? mindmapData.COMPARISONS : []),
     [sessionWrong, links, mindmapData]
@@ -974,6 +980,17 @@ export default function AudioMode({
   // 読み方の手動補正辞書（TTSの誤読を直す）
   const [pfTerm, setPfTerm] = useState('');
   const [pfReading, setPfReading] = useState('');
+  // 読み上げ方の工夫（2026-11-23）。誤読の対策（readFix）と図の説明は既定オン、聞きやすさの工夫は既定オフ。
+  const speechStyle = { readFix: true, figureDesc: true, ...(settings.audioSpeech || {}) };
+  const setSpeechStyle = (patch) => updateSettings({ audioSpeech: { ...(settings.audioSpeech || {}), ...patch } });
+  const SPEECH_RECOMMENDED = { readFix: true, figureDesc: true, sentencePause: true, kindLabel: true, bodyWords: true, sunNote: true, meridianFlow: true };
+  // 読みの辞書（本人の手動補正 ＞ 経穴カードの読み ＞ よく誤読される言葉 ＞ 経絡・臓腑の読み）
+  // 読み上げを整える部品（音声の画面を開いた時に読み込む。読み込み前は本人の手動補正だけで読む）
+  const st = useSpeechText(true);
+  const readingDict = useMemo(
+    () => (st ? st.buildReadingDict({ cards: keiketsuCards || [], termReadings: TERM_READINGS, common: st.SPEECH_READINGS, userFixes: settings.pronunciationFixes || {} }) : []),
+    [st, keiketsuCards, settings.pronunciationFixes]
+  );
 
   // 盲目の受験生からの改善提案#2：キーワードの前後に読点を入れて一拍おくだけの
   // 純粋な文字列変換（audioEngine.js側の読み上げループやpronunciationの仕組みは変えない。
@@ -1013,20 +1030,22 @@ export default function AudioMode({
     const correct = Array.isArray(q.choices) ? q.choices[q.answer] : null;
     const label = q.type === 'ox' ? '正解は、' : `正解は、${q.answer + 1}番、`;
     let t = correct != null && correct !== '' ? `${label}${correct}。` : '';
-    if (q.explanation) t += ` 解説。${explanationLabel(q)}${emphasizeForSpeech(q.explanation, effectiveTags(q, links))}`;
+    if (q.explanation) t += ` 解説。${explanationLabel(q)}${emphasizeForSpeech(q.explanation, [...effectiveTags(q, links), correct || ''])}`;
     return t;
   };
   const answerTextFor = (q, choices, answerIdx) => {
     const correct = choices[answerIdx];
     const label = q.type === 'ox' ? '正解は、' : `正解は、${answerIdx + 1}番、`;
     let t = `${label}${correct}。`;
-    if (q.explanation) t += ` 解説。${explanationLabel(q)}${emphasizeForSpeech(q.explanation, effectiveTags(q, links))}`;
+    if (q.explanation) t += ` 解説。${explanationLabel(q)}${emphasizeForSpeech(q.explanation, [...effectiveTags(q, links), correct || ''])}`;
     return t;
   };
   const shortStem = (q) => {
     const t = questionText(q).replace(/\s+/g, ' ').trim();
     return t.length > 26 ? t.slice(0, 26) + '…' : t;
   };
+  // 選択肢の読み方（頭文字法／短く＝かっこの中の補足を外す）
+  const choiceSpoken = (c) => (firstLetterOnly ? (c[0] || c) : (st && speechStyle.shortChoices ? st.shortenChoice(c) : c));
   const shortAnswer = (q) => (q.choices ? q.choices[q.answer] || '' : '');
   const flashcardText = (kw, qs) => {
     const notes = qs.map((q) => (links[q.id]?.note || '').trim()).filter(Boolean);
@@ -1345,12 +1364,17 @@ export default function AudioMode({
 
   // 読み方の手動補正辞書（TTSの誤読を直す）。読み上げ直前にだけ置き換える＝表示テキストはそのまま。
   const applyPronunciation = (text) => {
-    const fixes = settings.pronunciationFixes || {};
-    let t = text;
-    for (const term of Object.keys(fixes)) {
-      if (!term) continue;
-      t = t.split(term).join(fixes[term]);
+    let t = String(text || '');
+    if (!st) {
+      // 部品の読み込み前：今までどおり本人の手動補正だけをかける
+      const fixes = settings.pronunciationFixes || {};
+      for (const term of Object.keys(fixes)) if (term) t = t.split(term).join(fixes[term]);
+      return t;
     }
+    if (speechStyle.bodyWords) t = st.addBodyWords(t);
+    // 誤読の対策がオフの時は、今までどおり本人の手動補正だけをかける
+    t = speechStyle.readFix ? st.toSpeechText(t, readingDict) : st.applyReadingDict(t, st.buildReadingDict({ userFixes: settings.pronunciationFixes || {} }));
+    if (speechStyle.directionPause) t = st.pauseBeforeDirections(t);
     return t;
   };
 
@@ -1371,6 +1395,7 @@ export default function AudioMode({
       steps.push({ phase: K, say: item.recallPrompt || `用語。${item.keyword}。` });
       steps.push({ phase: G, waitGap: item.waitGapSec != null ? item.waitGapSec : true });
       steps.push({ phase: A, say: item.text });
+      if (st && speechStyle.sunNote && st.hasSun(item.text)) steps.push({ phase: N, say: st.SUN_NOTE });
       steps.push({ waitNextGap: true });
       return steps;
     }
@@ -1424,10 +1449,11 @@ export default function AudioMode({
       const cq = item.q;
       const subj2 = readSubject && cq.subject ? `${cq.subject}。` : '';
       const sc2 = shuffledChoicesFor(cq);
-      let t = `${subj2}問題。${questionText(cq)}。`;
-      if (needsFigureWarning(cq)) t = `注意。この問題は図を確認しないと判断できません。${t}`;
+      let t = `${subj2}${st && speechStyle.kindLabel ? st.questionKindText(cq) : ''}問題。${questionText(cq)}。`;
+      if (st && speechStyle.figureDesc && st.figureDescription(cq)) t += st.figureDescription(cq);
+      else if (needsFigureWarning(cq)) t = `注意。この問題は図を確認しないと判断できません。${t}`;
       if (carelessCaution(cq)) t = `${carelessCaution(cq)}${t}`;
-      if (cq.type !== 'ox') sc2.choices.forEach((c, i) => { t += `${i + 1}番、${firstLetterOnly ? (c[0] || c) : c}。`; });
+      if (cq.type !== 'ox') sc2.choices.forEach((c, i) => { t += `${i + 1}番、${choiceSpoken(c)}。`; });
       else t += '正しいか、誤りか。';
       steps.push({ phase: Q, say: t });
       steps.push({ phase: G, waitGap: true });
@@ -1460,20 +1486,45 @@ export default function AudioMode({
       front.push({ wait: storyPauseOn ? 1200 : 300 });
     }
     const subj = readSubject && q.subject ? `${q.subject}。` : '';
-    let frontText = `${subj}問題。${questionText(q)}。`;
-    if (needsFigureWarning(q)) frontText = `注意。この問題は図を確認しないと判断できません。${frontText}`;
+    let frontText = `${subj}${st && speechStyle.kindLabel ? st.questionKindText(q) : ''}問題。${questionText(q)}。`;
+    // 図の説明（図に描かれている内容だけを言葉にしたもの）。説明が無い図は今までどおり注意だけ。
+    if (st && speechStyle.figureDesc && st.figureDescription(q)) frontText += st.figureDescription(q);
+    else if (needsFigureWarning(q)) frontText = `注意。この問題は図を確認しないと判断できません。${frontText}`;
     if (carelessCaution(q)) frontText = `${carelessCaution(q)}${frontText}`;
     // A1：完全想起モードは選択肢を一切読まない（readChoicesがONでも上書きする）。
     const scFront = (readChoices && !pureRecallOn) ? shuffledChoicesFor(q) : null;
     if (scFront && q.type !== 'ox' && Array.isArray(q.choices)) {
-      scFront.choices.forEach((c, i) => { frontText += `${i + 1}番、${firstLetterOnly ? (c[0] || c) : c}。`; });
+      scFront.choices.forEach((c, i) => { frontText += `${i + 1}番、${choiceSpoken(c)}。`; });
     }
     // 盲目の受験生からの改善提案#27：倍速にしていても、まだ解いたことが無い新しい問題の
     // 問題文だけは等速以下に戻す（既定オフ。audioEngine.jsのstep.rateで1ステップだけ上書き）。
     front.push({ phase: Q, say: frontText, rate: (newSlowdownOn && !answeredIds.has(q.id)) ? Math.min(1, rate) : undefined });
     // 裏（答え）
     const back = [];
-    back.push({ phase: A, say: scFront ? answerTextFor(q, scFront.choices, scFront.answerIdx) : answerText(q) });
+    // 対策案29：まだ解いたことの無い問題は、問題文だけでなく解答・解説もゆっくり読む
+    const slowNew = newSlowdownOn && !answeredIds.has(q.id) ? Math.min(1, rate) : undefined;
+    back.push({ phase: A, say: scFront ? answerTextFor(q, scFront.choices, scFront.answerIdx) : answerText(q), rate: slowNew });
+    {
+      const tags = effectiveTags(q, links);
+      const allText = `${q.question || ''}${q.explanation || ''}${Array.isArray(q.choices) ? q.choices[q.answer] || '' : ''}`;
+      // 対策案22：似ているものとのちがい（まぎらわしい対比のデータがある時だけ）
+      if (speechStyle.compareAfter && mindmapData) {
+        const comp = tags.map((tg) => mindmapData.comparisonsForKeyword(tg)[0]).find(Boolean);
+        if (comp) back.push({ phase: N, say: `似ているものとのちがい。${comp.title}。${comp.note || ''}` });
+      }
+      // 対策案23：数字の要点（数値まとめのデータがある時だけ）
+      if (speechStyle.numberFact && mindmapData) {
+        const num = tags.map((tg) => mindmapData.numbersForKeyword(tg)[0]).find(Boolean);
+        if (num) back.push({ phase: N, say: `数字の要点。${num.topic}は、${num.value}。${num.note || ''}` });
+      }
+      // 対策案20：寸の目安
+      if (st && speechStyle.sunNote && st.hasSun(allText)) back.push({ phase: N, say: st.SUN_NOTE });
+      // 対策案28：経絡の流れ
+      if (st && speechStyle.meridianFlow) {
+        const flow = st.meridianFlowText(`${allText}${tags.join(' ')}`);
+        if (flow) back.push({ phase: N, say: flow });
+      }
+    }
     if (item.note) back.push({ phase: N, say: `つながり。${item.note}` });
     // 語呂合わせノート（kwMeta）に登録済みの語呂合わせがあれば、答えのあとに読む。
     const mnemonicTag = effectiveTags(q, links)[0];
@@ -1542,7 +1593,20 @@ export default function AudioMode({
   // アウトプットモード（outputModeOn）の時は、問題→正解の「間」（waitGap）を
   // 自動タイマーではなく手動操作（waitManual）に置き換える——1箇所で変換するので
   // 項目の種類（通常問題／クローズ／選択肢／比較／数字／暗記カード）ごとに個別対応しなくてよい。
-  const buildSteps = (item) => buildStepsRaw(item).map((s) => {
+  const buildSteps = (item) => buildStepsRaw(item).flatMap((s) => {
+    // 対策案16・17：長い解答・解説は文ごとに区切り、間を入れる
+    if (st && speechStyle.sentencePause && s.say && (s.phase === PHASES.ANSWER || s.phase === PHASES.NOTE)) {
+      const parts = st.splitSentences(s.say);
+      if (parts.length > 1) {
+        return parts.flatMap((part, i) => {
+          const one = toStep({ ...s, say: part }, item);
+          return i < parts.length - 1 ? [one, { wait: 500 }] : [one];
+        });
+      }
+    }
+    return [toStep(s, item)];
+  });
+  const toStep = (s, item) => {
     let step = s.say ? { ...s, say: applyPronunciation(s.say) } : s;
     // C5：声で解答モードも、答える前に自動タイマーで進まず待つ必要があるため、
     // アウトプットモードと同じwaitManualの仕組みに相乗りする（item.kind==='question'だけ
@@ -1555,12 +1619,12 @@ export default function AudioMode({
       step = { ...rest, waitManual: true };
     }
     return step;
-  });
+  };
 
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn, newSlowdownOn, answeredIds, rate, firstLetterOnly, storyPauseOn, whyOnAnswerOn, ifThenOn, voiceAnswerOn, pureRecallOn, adaptiveGapOn, keiketsuRecallOn, gap] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn, newSlowdownOn, answeredIds, rate, firstLetterOnly, storyPauseOn, whyOnAnswerOn, ifThenOn, voiceAnswerOn, pureRecallOn, adaptiveGapOn, keiketsuRecallOn, gap, settings.audioSpeech, readingDict, mindmapData, st] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
@@ -3988,6 +4052,15 @@ export default function AudioMode({
                 ? highlightKeywordsInText(current.question, curTags)
                 : current?.image ? '図を見て答える問題' : ''}
             </div>
+            {/* 対策案15：この問題で読みを直して読んでいる言葉（読み上げだけの置き換え。画面の文字は変えない） */}
+            {current && st && speechStyle.readFix && (() => {
+              const list = st.termsWithReading(`${current.question || ''}${current.explanation || ''}`, readingDict, 6);
+              return list.length ? (
+                <div className="inline-note" style={{ marginTop: 6, opacity: 0.85 }}>
+                  🔤 読みを直して読む言葉：{list.map((x) => `${x.term}（${x.reading}）`).join('・')}
+                </div>
+              ) : null;
+            })()}
             {/* 四択の選択肢は画面に出す（読み上げはしない。ユーザー指定）。並べ替えて読む設定の時は、
                 声の「正解は◯番」と同じ順で出す。正解・解説の段では正解に印を付ける。
                 完全想起モード（選択肢を見ずに思い出す練習）では、答えが出るまで出さない。 */}
@@ -4298,6 +4371,23 @@ export default function AudioMode({
                   </button>
                 )}
                 <button className="btn ghost sm" onClick={() => setPfQuickOpen((v) => !v)}>🔤 読み間違いを報告</button>
+                <button className="btn ghost sm" onClick={() => {
+                  // 対策案30：同じ文のくり返しではなく、答えと解説の最初の1文だけを短く言い直す
+                  cancelSpeech();
+                  speak(applyPronunciation(st ? st.shortRetellText(current) : answerText(current)), { rate, voice: selectedVoice() }).catch(() => {});
+                }}>🔁 短く言い直す</button>
+              </div>
+            )}
+            {current && pfQuickOpen && (
+              <div className="chip-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                <span className="inline-note" style={{ width: '100%' }}>誤って読まれた言葉をタップ（無ければ下に入力）：</span>
+                {Array.from(new Set([...curTags, ...(st ? st.kanjiWords(`${current.question || ''}${current.explanation || ''}`, 14) : [])])).slice(0, 16).map((w) => (
+                  <button key={w} className={`chip ${pfTerm === w ? 'active' : ''}`} onClick={() => {
+                    setPfTerm(w);
+                    const known = readingDict.find(([t]) => t === w);
+                    setPfReading(settings.pronunciationFixes?.[w] || (known ? known[1] : ''));
+                  }}>{w}</button>
+                ))}
               </div>
             )}
             {current && pfQuickOpen && (
@@ -5170,7 +5260,7 @@ export default function AudioMode({
               on={newSlowdownOn}
               onToggle={() => setNewSlowdownOn((v) => !v)}
               title="🐢 まだ解いていない新しい問題は等速で読む"
-              desc="再生速度を上げていても、一度も解いたことが無い問題の問題文だけは等速以下に戻します（倍速の上げすぎ対策）。"
+              desc="再生速度を上げていても、一度も解いたことが無い問題は、問題文も解答・解説も等速以下に戻します（倍速の上げすぎ対策）。"
             />
             <Opt
               on={whyOnAnswerOn}
@@ -5388,11 +5478,24 @@ export default function AudioMode({
             </div>
           </div>
 
+          {/* 読み上げ方の工夫（2026-11-23）。押した時に読み込む部品（起動時の束を増やさない） */}
+          <Suspense fallback={<div className="card"><div className="hint">読み込み中…</div></div>}>
+            <SpeechStyleCard
+              speechStyle={speechStyle}
+              setSpeechStyle={setSpeechStyle}
+              recommended={SPEECH_RECOMMENDED}
+              dictCount={readingDict.length}
+              onToast={onToast}
+            />
+          </Suspense>
+
           {/* 読み方の手動補正辞書（TTSが誤読する語を直す） */}
           <div className="card">
             <div className="section-label" style={{ marginTop: 0 }}>🗣️ 読み方の手動補正</div>
             <div className="hint" style={{ marginBottom: 8 }}>
               音声合成が読み間違える言葉があれば、正しい読み方（ひらがな・カタカナ）を登録できます。読み上げの時だけ置き換わり、画面の文字は変わりません。
+              ここで登録した読みは、アプリの読みの一覧よりいつも優先します。
+              読み方の癖は声（端末の音声）ごとに違うので、直らない時は「声を選び直す」で別の声も試してください。
             </div>
             {Object.keys(settings.pronunciationFixes || {}).length > 0 && (
               <ul className="pf-list" style={{ listStyle: 'none', padding: 0, margin: '0 0 10px' }}>
@@ -5426,6 +5529,15 @@ export default function AudioMode({
               )}
               <button className="btn sm primary" onClick={addPronunciationFix}>追加</button>
             </div>
+            <Suspense fallback={null}>
+              <ReadingDictTools
+                readingDict={readingDict}
+                userFixes={settings.pronunciationFixes || {}}
+                onPreview={(t) => { cancelSpeech(); speak(applyPronunciation(t), { rate, voice: selectedVoice() }).catch(() => {}); }}
+                onImport={(clean) => updateSettings({ pronunciationFixes: { ...(settings.pronunciationFixes || {}), ...clean } })}
+                onToast={onToast}
+              />
+            </Suspense>
             {/* #52：誤読報告の履歴一覧（辞書は上書きされるため、いつ何を報告したかは別に残す） */}
             {pronReportLog.length > 0 && (
               <details style={{ marginTop: 10 }}>
