@@ -66,6 +66,18 @@ Webアプリの内容を更新した時は、毎回 **手順2〜3（`npm run bui
 `npx cap sync android`）をやり直す**必要があります（`android/app/src/main/assets/public/`
 は `.gitignore` 済みの生成物で、リポジトリには含まれていません）。
 
+## 【2026-11-23】パソコン無しで入れる：GitHubの自動ビルド（いちばん簡単）
+
+`main` へ push されるたびに `.github/workflows/android-apk.yml` が APK を作り、
+GitHub の **Releases**（https://github.com/youtaix656-eng/-/releases）に
+`shinkyu-1.0.<番号>.apk` を置く（新しい5つだけ残す）。Android Studio は要らない。
+
+- 署名は `android/app/ci-release.keystore`（**公開リポジトリに置いた鍵**）。毎回同じ鍵なので
+  上書きで更新できる。誰でも同じ鍵で署名できてしまうので、**Releases 以外から来たAPKは入れない**こと。
+  Google Play へ出す時はこの鍵を使わず、非公開の鍵を別に作る。
+- 番号（versionCode）は Actions の実行番号。手元でビルドした時は1のまま。
+- 更新の受け取りは Obtainium（GitHub の Releases を見張るアプリ）を使うと楽。
+
 ## 【ユーザー選択・2026-11-13】方法A：Google Playを使わず自分の端末へ直接インストール
 
 一人だけで使うなら、Google Playの開発者登録・審査・プライバシーポリシーURL等は

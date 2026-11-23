@@ -1,0 +1,102 @@
+name: Build Android APK
+
+# 鍼灸国試アプリ（ルート）を Capacitor で Android アプリ（.apk）にし、
+# GitHub の Releases に置く。スマホでそこから入れる・Obtainium で更新を受け取る。
+# Google Play は使わない（android/README.md「方法A」）。
+# 対象はルートの鍼灸アプリだけ（同梱の他アプリは含まない）。
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'rirakuru-app/**'
+      - 'sleep-tracker/**'
+      - 'youtsu-navi/**'
+      - 'henkaku-note/**'
+      - 'ouro/**'
+      - 'kagami/**'
+      - 'shikaku-lab/**'
+      - 'maai/**'
+      - 'chou/**'
+      - 'kundalini/**'
+      - 'earpomo/**'
+      - '**/*.md'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Copy web app into Android project
+        run: npx cap sync android
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease \
+            -PappVersionCode=${{ github.run_number }} \
+            -PappVersionName=1.0.${{ github.run_number }}
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            out/shinkyu-1.0.${{ github.run_number }}.apk
+
+      - name: Keep APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shinkyu-apk-${{ github.run_number }}
+          path: out/*.apk
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="android-v1.0.${{ github.run_number }}"
+          gh release create "$TAG" out/*.apk \
+            --target "${{ github.sha }}" \
+            --title "鍼灸国試対策 Android 1.0.${{ github.run_number }}" \
+            --notes "自動ビルド（コミット ${{ github.sha }}）。スマホでAPKをダウンロードして入れてください。手順は android/README.md。"
+
+      - name: Remove old releases (keep newest 5)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt \
+            -q 'sort_by(.createdAt) | reverse | .[].tagName' \
+            | grep '^android-v' | tail -n +6 \
+            | xargs -r -I{} gh release delete {} --yes --cleanup-tag

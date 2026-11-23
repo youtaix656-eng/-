@@ -5807,6 +5807,22 @@ audioEngine.js・AudioMode.jsx・MiniPlayer.jsx を読み直して実際に見�
   **既存の確認スクリプトのうち「間0秒」前提で時間を区切っていたもの（60問休憩・連打）は、四択が3秒止まるぶん同じ時間内に
   進まなくなった**——確認の書き方の問題で、休憩・連打の処理は変えていない。
 
+## Android アプリ版を GitHub Actions で自動ビルド（2026-11-23追加）
+ユーザー依頼「バックグラウンドで音声学習もしたい」→ 提案のうち「まずアプリにするだけ（B）を
+GitHubで自動ビルド」を選択。パソコン（Android Studio）無しでスマホに入れられるようにした。
+- **`.github/workflows/android-apk.yml`**：main への push（同梱の他アプリ・.md だけの変更は除く）と
+  手動実行で、`npm ci`→`npm run build`→`npx cap sync android`→Java 21＋Android SDK→
+  `./gradlew assembleRelease`。APK を Releases（タグ `android-v1.0.<実行番号>`）に置き、新しい5つだけ残す。
+  Pages のデプロイ（deploy.yml）とは別のワークフロー。
+- **versionCode は実行番号**（`-PappVersionCode`）。手元のビルドでは1。上書き更新には番号が増え続けることが要る。
+- **署名鍵 `android/app/ci-release.keystore` をリポジトリに置いた**（パスワードも build.gradle に平文）。
+  ユーザーが一人で直接入れる前提の割り切りで、**同じ鍵で毎回署名しないと上書き更新できない**ため。
+  公開リポジトリなので誰でも同じ鍵で署名できる——Google Play に出す時は必ず非公開の鍵を別に作る
+  （環境変数 `ANDROID_KEYSTORE_*` で差し替えられる）。**この鍵を作り直すと、入れてあるアプリを
+  一度アンインストールしないと更新できなくなる**（学習記録も消える）ので、勝手に作り直さない。
+- Java は 21（Capacitor 8 の android ライブラリが 21 を要求）。アプリ側の compileOptions も 21 にそろえた。
+- **画面ロック中に音声学習が続くかは未確認**。止まるなら次は読み上げをネイティブ（TextToSpeech）へ移す（提案A）。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
