@@ -5820,7 +5820,9 @@ GitHubで自動ビルド」を選択。パソコン（Android Studio）無しで
   公開リポジトリなので誰でも同じ鍵で署名できる——Google Play に出す時は必ず非公開の鍵を別に作る
   （環境変数 `ANDROID_KEYSTORE_*` で差し替えられる）。**この鍵を作り直すと、入れてあるアプリを
   一度アンインストールしないと更新できなくなる**（学習記録も消える）ので、勝手に作り直さない。
-- Java は 21（Capacitor 8 の android ライブラリが 21 を要求）。アプリ側の compileOptions も 21 にそろえた。
+- Java は 21（Capacitor 8 の android ライブラリが 21 を要求）。**Node は 22**（Capacitor CLI 8 は 22 未満で止まる。1回目はこれで落ちた）。
+  `android-actions/setup-android` は既定の `tools` パッケージがもう無く失敗するので、`packages` を指定している（2回目はこれで落ちた）。
+  3回目（2026-11-23）で初めてビルドが通り、Releases に `shinkyu-1.0.3.apk`（約4.3MB、中に `assets/public/index.html` あり）ができた。**実機への導入・起動は未確認**。アプリ側の compileOptions も 21 にそろえた。
 - **画面ロック中に音声学習が続くかは未確認**。止まるなら次は読み上げをネイティブ（TextToSpeech）へ移す（提案A）。
 
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
