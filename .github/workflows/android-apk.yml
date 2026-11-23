@@ -60,6 +60,9 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # 既定の 'tools' はもう配布されておらず失敗するため、要るものだけ指定する
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       - name: Build APK
         working-directory: android
