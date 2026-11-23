@@ -56,14 +56,24 @@ class BackupFilePlugin : Plugin() {
                     call.reject("保存先を作れませんでした")
                     return
                 }
-                val out = resolver.openOutputStream(uri)
-                if (out == null) {
-                    call.reject("保存先に書き込めませんでした")
-                    return
+                try {
+                    val out = resolver.openOutputStream(uri) ?: throw IllegalStateException("保存先に書き込めませんでした")
+                    out.use { it.write(content.toByteArray(Charsets.UTF_8)) }
+                    val done = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
+                    resolver.update(uri, done, null, null)
+                } catch (e: Exception) {
+                    // 書きかけのまま残すと、中身の無いファイルが「ダウンロード」に見えないまま溜まる
+                    try { resolver.delete(uri, null, null) } catch (e2: Exception) { }
+                    throw e
                 }
-                out.use { it.write(content.toByteArray(Charsets.UTF_8)) }
-                val done = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
-                resolver.update(uri, done, null, null)
+                // 同じ名前があると端末が「(1)」などを付けるので、実際の名前を返す
+                var savedName = name
+                try {
+                    resolver.query(uri, arrayOf(MediaStore.Downloads.DISPLAY_NAME), null, null, null)?.use { c ->
+                        if (c.moveToFirst()) savedName = c.getString(0) ?: name
+                    }
+                } catch (e: Exception) { }
+                ret.put("filename", savedName)
                 ret.put("location", "ダウンロード")
             } else {
                 val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
@@ -72,7 +82,7 @@ class BackupFilePlugin : Plugin() {
                 file.writeText(content, Charsets.UTF_8)
                 ret.put("location", file.absolutePath)
             }
-            ret.put("filename", name)
+            if (!ret.has("filename")) ret.put("filename", name)
             call.resolve(ret)
         } catch (e: Exception) {
             call.reject(e.message ?: "保存に失敗しました")
@@ -91,6 +101,8 @@ class BackupFilePlugin : Plugin() {
         try {
             val dir = File(context.cacheDir, "share")
             dir.mkdirs()
+            // 前に共有したファイルは残さない（共有のたびに約1MBずつ溜まっていた）
+            dir.listFiles()?.forEach { try { it.delete() } catch (e: Exception) { } }
             val file = File(dir, name)
             file.writeText(content, Charsets.UTF_8)
             val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
@@ -152,8 +164,8 @@ class BackupFilePlugin : Plugin() {
                     if (si >= 0 && !c.isNull(si)) size = c.getLong(si)
                 }
             }
-            if (size > 60L * 1024 * 1024) {
-                call.reject("ファイルが大きすぎます（60MBまで）")
+            if (size > 30L * 1024 * 1024) {
+                call.reject("ファイルが大きすぎます（30MBまで）")
                 return
             }
             val text = resolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }

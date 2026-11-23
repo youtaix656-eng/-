@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { exportAll, flushNow } from '../lib/storage.js';
+import { exportAll } from '../lib/storage.js';
+import { reloadAfterRestore } from '../lib/restoreFlow.js';
 import { downloadFile, browserDownload, backupFileName } from '../lib/download.js';
 import { canNativeSaveFile, nativeShareTextFile, canNativePickFile, nativePickTextFile } from '../lib/nativeBridge.js';
 import { parseBackupText } from '../lib/backupText.js';
@@ -42,7 +43,7 @@ export default function FileBackupCard({ settings, updateSettings, markBackedUp,
       }
       markBackedUp();
       report(true, r.native
-        ? `「${r.location}」フォルダに ${filename} を保存しました`
+        ? `「${r.location}」フォルダに ${r.filename || filename} を保存しました`
         : `${filename} を保存しました（ダウンロードを確認してください）`);
     } catch (e) {
       report(false, `保存できませんでした（${(e && e.message) || '不明なエラー'}）`);
@@ -110,10 +111,9 @@ export default function FileBackupCard({ settings, updateSettings, markBackedUp,
     setBusy(true);
     try {
       await importBackup(data);
-      await flushNow();
       report(true, `復元しました（解答記録 ${n} 件）。画面を読み込み直します…`);
       // 画面ごとに読み込んだ記録（誤答理由・再生履歴など）も確実に入れ替えるため、読み込み直す
-      setTimeout(() => { try { window.location.reload(); } catch (e2) { /* noop */ } }, 1500);
+      await reloadAfterRestore();
       return true;
     } catch (err) {
       report(false, `復元の途中で失敗しました（${(err && err.message) || '不明なエラー'}）`);

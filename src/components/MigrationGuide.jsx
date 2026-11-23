@@ -38,8 +38,9 @@ export default function MigrationGuide({ store, onToast }) {
       setSizes({ syncPayloadBytes: encoded.length, fullBackupBytes: fullBytes });
     })();
     return () => { alive = false; };
-    // srs/history等の変化のたびに再計算（サイズが変わるため）
-  }, [srs, history, memos, links, examResults, settings, bookmarks, session]);
+    // 開いた時に1回だけ量る。以前は解答・設定が変わるたびに全データ（約1MB）を書き出し直していた
+    // （量の目安なので、開いている間の小さな変化は追わなくてよい）。
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const recommendation = recommendMigrationMethod({ ...sizes, hasShareApi, capabilities });
 

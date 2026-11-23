@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { exportAll } from '../lib/storage.js';
+import { parseBackupText } from '../lib/backupText.js';
+import { reloadAfterRestore } from '../lib/restoreFlow.js';
 import { canNativeSaveFile } from '../lib/nativeBridge.js';
 import {
   requestAccessToken,
@@ -66,9 +68,10 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
       const token = await ensureToken();
       const text = await downloadBackup(token);
       if (!text) { onToast?.('Googleドライブにバックアップが見つかりませんでした'); return; }
-      const data = JSON.parse(text);
+      const data = parseBackupText(text);
       await importBackup(data);
-      onToast?.('Googleドライブから復元しました');
+      onToast?.('Googleドライブから復元しました。画面を読み込み直します…');
+      await reloadAfterRestore();
     } catch (e) {
       onToast?.(e.message || 'Googleドライブからの復元に失敗しました');
     } finally {

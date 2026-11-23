@@ -1071,6 +1071,12 @@ export function useStore() {
 
   // バックアップから全復元し、state に反映
   const importBackup = useCallback(async (data) => {
+    // 復元の直前の状態を世代バックアップに1つ残す（違うファイルを選んでしまっても、
+    // 設定の「自動世代バックアップ」から元に戻せるように）。取れなくても復元は続ける。
+    try {
+      const snap = await import('./backupSnapshots.js');
+      await snap.takeSnapshot(storage, { auto: true });
+    } catch (e) { /* noop */ }
     await storage.importAll(data);
     await storage.flushNow();
     const [q, s, h, m, lk, sch, vn, ec, sn, km, ud, cfg] = await Promise.all([

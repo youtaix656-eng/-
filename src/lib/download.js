@@ -28,7 +28,7 @@ export async function downloadFile(content, filename, mime = 'text/plain') {
   if (canNativeSaveFile()) {
     try {
       const r = await nativeSaveTextFile(content, filename, mime);
-      return { ok: true, native: true, location: r?.location || 'ダウンロード' };
+      return { ok: true, native: true, location: r?.location || 'ダウンロード', filename: r?.filename || filename };
     } catch (e) {
       return { ok: false, native: true, error: (e && e.message) || '保存に失敗しました' };
     }

@@ -572,17 +572,10 @@ async function restoreExtras(extras) {
   if (!extras || typeof extras !== 'object') return;
   const idb = extras.idb && typeof extras.idb === 'object' ? extras.idb : {};
   const ls = extras.ls && typeof extras.ls === 'object' ? extras.ls : {};
-  const entries = Object.entries(idb).filter(([k]) => isExtraKey(k));
-  if (entries.length) {
-    let done = false;
-    if (useIdb) {
-      try { await idbSetMany(entries); done = true; } catch (e) { /* localStorage へ */ }
-    }
-    if (!done) {
-      for (const [k, v] of entries) {
-        try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* noop */ }
-      }
-    }
+  // 書き込み待ちの列（pending）を通して書く。直接 IndexedDB に書くと、復元の直前に
+  // この端末で書き込み待ちになっていた同じキー（閲覧履歴など）があとから上書きしていた。
+  for (const [k, v] of Object.entries(idb)) {
+    if (isExtraKey(k)) await write(k, v);
   }
   for (const [k, v] of Object.entries(ls)) {
     if (!isExtraKey(k) || typeof v !== 'string') continue;
@@ -616,7 +609,8 @@ export async function exportAll() {
     kwMeta: await loadKwMeta(),
     userDict: await loadUserDict(),
     unread: await loadUnread(),
-    auth: await loadAuth(),
+    // ログイン（パスワードのハッシュ・秘密の質問）は書き出さない。端末ごとの鍵で、
+    // 復元でも持ち込まない（importAll）。ファイルはLINE・ドライブ等へ送られるので入れない方が安全。
     examResults: await loadExamResults(),
     settings: await read(KEYS.settings, {}),
     bookmarks: await loadBookmarks(),
@@ -647,10 +641,42 @@ export async function exportAll() {
   };
 }
 
+// 端末ごとの設定は、復元・受け渡しで上書きしない（今の端末の値を残す）。
+//   ログイン設定のスキップ／Googleドライブ連携（クライアントIDは開いている場所ごとに違う・
+//   ログインも端末ごと）／ボイスクローン（APIキーは端末にしか無い）／選んでいる曲（曲は
+//   バックアップに入らない）／イヤホンの確認／自動バックアップとその回数（ファイルはこの端末に書く）。
+export const DEVICE_SETTING_KEYS = [
+  'authSkipped', 'googleDriveAutoSync', 'googleDriveClientId', 'googleDriveLastSync',
+  'voiceClone', 'audioHeadphoneConfirmedDate',
+  'autoBackupOnStart', 'lastAutoBackup', 'answersSinceBackup',
+];
+export function keepDeviceSettings(incoming, current) {
+  const out = { ...(incoming || {}) };
+  const cur = current || {};
+  for (const k of DEVICE_SETTING_KEYS) {
+    if (k in cur) out[k] = cur[k];
+    else delete out[k];
+  }
+  if (out.pomodoro && typeof out.pomodoro === 'object') {
+    out.pomodoro = { ...out.pomodoro, activeSongId: cur.pomodoro ? cur.pomodoro.activeSongId : undefined };
+  }
+  return out;
+}
+
 export async function importAll(data) {
   if (!data || typeof data !== 'object') throw new Error('不正なバックアップデータです');
+  // この端末で書き込み待ちのものを先に確定させる（あとから復元した値を上書きさせない）
+  await flushNow();
   // 先に名前の無い記録を戻し、名前つきの項目があとから上書きする（名前つきが正）
   await restoreExtras(data.extras);
+  // 丸ごとのバックアップ（extras つき）なのに入っていない、この端末の音声の続き・再生履歴は消す。
+  // 残すと、この端末の古い「続き」のほうが新しいとみなされ、復元した位置が使われなかった。
+  if (data.extras && typeof data.extras === 'object') {
+    const ls = data.extras.ls && typeof data.extras.ls === 'object' ? data.extras.ls : {};
+    for (const k of PROGRESS_LS_KEYS) {
+      if (!(k in ls)) { try { localStorage.removeItem(k); } catch (e) { /* noop */ } }
+    }
+  }
   if (Array.isArray(data.questions)) await saveQuestions(data.questions);
   if (data.srs && typeof data.srs === 'object') await saveSrs(data.srs);
   if (Array.isArray(data.history)) await saveHistory(data.history);
@@ -669,9 +695,7 @@ export async function importAll(data) {
   // 求められて「復元できない」ように見えていた（data.auth は読まない）。
   if (Array.isArray(data.examResults)) await saveExamResults(data.examResults);
   if (data.settings && typeof data.settings === 'object') {
-    // 「ログイン設定をスキップした」もこの端末の選択なので、今の端末の値を残す
-    const cur = await loadSettings();
-    await saveSettings({ ...data.settings, authSkipped: !!(cur && cur.authSkipped) });
+    await saveSettings(keepDeviceSettings(data.settings, await loadSettings()));
   }
   if (data.bookmarks && typeof data.bookmarks === 'object') await saveBookmarks(data.bookmarks);
   if (Array.isArray(data.keiketsuLibrary)) await saveKeiketsuLibrary(data.keiketsuLibrary);

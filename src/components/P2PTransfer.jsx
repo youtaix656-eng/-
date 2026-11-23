@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { exportAll } from '../lib/storage.js';
+import { reloadAfterRestore } from '../lib/restoreFlow.js';
 import { qrMatrix } from '../lib/qr.js';
 import { splitIntoChunks, Reassembler } from '../lib/chunk.js';
 import {
@@ -344,7 +345,8 @@ export default function P2PTransfer({ store, onToast }) {
               }
               await importBackup(data);
               setPhase('done');
-              onToast?.('受信・取り込みが完了しました');
+              onToast?.('受信・取り込みが完了しました。画面を読み込み直します…');
+              await reloadAfterRestore();
             } catch (e) {
               setErrorMsg('受信データの取り込みに失敗しました（形式が正しくない可能性があります）');
               setPhase('error');
