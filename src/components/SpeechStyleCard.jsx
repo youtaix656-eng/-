@@ -32,6 +32,12 @@ export default function SpeechStyleCard({ speechStyle, setSpeechStyle, recommend
           title="🔤 誤読の対策（経穴の読み・記号・略語・単位）"
           desc={`経穴361穴・経絡・よく誤読される言葉の読み（今${dictCount}語）を使い、→ や 〜、①、Ⅲ型、ADL のような略語、mmHg などの単位、2〜3・1/2・○×を言葉に直して読みます。`}
         />
+        <Opt on={!!speechStyle.homophoneMeridian} onToggle={() => setSpeechStyle({ homophoneMeridian: !speechStyle.homophoneMeridian })}
+          title="🈁 同じ読みの経穴に経絡を添える" desc="少海・小海・照海（どれも「しょうかい」）のように同じ読みの経穴が出てきたら、「心経のしょうかい」「腎経のしょうかい」のように経絡を先に言います（文の中に経絡がもう書いてあれば言いません）。" />
+        <Opt on={!!speechStyle.homophoneKanji} onToggle={() => setSpeechStyle({ homophoneKanji: !speechStyle.homophoneKanji })}
+          title="🔤 同じ読みの経穴に字の説明を添える" desc="「少ないに、海」「照らすに、海」のように、どの字かを言葉で説明します（同じ経穴は1つの文につき最初の1回だけ）。" />
+        <Opt on={!!speechStyle.homophoneLocation} onToggle={() => setSpeechStyle({ homophoneLocation: !speechStyle.homophoneLocation })}
+          title="📍 同じ読みの経穴に場所を添える（サブ）" desc="「場所は肘前内側」のように、経穴カードの部位の最初の言葉を添えます。長くなるので必要な時だけオンにしてください。" />
         <Opt on={speechStyle.figureDesc} onToggle={() => setSpeechStyle({ figureDesc: !speechStyle.figureDesc })}
           title="🖼️ 図の説明を読む" desc="図のある問題は、図に描かれている内容を言葉で説明します（図に無いことは足しません）。" />
         <Opt on={!!speechStyle.kindLabel} onToggle={() => setSpeechStyle({ kindLabel: !speechStyle.kindLabel })}

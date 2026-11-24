@@ -981,15 +981,20 @@ export default function AudioMode({
   const [pfTerm, setPfTerm] = useState('');
   const [pfReading, setPfReading] = useState('');
   // 読み上げ方の工夫（2026-11-23）。誤読の対策（readFix）と図の説明は既定オン、聞きやすさの工夫は既定オフ。
-  const speechStyle = { readFix: true, figureDesc: true, ...(settings.audioSpeech || {}) };
+  const speechStyle = { readFix: true, figureDesc: true, homophoneMeridian: true, homophoneKanji: true, ...(settings.audioSpeech || {}) };
   const setSpeechStyle = (patch) => updateSettings({ audioSpeech: { ...(settings.audioSpeech || {}), ...patch } });
-  const SPEECH_RECOMMENDED = { readFix: true, figureDesc: true, sentencePause: true, kindLabel: true, bodyWords: true, sunNote: true, meridianFlow: true };
+  const SPEECH_RECOMMENDED = { readFix: true, figureDesc: true, homophoneMeridian: true, homophoneKanji: true, sentencePause: true, kindLabel: true, bodyWords: true, sunNote: true, meridianFlow: true };
   // 読みの辞書（本人の手動補正 ＞ 経穴カードの読み ＞ よく誤読される言葉 ＞ 経絡・臓腑の読み）
   // 読み上げを整える部品（音声の画面を開いた時に読み込む。読み込み前は本人の手動補正だけで読む）
   const st = useSpeechText(true);
   const readingDict = useMemo(
     () => (st ? st.buildReadingDict({ cards: keiketsuCards || [], termReadings: TERM_READINGS, common: st.SPEECH_READINGS, userFixes: settings.pronunciationFixes || {} }) : []),
     [st, keiketsuCards, settings.pronunciationFixes]
+  );
+  // 同じ読みの経穴（少海・小海・照海など17組）。経絡・字の説明・場所を添えて聞き分ける（2026-11-24）
+  const homophoneInfo = useMemo(
+    () => (st && keiketsuCards ? st.buildHomophoneInfo(keiketsuCards, st.HOMOPHONE_KANJI_HINTS) : null),
+    [st, keiketsuCards]
   );
 
   // 盲目の受験生からの改善提案#2：キーワードの前後に読点を入れて一拍おくだけの
@@ -1226,6 +1231,10 @@ export default function AudioMode({
     if (source === 'confusingPairs') {
       return CONFUSING_PAIRS.map((c) => ({ kind: 'compare', comp: c }));
     }
+    // 同じ読みの経穴ドリル（2026-11-24）：組ごとに「いくつある？」→1つずつ「どの字？」
+    if (source === 'homophone') {
+      return st && homophoneInfo ? st.homophoneDrillItems(homophoneInfo) : [];
+    }
     // #1・#2：体の場所法（八会穴等、体の上から下の順で経穴を読む）。
     if (source === 'bodyLocation') {
       const set = BODY_LOCATION_SETS.find((s) => s.id === bodyLocationSetId) || BODY_LOCATION_SETS[0];
@@ -1323,7 +1332,7 @@ export default function AudioMode({
     base = applyTarget(base);
     return withProgressAnnounce(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState, audioNewPct, bodyLocationSetId, homeworkIds, prependReviewOn, keiketsuCards, keiketsuRecallOn, frozenReviewIds]);
+  }, [mode, source, selectedKeyword, chain, summary, flashcard, shuffleOn, clusters, kwNames, relatedMap, weakNames, weakRanked, dailyKw, questions, links, reviewPool, taggedQuestions, hasKeywords, filteredPool, filterActive, customReviewIds, leechFirst, srs, mindmapData, filterSubject, filterGenre, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, caseLinkMap, nagameOnly, excludeNagame, snoozedOnly, excludeSnoozed, reviewIdSet, snoozeLogState, audioNewPct, bodyLocationSetId, homeworkIds, prependReviewOn, keiketsuCards, keiketsuRecallOn, frozenReviewIds, homophoneInfo, st]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const rateRef = useRef(rate);
@@ -1370,6 +1379,11 @@ export default function AudioMode({
       const fixes = settings.pronunciationFixes || {};
       for (const term of Object.keys(fixes)) if (term) t = t.split(term).join(fixes[term]);
       return t;
+    }
+    if (homophoneInfo) {
+      t = st.annotateHomophones(t, homophoneInfo, {
+        meridian: !!speechStyle.homophoneMeridian, kanji: !!speechStyle.homophoneKanji, location: !!speechStyle.homophoneLocation,
+      });
     }
     if (speechStyle.bodyWords) t = st.addBodyWords(t);
     // 誤読の対策がオフの時は、今までどおり本人の手動補正だけをかける
@@ -1624,7 +1638,7 @@ export default function AudioMode({
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
     () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
-    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn, newSlowdownOn, answeredIds, rate, firstLetterOnly, storyPauseOn, whyOnAnswerOn, ifThenOn, voiceAnswerOn, pureRecallOn, adaptiveGapOn, keiketsuRecallOn, gap, settings.audioSpeech, readingDict, mindmapData, st] // eslint-disable-line react-hooks/exhaustive-deps
+    [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn, newSlowdownOn, answeredIds, rate, firstLetterOnly, storyPauseOn, whyOnAnswerOn, ifThenOn, voiceAnswerOn, pureRecallOn, adaptiveGapOn, keiketsuRecallOn, gap, settings.audioSpeech, readingDict, mindmapData, st, homophoneInfo] // eslint-disable-line react-hooks/exhaustive-deps
   );
   // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
   const planSig = useMemo(
@@ -3571,6 +3585,13 @@ export default function AudioMode({
           >
             😵 紛らわしいペア（{CONFUSING_PAIRS.length}組）
           </button>
+          <button
+            className="btn sm"
+            disabled={!homophoneInfo}
+            onClick={() => startSimpleSource('homophone', `🈁 同じ読みの経穴を${homophoneInfo ? homophoneInfo.groups.length : ''}組、聞き分けます`)}
+          >
+            🈁 同じ読みの経穴ドリル{homophoneInfo ? `（${homophoneInfo.groups.length}組）` : '（読み込み中）'}
+          </button>
           {homeworkIds.length > 0 && (
             <button
               className="btn sm"
@@ -3582,6 +3603,7 @@ export default function AudioMode({
         </div>
         <p className="inline-note" style={{ marginTop: 6 }}>
           体の場所法：頭→顔→首→肩→胸→お腹→腰→太もも→膝→すね→足の順に経穴を配置して読みます。
+          同じ読みの経穴ドリル：少海・小海・照海のように読みが同じ経穴を、組ごとに「いくつある？」→1つずつ「どの字？」と聞き分けます。
           宿題リプレイ：「📌 あとで調べる」に登録してから一晩（12時間）以上経った問題だけを優先して読み直します。
         </p>
         {source === 'bodyLocation' && (

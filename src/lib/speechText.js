@@ -267,3 +267,89 @@ export function kanjiWords(text, limit = 12) {
   }
   return out;
 }
+
+// ---- 同じ読みの経穴（2026-11-24）----
+// 少海・小海・照海はどれも「しょうかい」で、耳だけでは区別できない。
+// ①経絡を名前の前に添える（心経のしょうかい）②字の説明を添える（少ないに、海）③場所を添える（任意）。
+const MERIDIAN_SHORT_RE = /(心包|三焦|大腸|小腸|膀胱|肺|胃|脾|心|腎|胆|肝)経$/;
+export function meridianShort(meridian) {
+  const m = String(meridian || '');
+  if (m === '督脈' || m === '任脈') return m;
+  const hit = m.match(MERIDIAN_SHORT_RE);
+  return hit ? `${hit[1]}経` : m;
+}
+function locationHead(location) {
+  return String(location || '').split(/[、。]/)[0].trim();
+}
+// 経穴カードから、同じ読みが2つ以上ある経穴だけを集める
+export function buildHomophoneInfo(cards, hints = {}) {
+  const byYomi = new Map();
+  for (const c of cards || []) {
+    if (!c || !c.name || !c.yomi) continue;
+    if (!byYomi.has(c.yomi)) byYomi.set(c.yomi, []);
+    byYomi.get(c.yomi).push(c);
+  }
+  const map = new Map();
+  const groups = [];
+  for (const [yomi, list] of byYomi) {
+    if (list.length < 2) continue;
+    const members = list.map((c) => ({
+      name: c.name, yomi, short: meridianShort(c.meridian), meridian: c.meridian || '',
+      hint: hints[c.name] || '', loc: locationHead(c.location),
+    }));
+    const shorts = members.map((m) => m.short);
+    for (const m of members) {
+      m.uniqueMeridian = shorts.filter((s) => s === m.short).length === 1;
+      m.others = members.filter((o) => o !== m).map((o) => o.name);
+      map.set(m.name, m);
+    }
+    groups.push({ yomi, members });
+  }
+  return { map, groups };
+}
+// 文の中の同じ読みの経穴に、経絡・字の説明・場所を添える（同じ経穴は文ごとに最初の1回だけ）
+export function annotateHomophones(text, info, opts = {}) {
+  if (!text || !info || !info.map || info.map.size === 0) return text || '';
+  const { meridian = true, kanji = true, location = false } = opts;
+  if (!meridian && !kanji && !location) return text;
+  const names = [...info.map.keys()].sort((a, b) => b.length - a.length);
+  const re = new RegExp(names.map(escRe).join('|'), 'g');
+  const str = String(text);
+  const done = new Set();
+  return str.replace(re, (name, offset) => {
+    if (done.has(name) || !safeToReplace(str, offset, name.length)) return name;
+    done.add(name);
+    const m = info.map.get(name);
+    const near = str.slice(Math.max(0, offset - 12), offset + name.length + 12);
+    const pre = meridian && m.short && !near.includes(m.short) ? `${m.short}の` : '';
+    const tail = [];
+    if (kanji && m.hint && !str.includes(m.hint)) tail.push(m.hint);
+    if (location && m.loc && !str.includes(m.loc)) tail.push(`場所は${m.loc}`);
+    return `${pre}${name}${tail.length ? `、${tail.join('、')}、` : ''}`;
+  });
+}
+// 同じ読みの経穴ドリル：組ごとに「いくつあるか」→1つずつ「どの字か」
+export function homophoneDrillItems(info) {
+  const items = [];
+  for (const g of (info && info.groups) || []) {
+    const n = g.members.length;
+    items.push({
+      kind: 'flashcard',
+      keyword: `${g.yomi}（同じ読み${n}つ）`,
+      recallPrompt: `同じ読みの経穴。${g.yomi}、と読む経穴はいくつある？`,
+      waitGapSec: 2,
+      text: `${n}つあります。` + g.members.map((m, i) => `${i + 1}つめ、${m.short}の${m.name}、${m.hint}。`).join(''),
+    });
+    for (const m of g.members) {
+      const cue = m.uniqueMeridian ? `${m.short}の` : `${m.loc}にある`;
+      items.push({
+        kind: 'flashcard',
+        keyword: `${cue}${g.yomi}は、どの字？`,
+        recallPrompt: `問題。${cue}、${g.yomi}は、どの字？`,
+        waitGapSec: 3,
+        text: `${m.hint}。${m.name}です。場所は、${m.loc}。`,
+      });
+    }
+  }
+  return items;
+}

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {
   buildReadingDict, applyReadingDict, toSpeechText, readSymbols, termsWithReading, addBodyWords,
   questionKindText, meridianFlowText, hasSun, shortenChoice, FIGURE_DESCRIPTIONS, splitSentences,
-  pauseBeforeDirections, kanjiWords,
+  pauseBeforeDirections, kanjiWords, buildHomophoneInfo, annotateHomophones, homophoneDrillItems, meridianShort,
 } from '../src/lib/speechText.js';
 import { KEIKETSU_CARDS } from '../src/data/keiketsuCards.js';
-import { SPEECH_READINGS } from '../src/data/speechReadings.js';
+import { SPEECH_READINGS, HOMOPHONE_KANJI_HINTS } from '../src/data/speechReadings.js';
 import { TERM_READINGS } from '../src/lib/yomi.js';
 import { SEED_BANKS } from '../src/data/seedRegistry.js';
 
@@ -105,4 +105,33 @@ test('実際の問題文を読み上げ用に直しても落ちない', () => {
     n++;
   }
   assert.ok(n > 3000);
+});
+
+const homo = buildHomophoneInfo(KEIKETSU_CARDS, HOMOPHONE_KANJI_HINTS);
+
+test('同じ読みの経穴は全部、字の説明を持っている', () => {
+  assert.ok(homo.groups.length >= 17);
+  for (const g of homo.groups) for (const m of g.members) assert.ok(m.hint, `${m.name}（${g.yomi}）の字の説明がありません`);
+  assert.equal(meridianShort('手の少陰心経'), '心経');
+  assert.equal(meridianShort('手の厥陰心包経'), '心包経');
+  assert.equal(meridianShort('督脈'), '督脈');
+});
+
+test('同じ読みの経穴に経絡・字の説明を添える（同じ文では1回だけ・書いてあれば言わない）', () => {
+  assert.equal(annotateHomophones('少海を取る', homo), '心経の少海、少ないに、海、を取る');
+  assert.equal(annotateHomophones('少海と少海', homo), '心経の少海、少ないに、海、と少海');
+  assert.equal(annotateHomophones('心経の少海', homo, { kanji: false }), '心経の少海');
+  assert.equal(annotateHomophones('照海穴', homo, { kanji: false }), '腎経の照海穴');
+  assert.equal(annotateHomophones('合谷', homo), '合谷');
+  assert.match(annotateHomophones('照海', homo, { meridian: false, kanji: false, location: true }), /場所は足内側/);
+  assert.equal(annotateHomophones('少海', homo, { meridian: false, kanji: false }), '少海');
+});
+
+test('同じ読みのドリル：経絡が同じ組（天宗・天窓）は場所で問う', () => {
+  const items = homophoneDrillItems(homo);
+  assert.ok(items.length >= homo.groups.length * 3);
+  const tenso = items.filter((x) => /てんそう/.test(x.recallPrompt) && /どの字/.test(x.recallPrompt));
+  assert.equal(tenso.length, 2);
+  for (const t of tenso) assert.doesNotMatch(t.recallPrompt, /小腸経の/);
+  for (const x of items) assert.doesNotMatch(x.recallPrompt, /少海|小海|照海/);
 });
