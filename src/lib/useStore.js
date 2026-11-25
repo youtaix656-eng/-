@@ -1075,7 +1075,7 @@ export function useStore() {
     // 設定の「自動世代バックアップ」から元に戻せるように）。取れなくても復元は続ける。
     try {
       const snap = await import('./backupSnapshots.js');
-      await snap.takeSnapshot(storage, { auto: true });
+      await snap.takeSnapshot(storage, { auto: true, reason: 'beforeRestore' });
     } catch (e) { /* noop */ }
     await storage.importAll(data);
     await storage.flushNow();

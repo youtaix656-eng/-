@@ -15,19 +15,22 @@ export default function Diagnostics({ store, onToast }) {
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [busy, setBusy] = useState(false);
 
+  // 1つ調べられなくても残りは出す（アプリ版などで Service Worker の確認が失敗すると、以前は全部が「確認中…」のままだった）
   const refresh = async () => {
-    setEst(await estimateStorage());
-    setPersisted(await isPersisted());
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      setSw(reg ? '登録済み（オフライン対応）' : '未登録');
-    } else setSw('非対応ブラウザ');
+    try { setEst(await estimateStorage()); } catch (e) { setEst(null); }
+    try { setPersisted(await isPersisted()); } catch (e) { setPersisted(false); }
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        setSw(reg ? '登録済み（オフライン対応）' : '未登録');
+      } else setSw('非対応（アプリ版・一部のブラウザ）');
+    } catch (e) { setSw('確認できませんでした'); }
     setOnline(navigator.onLine);
   };
   useEffect(() => { if (open) refresh(); }, [open]);
 
   const doPersist = async () => {
-    const ok = await requestPersistent();
+    const ok = await requestPersistent().catch(() => false);
     setPersisted(await isPersisted());
     onToast?.(ok ? '永続ストレージが有効になりました' : '永続化は許可されませんでした（後で再試行できます）');
   };

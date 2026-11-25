@@ -2038,6 +2038,11 @@ export default function AudioMode({
     // 自己採点した直後にも書く（以前は次の問題へ進むまで書かず、採点してすぐ閉じると二重記録防止が消えていた）
   }, [snap.index, planSig, audioReady, builtPlan.length, source, filterSubject, filterGenre, filterKeyword, filterRound, sessionGradedCount]);
 
+  // 設定画面で変えた速度・間をこの画面にも反映する。再生中は画面を閉じても残るので、
+  // 以前は設定画面で変えても、ここで▶を押した瞬間に古い値で設定を書き戻していた。
+  useEffect(() => { const v = Number(settings.speechRate); if (v && v !== rateRef.current) setRate(v); }, [settings.speechRate]);
+  useEffect(() => { if (Number.isFinite(settings.gapSeconds)) setGap(settings.gapSeconds); }, [settings.gapSeconds]);
+  useEffect(() => { if (Number.isFinite(settings.nextGapSeconds)) setNextGap(settings.nextGapSeconds); }, [settings.nextGapSeconds]);
   // 再生設定をエンジンへ反映（再生中でも即時）
   useEffect(() => { engine.configure({ rate: effectiveRateOf(rate) }); }, [rate]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { engine.configure({ gapSeconds: gap }); }, [gap]);

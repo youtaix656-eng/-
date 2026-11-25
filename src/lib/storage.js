@@ -372,7 +372,7 @@ export const clearPomoMusic = () => remove(KEYS.pomoMusic);
 // 同じ考え方で、常に「今選んでいる1曲」だけが流れる。オートアドバンスを足すとその
 // 考え方と矛盾するため、あえて増やさなかった）。
 // 古いデータ（kindを持たない）はnormalizePomoSongがkind:'file'として読む。
-const POMO_PLAYLIST_CAP = 30;
+export const POMO_PLAYLIST_CAP = 30;
 function genPomoId() {
   return 'pm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
@@ -704,6 +704,15 @@ export async function importAll(data) {
   if (data.examProgress && typeof data.examProgress === 'object') await saveExamProgress(data.examProgress);
   if (data.audioProgress && typeof data.audioProgress === 'object') await saveAudioProgress(data.audioProgress);
   if (data.session && typeof data.session === 'object') await saveSession(data.session);
+  // 丸ごとのバックアップ（extras つき）で「続きから」が空だった項目は、この端末に残った古い続きも消す。
+  // 残すと、復元した記録と食い違う古い位置から「前回の続きから」が始まっていた。
+  if (data.extras && typeof data.extras === 'object') {
+    if ('quizProgress' in data && !data.quizProgress) await clearQuizProgress();
+    if ('reviewProgress' in data && !data.reviewProgress) await clearReviewProgress();
+    if ('examProgress' in data && !data.examProgress) await clearExamProgress();
+    if ('audioProgress' in data && !data.audioProgress) await clearAudioProgress();
+    if ('session' in data && !data.session) await clearSession();
+  }
   if (Array.isArray(data.glossaryExtra)) await saveGlossaryExtra(data.glossaryExtra);
   if (Array.isArray(data.glossaryRemovedIds)) await saveGlossaryRemovedIds(data.glossaryRemovedIds);
   if (Array.isArray(data.tocCandidates)) await saveTocCandidates(data.tocCandidates);

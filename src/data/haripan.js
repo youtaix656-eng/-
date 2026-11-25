@@ -176,13 +176,27 @@ export function haripanReminder(examDate, dueCount = 0, stalledDays = null, exam
 // 90分以内なら「勤務明け復習」を促す（変革ノートのシフト対応＝勤務日は終業+90分、と同じ考え方）。
 // 手元に無い勤務形態の判定はしない——本人が設定した時刻だけを使う。
 export function shiftReminderDue(shiftReminder, now = new Date()) {
-  if (!shiftReminder || !shiftReminder.enabled || !shiftReminder.afterTime) return false;
-  const [hh, mm] = String(shiftReminder.afterTime).split(':').map((x) => parseInt(x, 10));
-  if (!Number.isFinite(hh)) return false;
-  const start = new Date(now);
-  start.setHours(hh, mm || 0, 0, 0);
-  const end = new Date(start.getTime() + 90 * 60 * 1000);
-  return now >= start && now <= end;
+  return shiftReminderKey(shiftReminder, now) != null;
+}
+
+// 勤務明けの90分のどの回に当たっているか（「YYYY-MM-DD HH:MM」＝その回の勤務終了の日時）。
+// 当たっていなければ null。23時30分のように日付をまたぐ回は、0時を過ぎても前日の回として拾う
+// （以前は当日の23時30分としか比べず、0時〜1時の間は一度も当たらなかった）。
+export function shiftReminderKey(shiftReminder, now = new Date()) {
+  if (!shiftReminder || !shiftReminder.enabled) return null;
+  const [hh, mm] = String(shiftReminder.afterTime || '08:00').split(':').map((x) => parseInt(x, 10));
+  if (!Number.isFinite(hh)) return null;
+  for (const back of [0, 1]) {
+    const start = new Date(now);
+    start.setDate(start.getDate() - back);
+    start.setHours(hh, Number.isFinite(mm) ? mm : 0, 0, 0);
+    const end = new Date(start.getTime() + 90 * 60 * 1000);
+    if (now >= start && now <= end) {
+      const p = (n) => String(n).padStart(2, '0');
+      return `${start.getFullYear()}-${p(start.getMonth() + 1)}-${p(start.getDate())} ${p(start.getHours())}:${p(start.getMinutes())}`;
+    }
+  }
+  return null;
 }
 
 // 直近の本番同形式の模試（午前/午後/通し）から何日経過しているか。未実施ならnull

@@ -239,7 +239,7 @@ export default function FileBackupCard({ settings, updateSettings, markBackedUp,
         />
         <span>
           起動時に自動バックアップ
-          <small>1日1回まで、アプリを開いた時にバックアップを自動保存します。</small>
+          <small>1日1回まで、アプリを開いた時にバックアップを自動保存します（ブラウザは「ダウンロード」、アプリ版は端末の「ダウンロード」フォルダに1日1つずつファイルが増えます。古いものは自分で消してください）。</small>
         </span>
       </label>
     </div>

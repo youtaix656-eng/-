@@ -33,10 +33,11 @@ export async function listSnapshots() {
 }
 
 // 1世代取得して保存。storage は src/lib/storage.js（exportAll を持つ）。
-export async function takeSnapshot(storage, { auto = false } = {}) {
+// reason: 'beforeRestore'＝復元する直前に取った世代（間違えて復元した時に戻せるように）
+export async function takeSnapshot(storage, { auto = false, reason = '' } = {}) {
   const full = await storage.exportAll();
   const data = slim(full);
-  const entry = { id: `${Date.now()}`, at: Date.now(), auto, counts: counts(data), data };
+  const entry = { id: `${Date.now()}`, at: Date.now(), auto, reason, counts: counts(data), data };
   const next = rotateSnapshots(await listSnapshots(), entry);
   await idbSet(KEY, next);
   return entry;
@@ -55,6 +56,8 @@ export async function restoreSnapshot(storage, id) {
   const list = await listSnapshots();
   const snap = list.find((s) => s.id === id);
   if (!snap) throw new Error('スナップショットが見つかりません');
+  // 巻き戻す前の今の状態も1つ残す（違う世代を選んでしまっても戻れるように。以前は今の進捗が消えるだけだった）
+  try { await takeSnapshot(storage, { auto: true, reason: 'beforeRestore' }); } catch (e) { /* 取れなくても巻き戻しは続ける */ }
   await storage.importAll(snap.data);
   return snap;
 }

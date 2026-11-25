@@ -135,9 +135,21 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
       ? preview.questions.map((q) => ({ ...q, deck: q.deck || deckName.trim() }))
       : preview.questions;
     if (importMode === 'replace') {
-      if (!confirm(`今ある${questions.length}問をすべて消して、この${qs.length}問に置き換えます。よろしいですか？`)) return;
-      replaceQuestions(qs);
-      onToast(`${qs.length}問に置き換えました`);
+      // ファイルの中で同じ問題文・同じidが重なっていても二重にしない（追加の時と同じ扱い）
+      const { unique } = dedupeAgainst(qs, []);
+      const seenIds = new Set();
+      const list = unique.map((q, i) => {
+        if (q.id && !seenIds.has(q.id)) { seenIds.add(q.id); return q; }
+        let id = `imp-${Date.now().toString(36)}-${i}`;
+        while (seenIds.has(id)) id += 'x';
+        seenIds.add(id);
+        return { ...q, id };
+      });
+      if (!confirm(`今ある${questions.length}問をすべて消して、この${list.length}問に置き換えます。よろしいですか？`)) return;
+      replaceQuestions(list);
+      onToast(list.length < qs.length
+        ? `${list.length}問に置き換えました（ファイルの中で重なっていた${qs.length - list.length}問は1つにまとめました）`
+        : `${list.length}問に置き換えました`);
     } else {
       // 同じ問題文は入れない（同じファイルを2回取り込むと全部二重になっていた）。
       // 問題文は違うのにidがぶつかるものは、学習記録が混ざらないようidを付け直す。
@@ -161,6 +173,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         : `${fresh.length}問を追加しました`);
     }
     setPreview(null);
+    setPasteText('');
   };
 
   const importPaste = () => {
@@ -270,7 +283,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             checked={!!(settings.reminder && settings.reminder.enabled)}
             onChange={(e) => {
               const on = e.target.checked;
-              updateSettings({ reminder: { ...(settings.reminder || {}), enabled: on } });
+              updateSettings({ reminder: { time: '07:00', ...(settings.reminder || {}), enabled: on } });
               if (!on) return;
               // 端末の通知が出せない時は黙らない（アプリ内のお知らせと読み上げは出る）
               if (typeof Notification === 'undefined') {
@@ -310,11 +323,14 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           <input
             type="checkbox"
             checked={!!(settings.shiftReminder && settings.shiftReminder.enabled)}
-            onChange={(e) => updateSettings({ shiftReminder: { ...(settings.shiftReminder || {}), enabled: e.target.checked } })}
+            onChange={(e) => updateSettings({
+              // 画面に出している08:00も一緒に残す（以前は時刻を一度触らないと保存されず、一度も知らせなかった）
+              shiftReminder: { afterTime: '08:00', ...(settings.shiftReminder || {}), enabled: e.target.checked },
+            })}
           />
           <span>
             夜勤・交代勤務の勤務明けリマインド
-            <small>設定した勤務終了時刻から90分以内にアプリを開くと「勤務明け復習」を一言添えます。</small>
+            <small>勤務終了時刻から90分以内にアプリを開いていると、その回に1度だけ「勤務明け復習」をお知らせします（毎日のリマインドがオフでも出ます。日付をまたぐ時刻も使えます）。</small>
           </span>
         </label>
         {settings.shiftReminder && settings.shiftReminder.enabled && (
@@ -621,9 +637,11 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             const [missTypes, selfKindCounts] = await Promise.all([loadMissTypes(), loadSelfKindCounts()]);
             saveFile(exportHistoryCsv(history, questions, { missTypes, selfKindCounts }), 'shinkyu_history.csv', 'text/csv');
           }}
+          disabled={history.length === 0}
         >
           解答履歴をCSVで保存
         </button>
+        {history.length === 0 && <div className="hint">まだ解答の記録がありません。</div>}
         {/* #29：復習を毎日ゼロに戻せた日のログをCSVで書き出す */}
         <button
           className="btn"
@@ -659,10 +677,10 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
               min="0.5"
               max="2"
               step="0.05"
-              value={settings.speechRate}
+              value={Number(settings.speechRate) || 1}
               onChange={(e) => updateSettings({ speechRate: Number(e.target.value) })}
             />
-            <span className="range-val">{settings.speechRate.toFixed(2)}×</span>
+            <span className="range-val">{(Number(settings.speechRate) || 1).toFixed(2)}×</span>
           </div>
         </div>
 
@@ -682,12 +700,30 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           </div>
         </div>
 
+        {/* 音声学習の画面にある「次の問題まで待つ時間」をここからも変えられるように（以前はこの画面に無かった） */}
+        <div className="field">
+          <label htmlFor="settings-next-gap">解答・解説のあと、次の問題までの間</label>
+          <div className="range-row">
+            <input
+              id="settings-next-gap"
+              type="range"
+              min="0"
+              max="15"
+              step="1"
+              value={settings.nextGapSeconds ?? 1}
+              onChange={(e) => updateSettings({ nextGapSeconds: Number(e.target.value) })}
+            />
+            <span className="range-val">{settings.nextGapSeconds ?? 1}秒</span>
+          </div>
+        </div>
+
         {voices.length > 0 && (
           <div className="field" style={{ marginBottom: 0 }}>
             <label>音声（ボイス）</label>
             <select
               value={settings.voiceURI}
-              onChange={(e) => updateSettings({ voiceURI: e.target.value })}
+              // 自分で声を選んだら、音声学習の「声のプリセット」の印は外す（別の声なのにプリセットが選ばれたままに見えていた）
+              onChange={(e) => updateSettings({ voiceURI: e.target.value, voicePreset: '' })}
             >
               <option value="">既定の日本語音声</option>
               {voices.map((v) => (
@@ -736,7 +772,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           学習の進捗をリセット
         </button>
         <p className="inline-note" style={{ marginTop: 10 }}>
-          データはすべてこの端末のブラウザ内（IndexedDB）に保存されます。サーバーには送信されません。
+          データはこの端末の中（IndexedDB）に保存されます。自分でオンにした「Googleドライブ連携」「ボイスクローン」を使う時だけ、その機能に必要なものが外へ送られます。
         </p>
       </div>
 
@@ -783,6 +819,10 @@ function LoginSettings({ store, onToast }) {
     const q = question.trim();
     if (!q) return setMsg('秘密の質問を入力してください。');
     if (!has && !answer.trim()) return setMsg('秘密の質問の答えを入力してください。');
+    // 質問だけ変えて答えを空欄のままにすると、新しい質問に古い答えが残り、忘れた時に入れなくなる
+    if (has && q !== (auth.question || '').trim() && !answer.trim()) {
+      return setMsg('秘密の質問を変える時は、新しい答えも入力してください。');
+    }
     // 答え：新規は必須、変更時は空なら据え置き
     setBusy(true);
     try {

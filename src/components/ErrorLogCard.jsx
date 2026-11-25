@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getErrorLog, clearErrorLog } from '../lib/errorLog.js';
+import { downloadFile } from '../lib/download.js';
 
 // 端末内エラーログの閲覧・消去（外部送信なし）。不具合報告の材料に使う。
 function fmt(t) {
@@ -18,9 +19,16 @@ export default function ErrorLogCard({ onToast }) {
   const copyAll = async () => {
     const text = list.map((e) => `[${fmt(e.t)}] ${e.kind}: ${e.message}${e.detail ? ' @ ' + e.detail : ''}`).join('\n');
     try { await navigator.clipboard.writeText(text || '(ログなし)'); onToast?.('エラーログをコピーしました'); }
-    catch (e) { onToast?.('コピーできませんでした'); }
+    catch (e) {
+      // アプリ版などでコピーが使えない時は、ファイルに保存して渡せるようにする（黙って諦めない）
+      const r = await downloadFile(text || '(ログなし)', 'shinkyu_error_log.txt', 'text/plain');
+      onToast?.(r.ok ? `コピーできなかったので、ファイル（shinkyu_error_log.txt）に保存しました${r.native ? `（${r.location}）` : ''}` : 'コピーも保存もできませんでした');
+    }
   };
-  const clear = async () => { await clearErrorLog(); await load(); onToast?.('エラーログを消去しました'); };
+  const clear = async () => {
+    if (!confirm(`エラーログ（${list.length}件）を消去します。不具合を報告する予定があれば、先に「コピー」してください。よろしいですか？`)) return;
+    await clearErrorLog(); await load(); onToast?.('エラーログを消去しました');
+  };
 
   return (
     <div className="card" style={{ marginTop: 12 }}>

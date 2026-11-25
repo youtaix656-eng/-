@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  POMO_PLAYLIST_CAP,
   addPomoPlaylistFiles,
   addPomoPlaylistFileHandles,
   addPomoPlaylistYoutube,
@@ -55,6 +56,19 @@ export function PomodoroConfigFields({ cfg, setCfg, onToast, onMusicChange }) {
   const activeId = cfg.activeSongId;
   const activeSong = playlist.find((s) => s.id === activeId) || playlist[0] || null;
 
+  // プレイリストは30曲まで。以前は超えた分だけ古い曲（選んでいる曲も）を黙って消していた。
+  // 入る分だけ足し、入らない分はそう伝える。
+  const fitToRoom = (items) => {
+    const room = Math.max(0, POMO_PLAYLIST_CAP - playlist.length);
+    if (items.length > room) {
+      onToast?.(room === 0
+        ? `⚠️ プレイリストは${POMO_PLAYLIST_CAP}曲までです。いらない曲を削除してから追加してください。`
+        : `⚠️ プレイリストは${POMO_PLAYLIST_CAP}曲までなので、${room}曲だけ追加します。`);
+    }
+    return items.slice(0, room);
+  };
+  const saveFailed = (err) => onToast?.(`⚠️ 保存できませんでした（${(err && err.message) || '端末の空き容量が足りない可能性があります'}）`);
+
   const afterAdd = (next, firstNewId, toastMsg) => {
     setPlaylist(next);
     if (!activeSong) setCfg({ activeSongId: firstNewId });
@@ -73,9 +87,12 @@ export function PomodoroConfigFields({ cfg, setCfg, onToast, onMusicChange }) {
       ok.push(f);
     }
     if (overSize > 0) onToast?.(`⚠️ ${overSize}件はファイルが大きすぎます（15MBまで）。短い曲を選んでください。`);
-    if (!ok.length) return;
-    const next = await addPomoPlaylistFiles(ok);
-    afterAdd(next, next[next.length - ok.length].id, ok.length === 1 ? '曲をプレイリストに追加しました（取り込み）' : `曲を${ok.length}件プレイリストに追加しました（取り込み）`);
+    const fit = fitToRoom(ok);
+    if (!fit.length) return;
+    try {
+      const next = await addPomoPlaylistFiles(fit);
+      afterAdd(next, next[next.length - fit.length].id, fit.length === 1 ? '曲をプレイリストに追加しました（取り込み）' : `曲を${fit.length}件プレイリストに追加しました（取り込み）`);
+    } catch (err) { saveFailed(err); }
   };
 
   const connectFiles = async () => {
@@ -97,9 +114,10 @@ export function PomodoroConfigFields({ cfg, setCfg, onToast, onMusicChange }) {
         }
       }
       if (overSize > 0) onToast?.(`⚠️ ${overSize}件はファイルが大きすぎます（15MBまで）。スキップします。`);
-      if (!ok.length) return;
-      const next = await addPomoPlaylistFileHandles(ok);
-      afterAdd(next, next[next.length - ok.length].id, ok.length === 1 ? '曲をプレイリストに接続しました' : `曲を${ok.length}件プレイリストに接続しました`);
+      const fit = fitToRoom(ok);
+      if (!fit.length) return;
+      const next = await addPomoPlaylistFileHandles(fit);
+      afterAdd(next, next[next.length - fit.length].id, fit.length === 1 ? '曲をプレイリストに接続しました' : `曲を${fit.length}件プレイリストに接続しました`);
     } catch (err) {
       if (err?.name !== 'AbortError') onToast?.('⚠️ ファイルへの接続に失敗しました。');
     }
@@ -111,13 +129,21 @@ export function PomodoroConfigFields({ cfg, setCfg, onToast, onMusicChange }) {
       onToast?.('⚠️ YouTubeのURLとして読み取れませんでした。動画のURLを貼ってください。');
       return;
     }
+    if (playlist.some((s) => s.kind === 'youtube' && s.videoId === id)) {
+      onToast?.('この動画はもうプレイリストに入っています。');
+      return;
+    }
+    if (!fitToRoom([id]).length) return;
     setYtBusy(true);
-    const title = await fetchYoutubeTitle(id);
+    let title = null;
+    try { title = await fetchYoutubeTitle(id); } catch (e) { title = null; }
     setYtBusy(false);
     const url = `https://www.youtube.com/watch?v=${id}`;
-    const next = await addPomoPlaylistYoutube(id, title, url);
-    setYtUrl('');
-    afterAdd(next, next[next.length - 1].id, `YouTubeの曲をプレイリストに追加しました${title ? `（${title}）` : ''}`);
+    try {
+      const next = await addPomoPlaylistYoutube(id, title, url);
+      setYtUrl('');
+      afterAdd(next, next[next.length - 1].id, `YouTubeの曲をプレイリストに追加しました${title ? `（${title}）` : ''}`);
+    } catch (err) { saveFailed(err); }
   };
 
   const selectSong = async (s) => {

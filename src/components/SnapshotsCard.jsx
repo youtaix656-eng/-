@@ -14,16 +14,17 @@ export default function SnapshotsCard({ onToast }) {
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  const load = async () => setList(await listSnapshots());
+  const load = async () => { try { setList(await listSnapshots()); } catch (e) { setList([]); } };
   useEffect(() => { if (open) load(); }, [open]);
 
   const take = async () => {
     setBusy(true);
     try { await takeSnapshot(storage); await load(); onToast?.('現在の状態を1世代保存しました'); }
+    catch (e) { onToast?.(`保存できませんでした（${(e && e.message) || '容量が足りない可能性があります'}）`); }
     finally { setBusy(false); }
   };
   const restore = async (id) => {
-    if (!window.confirm('この世代に巻き戻します。現在の進捗は上書きされます。よろしいですか？')) return;
+    if (!window.confirm('この世代に巻き戻します。今の進捗は「復元前」として1世代残してから上書きします。よろしいですか？')) return;
     setBusy(true);
     try { await restoreSnapshot(storage, id); await storage.flushNow(); onToast?.('復元しました。再読み込みします'); setTimeout(() => window.location.reload(), 900); }
     catch (e) { onToast?.(`復元できませんでした（${(e && e.message) || '不明なエラー'}）`); }
@@ -31,7 +32,10 @@ export default function SnapshotsCard({ onToast }) {
   };
   const remove = async (id) => {
     if (!window.confirm('この世代を削除します。削除すると、この時点へは巻き戻せなくなります。よろしいですか？')) return;
-    await deleteSnapshot(id); await load(); onToast?.('世代を削除しました');
+    setBusy(true);
+    try { await deleteSnapshot(id); await load(); onToast?.('世代を削除しました'); }
+    catch (e) { onToast?.('削除できませんでした'); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -42,7 +46,7 @@ export default function SnapshotsCard({ onToast }) {
       {open && (
         <div style={{ marginTop: 10 }}>
           <p className="inline-note" style={{ marginBottom: 8 }}>
-            学習の進捗・設定を世代ごとに端末内へ自動保存します（1日1回＋手動）。問題データ本体は含めず軽量です。
+            学習の進捗・設定を世代ごとに端末内へ自動保存します（1日1回＋手動＋復元する直前）。問題データ本体は含めず軽量です。
             万一の破損時にワンタップで巻き戻せます。
           </p>
           {list.length === 0 ? (
@@ -52,7 +56,7 @@ export default function SnapshotsCard({ onToast }) {
               {list.map((s) => (
                 <li key={s.id} className="snap-row">
                   <span className="snap-when">
-                    {fmt(s.at)} {s.auto ? <span className="snap-tag">自動</span> : <span className="snap-tag">手動</span>}
+                    {fmt(s.at)} <span className="snap-tag">{s.reason === 'beforeRestore' ? '復元前' : s.auto ? '自動' : '手動'}</span>
                     <small>進捗{s.counts.srs}・履歴{s.counts.history}・模試{s.counts.examResults}</small>
                   </span>
                   <span className="snap-actions">

@@ -7,7 +7,7 @@ import {
 } from './lib/storage.js';
 import { pickTopResumeCandidate } from './lib/resumeHub.js';
 import { daysUntil } from './lib/gamify.js';
-import { haripanReminder, daysSinceLastMockExam, shiftReminderDue } from './data/haripan.js';
+import { haripanReminder, daysSinceLastMockExam, shiftReminderKey } from './data/haripan.js';
 import { daysSinceLastZero } from './lib/reviewZeroLog.js';
 import { loadAudioReviewLog, daysSinceLastAudioReview } from './lib/audioReviewLog.js';
 import { speak, cancelSpeech, isSpeechSupported } from './lib/speech.js';
@@ -503,9 +503,13 @@ export default function App() {
   }, [store.cloudAutoSyncToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 毎日のリマインド通知（指定時刻以降にアプリを開いていたら1日1回）
+  // 1分ごとの見直しは最新の記録で数える（以前は見張りを始めた時点の復習件数などのまま知らせていた）。
+  const reminderStoreRef = useRef(store);
+  reminderStoreRef.current = store;
   useEffect(() => {
     if (!store.loaded) return;
     const check = () => {
+      const store = reminderStoreRef.current;
       const r = store.settings.reminder;
       if (!r || !r.enabled) return;
       const now = new Date();
@@ -514,7 +518,8 @@ export default function App() {
       if (r.lastNotified === today) return;
       const [hh, mm] = String(r.time || '07:00').split(':').map((x) => parseInt(x, 10));
       const target = new Date(now);
-      target.setHours(hh || 7, mm || 0, 0, 0);
+      // 0時（00:00）を「未設定」と取り違えて7時にしていた
+      target.setHours(Number.isFinite(hh) ? hh : 7, Number.isFinite(mm) ? mm : 0, 0, 0);
       if (now < target) return;
       // ハリオ先生からのリマインド（通知＋アプリ内トースト＋読み上げ）。復習期限の件数・
       //   何日ゼロに戻せていないか（#6）も伝える。
@@ -523,8 +528,8 @@ export default function App() {
         (store.dueReviewQuestions || []).length,
         daysSinceLastZero(store.reviewZeroLog),
         daysSinceLastMockExam(store.examResults),
-        daysSinceLastAudioReview(audioReviewLog),
-        shiftReminderDue(store.settings.shiftReminder)
+        daysSinceLastAudioReview(audioReviewLog)
+        // 勤務明けの一言は、下の勤務明けリマインドが別に知らせる（ここで重ねると2回出る）
       );
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -550,6 +555,32 @@ export default function App() {
     return () => clearInterval(iv);
   }, [store.loaded, store.settings.reminder]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 夜勤・交代勤務の勤務明けリマインド。以前は毎日のリマインドの文に一言添えるだけで、
+  // 毎日のリマインドをオンにしていないと出ず、オンでも朝の通知時刻が勤務明けの90分に
+  // 重ならない限り一度も出なかった。勤務明けの90分の間に開いていたら、その回に1度だけ知らせる。
+  useEffect(() => {
+    if (!store.loaded) return;
+    const check = () => {
+      const st = reminderStoreRef.current;
+      const sr = st.settings.shiftReminder;
+      const key = shiftReminderKey(sr);
+      if (!key || sr.lastNotified === key) return;
+      const body = 'ハリオだ。勤務明けだな、お疲れさま。無理せず耳だけで短く復習しよう。' +
+        ((st.dueReviewQuestions || []).length ? `今日の復習は${st.dueReviewQuestions.length}問あるぞ。` : '');
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('ハリオ先生', { body });
+        }
+      } catch (e) { /* noop */ }
+      showToast(`🌙 ${body}`);
+      st.updateSettings({ shiftReminder: { ...sr, lastNotified: key } });
+    };
+    // 毎日のリマインドと同時に出すと、お知らせが1枠しかないので先の方が消える。少し遅らせる
+    const first = setTimeout(check, 6000);
+    const iv = setInterval(check, 60 * 1000);
+    return () => { clearTimeout(first); clearInterval(iv); };
+  }, [store.loaded, store.settings.shiftReminder]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // PWA インストールプロンプトを捕捉
   useEffect(() => {
     const onBip = (e) => {
@@ -570,6 +601,7 @@ export default function App() {
     }
     store.markBackedUp();
     if (!silent) showToast(r.native ? `バックアップを「${r.location}」に保存しました` : 'バックアップを保存しました');
+    else showToast(r.native ? `自動バックアップを「${r.location}」に保存しました（1日1回）` : '自動バックアップを保存しました（1日1回・ダウンロードに保存）');
   };
 
   // 起動時の自動バックアップ（1日1回まで）
@@ -580,7 +612,8 @@ export default function App() {
     const { autoBackupOnStart, lastAutoBackup } = store.settings;
     if (autoBackupOnStart && Date.now() - (lastAutoBackup || 0) > DAY_MS) {
       // 履歴が空のときは何もしない
-      if (store.history.length > 0) doBackup(true);
+      // 黙って保存すると、どこにファイルが増えているのか分からないので、保存できた時だけ一言知らせる
+      if (store.history.length > 0) doBackup(true).then(() => {}).catch(() => {});
     }
   }, [store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -25,7 +25,10 @@ export default function VoiceClone({ settings, updateSettings, apiKey: rawApiKey
 
   const saveKey = () => {
     const k = keyInput.trim();
+    // 欄を空のまま押すと保存済みのキーが消える。消すつもりかを確かめる（以前は黙って消えた）
+    if (!k && apiKey && !confirm('APIキーの欄が空です。保存してあるAPIキーを消しますか？')) return;
     onSaveApiKey(k);
+    keyTouchedRef.current = false;
     onToast?.(k ? 'APIキーを保存しました（この端末にのみ保存）' : 'APIキーを消しました');
   };
 

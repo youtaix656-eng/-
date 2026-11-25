@@ -44,6 +44,9 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
 
   const doUpload = async () => {
     if (!clientId.trim()) { onToast?.('先にOAuthクライアントIDを設定してください'); return; }
+    // ドライブのバックアップは1つだけで、保存すると置き換わる。別の端末で保存した新しい記録を
+    // うっかり古い記録で上書きしないよう確かめる（以前は確認なしで置き換えていた）。
+    if (!confirm('この端末の学習データをGoogleドライブに保存します。ドライブに前のバックアップ（別の端末で保存したものを含む）があれば置き換わります。よろしいですか？')) return;
     setBusy(true);
     try {
       const token = await ensureToken();
@@ -188,6 +191,8 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
             <input
               type="checkbox"
               checked={!!settings.googleDriveAutoSync}
+              // クライアントIDが無いままオンにしても何も同期されない（以前はオンに見えるだけだった）
+              disabled={!clientId.trim() && !settings.googleDriveAutoSync}
               onChange={(e) => updateSettings({ googleDriveAutoSync: e.target.checked })}
             />
             <span>
@@ -198,6 +203,7 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
                 問題データは含みません）。片方の端末だけの進捗が消えないよう、問題ごと・
                 解答記録ごとにマージします。初回は上の「保存」または「復元」を一度手動で行い、
                 Googleへのログインを済ませてください（以後は自動）。
+                {!clientId.trim() && '（先に上でOAuthクライアントIDを入れると選べます）'}
               </small>
             </span>
           </label>
