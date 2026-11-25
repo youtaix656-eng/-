@@ -21,15 +21,17 @@ export function summarizeHistoryForTransfer(history, now = Date.now()) {
   for (const e of history) {
     if (!e || e.at == null) continue;
     if (e.at >= cutoff) { recent.push(e); continue; }
-    const day = new Date(e.at).toISOString().slice(0, 10);
+    // 日付は端末の日付で区切る（UTCだと日本時間の朝9時前の解答が前の日に入っていた）
+    const dt = new Date(e.at);
+    const day = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
     const key = `${day}|${e.subject || ''}|${e.correct ? 1 : 0}`;
-    buckets.set(key, (buckets.get(key) || 0) + 1);
+    buckets.set(key, (buckets.get(key) || 0) + (Number.isFinite(Number(e.n)) && Number(e.n) > 0 ? Number(e.n) : 1));
   }
   const aggregated = [];
   for (const [key, n] of buckets) {
     const [day, subject, correctFlag] = key.split('|');
     aggregated.push({
-      at: new Date(`${day}T00:00:00.000Z`).getTime(),
+      at: new Date(`${day}T00:00:00`).getTime(),
       ...(subject ? { subject } : {}),
       correct: correctFlag === '1',
       n,

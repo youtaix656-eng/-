@@ -17,12 +17,20 @@ export function mergeSrs(local, remote) {
 }
 
 // history: 追記型なのでUNION（同一の解答記録は重複除去）。時刻順に並べ直す。
+//   片方の端末で古い履歴を「件数のまとめ」（n を持つ記録）にしていたら、まとめた日までの
+//   1件ずつの記録は同じ解答の重なりなので落とす（落とさないと二重に数え、軽量化も元に戻る）。
 export function mergeHistory(local, remote) {
   const seen = new Set();
   const out = [];
-  for (const e of [...(local || []), ...(remote || [])]) {
+  const all = [...(local || []), ...(remote || [])];
+  let summaryUntil = -Infinity;
+  for (const e of all) {
+    if (e && e.n != null && Number.isFinite(e.at)) summaryUntil = Math.max(summaryUntil, e.at + 86400000);
+  }
+  for (const e of all) {
     if (!e) continue;
-    const key = `${e.questionId}|${e.at}|${e.correct}|${e.source || ''}|${e.selfKind || ''}`;
+    if (e.n == null && Number.isFinite(summaryUntil) && (e.at || 0) < summaryUntil) continue;
+    const key = `${e.questionId}|${e.at}|${e.correct}|${e.source || ''}|${e.selfKind || ''}|${e.subject || ''}|${e.n ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(e);

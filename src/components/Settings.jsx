@@ -941,21 +941,22 @@ function LoginSettings({ store, onToast }) {
         <div>
           <div className="field">
             <label>ログインID（メールアドレス）</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
           </div>
           {has && (
             <div className="field">
               <label>現在のパスワード（本人確認）</label>
-              <input type="password" value={curPw} onChange={(e) => setCurPw(e.target.value)} />
+              <input type="password" autoComplete="current-password" value={curPw} onChange={(e) => setCurPw(e.target.value)} />
             </div>
           )}
           <div className="field">
             <label>{has ? '新しいパスワード（変えない場合は空欄）' : 'パスワード（アルファベット4＋数字4以上）'}</label>
-            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="例）study2024" />
+            {/* 新しいパスワードの欄にブラウザが保存済みのパスワードを自動で入れると、確認欄と食い違って保存できなかった */}
+            <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="例）study2024" />
           </div>
           <div className="field">
             <label>パスワード（確認）</label>
-            <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+            <input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
           </div>
           <div className="field">
             <label>秘密の質問</label>

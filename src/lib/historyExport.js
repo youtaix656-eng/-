@@ -14,7 +14,7 @@ function esc(v) {
 // （これまでCSVには含まれておらず、せっかく記録している情報が書き出しで欠落していた）。
 export function exportHistoryCsv(history, questions = [], { missTypes = {}, selfKindCounts = {} } = {}) {
   const byId = new Map(questions.map((q) => [q.id, q]));
-  const header = ['日時', '科目', '問題文', '正誤', '出題元', '誤答理由の型', '★段階'];
+  const header = ['日時', '科目', '問題文', '正誤', '出題元', '誤答理由の型', '★段階', '件数'];
   const lines = [header.join(',')];
   for (const h of history) {
     const q = byId.get(h.questionId);
@@ -23,11 +23,13 @@ export function exportHistoryCsv(history, questions = [], { missTypes = {}, self
     const row = [
       h.at ? new Date(h.at).toLocaleString('ja-JP') : '',
       h.subject || q?.subject || '',
-      q?.question || '',
+      // 軽量化でまとめた記録は1問ごとの詳細を持たないので、そうと分かるように書く
+      q?.question || (h.n != null ? '（古い履歴のまとめ）' : ''),
       h.correct ? '正解' : '不正解',
       h.source || '',
       type ? missTypeLabel(type) : '',
       starLv > 0 ? starLabel(starLv) : '',
+      h.n != null ? String(h.n) : '1',
     ];
     lines.push(row.map(esc).join(','));
   }

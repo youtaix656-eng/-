@@ -15,6 +15,13 @@ export function getSubjects(questions) {
 
 // 解答履歴から科目別の正答率を集計
 // 戻り値: [{ subject, total, correct, accuracy }] 正答率の低い順（苦手順）
+// 設定の「古い解答履歴を軽量化」でまとめた記録（{at, subject, correct, n}）は
+// n 件ぶんの解答として数える（1件と数えると解答数・正答率が崩れる）。
+export function weightOf(h) {
+  const n = h && Number(h.n);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 export function subjectStats(history, questions) {
   const subjects = getSubjects(questions);
   const map = {};
@@ -22,8 +29,9 @@ export function subjectStats(history, questions) {
 
   history.forEach((h) => {
     if (!map[h.subject]) map[h.subject] = { subject: h.subject, total: 0, correct: 0 };
-    map[h.subject].total += 1;
-    if (h.correct) map[h.subject].correct += 1;
+    const w = weightOf(h);
+    map[h.subject].total += w;
+    if (h.correct) map[h.subject].correct += w;
   });
 
   return Object.values(map)
@@ -42,8 +50,13 @@ export function subjectStats(history, questions) {
 
 // 全体の統計
 export function overallStats(history) {
-  const total = history.length;
-  const correct = history.filter((h) => h.correct).length;
+  let total = 0;
+  let correct = 0;
+  for (const h of history) {
+    const w = weightOf(h);
+    total += w;
+    if (h.correct) correct += w;
+  }
   return {
     total,
     correct,
@@ -68,8 +81,9 @@ export function dailyActivity(history, days = 14) {
     d.setHours(0, 0, 0, 0);
     const b = buckets.find((x) => x.date.getTime() === d.getTime());
     if (b) {
-      b.count += 1;
-      if (h.correct) b.correct += 1;
+      const w = weightOf(h);
+      b.count += w;
+      if (h.correct) b.correct += w;
     }
   });
   return buckets;
@@ -153,8 +167,9 @@ export function accuracyTrend(history, blocks = 8) {
   for (let i = 0; i < history.length; i += size) {
     const chunk = history.slice(i, i + size);
     if (chunk.length < Math.min(5, size)) continue;
-    const correct = chunk.filter((h) => h.correct).length;
-    out.push({ n: chunk.length, accuracy: correct / chunk.length });
+    // 軽量化でまとめた記録は n 件ぶんとして数える
+    const { total, correct } = overallStats(chunk);
+    out.push({ n: total, accuracy: correct / total });
   }
   return out.slice(-blocks);
 }

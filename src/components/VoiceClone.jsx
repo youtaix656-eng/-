@@ -16,6 +16,16 @@ export default function VoiceClone({ settings, updateSettings, apiKey: rawApiKey
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
+  // 試聴の音。画面を離れても鳴り続けていたので、離れる時・もう一度押した時に止める
+  const testAudioRef = useRef(null);
+  const stopTest = () => {
+    const a = testAudioRef.current;
+    if (!a) return;
+    try { a.pause(); } catch (e) { /* noop */ }
+    if (a._url) URL.revokeObjectURL(a._url);
+    testAudioRef.current = null;
+  };
+  useEffect(() => stopTest, []);
   // APIキーは画面を開いた後に読み込まれることがある。最初に空のまま固定していたので、
   // 保存済みでも欄が空に見え、そのまま「保存」を押すとキーが消えていた。
   const keyTouchedRef = useRef(false);
@@ -66,12 +76,16 @@ export default function VoiceClone({ settings, updateSettings, apiKey: rawApiKey
     let url;
     try {
       const blob = await synthesizeSpeech({ apiKey, voiceId: voiceClone.voiceId, text: SAMPLE_TEXT });
+      stopTest();
       url = URL.createObjectURL(blob);
       const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
+      audio._url = url;
+      testAudioRef.current = audio;
+      audio.onended = () => { if (testAudioRef.current === audio) stopTest(); };
       await audio.play();
     } catch (e) {
-      if (url) URL.revokeObjectURL(url);
+      if (url && testAudioRef.current?._url !== url) URL.revokeObjectURL(url);
+      else stopTest();
       onToast?.(e.message || '試聴に失敗しました');
     } finally {
       setBusy(false);

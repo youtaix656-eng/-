@@ -85,6 +85,14 @@ export default function CloudBackup({ settings, updateSettings, onToast, importB
   const doSignOut = () => {
     signOut();
     setSignedIn(false);
+    // ログアウトは許可そのものを取り消すので、自動同期を残すと「ログインし直してください」が
+    // 出続ける。自分でログアウトしたのだから自動同期も止める。
+    if (settings.googleDriveAutoSync) {
+      updateSettings({ googleDriveAutoSync: false });
+      clearCloudAuthPause?.();
+      onToast?.('Googleからログアウトし、自動同期もオフにしました（この端末のデータは残ります）');
+      return;
+    }
     onToast?.('Googleからログアウトしました（この端末のバックアップデータは残ります）');
   };
 
