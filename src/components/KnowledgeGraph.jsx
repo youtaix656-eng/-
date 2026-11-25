@@ -21,6 +21,7 @@ import { loadUserRelations } from '../lib/userRelations.js';
 import { addNode, addEdge } from '../lib/knowledgeGraph.js';
 import { conceptId } from '../lib/concepts.js';
 import { loadKwMeta, saveKwMeta } from '../lib/storage.js';
+import { scrollBehavior } from '../lib/motion.js';
 
 function firstSentence(text) {
   const s = String(text || '').trim();
@@ -155,7 +156,7 @@ export default function KnowledgeGraph({ store, onOpenKeyword, onStudyConcepts, 
     if (!focusConcept || !conceptList.includes(focusConcept)) return;
     setPathA(focusConcept);
     const timer = setTimeout(() => {
-      pathSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pathSectionRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
       onConsumeFocusConcept?.();
     }, 150);
     return () => clearTimeout(timer);

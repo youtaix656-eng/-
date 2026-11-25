@@ -12,6 +12,7 @@
 //  ・**画面の分岐（renderView）の中に入れない**——入れるとその画面にしか出ない。
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { scrollBehavior } from '../lib/motion.js';
 
 /** 端とみなす余白。ぴったり0でしか消えないと、端で薄くならない。 */
 const EDGE = 24;
@@ -64,12 +65,9 @@ export default function ScrollArrows({ view }) {
   if (!st.show) return null;
 
   const move = (dir) => {
-    const reduce =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollBy({
       top: dir * Math.round(window.innerHeight * STEP),
-      behavior: reduce ? 'auto' : 'smooth',
+      behavior: scrollBehavior(),
     });
   };
 

@@ -164,6 +164,7 @@ import {
   keywordAccuracy,
   dailyKeyword,
 } from '../lib/audioplan.js';
+import { scrollBehavior } from '../lib/motion.js';
 
 // 音声学習モード × 連結学習法（強化版）
 //   基本フロー: 問題 →（間）→ 正解＋解説 → 次…
@@ -2002,7 +2003,7 @@ export default function AudioMode({
       if (!el) return;
       const headerH = document.querySelector('.app-header')?.getBoundingClientRect().height || 0;
       const top = el.getBoundingClientRect().top + window.scrollY - headerH - 8;
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      window.scrollTo({ top: Math.max(0, top), behavior: scrollBehavior() });
     }, 50);
     return () => clearTimeout(t);
   }, [audioReady, builtPlan.length, jumpNonce]);

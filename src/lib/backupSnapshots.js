@@ -9,8 +9,17 @@ export const MAX_SNAPSHOTS = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // リングバッファ（純粋）：新しい世代を先頭に足し、max 件に切り詰める。
+//   「復元前」の世代は新しい3つだけ残す——復元を何度か試すだけで、それより前のふつうの世代が
+//   全部押し出されて戻れなくなっていたため（復元のたびに1つずつ増える）。
+export const MAX_BEFORE_RESTORE = 3;
 export function rotateSnapshots(list, entry, max = MAX_SNAPSHOTS) {
-  return [entry, ...(Array.isArray(list) ? list : [])].slice(0, max);
+  let seen = 0;
+  const all = [entry, ...(Array.isArray(list) ? list : [])].filter((s) => {
+    if (!s || s.reason !== 'beforeRestore') return true;
+    seen += 1;
+    return seen <= MAX_BEFORE_RESTORE;
+  });
+  return all.slice(0, max);
 }
 
 // スナップショットに残すデータだけを抜き出す（questions/auth は除外＝軽量・安全）。

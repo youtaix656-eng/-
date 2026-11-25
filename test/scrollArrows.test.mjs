@@ -68,8 +68,11 @@ test('スクロールの見張りを毎回動かさない（rAF で間引き、�
 });
 
 test('動きを減らす設定を尊重する', () => {
-  assert.match(cmp, /prefers-reduced-motion/);
-  assert.match(cmp, /behavior: reduce \? 'auto' : 'smooth'/);
+  // 端末の設定とアプリの「アニメーションを減らす」の両方を lib/motion.js が見る
+  assert.match(cmp, /behavior: scrollBehavior\(\)/);
+  const motion = readFileSync(new URL('../src/lib/motion.js', import.meta.url), 'utf8');
+  assert.match(motion, /prefers-reduced-motion/);
+  assert.match(motion, /reduce-motion/);
 });
 
 test('1回で動くのは1画面ぶん（全部だと前後が見えなくなる）', () => {

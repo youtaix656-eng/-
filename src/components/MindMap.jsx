@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { mindmapFor, centerCandidates, branchesOf, radialLayout } from '../lib/mindmap.js';
 import { MINDMAP_REFERENCES } from '../data/mindmapData.js';
 import { buildKanaIndex } from '../lib/yomi.js';
+import { scrollBehavior } from '../lib/motion.js';
 
 // マインドマップ：センターのキーワードから
 //   🔗 つながる語（連結学習）/ ⚖️ 比較されやすいもの / 🔢 数値を変えられやすいもの
@@ -38,7 +39,7 @@ export default function MindMap({ store, onOpenKeyword }) {
     if (b.type === 'linked') setCenter(b.id); // つながる語は再センター
     else {
       const el = document.getElementById(`mm-${b.type}-${b.id}`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
     }
   };
 

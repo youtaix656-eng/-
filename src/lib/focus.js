@@ -1,3 +1,4 @@
+import { scrollBehavior } from './motion.js';
 // 目次から飛んだ先で、その項目まで運んで一時的に光らせる。
 //
 // **1か所に置く**——画面ごとに書くと、片方だけ直したときに
@@ -25,7 +26,7 @@ export function flashTo(anchorId, doc = typeof document === 'undefined' ? null :
   if (!anchorId || !doc) return false;
   const el = doc.getElementById(anchorId);
   if (!el) return false;
-  if (el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  if (el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
   if (el.setAttribute) {
     el.setAttribute(FLASH_ATTR, 'on');
     setTimeout(() => {

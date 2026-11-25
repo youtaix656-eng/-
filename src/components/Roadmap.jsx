@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { ROADMAP_PHASES, ROADMAP_MONTHS, phasesInMonth } from '../data/roadmapPhases.js';
+import { scrollBehavior } from '../lib/motion.js';
 
 const MONTH_LABEL = (year, month) => `${year}年${month + 1}月`;
 const FMT_DAY = (dateStr) => {
@@ -98,7 +99,7 @@ export default function Roadmap({ store, onNavigate, focusLevel, onConsumeFocusL
     el.open = true;
     const timer = setTimeout(() => {
       const target = el.querySelector(`#level-${focusLevel}`);
-      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
       onConsumeFocusLevel?.();
     }, 150);
     return () => clearTimeout(timer);

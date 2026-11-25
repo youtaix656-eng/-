@@ -38,3 +38,9 @@ test('CSV にまとめの件数が出る', () => {
   assert.match(csv.split('\n')[0], /件数/);
   assert.ok(csv.includes('（古い履歴のまとめ）'));
 });
+
+test('formatBytes: GB の大きさも読める', async () => {
+  const { formatBytes } = await import('../src/lib/storageHealth.js');
+  assert.equal(formatBytes(6 * 1024 * 1024 * 1024), '6.0 GB');
+  assert.equal(formatBytes(1536 * 1024), '1.5 MB');
+});

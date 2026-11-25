@@ -4,6 +4,7 @@ import { buildKanaIndex } from '../lib/yomi.js';
 import { resolveKeizetsuTerm, dedupeKeizetsuIndex } from '../lib/keizetsuLookup.js';
 import { meridianNameById } from '../data/knowledgeBase.js';
 import { figureFor } from '../data/figures.jsx';
+import { scrollBehavior } from '../lib/motion.js';
 
 const KIND_LABEL = {
   card: 'フラッシュカードあり',
@@ -121,7 +122,7 @@ function KeizetsuPageCard({ entry, resolved, onClose, onNavigate }) {
 
   useEffect(() => {
     setJustJumped(true);
-    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    ref.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     const t = setTimeout(() => setJustJumped(false), 2200);
     return () => clearTimeout(t);
   }, [entry.term]);

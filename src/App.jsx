@@ -1121,7 +1121,7 @@ export default function App() {
         {needBackup && view !== 'settings' && !inActiveSession && (
           <div className="reminder-banner">
             <span>
-              📌 前回のバックアップから{store.settings.answersSinceBackup}問解きました。データ消失に備えて保存しましょう。
+              📌 前回の保存（または案内）から{store.settings.answersSinceBackup}問解きました。データ消失に備えて保存しましょう。
             </span>
             <div className="reminder-actions">
               <button className="btn sm primary" onClick={() => doBackup(false)}>
@@ -1129,7 +1129,7 @@ export default function App() {
               </button>
               <button
                 className="btn sm ghost"
-                onClick={() => store.markBackedUp()}
+                onClick={() => store.snoozeBackupReminder()}
                 aria-label="あとで"
               >
                 あとで

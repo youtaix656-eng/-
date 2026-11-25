@@ -1060,6 +1060,12 @@ export function useStore() {
     return { before, after: summarized.length };
   }, [history]);
 
+  // 「あとで」：案内の数だけ数え直す（保存したことにはしない。以前は markBackedUp を使っていたため、
+  // 「あとで」を押すと起動時の自動バックアップまでその日は飛ばされていた）
+  const snoozeBackupReminder = useCallback(() => {
+    setSettings((prev) => ({ ...prev, answersSinceBackup: 0 }));
+  }, []);
+
   // バックアップ実行後にカウンタをリセット
   const markBackedUp = useCallback(() => {
     setSettings((prev) => ({
@@ -1212,6 +1218,7 @@ export function useStore() {
     resetProgress,
     restoreSamples,
     summarizeOldHistory,
+    snoozeBackupReminder,
     markBackedUp,
     importBackup,
     emptyState,
