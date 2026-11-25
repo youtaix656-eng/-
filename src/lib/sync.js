@@ -5,6 +5,7 @@
 // 大きなデータは src/lib/chunk.js で分割し、複数のQR／テキストブロックに分けて送れる。
 
 import { encodeTransferString, decodeTransferString } from './transferCodec.js';
+import { parseChunk } from './chunk.js';
 
 // 受け渡し（QR／URL）の有効期限：発行から5分間だけ使える（安全のため）
 export const SYNC_TTL_MS = 5 * 60 * 1000;
@@ -53,6 +54,8 @@ export function buildSyncPayload(data, { includeHistory = true, summarizeHistory
   if (Array.isArray(data.examResults) && data.examResults.length) p.e = data.examResults;
   if (data.settings) p.g = data.settings;
   if (data.bookmarks && Object.keys(data.bookmarks).length) p.b = data.bookmarks;
+  // 語呂合わせ（自分で書いたもの）。以前は入っておらず、QRで機種変更すると消えていた
+  if (data.kwMeta && Object.keys(data.kwMeta).length) p.k = data.kwMeta;
   // 「前回の続きから」（一問一答・復習・模試・音声・学習セッション）
   if (data.quizProgress) p.q = data.quizProgress;
   if (data.reviewProgress) p.r = data.reviewProgress;
@@ -98,6 +101,7 @@ export function syncToBackup(p) {
   if (p.e) b.examResults = p.e;
   if (p.g) b.settings = p.g;
   if (p.b) b.bookmarks = p.b;
+  if (p.k) b.kwMeta = p.k;
   if (p.q) b.quizProgress = p.q;
   if (p.r) b.reviewProgress = p.r;
   if (p.x) b.examProgress = p.x;
@@ -124,4 +128,35 @@ export function extractSyncCode(text) {
   if (!text) return '';
   const m = String(text).match(/[#?&]sync=([^&#\s]+)/);
   return m ? m[1] : '';
+}
+
+// ---- カメラで読み取った URL（#sync=…）を組み立てる ----
+// アプリが出す QR／URL は分割の形式（{転送id}.{何枚目}.{全何枚}.{データ}）。以前は URL を開いた時に
+// この形式を読めず、何も取り込まないまま黙っていた（2026-11-25、2台で動かして見つけた）。
+// 複数枚に分かれている時は、カメラで1枚読むたびに新しいタブで開かれるので、端末の中（localStorage。
+// 'shinkyu:' で始めない＝バックアップに入れない）に集めて、揃ったら返す。
+export const URL_CHUNK_KEY = 'syncUrlChunks';
+const URL_CHUNK_TTL_MS = SYNC_TTL_MS * 2;
+// 戻り値：{ encoded }（揃った・分割でない）／{ partial: { received, total } }／{ error }
+export function collectUrlChunk(code, store, now = Date.now()) {
+  const text = String(code || '').trim();
+  if (!text) return { error: '空のデータです' };
+  const chunk = parseChunk(text);
+  if (!chunk) return { encoded: text }; // 分割していない古い形式
+  if (chunk.of === 1) return { encoded: chunk.data };
+  let saved = null;
+  try { saved = JSON.parse(store.get(URL_CHUNK_KEY) || 'null'); } catch (e) { saved = null; }
+  if (!saved || saved.id !== chunk.transferId || saved.of !== chunk.of || now - (saved.at || 0) > URL_CHUNK_TTL_MS) {
+    saved = { id: chunk.transferId, of: chunk.of, at: now, parts: {} };
+  }
+  saved.parts[chunk.part] = chunk.data;
+  const received = Object.keys(saved.parts).length;
+  if (received < chunk.of) {
+    try { store.set(URL_CHUNK_KEY, JSON.stringify(saved)); } catch (e) { /* noop */ }
+    return { partial: { received, total: chunk.of } };
+  }
+  try { store.remove(URL_CHUNK_KEY); } catch (e) { /* noop */ }
+  let out = '';
+  for (let i = 1; i <= chunk.of; i++) out += saved.parts[i];
+  return { encoded: out };
 }

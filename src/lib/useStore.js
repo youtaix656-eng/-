@@ -11,7 +11,7 @@ import { buildCaseLinkMap, partnerOf } from './casePairs.js';
 import { applyQuestionPatches } from './questionPatches.js';
 import { dateKey, nextStreak } from './connect.js';
 import { readSeedFromHash, readImportFromHash, clearSeedHash } from './noteshare.js';
-import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer } from './sync.js';
+import { decodeSync, syncToBackup, isSyncExpired, summarizeHistoryForTransfer, collectUrlChunk } from './sync.js';
 import { dedupeAgainst } from './importer.js';
 import { appendContentSeedLog } from './contentSeedLog.js';
 import { loadReviewZeroLog, markReviewZeroToday } from './reviewZeroLog.js';
@@ -113,29 +113,57 @@ export function useStore() {
     (async () => {
       await storage.migrateFromLocalStorage();
       // 別端末からの進捗取り込み（QR/URL の #sync=…）。読み込み前に反映する。
-      try {
+      {
         const hash = window.location.hash || '';
         const mSync = hash.match(/[#&]sync=([^&]+)/);
         if (mSync) {
-          const payload = await decodeSync(decodeURIComponent(mSync[1]));
-          if (isSyncExpired(payload)) {
-            // 発行から5分を過ぎた受け渡しは安全のため取り込まない
-            window.alert(
-              'この受け渡しリンク／QRコードは発行から5分以上経過したため使えません（安全のため）。\n受け渡し元でもう一度発行してください。'
-            );
-          } else {
-            const ok = window.confirm(
-              '別端末の学習データ（進捗・設定）を取り込みます。この端末の進捗は上書きされます。よろしいですか？'
-            );
-            if (ok) {
-              await storage.importAll(syncToBackup(payload));
-              if (alive) setSyncToast(1);
-            }
-          }
+          // 失敗しても URL に残さない（以前は読めないと #sync= が残り続けた）
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          try {
+            let code = mSync[1];
+            try { code = decodeURIComponent(code); } catch (e) { /* そのまま */ }
+            const lsStore = {
+              get: (k) => localStorage.getItem(k),
+              set: (k, v) => localStorage.setItem(k, v),
+              remove: (k) => localStorage.removeItem(k),
+            };
+            const got = collectUrlChunk(code, lsStore);
+            if (got.partial) {
+              window.alert(
+                `受け渡しのQRは全部で${got.partial.total}枚あります（いま${got.partial.received}枚を受け取りました）。\n残りのQRも、同じ端末・同じブラウザで読み取ってください。\n（アプリの「QRを読み取る」なら、かざし続けるだけで全部読めます）`
+              );
+            } else if (got.error) {
+              throw new Error(got.error);
+            } else {
+              const payload = await decodeSync(got.encoded);
+              if (isSyncExpired(payload)) {
+                // 発行から5分を過ぎた受け渡しは安全のため取り込まない
+                window.alert(
+                  'この受け渡しリンク／QRコードは発行から5分以上経過したため使えません（安全のため）。\n受け渡し元でもう一度発行してください。'
+                );
+              } else {
+                const ok = window.confirm(
+                  '別端末の学習データ（進捗・設定）を取り込みます。この端末の進捗は上書きされます。よろしいですか？'
+                );
+                if (ok) {
+                  // 取り込む前の状態を世代バックアップに残す（アプリの「QRを読み取る」・ファイルの復元と同じ）
+                  try {
+                    const snap = await import('./backupSnapshots.js');
+                    await snap.takeSnapshot(storage, { auto: true, reason: 'beforeRestore' });
+                  } catch (e) { /* 取れなくても取り込みは続ける */ }
+                  await storage.importAll(syncToBackup(payload));
+                  await storage.flushNow();
+                  if (alive) setSyncToast(1);
+                }
+              }
+            }
+          } catch (e) {
+            // 以前は黙って無視していた（開いても何も起きないように見えた）
+            window.alert(
+              `受け渡しのデータを読めませんでした（形式が違うか、途中で切れています）。\nURLが途中で切れていないか確かめ、元の端末でもう一度発行してください。`
+            );
+          }
         }
-      } catch (e) {
-        /* 無効な sync データは無視 */
       }
       // IndexedDB読み込みと並行して、科目データのチャンクも取得を始める（ネットワークとDBを同時に進める）。
       const subjectDataPromise = subjectDataModules();
@@ -507,6 +535,27 @@ export function useStore() {
   // 「進行中の別の同期と重なって今回は何もしなかった」のを「同期に成功した」と
   // 誤表示しないようにする（バックグラウンドの自動トリガーが増えたことで、手動ボタンを
   // 押した瞬間に別の同期が進行中というケースが実際に起こりうるようになったため）。
+  // この端末で最後に記録（解答・メモ・リンク・模試・ブックマーク・語呂合わせ・設定）を変えた時刻。
+  // クラウド自動同期で「どちらが新しいか」を比べるのに使う（progressMerge.js の syncChangeTimes）。
+  // 起動直後の数秒は、起動時の自動処理が設定を書き換えることがあるので数えない（自分で変えたことにしない）。
+  const localChangedAtRef = useRef(0);
+  const remoteApplyUntilRef = useRef(0);
+  const loadedAtRef = useRef(0);
+  useEffect(() => {
+    if (!loaded) return;
+    if (!loadedAtRef.current) {
+      loadedAtRef.current = Date.now();
+      storage.loadSyncMeta().then((m) => {
+        if (m && m.changedAt > localChangedAtRef.current) localChangedAtRef.current = m.changedAt;
+      });
+      return;
+    }
+    const now = Date.now();
+    if (now - loadedAtRef.current < 10000 || now < remoteApplyUntilRef.current) return;
+    localChangedAtRef.current = now;
+    storage.loadSyncMeta().then((m) => storage.saveSyncMeta({ ...(m || {}), changedAt: Math.max((m && m.changedAt) || 0, now) }));
+  }, [loaded, srs, history, memos, links, examResults, bookmarks, kwMeta, settings]);
+
   const runCloudSync = useCallback(async (silent) => {
     if (cloudSyncBusy.current) return { skipped: true, reason: 'busy' };
     const clientId = settings.googleDriveClientId;
@@ -541,25 +590,35 @@ export function useStore() {
         storage.loadPronunciationReportLog(),
       ]);
       const localSnapshot = {
-        srs, history, memos, links, examResults, settings, bookmarks, ...resumeState, session,
+        srs, history, memos, links, examResults, settings, bookmarks, kwMeta, ...resumeState, session,
         glossaryExtra, glossaryRemovedIds, tocCandidates, tocHistory, flashcardSrs, pronunciationReportLog,
       };
       let merged = localSnapshot;
       let pulled = false;
+      let times = pm.syncChangeTimes(meta, localChangedAtRef.current, null);
       if (remoteText) {
         const remote = JSON.parse(remoteText);
+        times = pm.syncChangeTimes(meta, localChangedAtRef.current, remote.meta);
         merged = pm.mergeProgress(localSnapshot, remote.data || {}, {
-          localUpdatedAt: meta.updatedAt || 0,
-          remoteUpdatedAt: (remote.meta && remote.meta.updatedAt) || 0,
+          localUpdatedAt: times.localUpdatedAt,
+          remoteUpdatedAt: times.remoteUpdatedAt,
         });
+        // 端末ごとの設定（GoogleのクライアントID・自動同期のオン・ボイスクローン・自動バックアップの回数など）は
+        // 別の端末の値で上書きしない。以前は別の端末の方が新しいと、そちらのクライアントIDに置き換わり
+        // （ブラウザ版とアプリ版では違う）、この端末の次の同期が失敗していた。
+        merged = { ...merged, settings: storage.keepDeviceSettings(merged.settings, settings) };
         // 件数だけの比較だと、既存の問題IDのlastAnswered/dueだけが他端末で更新された
         // ケース（件数は変わらず値だけ変わる、実運用で最も多いパターン）を「変化なし」と
         // 誤判定し、マージ結果をローカルへ反映し損ねてしまう（progressMerge.jsのバグ修正参照）。
         pulled = pm.progressChanged(localSnapshot, merged);
       }
       const newUpdatedAt = Date.now();
-      await gd.uploadBackup(token, JSON.stringify({ meta: { updatedAt: newUpdatedAt }, data: merged }), gd.SYNC_FILENAME);
-      await storage.saveSyncMeta({ updatedAt: newUpdatedAt });
+      const newChangedAt = times.changedAt || newUpdatedAt;
+      await gd.uploadBackup(token, JSON.stringify({ meta: { updatedAt: newUpdatedAt, changedAt: newChangedAt }, data: merged }), gd.SYNC_FILENAME);
+      localChangedAtRef.current = newChangedAt;
+      await storage.saveSyncMeta({ updatedAt: newUpdatedAt, changedAt: newChangedAt });
+      // ここで画面へ入れる値は「この端末で変えた」ことにしない（変更時刻を進めない）
+      remoteApplyUntilRef.current = Date.now() + 3000;
       if (pulled) {
         setSrs(merged.srs);
         setHistory(merged.history);
@@ -567,6 +626,7 @@ export function useStore() {
         setLinks(merged.links);
         setExamResultsState(merged.examResults);
         setBookmarks(merged.bookmarks);
+        if (merged.kwMeta) setKwMeta(merged.kwMeta);
         setSessionState(merged.session);
         await Promise.all([
           storage.saveSession(merged.session),
@@ -598,7 +658,7 @@ export function useStore() {
       cloudSyncBusy.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, srs, history, memos, links, examResults, bookmarks, session, cloudAuthPaused]);
+  }, [settings, srs, history, memos, links, examResults, bookmarks, kwMeta, session, cloudAuthPaused]);
 
   // 「常に最新の状態」の各種自動トリガーが共有する間引き用の最終実行時刻。
   // 起動時同期もここに登録することで、起動直後にfocus/visibilitychangeが偶発的に
@@ -616,7 +676,7 @@ export function useStore() {
     const timer = setTimeout(() => { runCloudSync(true).catch(() => {}); }, 5000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults, bookmarks, session]);
+  }, [loaded, settings.googleDriveAutoSync, settings.googleDriveClientId, srs, history, memos, links, examResults, bookmarks, kwMeta, session]);
 
   // ①起動時（URLを開いた・ホーム画面から起動した直後）は、上のデバウンスを待たず
   // ほぼ即座に同期を試みる（「開いたらすぐ最新化する」という体感を優先）。

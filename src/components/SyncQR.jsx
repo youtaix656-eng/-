@@ -25,7 +25,7 @@ function fmtRemain(ms) {
 //     一定間隔で自動的に切り替え表示する「アニメーションQR」にする
 //     （手動での送り／一時停止も可能）。相手はSyncScanでカメラをかざし続けるだけでよい。
 export default function SyncQR({ store, onToast }) {
-  const { srs, history, memos, links, examResults, settings, bookmarks, session } = store;
+  const { srs, history, memos, links, examResults, settings, bookmarks, session, kwMeta } = store;
   const [open, setOpen] = useState(false);
   const [withHistory, setWithHistory] = useState(true);
   const [summarizeHistory, setSummarizeHistory] = useState(false);
@@ -41,7 +41,7 @@ export default function SyncQR({ store, onToast }) {
   // 発行した時点の記録で作る。開いている間に記録・設定が変わるたびに作り直していたため、
   // 相手が複数枚を読み取っている途中で束ごと入れ替わり、いつまでも揃わないことがあった。
   const dataRef = useRef(null);
-  dataRef.current = { srs, history, memos, links, examResults, settings, bookmarks, session };
+  dataRef.current = { srs, history, memos, links, examResults, settings, bookmarks, session, kwMeta };
 
   // 発行（＝いまの進捗でQR/URLを作り直し、5分の有効期限を張り直す）
   const issue = () => {
@@ -128,7 +128,11 @@ export default function SyncQR({ store, onToast }) {
         圧縮し、それでも収まらなければ<strong>QRを複数枚に分けて自動で連続表示</strong>します（読み取り側はかざし続けるだけでOK）。
         <br />
         🔒 <strong>安全のため、発行から5分を過ぎると使えなくなります</strong>（過ぎたら再発行してください）。
-        <br />※ 問題データ本体や画像・音楽は含みません（容量のため）。
+        <br />※ 問題データ本体や画像・音楽は含みません（容量のため）。誤答理由・週次ジャーナル・音声の再生履歴なども
+        含みません——全部を引き継ぐ時は「バックアップを保存」→相手で「復元」を使ってください。
+        <br />※ 端末の<strong>カメラアプリ</strong>で読み取ると、<strong>ブラウザ</strong>で開いて取り込まれます。
+        <strong>アプリ版（Android）へ渡す時は、アプリの中の「QRを読み取る」</strong>から読み取ってください
+        （ブラウザとアプリ版は保存場所が別です）。
         <br />※ カメラが使えない環境では、QRの代わりに「受け渡しURLをコピー」でテキストとして送り、
         相手側の「URLを貼り付けて取り込む」に貼り付ける方法も使えます（複数枚の場合は1枚ずつ）。
       </p>

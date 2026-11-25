@@ -136,6 +136,7 @@ export function progressChanged(local, merged) {
     JSON.stringify(m.links) !== JSON.stringify(l.links) ||
     JSON.stringify(m.examResults) !== JSON.stringify(l.examResults) ||
     JSON.stringify(m.bookmarks) !== JSON.stringify(l.bookmarks) ||
+    JSON.stringify(m.kwMeta || {}) !== JSON.stringify(l.kwMeta || {}) ||
     JSON.stringify(m.quizProgress) !== JSON.stringify(l.quizProgress) ||
     JSON.stringify(m.examProgress) !== JSON.stringify(l.examProgress) ||
     JSON.stringify(m.reviewProgress) !== JSON.stringify(l.reviewProgress) ||
@@ -148,6 +149,17 @@ export function progressChanged(local, merged) {
     JSON.stringify(m.flashcardSrs) !== JSON.stringify(l.flashcardSrs) ||
     JSON.stringify(m.pronunciationReportLog) !== JSON.stringify(l.pronunciationReportLog)
   );
+}
+
+// どちらの記録が新しいかを「最後に同期した時刻」ではなく「最後に記録を変えた時刻（changedAt）」で比べる。
+// 以前は syncMeta.updatedAt（＝この端末が最後に同期した時刻）とアップロードの時刻を比べていたため、
+// 別の端末が間に同期しただけで「あちらが新しい」とみなされ、この端末で直したばかりのメモ・設定が
+// 古い値に戻ることがあった（2026-11-25）。changedAt を持たない古い記録は今までどおり同期の時刻で比べる。
+// 戻り値の changedAt は、マージした結果に入っている最新の変更時刻（アップロードとこの端末の両方に残す）。
+export function syncChangeTimes(meta, localChangedAt, remoteMeta) {
+  const lc = Math.max((meta && meta.changedAt) || 0, localChangedAt || 0) || (meta && meta.updatedAt) || 0;
+  const rc = (remoteMeta && (remoteMeta.changedAt || remoteMeta.updatedAt)) || 0;
+  return { localUpdatedAt: lc, remoteUpdatedAt: rc, changedAt: Math.max(lc, rc) };
 }
 
 // local/remote: { srs, history, memos, links, examResults, settings, bookmarks,
@@ -166,6 +178,9 @@ export function mergeProgress(local, remote, { localUpdatedAt = 0, remoteUpdated
     // QR／バックアップファイル／WebRTC経由の移行では既に引き継がれていたが、
     // クラウド自動同期の対象からは漏れていたため合わせる。
     bookmarks: mergeObjectMap(local?.bookmarks, remote?.bookmarks, remoteNewer),
+    // 語呂合わせ（kwMeta）も、片方の端末で書いたものを消さないようキー単位でUNION。
+    // 以前はクラウド自動同期の対象外で、スマホで書いた語呂合わせがパソコンに出なかった。
+    kwMeta: mergeObjectMap(local?.kwMeta, remote?.kwMeta, remoteNewer),
     // 一問一答・模試・復習・音声・学習セッションの「続きから」。ユーザー指定により
     // クラウド自動同期の対象に含める（各自身のタイムスタンプで新しい方をまるごと採用）。
     ...mergeResumeState(local, remote),

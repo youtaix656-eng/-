@@ -585,6 +585,27 @@ async function restoreExtras(extras) {
   }
 }
 
+async function removeExtrasMissingFrom(extras) {
+  const inIdb = extras.idb && typeof extras.idb === 'object' ? extras.idb : {};
+  const inLs = extras.ls && typeof extras.ls === 'object' ? extras.ls : {};
+  const keep = (k) => !isExtraKey(k) || NAMED_EXPORT_KEYS.has(k) || k in inIdb || k in inLs;
+  try {
+    if (useIdb) {
+      const all = await idbGetAll();
+      for (const k of Object.keys(all)) {
+        if (keep(k)) continue;
+        if (typeof Blob !== 'undefined' && all[k] instanceof Blob) continue;
+        await remove(k);
+      }
+    }
+  } catch (e) { /* 消せなくても復元は続ける */ }
+  try {
+    const lsKeys = [];
+    for (let i = 0; i < localStorage.length; i++) lsKeys.push(localStorage.key(i));
+    for (const k of lsKeys) if (!keep(k)) localStorage.removeItem(k);
+  } catch (e) { /* noop */ }
+}
+
 // 名前つきで書き出しているキー（extras に二重に入れない）
 const NAMED_EXPORT_KEYS = new Set([
   KEYS.questions, KEYS.srs, KEYS.history, KEYS.memos, KEYS.links, KEYS.schedule, KEYS.venues,
@@ -671,13 +692,12 @@ export async function importAll(data) {
   await flushNow();
   // 先に名前の無い記録を戻し、名前つきの項目があとから上書きする（名前つきが正）
   await restoreExtras(data.extras);
-  // 丸ごとのバックアップ（extras つき）なのに入っていない、この端末の音声の続き・再生履歴は消す。
-  // 残すと、この端末の古い「続き」のほうが新しいとみなされ、復元した位置が使われなかった。
+  // 丸ごとのバックアップ（extras つき）なのに入っていない、この端末だけの記録は消す
+  // （復元は「上書き」）。以前は音声の続き・再生履歴だけ消していて、今日の調子・誤答理由の傾向・
+  // 周回ログなど、この端末にしか無かった記録が残り、復元した記録と混ざっていた（2026-11-25、2台で動かして見つけた）。
+  // 消したものも、importBackup が復元前に取る世代バックアップから戻せる。
   if (data.extras && typeof data.extras === 'object') {
-    const ls = data.extras.ls && typeof data.extras.ls === 'object' ? data.extras.ls : {};
-    for (const k of PROGRESS_LS_KEYS) {
-      if (!(k in ls)) { try { localStorage.removeItem(k); } catch (e) { /* noop */ } }
-    }
+    await removeExtrasMissingFrom(data.extras);
   }
   if (Array.isArray(data.questions)) await saveQuestions(data.questions);
   if (data.srs && typeof data.srs === 'object') await saveSrs(data.srs);
