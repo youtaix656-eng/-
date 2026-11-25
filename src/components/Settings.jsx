@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { importFile, exportCsv, exportJson, dedupeAgainst } from '../lib/importer.js';
 import { canNativeSaveFile } from '../lib/nativeBridge.js';
 import { flushNow } from '../lib/storage.js';
-import { loadVoices } from '../lib/speech.js';
+import { loadVoices, speak, cancelSpeech, isSpeechSupported } from '../lib/speech.js';
 import {
   validateEmail,
   validatePassword,
@@ -80,12 +80,17 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
   const [importMode, setImportMode] = useState('append'); // append | replace
   const [preview, setPreview] = useState(null); // { questions, errors, warnings, fileName }
   const [voices, setVoices] = useState([]);
+  // 声の一覧は少し遅れて届く。届く前に「日本語の音声が見つかりませんでした」と出していた
+  const [voicesLoaded, setVoicesLoaded] = useState(false);
   const [deckName, setDeckName] = useState(''); // 取り込み先ファイル（デッキ）名
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
 
   useEffect(() => {
-    loadVoices().then((vs) => setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja'))));
+    loadVoices().then((vs) => {
+      setVoices(vs.filter((v) => v.lang && v.lang.startsWith('ja')));
+      setVoicesLoaded(true);
+    });
   }, []);
 
   // 取り込みハブ/OCR から渡されたテキストをプレビューに流し込む（形式は内容から自動判定）
@@ -211,6 +216,12 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             value={settings.examDate || ''}
             onChange={(e) => updateSettings({ examDate: e.target.value })}
           />
+          {settings.examDate && (
+            // アプリ版の日付の欄には「消す」が無い端末があるので、消すボタンを置く
+            <button className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => updateSettings({ examDate: '' })}>
+              ✕ 試験日を消す
+            </button>
+          )}
           {settings.examDate && daysUntil(settings.examDate) != null && (
             <div className="hint">
               {daysUntil(settings.examDate) >= 0
@@ -717,15 +728,38 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           </div>
         </div>
 
+        {/* 声のプリセットで変わった声の高さを、ここから戻せるように（以前はこの画面に無かった） */}
+        <div className="field">
+          <label htmlFor="settings-speech-pitch">声の高さ</label>
+          <div className="range-row">
+            <input
+              id="settings-speech-pitch"
+              type="range"
+              min="0.5"
+              max="1.5"
+              step="0.05"
+              value={Number(settings.speechPitch) || 1}
+              onChange={(e) => updateSettings({ speechPitch: Number(e.target.value), voicePreset: '' })}
+            />
+            <span className="range-val">
+              {(Number(settings.speechPitch) || 1).toFixed(2)}{Math.abs((Number(settings.speechPitch) || 1) - 1) < 0.01 ? '（標準）' : ''}
+            </span>
+          </div>
+        </div>
+
         {voices.length > 0 && (
           <div className="field" style={{ marginBottom: 0 }}>
             <label>音声（ボイス）</label>
             <select
-              value={settings.voiceURI}
+              value={settings.voiceURI || ''}
               // 自分で声を選んだら、音声学習の「声のプリセット」の印は外す（別の声なのにプリセットが選ばれたままに見えていた）
               onChange={(e) => updateSettings({ voiceURI: e.target.value, voicePreset: '' })}
             >
               <option value="">既定の日本語音声</option>
+              {/* 別の端末で選んだ声がこの端末に無い時（バックアップから戻した等）。黙って別の声に見せない */}
+              {settings.voiceURI && !voices.some((v) => v.voiceURI === settings.voiceURI) && (
+                <option value={settings.voiceURI}>（この端末に無い声：既定の声で読みます）</option>
+              )}
               {voices.map((v) => (
                 <option key={v.voiceURI} value={v.voiceURI}>
                   {v.name}
@@ -734,7 +768,24 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
             </select>
           </div>
         )}
-        {voices.length === 0 && (
+        {isSpeechSupported() && (
+          <button
+            className="btn ghost sm"
+            style={{ marginTop: 10 }}
+            onClick={() => {
+              cancelSpeech();
+              const voice = voices.find((v) => v.voiceURI === settings.voiceURI) || null;
+              speak('この速さと声で読み上げます。', {
+                rate: Number(settings.speechRate) || 1,
+                pitch: Number(settings.speechPitch) || 1,
+                voice,
+              }).catch(() => {});
+            }}
+          >
+            🔊 この設定で試し聞き
+          </button>
+        )}
+        {voicesLoaded && voices.length === 0 && (
           <p className="inline-note" style={{ marginBottom: 0 }}>
             日本語の音声が見つかりませんでした。端末の設定で日本語の音声合成データを追加すると、より自然に読み上げられます。
           </p>
@@ -760,7 +811,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           style={{ marginTop: 10 }}
           onClick={async () => {
             if (!confirm(
-              '学習の進捗をすべて消去します（解答の記録・復習の予定・誤答理由・先送り・続きからの位置・音声学習の記録）。\n' +
+              '学習の進捗をすべて消去します（解答の記録・復習の予定・経穴カードの復習の予定・誤答理由・先送り・続きからの位置・音声学習の記録）。\n' +
               '問題データ・メモ・ブックマーク・語呂合わせ・模試の結果・設定は残ります。\n' +
               '消したものは戻せません。先に「バックアップを保存」をおすすめします。よろしいですか？'
             )) return;
@@ -772,7 +823,7 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
           学習の進捗をリセット
         </button>
         <p className="inline-note" style={{ marginTop: 10 }}>
-          データはこの端末の中（IndexedDB）に保存されます。自分でオンにした「Googleドライブ連携」「ボイスクローン」を使う時だけ、その機能に必要なものが外へ送られます。
+          データはこの端末の中（IndexedDB）に保存されます。外へ送るのは、自分で使った時の「Googleドライブ連携」「ボイスクローン」・天気（地域の位置）・YouTubeの曲・音声認識（声の操作・声で解答）だけで、その機能に必要なものに限ります。
         </p>
       </div>
 

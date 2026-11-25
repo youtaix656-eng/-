@@ -9,6 +9,11 @@ import { syncToBackup } from '../lib/sync.js';
 //   ・非対応端末（iPhoneのSafari等）は、URLを貼り付けて取り込む方式にフォールバック。
 //   ・大きなデータは複数枚のQR（アニメーションQR）に分割されて届くことがあるため、
 //     Reassembler で読み取った断片を集め、揃ったら取り込む。カメラをかざし続けるだけでよい。
+// 途中で切れた貼り付け（%が半端に残る）で decodeURIComponent が例外を投げ、画面ごと止まっていた
+function safeDecode(s) {
+  try { return decodeURIComponent(s); } catch (e) { return s; }
+}
+
 export default function SyncScan({ onToast }) {
   const [mode, setMode] = useState('idle'); // idle | camera | paste
   const [error, setError] = useState('');
@@ -64,6 +69,11 @@ export default function SyncScan({ onToast }) {
     }
     stopCamera();
     try {
+      // 取り込む前の状態を世代バックアップに1つ残す（ファイルの復元と同じ。違う端末のQRを読んでも戻せるように）
+      try {
+        const snap = await import('../lib/backupSnapshots.js');
+        await snap.takeSnapshot(storage, { auto: true, reason: 'beforeRestore' });
+      } catch (e) { /* 取れなくても取り込みは続ける */ }
       await storage.importAll(syncToBackup(payload));
       // 書き込みは少し遅れて確定する作りなので、確定させてから読み込み直す
       // （以前はすぐ読み込み直していて、取り込んだ記録が保存されないことがあった）
@@ -107,7 +117,7 @@ export default function SyncScan({ onToast }) {
       onToast?.('これは受け渡し用のQR／URLではありません');
       return false;
     }
-    return handleChunkCode(decodeURIComponent(enc));
+    return handleChunkCode(safeDecode(enc));
   };
 
   // カメラ起動＋読み取りループ
@@ -147,7 +157,7 @@ export default function SyncScan({ onToast }) {
             const codes = await detector.detect(videoRef.current);
             if (codes && codes.length && !busyRef.current) {
               const enc = extractSync(codes[0].rawValue);
-              if (enc) { await handleChunkCode(decodeURIComponent(enc)); }
+              if (enc) { await handleChunkCode(safeDecode(enc)); }
               // 受け渡し用でないQRや、取り込み完了直前は無視して読み取りを続ける
             }
           } catch (e) { /* 一時的な検出エラーは無視して継続 */ }

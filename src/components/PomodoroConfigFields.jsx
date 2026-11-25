@@ -163,6 +163,9 @@ export function PomodoroConfigFields({ cfg, setCfg, onToast, onMusicChange }) {
     onMusicChange?.();
   };
   const removeSong = async (id) => {
+    // 取り込んだ曲は端末の中のコピーなので、消すと戻せない（以前は確認なしで消えた）
+    const target = playlist.find((s) => s.id === id);
+    if (target && target.kind === 'file' && !confirm(`「${target.name}」をプレイリストから消します。取り込んだ曲なので、消すともう一度取り込むまで戻せません。よろしいですか？`)) return;
     const next = await removePomoPlaylistSong(id);
     setPlaylist(next);
     if (activeId === id) setCfg({ activeSongId: next[0]?.id || null });

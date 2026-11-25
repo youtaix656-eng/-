@@ -36,6 +36,8 @@ export default function SyncQR({ store, onToast }) {
   const [frameIdx, setFrameIdx] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [intervalMs, setIntervalMs] = useState(1200);
+  // コピーできない端末（アプリ版など）では、文字を画面に出して長押しで選べるようにする
+  const [manualText, setManualText] = useState('');
   // 発行した時点の記録で作る。開いている間に記録・設定が変わるたびに作り直していたため、
   // 相手が複数枚を読み取っている途中で束ごと入れ替わり、いつまでも揃わないことがあった。
   const dataRef = useRef(null);
@@ -103,15 +105,18 @@ export default function SyncQR({ store, onToast }) {
       onToast?.('有効期限切れです。再発行してください');
       return;
     }
+    if (!currentUrl) return;
     try {
       await navigator.clipboard.writeText(currentUrl);
+      setManualText('');
       onToast?.(
         multi
           ? `（${frameIdx + 1}/${chunks.length}枚目）をコピーしました。相手の端末に貼り付けて「取り込む」→ 次の枚も同じ手順で`
           : '受け渡しURLをコピーしました（5分間だけ有効）'
       );
     } catch (e) {
-      onToast?.('コピーできませんでした');
+      setManualText(currentUrl);
+      onToast?.('自動でコピーできませんでした。下に出した文字を長押しして全部選び、コピーしてください');
     }
   };
 
@@ -137,7 +142,7 @@ export default function SyncQR({ store, onToast }) {
             <div style={{ marginBottom: 10 }}>
               <div className="auth-error" style={{ marginBottom: 10 }}>
                 データが大きすぎてQRとしては表示できませんでした。
-                {withHistory ? '下の「解答履歴を含めない」をオフにするか、' : ''}
+                {withHistory ? '下の「解答履歴も含める」をオフにするか、' : ''}
                 下の「コピー」でテキストとして1枚ずつ送るか、「共有」ボタンやバックアップファイルでの移行をご利用ください。
               </div>
               {!expired && chunks && chunks.length > 0 && (
@@ -234,13 +239,23 @@ export default function SyncQR({ store, onToast }) {
           )}
           <div className="btn-row" style={{ marginTop: 10 }}>
             {!tooBig && !expired && (
-              <button className="btn" onClick={copyUrl}>
+              <button className="btn" onClick={copyUrl} disabled={building || !currentUrl}>
                 受け渡しURLをコピー{multi ? `（${frameIdx + 1}/${chunks.length}枚目）` : ''}
               </button>
             )}
             <button className="btn" onClick={issue}>🔄 再発行</button>
-            <button className="btn ghost" onClick={() => setOpen(false)}>閉じる</button>
+            <button className="btn ghost" onClick={() => { setOpen(false); setManualText(''); }}>閉じる</button>
           </div>
+          {manualText && (
+            <textarea
+              readOnly
+              value={manualText}
+              rows={4}
+              style={{ width: '100%', marginTop: 8, fontSize: 12 }}
+              onFocus={(e) => e.target.select()}
+              aria-label="コピー用の受け渡しURL"
+            />
+          )}
         </div>
       )}
     </div>

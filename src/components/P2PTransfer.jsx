@@ -29,13 +29,17 @@ function CodeOutputPanel({ chunks, onToast, label }) {
   const multi = chunks.length > 1;
   const current = chunks[idx];
   const matrix = useMemo(() => qrMatrix(current), [current]);
+  const [manualText, setManualText] = useState('');
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(current);
+      setManualText('');
       onToast?.(multi ? `${label}（${idx + 1}/${chunks.length}）をコピーしました` : `${label}をコピーしました`);
     } catch (e) {
-      onToast?.('コピーできませんでした');
+      // コピーできない端末では、文字を出して長押しで選べるようにする（以前は諦めるだけだった）
+      setManualText(current);
+      onToast?.('自動でコピーできませんでした。下に出した文字を長押しして全部選び、コピーしてください');
     }
   };
 
@@ -56,6 +60,10 @@ function CodeOutputPanel({ chunks, onToast, label }) {
         <button className="btn primary sm" onClick={copy}>📋 コピー</button>
         {multi && <button className="btn ghost sm" onClick={() => setIdx((i) => (i + 1) % chunks.length)}>次へ ▶</button>}
       </div>
+      {manualText && manualText === current && (
+        <textarea readOnly value={manualText} rows={4} style={{ width: '100%', marginTop: 8, fontSize: 12 }}
+          onFocus={(e) => e.target.select()} aria-label={`コピー用の${label}`} />
+      )}
     </div>
   );
 }

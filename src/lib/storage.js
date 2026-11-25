@@ -514,6 +514,8 @@ export const PROGRESS_KEYS = [
   'shinkyu:missTypes', 'shinkyu:selfKindCounts', 'shinkyu:snoozeLog', 'shinkyu:reviewZeroLog',
   'shinkyu:roundLog', 'shinkyu:roundStartLog', 'shinkyu:audioReviewLog', 'shinkyu:rephraseLog',
   'shinkyu:voiceAnswerLog', 'shinkyu:streakBreakLog',
+  // 経穴カードの復習の予定も「学習の進捗」なので一緒に消す（以前は残っていて、リセットしても期限のカードが出続けた）
+  'shinkyu:flashcardSrs',
 ];
 const PROGRESS_LS_KEYS = ['shinkyu:audioPlayHistory', 'shinkyu:audioProgressSync'];
 export async function resetProgress() {
