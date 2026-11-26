@@ -81,9 +81,11 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
           <span className="mini-title">
             {!live && <span className="mini-tag">{last.done ? 'もう一度' : '続きから'}</span>}
             <span className="mini-title-text">{label}</span>
-            {pos && <span className="mini-pos">{pos}</span>}
+            {live && pos && <span className="mini-pos">{pos}</span>}
           </span>
-          <span className="mini-sub">{sub}</span>
+          {/* 続きから（再生していない時）は位置の文が長いので、題名の行ではなく下の行に出す
+              （幅360pxで題名が「誤…」まで切れて、何を聞いていたか分からなかった） */}
+          <span className="mini-sub">{!live && pos ? `${pos}・${sub}` : sub}</span>
         </span>
       </button>
       <div className="mini-controls">

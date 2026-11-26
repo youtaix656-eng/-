@@ -64,7 +64,7 @@ import { recordRephrase } from '../lib/rephraseLog.js';
 import { setBreakResumePending, clearBreakResumePending, loadBreakResumePending } from '../lib/audioBreakResumeFlag.js';
 import { BODY_LOCATION_SETS } from '../data/bodyLocationMethod.js';
 import { useKeiketsuCards } from '../lib/keiketsuCardsLoader.js';
-import { resolveDailySubjectIndex, subjectAt, subjectWrongPool } from '../lib/audioDailySubject.js';
+import { resolveDailySubjectIndex, dailyWrongPickWithFallback } from '../lib/audioDailySubject.js';
 import { CONFUSING_PAIRS } from '../lib/confusingPairsChecklist.js';
 import { findIfThenScenario } from '../lib/ifThenScenarios.js';
 import { readingOrderHintFor } from '../lib/subjectReadingTemplates.js';
@@ -175,6 +175,10 @@ import { scrollBehavior } from '../lib/motion.js';
 //   ※ アプリを開いた状態での利用を想定（画面OFF時の継続再生は不可）。
 
 const PHASES = { KEYWORD: 'keyword', QUESTION: 'question', GAP: 'gap', ANSWER: 'answer', NOTE: 'note' };
+// 次の問題の問題文が流れ始めてからこの時間内に○△✕を押したら、前の問題に付ける（アプリ内部の目安）
+const GRADE_PREV_WINDOW_MS = 6000;
+// 何も選ばずに▶を押した時の最初の件数（1セット＝60問。SESSION_TARGETSの60と同じ）
+const AUTO_FIRST_TARGET = 60;
 const ALL_KW = '__all__';
 
 // 設定トグル1行（初心者向けの説明つき）
@@ -239,7 +243,7 @@ export default function AudioMode({
     updateSettings({ audioDailySubjectRotation: { index: dailySubjectState.index, dateKey: dailySubjectState.dateKey } });
   }, [dailySubjectState.changed, dailySubjectState.index, dailySubjectState.dateKey, updateSettings]);
   const dailyWrongPick = useMemo(
-    () => subjectWrongPool(questions, srs, subjectAt(dailySubjectState.index)),
+    () => dailyWrongPickWithFallback(questions, srs, dailySubjectState.index),
     [questions, srs, dailySubjectState.index]
   );
   const { streak, studiedToday } = useMemo(() => studyStreak(history), [history]);
@@ -369,6 +373,11 @@ export default function AudioMode({
   const [laterLookup, setLaterLookup] = useState([]);
   useEffect(() => { loadLaterLookup().then(setLaterLookup); }, []);
   const [laterLookupOpen, setLaterLookupOpen] = useState(false);
+  // 再生ボタンが4〜5画面下にあったので、「すぐ始める」カード群と検索の細かい条件は開いた時だけ出す
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [searchMoreOpen, setSearchMoreOpen] = useState(false);
+  // 件数で「すべて」を自分で選んだか（選んでいない時、何も選ばずに▶で全収録問題を読み始めないように）
+  const explicitAllRef = useRef(false);
   // #1：体の場所法で読む経穴の組（既定は八会穴、増えたら選べるようにする）
   const [bodyLocationSetId, setBodyLocationSetId] = useState(BODY_LOCATION_SETS[0]?.id || null);
   // #28：宿題リプレイ。「あとで調べる」に登録してから12時間以上経ったものだけを対象にする
@@ -590,6 +599,7 @@ export default function AudioMode({
   const autoPlayReqRef = useRef(0);
   const latestPlanSigRef = useRef(null);
   const requestAutoPlay = () => {
+    scrollToPlayer();
     const at = Date.now();
     autoPlayReqRef.current = at;
     // 組み直しが起きない（同じ束をもう一度選んだ）時の受け皿。組み直し中（エンジンの束と
@@ -1374,7 +1384,8 @@ export default function AudioMode({
 
   // 読み方の手動補正辞書（TTSの誤読を直す）。読み上げ直前にだけ置き換える＝表示テキストはそのまま。
   const applyPronunciation = (text) => {
-    let t = String(text || '');
+    // 問題文の終わりの「。」に読み上げ側の「。」が重なって「どれか。。」になっていたので1つにまとめる
+    let t = String(text || '').replace(/([。？！?!])。+/g, '$1');
     if (!st) {
       // 部品の読み込み前：今までどおり本人の手動補正だけをかける
       const fixes = settings.pronunciationFixes || {};
@@ -1963,6 +1974,17 @@ export default function AudioMode({
   // 素の scrollIntoView(block:'start') だとヘッダーの裏に隠れてプレーヤー上段
   // （問題番号・今日の目標の行）が見えなくなることを実機で確認したため。
   const playerRef = useRef(null);
+  // プレーヤー（またはセレクタで指した要素）まで、固定ヘッダーの下に出るようにスクロールする。
+  // 「間違えた問題を読み上げる」などを押しても画面が先頭のままで、▶まで自分で探す必要があった。
+  function scrollToEl(el) {
+    if (!el) return;
+    const headerH = document.querySelector('.app-header')?.getBoundingClientRect().height || 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - headerH - 8;
+    window.scrollTo({ top: Math.max(0, top), behavior: scrollBehavior() });
+  }
+  function scrollToPlayer() {
+    setTimeout(() => scrollToEl(playerRef.current), 250);
+  }
   // #11：プレーヤー領域のスワイプ操作（左へスワイプ＝次へ・右へスワイプ＝前へ）。
   // 縦方向の移動（ページスクロール）の方が大きい時は無視し、画面スクロールの邪魔をしない。
   const swipeStartRef = useRef(null);
@@ -2083,6 +2105,7 @@ export default function AudioMode({
     setVoiceAnswerStats({ attempts: 0, matched: 0 });
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = null;
+    scrollToPlayer();
   };
   useEffect(() => {
     if (!reviewPreset) return;
@@ -2118,6 +2141,12 @@ export default function AudioMode({
   // 以前は「いま何番目にいるか」で数えていたため、問題番号バーで後ろへ飛ぶ・続きから再開するだけで
   // 聞いていないのに「達成」になり、また「声で知らせる」と書いてあるのにトーストだけだった。
   // 最後まで読み終えた問題の数（このセッション内・同じ問題は1回）で数え、達成したら声でも知らせる。
+  // 最後まで読み終えた問題（自己採点を前の問題へ付ける判定に使う）
+  const lastCompletedRef = useRef(null);
+  useEffect(() => {
+    if (snap.completedId == null) return;
+    lastCompletedRef.current = { id: snap.completedId, at: Date.now() };
+  }, [snap.completedSeq]); // eslint-disable-line react-hooks/exhaustive-deps
   const goalHeardRef = useRef({ sig: null, seq: null, ids: new Set() });
   const [goalHeardCount, setGoalHeardCount] = useState(0);
   useEffect(() => {
@@ -2157,6 +2186,16 @@ export default function AudioMode({
       // 改善案i3：確認済みはその日のうちだけ覚えておく（毎回チェックしなくてよいように）。
       if (headphoneOnly && headphoneHint !== true && settings.audioHeadphoneConfirmedDate !== dateKey()) {
         onToast?.('🎧 イヤホンの接続を確認できませんでした。イヤホンをつないでから、下の「イヤホンを付けています」にチェックしてください。');
+        return;
+      }
+      // 何も選ばずに▶を押すと、全収録問題（3000問超・セット1/56）を収録順に読み始めていた。
+      // 最初の1回としては多すぎるので、まず60問（1セット）にする。「すべて」を自分で選んだ時はそのまま。
+      if (!snap.started && mode === 0 && source === 'all' && !filterActive && reviewTarget == null
+        && !explicitAllRef.current && total > AUTO_FIRST_TARGET) {
+        setReviewOffsetPersist(0);
+        setReviewTarget(AUTO_FIRST_TARGET);
+        onToast?.(`全${total}問は多いので、まず${AUTO_FIRST_TARGET}問（1セット）から始めます。全部読む時は件数で「すべて」を選んでください`);
+        requestAutoPlay();
         return;
       }
       updateSettings({ speechRate: rate, gapSeconds: gap, nextGapSeconds: nextGap });
@@ -2516,6 +2555,17 @@ export default function AudioMode({
   // 「間違えた問題だけもう一度」がONなら自動でもう一度だけ回す（#14・#15・#17・#19・#20）。
   // 前回との正答率比較（新規#1）・誤答理由（型）別の件数（新規#2）・プレイリストの次の束への
   // 自動進行（新規#3）もここでまとめて行う。
+  // 聞き終えた時のまとめ（.sess-done）は画面の先頭近くに出るのに、聞いている人はずっと下の
+  // プレーヤーにいるので目に入らなかった。聞き終えたらまとめまで移す（続けて次の束が始まる時は移さない）。
+  useEffect(() => {
+    if (!snap.finished) return undefined;
+    const t = setTimeout(() => {
+      if (!engine.getSnapshot().finished) return;
+      const el = document.querySelector('.sess-done');
+      if (el && el.offsetParent) scrollToEl(el);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [snap.finished]); // eslint-disable-line react-hooks/exhaustive-deps
   const prevFinishedRef = useRef(false);
   useEffect(() => {
     const justFinished = snap.finished && !prevFinishedRef.current;
@@ -2977,7 +3027,9 @@ export default function AudioMode({
     setVoiceAnswerStats({ attempts: 0, matched: 0 });
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = null;
-    onToast?.(`🔴 今日の科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`);
+    onToast?.(dailyWrongPick.fallback
+      ? `🔴 今日の科目「${dailyWrongPick.todaySubject}」には誤答が無いので、「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`
+      : `🔴 今日の科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`);
     requestAutoPlay();
   };
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）
@@ -3097,8 +3149,18 @@ export default function AudioMode({
   const [detailSettingsOpen, setDetailSettingsOpen] = useState(false);
   // #10 聞きながら自己採点／キーワード追加（○＝できた, △・✕＝復習へ）
   const gradeCurrent = (kind) => {
-    const q = current;
+    let q = current;
     if (!q) return;
+    // 解説を読み終えて次の問題の問題文が流れ始めた直後（GRADE_PREV_WINDOW_MS以内）に押した時は、
+    // 答えを聞き終えた前の問題に付ける。以前はその時に読んでいる次の問題に付けていたため、
+    // まだ答えを聞いていない問題に○が付いていた（耳だけで聞いている時にいちばん起きやすい）。
+    const lc = lastCompletedRef.current;
+    let toPrev = false;
+    if (lc && lc.id !== q.id && (phase === PHASES.QUESTION || phase === PHASES.KEYWORD || phase === PHASES.GAP)
+      && Date.now() - lc.at < GRADE_PREV_WINDOW_MS && !gradedIdsRef.current.has(lc.id)) {
+      const pq = questionsById.get(lc.id);
+      if (pq) { q = pq; toPrev = true; }
+    }
     if (gradedIdsRef.current.has(q.id)) {
       onToast?.('この問題はすでに記録済みです（二重には記録しません）');
       return;
@@ -3155,7 +3217,8 @@ export default function AudioMode({
         // comparisonsForKeywordは `c.title.includes(kw)` を含む判定のため、空文字を渡すと
         // 「すべての文字列に空文字は含まれる」でCOMPARISONS全件がヒットしてしまう
         // （curTags[0]が無い問題で、無関係な対比が紛れ込むバグになるところだった。実装時に発見）。
-        const comp = mindmapData && curTags[0] ? (mindmapData.comparisonsForKeyword(curTags[0])[0] || null) : null;
+        const qTags = effectiveTags(q, links);
+        const comp = mindmapData && qTags[0] ? (mindmapData.comparisonsForKeyword(qTags[0])[0] || null) : null;
         const others = comp ? (comp.members || []).filter((m) => m && !(q.question || '').includes(m)).slice(0, 2) : [];
         const angle = others.length ? `似ている「${others.join('」「')}」とはここが違います。` : '';
         setTimeout(() => {
@@ -3168,22 +3231,25 @@ export default function AudioMode({
     if (!ok) {
       setSessionWrong((prev) => (prev.some((x) => x.id === q.id) ? prev : [...prev, q]));
       setSessionWrongKinds((prev) => ({ ...prev, [q.id]: kind }));
-      setJustGradedWrongId(q.id); // A10：その場で誤答理由を選べるように
+      // 前の問題に付けた時は、もう次の問題を読んでいるので、その場の誤答理由・一言メモは出さない
+      // （聞き終えた時のまとめで分類できる）
+      if (!toPrev) setJustGradedWrongId(q.id); // A10：その場で誤答理由を選べるように
       // A9：自己説明ステップ（音声版）。QuestionCard.jsxのwhyPrompt（誤答時に自動で促す）と
       //   同じ考え方を、聞きながらでも使えるよう声でも一言促す。
       setAudioWhy('');
-      speak('なぜこの答えだったか、一言メモしておくと、同じ間違いを繰り返しにくくなります。', {
+      if (!toPrev) speak('なぜこの答えだったか、一言メモしておくと、同じ間違いを繰り返しにくくなります。', {
         rate, pitch: settings.speechPitch || 1, voice: selectedVoice(),
       }).catch(() => {});
     } else {
       setJustGradedWrongId(null);
     }
+    const which = `${toPrev ? '前の問題' : ''}「${(q.question || '（図の問題）').slice(0, 14)}…」`;
     onToast?.(
       kind === 'maru'
-        ? '「○ できた」を記録しました'
+        ? `「○ できた」を${which}に記録しました`
         : kind === 'sankaku'
-        ? '「△ あいまい」を記録（復習に追加）'
-        : '「✕ できない」を記録（復習に追加）'
+        ? `「△ あいまい」を${which}に記録（復習に追加）`
+        : `「✕ できない」を${which}に記録（復習に追加）`
     );
   };
   // 声コマンド「全部できた」：今の問題から最後までをまとめて○にし、そこで終える（新規#9）。
@@ -3337,6 +3403,26 @@ export default function AudioMode({
   const modeUsage = settings.audioModeUsage || {};
   const sortedModes = MODES.slice().sort((a, b) => (modeUsage[b.id] || 0) - (modeUsage[a.id] || 0));
 
+  // 「詳しくしぼり込む」の中で使っている条件の数（閉じていても使っていると分かるように）
+  const searchMoreActive = [bookmarkOnly, newOnly, recentOnlyFilter, derivedOnly, oxOnly, rotateSubjects.length > 0,
+    leechFirst, audioNewPct != null, !!recentOnly, minRisk > 0, !!riskTopN, minWrong > 0].filter(Boolean).length;
+  // 聞き終えた時の見出しに使う「何を聞いていたか」。以前は自己採点の数だけで決めていて、
+  // 誤答・△✕を15問聞いても「すきま学習（15問）完了！」と出ていた。
+  function finishedSessionLabel() {
+    const k = audioSessionKindRef.current;
+    if (k && REVIEW_TITLE_PREFIX[k]) return REVIEW_TITLE_PREFIX[k];
+    if (quickMinuteActiveRef.current != null) return `${quickMinuteActiveRef.current}分だけ`;
+    if (mode > 0) return MODES.find((m) => m.id === mode)?.title || '連結学習';
+    if (source === 'review') return '誤答・△✕';
+    if (source === 'filter' && newOnly) return 'まだ解いていない問題';
+    if (source === 'bodyLocation') return '体の場所法';
+    if (source === 'confusingPairs') return '紛らわしいペア';
+    if (source === 'homophone') return '同じ読みの経穴ドリル';
+    if (source === 'homework') return '宿題リプレイ';
+    if (filterSubject) return filterSubject;
+    return '読み上げ';
+  }
+
   return (
     <div className="view">
       <h2 className="view-title">音声学習 × 連結学習</h2>
@@ -3353,17 +3439,29 @@ export default function AudioMode({
       >
         <span className="daily-wrong-pill-main">🔴 今日の科目で誤答・△✕を聞く</span>
         <span className="daily-wrong-pill-sub">
-          {dailyWrongPick.pool.length > 0
-            ? `${dailyWrongPick.subject}・${dailyWrongPick.pool.length}問`
-            : `${dailyWrongPick.subject}・まだ誤答がありません`}
+          {dailyWrongPick.pool.length === 0
+            ? `${dailyWrongPick.subject}・まだ誤答がありません`
+            : dailyWrongPick.fallback
+            ? `今日の${dailyWrongPick.todaySubject}は誤答なし → ${dailyWrongPick.subject}・${dailyWrongPick.pool.length}問`
+            : `${dailyWrongPick.subject}・${dailyWrongPick.pool.length}問`}
         </span>
       </button>
+
+      {builtPlan.length > 0 && (
+        <button type="button" className="btn ghost sm block" style={{ marginBottom: 10 }} onClick={() => scrollToEl(playerRef.current)}>
+          🎧 再生ボタン（プレーヤー）へ移る
+        </button>
+      )}
 
       {streak > 0 && (
         <div className={`streak-card${studiedToday ? ' lit' : ''}`} style={{ marginBottom: 12 }}>
           <span className="streak-flame">🔥</span>
           <span className="streak-main"><strong>{streak}</strong>日連続</span>
-          <span className="streak-sub">{studiedToday ? '今日も学習済み！' : '今日まだ未学習。1問でも解いて継続！'}</span>
+          <span className="streak-sub">{studiedToday
+            ? '今日も学習済み！'
+            : goalHeardCount > 0
+            ? `この束で${goalHeardCount}問聞きました。○△✕を付けると学習日に数えます`
+            : '今日まだ未学習。1問でも解いて継続！'}</span>
         </div>
       )}
 
@@ -3384,14 +3482,19 @@ export default function AudioMode({
           ? `今日の目標 ${effectiveDailyGoal}問 達成！`
           : graded >= 60
           ? '1セット（60問）完了！'
-          : `すきま学習（${total}問）完了！`;
+          : `${finishedSessionLabel()}（${total}問）を聞き終えました`;
         return (
           <div className="card sess-done" style={{ marginBottom: 12 }}>
             <div className="sess-done-ico">{doneIco}</div>
             <h2 style={{ textAlign: 'center' }}>{doneTitle}</h2>
             <p className="view-desc" style={{ textAlign: 'center' }}>
-              おつかれさまでした。全{total}問・自己採点{graded}問。
+              おつかれさまでした。全{total}問・聞き終えた{goalHeardCount}問・自己採点{graded}問。
             </p>
+            {graded === 0 && goalHeardCount > 0 && (
+              <p className="inline-note" style={{ textAlign: 'center', marginTop: 0 }}>
+                聞いただけの問題は、学習日・今日の目標には数えていません。○△✕を付けると記録に残ります。
+              </p>
+            )}
             {/* 派生#41：直前が「◯分だけ」のミニセッションだった時だけ出す */}
             {quickMinuteActiveRef.current != null && (
               <button
@@ -3565,6 +3668,19 @@ export default function AudioMode({
         </div>
       )}
 
+      {/* すぐ始めるメニュー（隙間時間・記憶術・本番想定・就寝前）。4枚のカードが並んで再生ボタンが
+          ずっと下になっていたので、開いた時だけ出す。 */}
+      <div className="card" style={{ marginBottom: 10 }}>
+        <button
+          className="btn ghost sm block"
+          aria-expanded={quickMenuOpen}
+          onClick={() => setQuickMenuOpen((v) => !v)}
+        >
+          🚀 すぐ始める（5分だけ・記憶術・本番想定・就寝前） {quickMenuOpen ? '▲' : '▼'}
+        </button>
+      </div>
+      {quickMenuOpen && (
+        <>
       {/* #41：通勤・隙間時間向けの「◯分だけ」ミニセッション（検索・設定を経由せず即開始） */}
       <div className="card" style={{ marginBottom: 10 }}>
         <div className="section-label" style={{ marginTop: 0 }}>🚃 隙間時間に</div>
@@ -3646,6 +3762,9 @@ export default function AudioMode({
         </div>
       </div>
 
+        </>
+      )}
+
       {/* 上部の検索（科目名・ジャンル・キーワードでしぼり込む） */}
       <div className="card audio-search">
         <div className="section-label" style={{ marginTop: 0 }}>🔍 検索（しぼり込み）</div>
@@ -3715,6 +3834,17 @@ export default function AudioMode({
           style={{ marginTop: 10 }}
         />
 
+        <button
+          className="btn ghost sm block"
+          style={{ marginTop: 10 }}
+          aria-expanded={searchMoreOpen}
+          onClick={() => setSearchMoreOpen((v) => !v)}
+        >
+          🔧 詳しくしぼり込む（ブックマーク・新着・出題形式・複数科目・新規と復習の割合・忘却リスクなど）
+          {searchMoreActive > 0 ? `・使用中${searchMoreActive}` : ''} {searchMoreOpen ? '▲' : '▼'}
+        </button>
+        {searchMoreOpen && (
+          <>
         <label className="autokw-row" style={{ marginTop: 8 }}>
           <input type="checkbox" checked={bookmarkOnly} onChange={toggleBookmarkOnly} />
           <span>★ ブックマークした問題だけ読み上げ</span>
@@ -3873,6 +4003,8 @@ export default function AudioMode({
             onChange={(e) => { rebuildStop(); setMinWrong(Number(e.target.value)); }}
           />
         </div>
+          </>
+        )}
         <div className="search-foot">
           {filterActive ? (
             <>
@@ -4084,9 +4216,11 @@ export default function AudioMode({
             {current && st && speechStyle.readFix && (() => {
               const list = st.termsWithReading(`${current.question || ''}${current.explanation || ''}`, readingDict, 6);
               return list.length ? (
-                <div className="inline-note" style={{ marginTop: 6, opacity: 0.85 }}>
-                  🔤 読みを直して読む言葉：{list.map((x) => `${x.term}（${x.reading}）`).join('・')}
-                </div>
+                // 毎問出ていて問題文のまわりが混み合っていたので、開いた時だけ一覧を出す
+                <details className="read-fix-note" style={{ marginTop: 6 }}>
+                  <summary>🔤 読みを直して読む言葉（{list.length}）</summary>
+                  <div className="inline-note" style={{ opacity: 0.85 }}>{list.map((x) => `${x.term}（${x.reading}）`).join('・')}</div>
+                </details>
               ) : null;
             })()}
             {/* 四択の選択肢は画面に出す（読み上げはしない。ユーザー指定）。並べ替えて読む設定の時は、
@@ -4197,7 +4331,7 @@ export default function AudioMode({
                   onClick={() => jumpMark(-1)}
                   disabled={index === 0}
                   aria-label={`戻る（前の区切り${markTarget(-1) != null ? `・${markTarget(-1)}問目` : ''}へ）`}
-                >◀</button>
+                ><span aria-hidden="true">◀</span><small aria-hidden="true">区切り</small></button>
               )}
               <button onClick={() => skip(-1)} disabled={index === 0} aria-label="前へ">⏮</button>
               <button className="main" onClick={togglePlay} aria-label="再生 / 一時停止">{playing ? '⏸' : '▶'}</button>
@@ -4208,7 +4342,7 @@ export default function AudioMode({
                   onClick={() => jumpMark(1)}
                   disabled={index >= total - 1}
                   aria-label={`進む（次の区切り${markTarget(1) != null ? `・${markTarget(1)}問目` : ''}へ）`}
-                >▶</button>
+                ><span aria-hidden="true">▶</span><small aria-hidden="true">区切り</small></button>
               )}
             </div>
             {total > 1 && (
@@ -4267,24 +4401,30 @@ export default function AudioMode({
             )}
             {/* #10 聞きながら自己採点＋キーワード追加＋ブックマーク */}
             {current && (
-              <div className="selfgrade">
-                <button className="sg-btn ok" onClick={() => gradeCurrent('maru')}>○ できた</button>
-                <button className="sg-btn mid" onClick={() => gradeCurrent('sankaku')}>△ あいまい</button>
-                <button className="sg-btn ng" onClick={() => gradeCurrent('batsu')}>✕ できない</button>
-                <button className={`sg-btn q-bookmark${bookmarks[current.id] ? ' on' : ''}`} onClick={toggleCurrentBookmark}>
-                  {bookmarks[current.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
-                </button>
-                <button className="sg-btn" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
-              </div>
+              <>
+                {/* ○△✕だけを1行に置き、ほかの操作とは間を空ける（押し間違いを減らす） */}
+                <div className="selfgrade selfgrade-main">
+                  <button className="sg-btn ok" onClick={() => gradeCurrent('maru')}>○ できた</button>
+                  <button className="sg-btn mid" onClick={() => gradeCurrent('sankaku')}>△ あいまい</button>
+                  <button className="sg-btn ng" onClick={() => gradeCurrent('batsu')}>✕ できない</button>
+                </div>
+                <div className="btn-row selfgrade-sub">
+                  <button className="btn ghost sm" onClick={toggleCurrentBookmark}>
+                    {bookmarks[current.id] ? '★ ブックマーク済み' : '☆ ブックマーク'}
+                  </button>
+                  <button className="btn ghost sm" onClick={() => setTagOpen((v) => !v)}>🔗 キーワード追加</button>
+                </div>
+              </>
             )}
-            {/* #16：自分の言葉で言い直す練習を録音する（端末内保存のみ、直近20件）。 */}
+            {/* #16：自分の言葉で言い直す練習を録音する（端末内保存のみ、直近20件）。
+                ○△✕のすぐ下に並んで押し間違えやすかったので、開いた時だけ出す。 */}
             {current && (
+              <details className="audio-more" open={recordingOn || undefined}>
+                <summary>🎙️ 自分の声で言い直す・録音</summary>
               <label className="autokw-row" style={{ marginTop: 6 }}>
                 <input type="checkbox" checked={teachModeOn} onChange={(e) => setTeachModeOn(e.target.checked)} />
                 <span>🧑‍🏫 「後輩に教えるつもりで」と録音前に促す（教えるモード）</span>
               </label>
-            )}
-            {current && (
               <div className="btn-row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
                 {!recordingOn ? (
                   <button className="btn ghost sm" onClick={() => startSelfVoiceRecording()}>🎙️ 自分の声で言い直して録音</button>
@@ -4303,6 +4443,7 @@ export default function AudioMode({
                   </>
                 )}
               </div>
+              </details>
             )}
             {/* A10：誤答理由をその場で選べるように（△・✕を選んだ直後だけ表示。
                 完了画面でまとめて選ぶのとは別に、忘れないうちに今すぐ記録できる） */}
@@ -4581,7 +4722,7 @@ export default function AudioMode({
                   })}
                   <button
                     className={`sess-target ${!reviewTarget ? 'active' : ''}`}
-                    onClick={() => changeReviewTarget(null)}
+                    onClick={() => { explicitAllRef.current = true; changeReviewTarget(null); }}
                   >
                     <span className="sess-target-n">すべて</span>
                     <span className="sess-target-l">{n}問</span>
@@ -4960,7 +5101,7 @@ export default function AudioMode({
                   })}
                   <button
                     className={`sess-target ${!reviewTarget ? 'active' : ''}`}
-                    onClick={() => changeReviewTarget(null)}
+                    onClick={() => { explicitAllRef.current = true; changeReviewTarget(null); }}
                   >
                     <span className="sess-target-n">すべて</span>
                     <span className="sess-target-l">{n}問</span>

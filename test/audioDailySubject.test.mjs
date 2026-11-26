@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveDailySubjectIndex, subjectAt, subjectWrongPool } from '../src/lib/audioDailySubject.js';
+import { resolveDailySubjectIndex, subjectAt, subjectWrongPool, dailyWrongPickWithFallback } from '../src/lib/audioDailySubject.js';
 import { SUBJECT_TAG_NAMES } from '../src/data/examScope.js';
 
 test('resolveDailySubjectIndex：保存状態が無い最初の1回は「生理学」（解剖学の次）から始まる', () => {
@@ -86,4 +86,19 @@ test('subjectWrongPool：対象が0件なら空のpoolを返す（黒いが行�
   const { subject: pickedSubject, pool } = subjectWrongPool([], {}, '生理学');
   assert.equal(pickedSubject, '生理学');
   assert.deepEqual(pool, []);
+});
+
+test('dailyWrongPickWithFallback：今日の科目に誤答が無い日は、順番どおり次の誤答がある科目へ回す', () => {
+  const i = SUBJECT_TAG_NAMES.indexOf('生理学');
+  const later = SUBJECT_TAG_NAMES[(i + 3) % SUBJECT_TAG_NAMES.length];
+  const qs = [{ id: 'a', subject: later }];
+  const srs = { a: { wrongCount: 1, correctStreak: 0, due: 0 } };
+  const r = dailyWrongPickWithFallback(qs, srs, i);
+  assert.equal(r.fallback, true);
+  assert.equal(r.todaySubject, '生理学');
+  assert.equal(r.subject, later);
+  assert.equal(r.pool.length, 1);
+  const none = dailyWrongPickWithFallback([], {}, i);
+  assert.equal(none.fallback, false);
+  assert.equal(none.pool.length, 0);
 });

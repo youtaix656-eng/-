@@ -135,3 +135,9 @@ test('同じ読みのドリル：経絡が同じ組（天宗・天窓）は場�
   for (const t of tenso) assert.doesNotMatch(t.recallPrompt, /小腸経の/);
   for (const x of items) assert.doesNotMatch(x.recallPrompt, /少海|小海|照海/);
 });
+
+test('readSymbols：言葉どうしの「／」は区切り、「＝」は「は」と読む（数どうしの分数はそのまま）', () => {
+  assert.equal(readSymbols('筋皮神経／正中神経'), '筋皮神経、正中神経');
+  assert.equal(readSymbols('左心室＝体循環の起点'), '左心室は体循環の起点');
+  assert.equal(readSymbols('1/2の量'), '2分の1の量');
+});

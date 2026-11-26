@@ -59,3 +59,17 @@ export function subjectWrongPool(questions, srs, subject) {
   const rest = wrong.filter((q) => !isDue(srs[q.id]));
   return { subject, pool: [...due, ...rest] };
 }
+
+// 今日の科目に誤答・△✕が1問も無い日に、ボタンが押せなくなって行き止まりになっていた
+// （ほかの科目には誤答が溜まっていても回す道が無かった）。今日の科目から順番どおりに
+// 次の科目を見ていき、誤答・△✕がある最初の科目を返す。保存している日替わりの添字は変えない
+// （明日の科目の順番はそのまま）。どの科目にも無ければ today の空のプールを返す。
+export function dailyWrongPickWithFallback(questions, srs, index) {
+  const today = subjectWrongPool(questions, srs, subjectAt(index));
+  if (today.pool.length > 0) return { ...today, todaySubject: today.subject, fallback: false };
+  for (let k = 1; k < SUBJECT_TAG_NAMES.length; k += 1) {
+    const p = subjectWrongPool(questions, srs, subjectAt(index + k));
+    if (p.pool.length > 0) return { ...p, todaySubject: today.subject, fallback: true };
+  }
+  return { ...today, todaySubject: today.subject, fallback: false };
+}

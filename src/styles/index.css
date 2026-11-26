@@ -978,10 +978,16 @@ textarea {
 .player-controls button.mark-jump {
   background: #e53935;
   color: #fff;
-  width: 40px;
-  height: 40px;
-  font-size: 16px;
+  /* 丸い再生ボタンと形でも見分けられるよう、角丸の四角＋「区切り」の小さな文字 */
+  width: 44px;
+  height: 46px;
+  border-radius: 10px;
+  font-size: 14px;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1;
 }
+.player-controls button.mark-jump small { font-size: 9px; font-weight: 700; }
 .mark-jump-hint {
   text-align: center;
   font-size: 11px;
@@ -2930,6 +2936,12 @@ code.block {
 .sg-btn.ok { border-color: var(--correct); }
 .sg-btn.mid { border-color: #d8a640; }
 .sg-btn.ng { border-color: var(--wrong); }
+/* ○△✕だけの1行（大きめ・折り返さない）。ほかの操作とは間を空けて押し間違いを減らす */
+.selfgrade-main { flex-wrap: nowrap; }
+.selfgrade-main .sg-btn { min-width: 0; min-height: 52px; font-size: 14px; padding: 10px 2px; white-space: nowrap; }
+.selfgrade-sub { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.audio-more { margin-top: 8px; }
+.audio-more > summary { cursor: pointer; font-size: 13px; color: var(--text-sub); padding: 6px 0; }
 
 /* ===== 連結学習 強化版 ===== */
 .tmpl-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -4073,3 +4085,6 @@ code.block {
 @media (max-width: 360px) {
   .player-controls { gap: 8px; }
 }
+
+/* 音声学習：読みを直して読む言葉（開いた時だけ一覧） */
+.read-fix-note > summary { cursor: pointer; font-size: 12px; opacity: 0.75; }
