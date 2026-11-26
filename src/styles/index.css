@@ -1029,6 +1029,15 @@ textarea {
   align-items: center; justify-content: center; border: 1px solid currentColor; font-size: 13px; font-weight: 700;
 }
 .player .now-choice-mark { margin-left: auto; font-weight: 800; }
+/* アウトプットの考え中：選択肢そのものを押して答える */
+.player .now-choice-pick {
+  display: flex; gap: 8px; align-items: flex-start; width: 100%; min-height: 40px;
+  background: none; border: none; color: inherit; font: inherit; text-align: left; padding: 0; cursor: pointer;
+}
+.player .now-choices li:has(.now-choice-pick) { border-color: rgba(255, 255, 255, 0.6); }
+.player .now-choices li.picked-wrong { border-color: var(--wrong, #e53935); border-width: 2px; }
+.player .ox-pick-row { display: flex; gap: 10px; margin-top: 10px; }
+.player .ox-pick-row .ox-pick { flex: 1; min-height: 52px; font-size: 16px; font-weight: 700; }
 .player .now-answer {
   margin-top: 12px;
   padding-top: 12px;
@@ -1085,6 +1094,9 @@ textarea {
 .phase-indicator .seg.on {
   background: #fff;
 }
+.phase-labels { display: flex; gap: 6px; margin-top: 4px; font-size: 11px; opacity: 0.6; }
+.phase-labels span { flex: 1; text-align: center; }
+.phase-labels span.on { opacity: 1; font-weight: 700; }
 
 /* ---- 設定項目 ---- */
 .field {
@@ -4088,3 +4100,4 @@ code.block {
 
 /* 音声学習：読みを直して読む言葉（開いた時だけ一覧） */
 .read-fix-note > summary { cursor: pointer; font-size: 12px; opacity: 0.75; }
+.player .player-style-row { justify-content: center; margin: 10px 0 0; }
