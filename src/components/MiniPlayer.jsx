@@ -3,7 +3,7 @@ import * as engine from '../lib/audioEngine.js';
 import { useAudioEngine } from '../lib/audioEngine.js';
 import {
   loadAudioHistory, subscribeAudioHistory, deleteAudioHistory, clearAudioHistory,
-  historyTitle, positionText, historyTimeText, saveCurrentAsPinned,
+  historyTitle, positionText, historyTimeText, saveCurrentAsPinned, currentReviewTitle,
 } from '../lib/audioPlayHistory.js';
 
 // どの画面からでも表示される音声ミニプレーヤー。
@@ -34,7 +34,7 @@ export default function MiniPlayer({ hidden, onOpen, onJump, lifted }) {
   if (!live && (!last || dismissed)) return null;
 
   const d = snap.display;
-  const label = live ? labelOf(d) : historyTitle(last);
+  const label = live ? (currentReviewTitle() || labelOf(d)) : historyTitle(last);
   const sub = live ? subOf(d)
     : last.done ? '▶ で最初から再生'
       : last.kind === 'review' ? `▶ でまだ聞いていない${last.total - (last.heard || []).length}問を再生`

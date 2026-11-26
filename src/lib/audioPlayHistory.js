@@ -170,6 +170,13 @@ export function clearAudioHistory() { saveAudioHistory([]); return []; }
 // 今の状態を履歴1件の形にして返す関数を登録する（下部バーは画面の絞り込みを知らないため）。
 let currentContextProvider = null;
 export function setCurrentAudioContext(fn) { currentContextProvider = typeof fn === 'function' ? fn : null; }
+// 下部バーの題名用：誤答・△✕などの束を聞いている時だけ、その題（「誤答・△✕ 解剖学」など）を返す。
+// 以前は再生中の下部バーに科目名しか出ず、ふつうの読み上げと見分けがつかなかった。
+export function currentReviewTitle() {
+  let ctx = null;
+  try { ctx = currentContextProvider ? currentContextProvider() : null; } catch { ctx = null; }
+  return ctx && ctx.kind === 'review' ? historyTitle(ctx) : '';
+}
 // 戻り値：保存した1件（保存できない読み上げ方なら null）
 export function saveCurrentAsPinned(now = Date.now()) {
   let ctx = null;

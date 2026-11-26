@@ -17,7 +17,7 @@ import { reviewPoolFor, buildWeaknessSummary, weaknessSummaryToText, recommendNe
 import { studyStreak, subjectBalanceWarning, formatPercent, getSubjects } from '../lib/stats.js';
 import { normalize, MASTER_STREAK, isLeech as isLeechState, GRADES } from '../lib/srs.js';
 import { riskOf } from '../lib/reviewOrder.js';
-import { SESSION_TARGETS, sessionTargetLabel, estimateAudioSeconds, formatEstimateMinutes } from '../lib/sessionTargets.js';
+import { SESSION_TARGETS, sessionTargetLabel, estimateAudioSeconds, formatEstimateMinutes, audioSecPerItem, loadAudioPace, nextAudioPace, saveAudioPace, PACE_MIN_SAMPLES } from '../lib/sessionTargets.js';
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
@@ -179,6 +179,8 @@ const PHASES = { KEYWORD: 'keyword', QUESTION: 'question', GAP: 'gap', ANSWER: '
 const GRADE_PREV_WINDOW_MS = 6000;
 // 何も選ばずに▶を押した時の最初の件数（1セット＝60問。SESSION_TARGETSの60と同じ）
 const AUTO_FIRST_TARGET = 60;
+// プレーヤーの中に出す速さ（詳細設定の再生速度と同じ値を使う）
+const PLAYER_RATES = [1.0, 1.3, 1.5, 1.75, 2.0];
 const ALL_KW = '__all__';
 
 // 設定トグル1行（初心者向けの説明つき）
@@ -1415,7 +1417,10 @@ export default function AudioMode({
 
   // 1項目を「読み上げステップ（phase／読む文／間）」の配列へ変換。
   // 画面OFF・バックグラウンドではOSの仕様で停止する点は従来どおり。
-  const buildStepsRaw = (item) => {
+  // 前の項目と同じ科目なら科目名は読まない（科目で絞って聞くと毎問「解剖学。」が入り、
+  // 1問ごとに数秒ずつ余計にかかっていた）。科目が変わった所と、束の最初の1問だけ読む。
+  const subjectChanged = (q, prev) => !(prev && prev.q && prev.q.subject && prev.q.subject === q.subject);
+  const buildStepsRaw = (item, prev = null) => {
     const K = PHASES.KEYWORD, Q = PHASES.QUESTION, G = PHASES.GAP, A = PHASES.ANSWER, N = PHASES.NOTE;
     const steps = [];
     if (item.kind === 'progress') {
@@ -1482,7 +1487,7 @@ export default function AudioMode({
     }
     if (item.kind === 'choices') {
       const cq = item.q;
-      const subj2 = readSubject && cq.subject ? `${cq.subject}。` : '';
+      const subj2 = readSubject && cq.subject && subjectChanged(cq, prev) ? `${cq.subject}。` : '';
       const sc2 = shuffledChoicesFor(cq);
       let t = `${subj2}${st && speechStyle.kindLabel ? st.questionKindText(cq) : ''}問題。${questionText(cq)}。`;
       if (st && speechStyle.figureDesc && st.figureDescription(cq)) t += st.figureDescription(cq);
@@ -1520,8 +1525,11 @@ export default function AudioMode({
       // #4：ストーリー法向けに、キーワード（場面）が変わる所の間を長めに取る（既定オフ）。
       front.push({ wait: storyPauseOn ? 1200 : 300 });
     }
-    const subj = readSubject && q.subject ? `${q.subject}。` : '';
-    let frontText = `${subj}${st && speechStyle.kindLabel ? st.questionKindText(q) : ''}問題。${questionText(q)}。`;
+    const subj = readSubject && q.subject && subjectChanged(q, prev) ? `${q.subject}。` : '';
+    // ○×問題は文がそのまま「〜である。」と読まれ、耳だけだと問われていると分からなかった。
+    // 問題の種類を読む設定がオフでも、○×だけは「まるばつ問題。」と短く伝える。
+    const kindText = st && speechStyle.kindLabel ? st.questionKindText(q) : '';
+    let frontText = `${subj}${kindText}${q.type === 'ox' && !kindText ? 'まるばつ問題' : '問題'}。${questionText(q)}。`;
     // 図の説明（図に描かれている内容だけを言葉にしたもの）。説明が無い図は今までどおり注意だけ。
     if (st && speechStyle.figureDesc && st.figureDescription(q)) frontText += st.figureDescription(q);
     else if (needsFigureWarning(q)) frontText = `注意。この問題は図を確認しないと判断できません。${frontText}`;
@@ -1628,7 +1636,7 @@ export default function AudioMode({
   // アウトプットモード（outputModeOn）の時は、問題→正解の「間」（waitGap）を
   // 自動タイマーではなく手動操作（waitManual）に置き換える——1箇所で変換するので
   // 項目の種類（通常問題／クローズ／選択肢／比較／数字／暗記カード）ごとに個別対応しなくてよい。
-  const buildSteps = (item) => buildStepsRaw(item).flatMap((s) => {
+  const buildSteps = (item, prev = null) => buildStepsRaw(item, prev).flatMap((s) => {
     // 対策案16・17：長い解答・解説は文ごとに区切り、間を入れる
     if (st && speechStyle.sentencePause && s.say && (s.phase === PHASES.ANSWER || s.phase === PHASES.NOTE)) {
       const parts = st.splitSentences(s.say);
@@ -1658,28 +1666,49 @@ export default function AudioMode({
 
   // 再生計画（steps＝読み上げ手順, display＝画面表示用にそのままの item）
   const builtPlan = useMemo(
-    () => plan.map((item) => ({ steps: buildSteps(item), display: item })),
+    () => plan.map((item, i) => ({ steps: buildSteps(item, i > 0 ? plan[i - 1] : null), display: item })),
     [plan, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, shuffleChoicesOn, kwMeta, links, settings.pronunciationFixes, outputModeOn, keywordEmphasisOn, newSlowdownOn, answeredIds, rate, firstLetterOnly, storyPauseOn, whyOnAnswerOn, ifThenOn, voiceAnswerOn, pureRecallOn, adaptiveGapOn, keiketsuRecallOn, gap, settings.audioSpeech, readingDict, mindmapData, st, homophoneInfo] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名
+  // 構成が同じなら（画面を離れて戻ってきた等）再生位置を保つための署名。
+  // 署名には「どの問題をどの順で読むか」を決める条件だけを入れる。読み方だけの設定（聞くだけ／自分で答える・
+  // 選択肢も読む・記憶定着・問題文の省略・科目名・ヒント・逆向き・読む面）を入れていたため、
+  // 再生の途中で切り替えると束が読み込み直され、1問目に戻っていた（実際のバグ）。読み方だけの変化は
+  // エンジン側で中身だけ差し替える（audioEngine.js の load。次の問題から新しい読み方になる）。
+  const planSigParts = [
+    source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn,
+    filterSubject, filterGenre, filterKeyword, filterRound,
+    reviewTarget, reviewOffset, newOnly, progressAnnounceOn,
+    questions.length, plan.length,
+    // 間違えた問題などの「id配列で渡された束」は、件数が同じでも中身が違えば別の計画として扱う
+    // （以前は件数しか見ておらず、同じ件数の別の束へ切り替えても前の束のまま読み続けていた）。
+    source === 'review' && customReviewIds ? idsSignature(customReviewIds) : '',
+    customReviewIds && customReviewIds === frozenReviewIds ? 'frozen' : '',
+  ];
+  const PLAN_LEN_AT = 16; // planSigParts の中の plan.length の位置（planSigBase で使う）
   const planSig = useMemo(
+    () => JSON.stringify(planSigParts),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, filterSubject, filterGenre, filterKeyword, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, questions.length, plan.length, customReviewIds, frozenReviewIds]
+  );
+  // 以前の形の署名（読み方の設定も含んでいた）。この版へ上がる前に保存した「続きから」の位置を
+  // 1回目だけは引き継げるように、読み込み時の照合にだけ使う。
+  const legacyPlanSig = useMemo(
     () => JSON.stringify([
       source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn,
       readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound,
       reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn,
       questions.length, plan.length,
-      // 間違えた問題などの「id配列で渡された束」は、件数が同じでも中身が違えば別の計画として扱う
-      // （以前は件数しか見ておらず、同じ件数の別の束へ切り替えても前の束のまま読み続けていた）。
       source === 'review' && customReviewIds ? idsSignature(customReviewIds) : '',
       customReviewIds && customReviewIds === frozenReviewIds ? 'frozen' : '',
     ]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, readSubject, readHint, reverse, readSide, readChoices, recallMode, filterSubject, filterGenre, filterKeyword, filterRound, reviewTarget, reviewOffset, newOnly, progressAnnounceOn, skipQuestionText, outputModeOn, questions.length, plan.length, customReviewIds, frozenReviewIds]
+    [planSig, readSubject, readHint, reverse, readSide, readChoices, recallMode, skipQuestionText, outputModeOn]
   );
+  const sigMatches = (saved) => saved === planSig || saved === legacyPlanSig;
 
   // 件数（plan.length）以外の条件だけの署名（件数だけ変わったかを見分ける）
   const loadedBaseRef = useRef('');
-  const planSigBase = (sig) => { try { const a = JSON.parse(sig); a[24] = null; return JSON.stringify(a); } catch { return sig; } };
+  const planSigBase = (sig) => { try { const a = JSON.parse(sig); a[PLAN_LEN_AT] = null; return JSON.stringify(a); } catch { return sig; } };
   // 保存済みの再生位置（続きから）。マウント時に一度だけ読み込む。
   const [audioReady, setAudioReady] = useState(false);
   const resumeAudioRef = useRef(null);
@@ -1722,7 +1751,7 @@ export default function AudioMode({
   useEffect(() => {
     if (!audioReady) return;
     const saved = resumeAudioRef.current;
-    const startIndex = saved && saved.sig === planSig ? saved.index : 0;
+    const startIndex = saved && sigMatches(saved.sig) ? saved.index : 0;
     // 間違えた問題（△✕）を聞いている最中に自己採点すると、マスターした問題が復習対象から外れる・
     // 念のため確認が増える等で「件数だけ」が変わる。以前はこれで計画が読み込み直され、
     // 再生が途中で止まっていた（実際のバグ）。条件は同じで件数だけ変わった時は、聞いている束をそのまま続ける。
@@ -1919,6 +1948,23 @@ export default function AudioMode({
     writeReviewHistory(sess);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap.index, snap.playing, snap.phase, snap.completedSeq, audioReady, builtPlan, planSig, mode, source]);
+  // 実際に聞いた1問あたりの秒数を覚える（所要時間の目安・「◯分だけ」・3分の2バッファ術の問題数に使う）。
+  // 自分で答える・声で答える時は、考えている時間が入るので数えない。続けて読み終えた2問の間だけを測る。
+  const [audioPace, setAudioPace] = useState(() => loadAudioPace());
+  const paceMarkRef = useRef({ seq: null, at: 0, index: -1 });
+  useEffect(() => {
+    if (snap.completedId == null || snap.completedSeq == null) return;
+    const m = paceMarkRef.current;
+    if (m.seq === snap.completedSeq) return;
+    const now = Date.now();
+    const consecutive = m.seq != null && snap.completedSeq === m.seq + 1 && snap.index === m.index + 1;
+    if (consecutive && snap.playing && !outputModeOn && !voiceAnswerOn) {
+      const next = nextAudioPace(audioPace, (now - m.at) / 1000, effectiveRateOf(rate));
+      if (next && next !== audioPace) { setAudioPace(next); saveAudioPace(next); }
+    }
+    paceMarkRef.current = { seq: snap.completedSeq, at: now, index: snap.index };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap.completedSeq]);
   // 下部バーの「💾 ここを保存」用：いま聞いているところを、再生履歴の1件の形で渡す。
   // 通常の読み上げ（科目などを選んで読む／すべて読む）と、誤答・△✕などの束だけが保存できる。
   useEffect(() => {
@@ -2289,6 +2335,18 @@ export default function AudioMode({
   };
   // プラン構造を変える操作は停止（署名が変わればエンジンが先頭から読み直す）
   const rebuildStop = () => engine.stop();
+
+  // 再生スタイル（聞くだけ／自分で答える）の切り替え。聞いている位置は保つ（署名に入れていない）。
+  // 今読んでいる問題は前の読み方のまま進むので、次の問題から切り替わることを伝える。
+  // 「自分で答える」で答えを待っている最中に「聞くだけ」へ戻した時は、待ちを解いて正解へ進める
+  // （解答を見るボタンが消えて、止まったままになるのを防ぐ）。
+  const changeOutputMode = (on) => {
+    if (on === outputModeOn) return;
+    setOutputModeOn(on);
+    const sn = engine.getSnapshot();
+    if (!on && sn.waitingManual) engine.resumeManual();
+    if (sn.started) onToast?.(on ? '✋ 次の問題から、自分で答えてから正解を聞く形になります' : '📻 次の問題から、聞くだけ（自動で正解へ進む）になります');
+  };
 
   // 60問区切りで自動的にひと休み（Session.jsxの60問区切りの休憩と同じ考え方、#12）。
   // 件数チップを使っていない「すべて」でも、長時間になりがちなので同じく60問ごとに休憩を挟む
@@ -2953,7 +3011,7 @@ export default function AudioMode({
   //   同じ逆算式を使い、まだ解いていない問題だけから即座に始める（検索・設定を一切経由しない）。
   const startQuickMinute = (min) => {
     rebuildStop();
-    const perItem = 12 / Math.max(0.1, rate) + gap + nextGap;
+    const perItem = audioSecPerItem({ rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace });
     const count = Math.max(1, Math.round((min * 60) / perItem));
     setMode(0);
     setSource('filter');
@@ -3061,6 +3119,9 @@ export default function AudioMode({
     setReviewTarget(null);
     setReviewOffsetPersist(0);
     setSource('review');
+    // 赤い長丸は「聞くだけ」で始める（ユーザー指定のインプット特化）。以前は「自分で答える」を
+    // 選んでいても黙って切り替えていたので、切り替えたことを知らせる（プレーヤーで戻せる）。
+    const switchedStyle = outputModeOn || pureRecallOn;
     setOutputModeOn(false);
     setPureRecallOn(false);
     setSessionGradedCount(0);
@@ -3073,6 +3134,7 @@ export default function AudioMode({
     onToast?.(dailyWrongPick.fallback
       ? `🔴 今日の科目「${dailyWrongPick.todaySubject}」には誤答が無いので、「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`
       : `🔴 今日の科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`);
+    if (switchedStyle) setTimeout(() => onToast?.('📻 赤い丸は「聞くだけ」で始めます（自分で答えたい時はプレーヤーの「✋ 自分で答える」へ）'), 2600);
     requestAutoPlay();
   };
   // 🔁 もう一度（同じ件数で別の問題を）：対象プールの次の束へローテーションする（#2）
@@ -3176,7 +3238,7 @@ export default function AudioMode({
     if (loadedSigForGradedRef.current === snap.planSig) return;
     loadedSigForGradedRef.current = snap.planSig;
     const saved = resumeAudioRef.current;
-    if (saved && saved.sig === snap.planSig && Array.isArray(saved.graded)) {
+    if (saved && (saved.sig === snap.planSig || saved.sig === legacyPlanSig) && Array.isArray(saved.graded)) {
       gradedIdsRef.current = new Set(saved.graded);
     } else {
       gradedIdsRef.current = new Set();
@@ -3874,6 +3936,12 @@ export default function AudioMode({
                 </optgroup>
               ))}
             </select>
+            {/* 科目を選ばないと数千語が1つの一覧に並び、スマホではほぼ探せなかった */}
+            {!filterSubject && !filterGenre && keywordOptions.length > 500 && (
+              <small className="hint" style={{ display: 'block', marginTop: 4 }}>
+                {keywordOptions.length}語あります。先に科目を選ぶと絞られます（語で探す時は下の検索欄へ）。
+              </small>
+            )}
           </label>
           <label className="mini-field">
             <span>回（年度）</span>
@@ -4138,6 +4206,13 @@ export default function AudioMode({
             <p className="inline-note" style={{ marginBottom: 10 }}>
               💡 まずは▶を押すだけで始められます。くわしい設定（件数・連結学習モード・声など）は下にあります。
               <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => updateSettings({ audioPlayerTipDismissed: true })}>✕ 次回から表示しない</button>
+            </p>
+          )}
+          {/* 何も選ばずに▶を押すと、まず60問にする（下の togglePlay）。押す前の「1 / 3301」のままだと、
+              全部読み始めるように見えていたので、押す前に書いておく。 */}
+          {!snap.started && mode === 0 && source === 'all' && !filterActive && reviewTarget == null && !explicitAllRef.current && total > AUTO_FIRST_TARGET && (
+            <p className="inline-note" style={{ marginBottom: 8 }}>
+              ▶を押すと、まず{AUTO_FIRST_TARGET}問から始めます（全{total}問を通して聞く時は、下の件数で「すべて」を選んでください）。
             </p>
           )}
           {/* プレーヤー */}
@@ -4435,8 +4510,23 @@ export default function AudioMode({
             {/* 再生スタイルはプレーヤーの中でも切り替える（以前は「このセッションの設定」カードにしか無く、
                 間違えた問題・まだ解いていない問題・赤い長丸のときはそのカードごと出ないので選べなかった） */}
             <div className="chip-row player-style-row" role="group" aria-label="再生スタイル">
-              <button className={`chip ${!outputModeOn ? 'active' : ''}`} onClick={() => setOutputModeOn(false)}>📻 聞くだけ</button>
-              <button className={`chip ${outputModeOn ? 'active' : ''}`} onClick={() => setOutputModeOn(true)}>✋ 自分で答える</button>
+              <button className={`chip ${!outputModeOn ? 'active' : ''}`} onClick={() => changeOutputMode(false)}>📻 聞くだけ</button>
+              <button className={`chip ${outputModeOn ? 'active' : ''}`} onClick={() => changeOutputMode(true)}>✋ 自分で答える</button>
+            </div>
+            {/* 速さもプレーヤーの中で変える（以前は「詳細設定」を開いた奥にしか無く、聞きながら変えられなかった）。
+                変えた速さは次に読む文から効く。 */}
+            <div className="chip-row player-speed-row" role="group" aria-label="読み上げの速さ">
+              <span className="player-speed-label" aria-hidden="true">速さ</span>
+              {PLAYER_RATES.map((r) => (
+                <button
+                  key={r}
+                  className={`chip ${Math.abs(rate - r) < 0.001 ? 'active' : ''}`}
+                  aria-label={`速さ ${r}倍`}
+                  onClick={() => { setRate(r); updateSettings({ speechRate: r }); }}
+                >
+                  {r}×
+                </button>
+              ))}
             </div>
 
             <div className="player-controls">
@@ -4824,7 +4914,7 @@ export default function AudioMode({
                 <label className="section-label" style={{ marginTop: 6 }}>今回はどれだけ読みますか？（所要時間は目安）</label>
                 <div className="sess-targets">
                   {SESSION_TARGETS.map((t) => {
-                    const estSec = estimateAudioSeconds(Math.min(t, n), { rate, gapSeconds: gap, nextGapSeconds: nextGap });
+                    const estSec = estimateAudioSeconds(Math.min(t, n), { rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace });
                     return (
                       <button
                         key={t}
@@ -4843,7 +4933,7 @@ export default function AudioMode({
                   >
                     <span className="sess-target-n">すべて</span>
                     <span className="sess-target-l">{n}問</span>
-                    <span className="sess-target-est">{formatEstimateMinutes(estimateAudioSeconds(n, { rate, gapSeconds: gap, nextGapSeconds: nextGap }))}</span>
+                    <span className="sess-target-est">{formatEstimateMinutes(estimateAudioSeconds(n, { rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace }))}</span>
                   </button>
                 </div>
                 {/* 新規#4：時間から件数を逆算して選ぶ（今の再生速度・間の設定から見積もる） */}
@@ -4855,7 +4945,7 @@ export default function AudioMode({
                         key={min}
                         className="chip"
                         onClick={() => {
-                          const perItem = 12 / Math.max(0.1, rate) + gap + nextGap;
+                          const perItem = audioSecPerItem({ rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace });
                           const count = Math.max(1, Math.min(n, Math.round((min * 60) / perItem)));
                           changeReviewTarget(count);
                         }}
@@ -5026,7 +5116,7 @@ export default function AudioMode({
             on={progressAnnounceOn}
             onToggle={() => setProgressAnnounceOn((v) => !v)}
             title="10問ごとに進み具合を声で知らせる"
-            desc="画面を見ていなくても「ここまで◯問、残り◯問」が分かります。"
+            desc="画面を見ていなくても「残り◯問です」で進み具合が分かります。"
           />
           <Opt
             on={autoRequeueWrongOn}
@@ -5161,6 +5251,8 @@ export default function AudioMode({
           updateSettings={updateSettings}
           mood={mood}
           onStart={startAudioBufferPlan}
+          secPerQuestion={audioSecPerItem({ rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace })}
+          paceNote={audioPace && (audioPace.n || 0) >= PACE_MIN_SAMPLES ? 'これまで実際に聞いたペース' : '読み上げの速さと間の秒数'}
           startDisabled={(source === 'filter' ? filteredPool.length : questions.length) === 0}
           onToast={onToast}
         />
@@ -5203,7 +5295,7 @@ export default function AudioMode({
                 <label className="section-label" style={{ marginTop: 0 }}>今回はどれだけ読みますか？</label>
                 <div className="sess-targets">
                   {SESSION_TARGETS.map((t) => {
-                    const estSec = estimateAudioSeconds(Math.min(t, n), { rate, gapSeconds: gap, nextGapSeconds: nextGap });
+                    const estSec = estimateAudioSeconds(Math.min(t, n), { rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace });
                     return (
                       <button
                         key={t}
@@ -5222,7 +5314,7 @@ export default function AudioMode({
                   >
                     <span className="sess-target-n">すべて</span>
                     <span className="sess-target-l">{n}問</span>
-                    <span className="sess-target-est">{formatEstimateMinutes(estimateAudioSeconds(n, { rate, gapSeconds: gap, nextGapSeconds: nextGap }))}</span>
+                    <span className="sess-target-est">{formatEstimateMinutes(estimateAudioSeconds(n, { rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace }))}</span>
                   </button>
                 </div>
                 {reviewTarget && reviewTarget > n && (
@@ -5356,16 +5448,16 @@ export default function AudioMode({
             <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
               <label>再生スタイル</label>
               <div className="chip-row" style={{ marginBottom: 0 }}>
-                <button className={`chip ${!outputModeOn ? 'active' : ''}`} onClick={() => setOutputModeOn(false)}>
+                <button className={`chip ${!outputModeOn ? 'active' : ''}`} onClick={() => changeOutputMode(false)}>
                   📻 インプット（聞くだけ・自動で正解まで進む）
                 </button>
-                <button className={`chip ${outputModeOn ? 'active' : ''}`} onClick={() => setOutputModeOn(true)}>
+                <button className={`chip ${outputModeOn ? 'active' : ''}`} onClick={() => changeOutputMode(true)}>
                   ✋ アウトプット（止めて、自分で解答してから正解を見る）
                 </button>
               </div>
               <p className="inline-note" style={{ marginTop: 6 }}>
-                アウトプットを選ぶと、問題のあと自動では正解に進まず、「✅ 解答を見る」を押すまで止まって待ちます
-                （解答選択の手が使えない時はインプットのままでも使えます）。
+                アウトプットを選ぶと、問題のあと自動では正解に進まず止まって待ちます。四択は選択肢を、○×は「○ 正しい／✕ 誤り」を押して答えると、
+                ○✕が自動で記録されて正解・解説へ進みます（選ばずに「解答を見る」で進むこともできます）。同じ切り替えはプレーヤーの中にもあります。
               </p>
             </div>
           </div>
@@ -5467,8 +5559,8 @@ export default function AudioMode({
             <Opt
               on={voiceAnswerOn}
               onToggle={() => setVoiceAnswerOn((v) => !v)}
-              title="🎙️ 声で解答モード（新規性が高い機能）"
-              desc="声で実際の答えを言い、音声認識の結果が正解語と一致した時だけ自動で○にします。聞き取れない・一致しない時は自動✕にはせず、黙ってそのまま正解を読みます（誤判定による不公平な自動✕を避ける安全設計）。"
+              title="🎙️ 声で解答モード"
+              desc="声で実際の答えを言い、音声認識の結果が正解語と一致した時だけ自動で○にします。聞き取れない・一致しない時は自動✕にはせず、黙ってそのまま正解を読みます（聞き取りの誤りで✕が付かないようにするため）。"
             />
             {/* 盲目の受験生からの改善提案#3（2026-11-14）：スワイプ操作自体は「間違えた問題」
                 限定ではなくどのモードのプレーヤーにも常に効くため、オフにする設定も同じく
@@ -5484,7 +5576,7 @@ export default function AudioMode({
               on={timeBreakOn}
               onToggle={() => setTimeBreakOn((v) => !v)}
               title="⏱ 5分ごとに休憩を提案する"
-              desc="ファイルを長時間にしすぎないための時間基準の区切り（既存の60問区切りとは別）。"
+              desc="聞き続けすぎないよう、再生した時間で5分ごとに区切ります（60問ごとの区切りとは別）。"
             />
             <Opt
               on={earRestOn}
@@ -5509,8 +5601,8 @@ export default function AudioMode({
             <Opt
               on={readSubject}
               onToggle={() => setReadSubject((v) => !v)}
-              title="科目もいっしょに読む（横断ミックス）"
-              desc="同じ言葉を、解剖・生理などいろいろな科目の問題で聞けます。多方面から覚えられます。"
+              title="問題の前に科目名を読む"
+              desc="「解剖学。問題。…」のように科目名を先に読みます。同じ科目が続く間は、科目が変わった所でだけ読みます。"
             />
             <Opt
               on={chain}

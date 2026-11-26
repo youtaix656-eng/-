@@ -99,11 +99,13 @@ export function planStudySession({
   conditionScore = null,
   baseRatio = null,
   standardRatio = null,
+  // 音声学習のように「1問あたりの秒数」が解答のペースとは別に決まる時に渡す（省略時は過去の解答ペース）
+  secPerQuestionOverride = null,
 }) {
   const ratio = baseRatioFor({ shiftContext, conditionScore, baseRatio, standardRatio });
   const baseTaskMinutes = Math.max(1, Math.round(totalMinutes * ratio));
   const bufferMinutes = Math.max(0, totalMinutes - baseTaskMinutes);
-  const secPerQuestion = estimatedAnswerSeconds(history, subject);
+  const secPerQuestion = secPerQuestionOverride > 0 ? Math.round(secPerQuestionOverride) : estimatedAnswerSeconds(history, subject);
   const baseTaskQuestionCount = Math.max(1, Math.round((baseTaskMinutes * 60) / secPerQuestion));
   const bufferQuestionCount = Math.max(0, Math.round((bufferMinutes * 60) / secPerQuestion));
   return {

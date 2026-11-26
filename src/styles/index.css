@@ -4101,3 +4101,6 @@ code.block {
 /* 音声学習：読みを直して読む言葉（開いた時だけ一覧） */
 .read-fix-note > summary { cursor: pointer; font-size: 12px; opacity: 0.75; }
 .player .player-style-row { justify-content: center; margin: 10px 0 0; }
+.player .player-speed-row { justify-content: center; align-items: center; margin: 6px 0 0; gap: 4px; }
+.player .player-speed-row .chip { padding: 4px 9px; font-size: 13px; min-height: 30px; }
+.player .player-speed-label { font-size: 12px; opacity: 0.8; margin-right: 2px; }

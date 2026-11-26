@@ -7,7 +7,7 @@ import { moodToConditionScore, MOODS } from '../lib/mood.js';
 //   学習予定時間（分）→ 基礎タスク/バッファの自動計算はplanStudySession（bufferSession.js）に委ね、
 //   このコンポーネントはUIと分数の状態管理だけを持つ。実際にセッションを開始する処理は
 //   呼び出し側（onStart(bufferPlan)）に委ねる（Session.jsxのbegin()とQuiz.jsxの開始方法が異なるため）。
-export default function BufferPlanCard({ subject, history, settings, updateSettings, mood, onStart, startDisabled, onToast }) {
+export default function BufferPlanCard({ subject, history, settings, updateSettings, mood, onStart, startDisabled, onToast, secPerQuestion = null, paceNote = null }) {
   const [planMinutes, setPlanMinutes] = useState(60);
   const standardBaseRatio = (settings.bufferBaseRatioPct ?? Math.round(DEFAULT_BASE_RATIO * 100)) / 100;
   const bufferPlan = useMemo(
@@ -18,8 +18,9 @@ export default function BufferPlanCard({ subject, history, settings, updateSetti
         history,
         standardRatio: standardBaseRatio,
         conditionScore: moodToConditionScore(mood),
+        secPerQuestionOverride: secPerQuestion,
       }),
-    [planMinutes, subject, history, standardBaseRatio, mood]
+    [planMinutes, subject, history, standardBaseRatio, mood, secPerQuestion]
   );
 
   return (
@@ -52,7 +53,7 @@ export default function BufferPlanCard({ subject, history, settings, updateSetti
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
         基礎タスク:バッファ = {Math.round(bufferPlan.ratio * 100)}:{100 - Math.round(bufferPlan.ratio * 100)}
-        （設定画面で調整できます）。問題数は、あなたの過去の平均解答時間（1問あたり約{bufferPlan.secPerQuestion}秒）から概算しています。
+        （設定画面で調整できます）。問題数は、{paceNote || 'あなたの過去の平均解答時間'}（1問あたり約{bufferPlan.secPerQuestion}秒）から概算しています。
         {mood && (
           <>
             <br />
