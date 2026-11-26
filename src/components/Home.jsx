@@ -948,6 +948,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           {dictQuery.trim() === '' && (
             <span className="desc">用語集の中から、気になる言葉をその場で調べられます。</span>
           )}
+          {!dictMod && dictQuery.trim() !== '' && <span className="desc">用語集を読み込み中…</span>}
           {dictMod && dictQuery.trim() !== '' && dictResults.length === 0 && (
             <button type="button" className="dict-empty" onClick={() => onOpenGlossaryTerm?.(dictQuery)}>
               見つかりませんでした。用語集で探す →

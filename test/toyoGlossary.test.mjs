@@ -26,4 +26,7 @@ test('東洋医学概論の用語：音声学習で読みが当たる（1文字�
   assert.equal(applyReadingDict('眩暈と耳聾', dict), 'げんうんとじろう');
   assert.equal(applyReadingDict('裏急後重', dict), 'りきゅうこうじゅう');
   assert.equal(applyReadingDict('日哺潮熱', dict), 'にっぽちょうねつ');
+  // 問題文で使われている字（頬・飧）でも当たる
+  assert.equal(applyReadingDict('頬部紅潮がみられる', dict), 'きょうぶこうちょうがみられる');
+  assert.equal(applyReadingDict('飧泄', dict), 'そんせつ');
 });
