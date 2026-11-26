@@ -686,6 +686,20 @@ export function keepDeviceSettings(incoming, current) {
   return out;
 }
 
+// 同梱の問題を「どこまで追加したか」の印（eiseiVersion など・iryouSeeded）は、この端末の問題データの状態。
+// 問題そのものを持ってこない受け渡し（QR・クラウド自動同期）で別の端末の印を持ち込むと、
+// 「もう追加した」ことになって、この端末には新しい問題が二度と入らなかった（2026-11-26）。
+// 問題も一緒に入っている丸ごとのバックアップでは、問題と印がそろっているのでそのまま使う。
+// 語呂合わせの印（mnemonicsVersion）は語呂合わせ（kwMeta）と一緒に動くので対象外。
+export const isSeedFlagKey = (k) => k === 'iryouSeeded' || (/^[a-z]+Version$/.test(k) && k !== 'mnemonicsVersion');
+export function keepSeedFlags(incoming, current) {
+  const out = { ...(incoming || {}) };
+  const cur = current || {};
+  for (const k of Object.keys(out)) if (isSeedFlagKey(k)) delete out[k];
+  for (const k of Object.keys(cur)) if (isSeedFlagKey(k)) out[k] = cur[k];
+  return out;
+}
+
 export async function importAll(data) {
   if (!data || typeof data !== 'object') throw new Error('不正なバックアップデータです');
   // この端末で書き込み待ちのものを先に確定させる（あとから復元した値を上書きさせない）
@@ -717,7 +731,10 @@ export async function importAll(data) {
   // 求められて「復元できない」ように見えていた（data.auth は読まない）。
   if (Array.isArray(data.examResults)) await saveExamResults(data.examResults);
   if (data.settings && typeof data.settings === 'object') {
-    await saveSettings(keepDeviceSettings(data.settings, await loadSettings()));
+    const cur = await loadSettings();
+    let next = keepDeviceSettings(data.settings, cur);
+    if (!Array.isArray(data.questions)) next = keepSeedFlags(next, cur);
+    await saveSettings(next);
   }
   if (data.bookmarks && typeof data.bookmarks === 'object') await saveBookmarks(data.bookmarks);
   if (Array.isArray(data.keiketsuLibrary)) await saveKeiketsuLibrary(data.keiketsuLibrary);

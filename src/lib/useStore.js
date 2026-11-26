@@ -606,7 +606,7 @@ export function useStore() {
         // 端末ごとの設定（GoogleのクライアントID・自動同期のオン・ボイスクローン・自動バックアップの回数など）は
         // 別の端末の値で上書きしない。以前は別の端末の方が新しいと、そちらのクライアントIDに置き換わり
         // （ブラウザ版とアプリ版では違う）、この端末の次の同期が失敗していた。
-        merged = { ...merged, settings: storage.keepDeviceSettings(merged.settings, settings) };
+        merged = { ...merged, settings: storage.keepSeedFlags(storage.keepDeviceSettings(merged.settings, settings), settings) };
         // 件数だけの比較だと、既存の問題IDのlastAnswered/dueだけが他端末で更新された
         // ケース（件数は変わらず値だけ変わる、実運用で最も多いパターン）を「変化なし」と
         // 誤判定し、マージ結果をローカルへ反映し損ねてしまう（progressMerge.jsのバグ修正参照）。

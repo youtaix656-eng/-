@@ -55,3 +55,18 @@ test('新しさは同期の時刻ではなく記録を変えた時刻で比べ�
   const old = syncChangeTimes({ updatedAt: 100 }, 0, { updatedAt: 200 });
   assert.equal(old.remoteUpdatedAt > old.localUpdatedAt, true);
 });
+
+import { keepSeedFlags, isSeedFlagKey } from '../src/lib/storage.js';
+
+test('問題を持ってこない受け渡しでは、問題を追加した印をこの端末のまま残す', () => {
+  const incoming = { dailyGoal: 77, eiseiVersion: 99, iryouSeeded: true, mnemonicsVersion: 5, weatherDefaultsVersion: 2 };
+  const current = { dailyGoal: 5, eiseiVersion: 10 };
+  const out = keepSeedFlags(incoming, current);
+  assert.equal(out.dailyGoal, 77);
+  assert.equal(out.eiseiVersion, 10);
+  assert.equal('iryouSeeded' in out, false); // この端末にはまだ無い＝次の起動で入れる
+  assert.equal(out.mnemonicsVersion, 5); // 語呂合わせの印は語呂合わせと一緒に動く
+  assert.equal(out.weatherDefaultsVersion, 2);
+  assert.equal(isSeedFlagKey('anatVersion'), true);
+  assert.equal(isSeedFlagKey('mnemonicsVersion'), false);
+});
