@@ -6,8 +6,6 @@ import { isNowBestTime } from '../lib/timeOfDay.js';
 import { scopeCoverage } from '../data/examScope.js';
 import { daysUntil, formatExamDate } from '../lib/gamify.js';
 import { loadQuizProgress, clearQuizProgress, loadSyncMeta, loadExamProgress, clearExamProgress, loadGlossaryExtra, loadGlossaryRemovedIds } from '../lib/storage.js';
-import { buildTocEntries, filterToc } from '../data/toc.js';
-import { effectiveGlossary } from '../data/glossaryTerms.js';
 import { loadNextTask, clearNextTask } from '../lib/nextTask.js';
 import { maruStatusList, excludeMastered, maruSubjectBreakdown, lastMaruReviewAt } from '../lib/maruPool.js';
 import { phaseForDate, upcomingPhaseChange, parseMixRatio, ROADMAP_PHASES } from '../data/roadmapPhases.js';
@@ -115,11 +113,24 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
       setDictRemoved(removed);
     });
   }, []);
-  const dictEntries = useMemo(() => buildTocEntries(effectiveGlossary(dictExtra, dictRemoved)), [dictExtra, dictRemoved]);
+  // 用語集の本体（東洋医学概論の用語など約190語）と索引の組み立ては、起動時の束に入れず後から読む
+  // （ホームは起動時に読む画面なので、静的に読むと起動時JSが増える。読み込み前は検索結果を出さない）。
+  const [dictMod, setDictMod] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([import('../data/toc.js'), import('../data/glossaryTerms.js')])
+      .then(([toc, g]) => { if (!cancelled) setDictMod({ ...toc, effectiveGlossary: g.effectiveGlossary }); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const dictEntries = useMemo(
+    () => (dictMod ? dictMod.buildTocEntries(dictMod.effectiveGlossary(dictExtra, dictRemoved)) : []),
+    [dictMod, dictExtra, dictRemoved]
+  );
   const [dictQuery, setDictQuery] = useState('');
   const dictResults = useMemo(
-    () => (dictQuery.trim() ? filterToc(dictEntries, { query: dictQuery }).slice(0, 4) : []),
-    [dictEntries, dictQuery]
+    () => (dictMod && dictQuery.trim() ? dictMod.filterToc(dictEntries, { query: dictQuery }).slice(0, 4) : []),
+    [dictMod, dictEntries, dictQuery]
   );
 
   const overall = useMemo(() => overallStats(history), [history]);
@@ -937,7 +948,7 @@ export default function Home({ store, onNavigate, onResumeQuiz, installPrompt, o
           {dictQuery.trim() === '' && (
             <span className="desc">用語集の中から、気になる言葉をその場で調べられます。</span>
           )}
-          {dictQuery.trim() !== '' && dictResults.length === 0 && (
+          {dictMod && dictQuery.trim() !== '' && dictResults.length === 0 && (
             <button type="button" className="dict-empty" onClick={() => onOpenGlossaryTerm?.(dictQuery)}>
               見つかりませんでした。用語集で探す →
             </button>

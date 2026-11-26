@@ -26,7 +26,10 @@ export const GLOSSARY_CATEGORIES = [
   { id: 'keiraku', label: '経絡・経穴の基礎' },
   { id: 'zangfu', label: '陰陽五行・臓腑' },
   { id: 'anatomy', label: '解剖・生理の基礎' },
+  { id: 'toyo', label: '東洋医学概論の用語' },
 ];
+
+import { buildToyoGlossaryTerms } from './toyoGlossaryTerms.js';
 
 export const DESTINATION_TYPES = ['page', 'question', 'function', 'system'];
 
@@ -240,6 +243,8 @@ export const GLOSSARY_TERMS = [
     aliases: [],
     destinations: [],
   },
+  // 東洋医学概論の用語（ユーザー提供の用語索引より・2026-11-27）。中身は toyoGlossaryTerms.js が単一の正。
+  ...buildToyoGlossaryTerms(),
 ];
 
 // 本体データ（GLOSSARY_TERMS）＋候補フローで承認された実行時追加分（extra）を合わせ、
