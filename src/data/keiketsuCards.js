@@ -650,7 +650,7 @@ export const KEIKETSU_CARDS = [
     shuji: null, figure: null, sourceIds: [],
   },
   {
-    id: 'kc-st27', name: '大巨', yomi: 'たいこ', meridian: '足の陽明胃経', ryaku: 'ST27', type: null,
+    id: 'kc-st27', name: '大巨', yomi: 'だいこ', meridian: '足の陽明胃経', ryaku: 'ST27', type: null,
     location: '下腹部、臍中央の下方2寸、前正中線の外方2寸。天枢の下方2寸、石門（任脈）の外方2寸、腹直筋中に取る。',
     shuji: null, figure: null, sourceIds: [],
   },
