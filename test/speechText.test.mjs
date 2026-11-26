@@ -141,3 +141,13 @@ test('readSymbols：言葉どうしの「／」は区切り、「＝」は「は
   assert.equal(readSymbols('左心室＝体循環の起点'), '左心室は体循環の起点');
   assert.equal(readSymbols('1/2の量'), '2分の1の量');
 });
+
+import { applyContextReadings } from '../src/lib/speechText.js';
+test('東洋医学の「風邪」は ふうじゃ、ふつうの風邪（かぜ）はそのまま', () => {
+  assert.equal(applyContextReadings('行痺は風邪による'), '行痺はふうじゃによる');
+  assert.equal(applyContextReadings('2週間前に風邪を引いた。風邪薬を飲んだ'), '2週間前に風邪を引いた。風邪薬を飲んだ');
+});
+test('脈の「数」は さく（年数などは変えない）', () => {
+  assert.equal(applyContextReadings('脈は細数、弦数。数脈'), '脈は細さく、弦さく。さくみゃく');
+  assert.equal(applyContextReadings('脈数、喫煙年数'), '脈さく、喫煙年数');
+});

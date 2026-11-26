@@ -148,9 +148,20 @@ export function readSymbols(text) {
   return t;
 }
 
-// 誤読対策をまとめてかける（読みの辞書 → 記号）
+// 前後を見ないと読みが決まらない言葉（2026-11-26、東洋医学の3科目を調べて足したもの）。
+// ・風邪：六淫の「ふうじゃ」。ただし「風邪を引く」「風邪薬」「風邪気味」の時はふつうの「かぜ」のまま。
+// ・脈の「数」：脈が速いことを表す時は「さく」（脈数・細数・弦数・滑数・浮数・数脈）。「年数」などは変えない。
+export function applyContextReadings(text) {
+  let t = String(text || '');
+  t = t.replace(/風邪(?!を引|をひ|引|薬|気味|症候群|をこじら)/g, 'ふうじゃ');
+  t = t.replace(/数脈/g, 'さくみゃく');
+  t = t.replace(/(脈|[浮沈細弦滑洪緊濡])数(?![字値量年回日人個種倍])/g, '$1さく');
+  return t;
+}
+
+// 誤読対策をまとめてかける（前後で読みが決まる言葉 → 読みの辞書 → 記号）
 export function toSpeechText(text, dict) {
-  return readSymbols(applyReadingDict(text, dict));
+  return readSymbols(applyReadingDict(applyContextReadings(text), dict));
 }
 
 // ---- 聞きやすさ ----
