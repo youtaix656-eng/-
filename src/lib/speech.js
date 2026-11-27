@@ -39,6 +39,13 @@ export async function nativeTtsProblem() {
   }
 }
 
+// 端末の読み上げの設定を開く（アプリ版だけ）
+export async function openNativeTtsSettings() {
+  const p = nativeTts();
+  if (!p || typeof p.openSettings !== 'function') return false;
+  try { await p.openSettings({}); return true; } catch (e) { return false; }
+}
+
 // 利用可能な音声一覧を取得（日本語を優先して返す）。アプリ版は端末の読み上げの声を使うので空。
 export function getVoices() {
   if (nativeTts() || !hasWebSpeech()) return [];
@@ -130,7 +137,13 @@ function speakOneNative(p, text, { rate, pitch, volume, signal }) {
     }, expectMs * 2);
     Promise.resolve(p.speak({ text, rate, pitch, volume: Math.max(0, Math.min(1, volume)) }))
       .then((r) => { clearTimeout(watch); finish(resolve, r?.canceled ? 'canceled' : undefined); })
-      .catch((e) => { clearTimeout(watch); finish(reject, new Error(e?.message || '読み上げに失敗しました')); });
+      .catch((e) => {
+        clearTimeout(watch);
+        const err = new Error(e?.message || '読み上げに失敗しました');
+        // 端末の読み上げそのものが使えない（日本語の音声データが無い等）。1問ずつ飛ばし続けないよう、呼び出し側で止める
+        if (e?.code === 'unavailable') err.name = 'TtsUnavailable';
+        finish(reject, err);
+      });
   });
 }
 

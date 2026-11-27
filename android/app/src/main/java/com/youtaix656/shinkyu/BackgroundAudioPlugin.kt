@@ -152,6 +152,32 @@ class BackgroundAudioPlugin : Plugin() {
         }
     }
 
+    // 電池の最適化の対象外になっているか（対象のままだと、画面を消している間に止められやすい）
+    @PluginMethod
+    fun batteryStatus(call: PluginCall) {
+        var ignoring = true
+        try {
+            val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+            ignoring = pm.isIgnoringBatteryOptimizations(context.packageName)
+        } catch (e: Exception) {
+            // 分からない時は「対象外」として案内を出さない
+        }
+        call.resolve(JSObject().put("ignoring", ignoring))
+    }
+
+    // 電池の最適化の設定画面を開く（どのアプリを外すかは本人が選ぶ。勝手には外さない）
+    @PluginMethod
+    fun openBatterySettings(call: PluginCall) {
+        try {
+            val i = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(i)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("設定を開けませんでした")
+        }
+    }
+
     companion object {
         const val DONE_CHANNEL = "shinkyu_audio_done"
     }

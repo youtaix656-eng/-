@@ -25,6 +25,7 @@ let state = {
   display: null,
   planSig: null,
   finished: false, // 繰り返しオフで最後まで自動的に読み終えた直後だけtrue（再生・スキップ等で即false）
+  ttsUnavailable: false, // アプリ版で端末の読み上げが使えず止めた直後だけtrue
   backgroundStopped: false, // タブの非表示化で読み上げを止めた直後だけtrue（AudioMode.jsxがトーストを出したら即false）
 };
 
@@ -255,6 +256,13 @@ async function playOne(item, signal) {
         }
       } catch (e) {
         if (e?.name === 'AbortError') throw e;
+        // 端末の読み上げそのものが使えない時は、全部の問題を無音で飛ばして「聞き終えた」にしない
+        if (e?.name === 'TtsUnavailable') {
+          stop();
+          endNativeService();
+          emit({ ttsUnavailable: true });
+          throw new DOMException('aborted', 'AbortError');
+        }
         console.warn('読み上げを1つ飛ばしました', e);
         await wait(400, signal);
       }
@@ -366,13 +374,16 @@ export function play() {
   requestWakeLock();
   initVisibility();
   startKeepAlive();
-  emit({ started: true, finished: false, backgroundStopped: false });
+  emit({ started: true, finished: false, backgroundStopped: false, ttsUnavailable: false });
   const start = state.index < plan.length ? state.index : 0;
   runFrom(start);
 }
 
 // タブの非表示化で止めた読み上げが知らされないまま（＝トーストを出さないまま）
 // 次の開始に至った場合に備え、念のためここでも下ろしておく。
+export function clearTtsUnavailable() {
+  emit({ ttsUnavailable: false });
+}
 export function clearBackgroundStopped() {
   emit({ backgroundStopped: false });
 }

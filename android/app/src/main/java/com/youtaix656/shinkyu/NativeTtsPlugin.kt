@@ -106,7 +106,7 @@ class NativeTtsPlugin : Plugin() {
         whenInit {
             val engine = tts
             if (!ready || engine == null) {
-                call.reject(initError ?: "読み上げを使えません")
+                call.reject(initError ?: "読み上げを使えません", "unavailable")
                 return@whenInit
             }
             val rate = (call.getFloat("rate") ?: 1f).coerceIn(0.1f, 4f)
@@ -170,6 +170,26 @@ class NativeTtsPlugin : Plugin() {
             // noop
         }
         call.resolve(JSObject().put("connected", found))
+    }
+
+    // 端末の読み上げの設定（日本語の音声データを入れる・声を選ぶ）を開く
+    @PluginMethod
+    fun openSettings(call: PluginCall) {
+        try {
+            val i = android.content.Intent("com.android.settings.TTS_SETTINGS")
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(i)
+            call.resolve()
+        } catch (e: Exception) {
+            try {
+                val i = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(i)
+                call.resolve()
+            } catch (e2: Exception) {
+                call.reject("設定を開けませんでした")
+            }
+        }
     }
 
     @PluginMethod

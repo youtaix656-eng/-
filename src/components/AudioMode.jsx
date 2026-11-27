@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { isSpeechSupported, loadVoices, speak, cancelSpeech, nativeTtsProblem } from '../lib/speech.js';
+import { isSpeechSupported, loadVoices, speak, cancelSpeech, nativeTtsProblem, openNativeTtsSettings } from '../lib/speech.js';
 import * as storage from '../lib/storage.js';
 import * as engine from '../lib/audioEngine.js';
 import { useAudioEngine } from '../lib/audioEngine.js';
@@ -26,7 +26,7 @@ import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import { beep, vibrate, bellRing } from '../lib/sound.js';
 import { startTicker } from '../lib/pomoTicker.js';
 import { isVoiceCommandSupported, parseVoiceCommand, listenOnce } from '../lib/voiceCommand.js';
-import { isNativeApp, nativeNotifyDone } from '../lib/nativeBridge.js';
+import { isNativeApp, nativeNotifyDone, nativeBatteryIgnoring, openNativeBatterySettings } from '../lib/nativeBridge.js';
 import { detectHeadphoneHint } from '../lib/headphones.js';
 import {
   loadAudioReviewLog, recordAudioReviewStart, recordAudioReviewFinish,
@@ -6413,18 +6413,57 @@ export default function AudioMode({
 // 画面の読み上げ（スクリーンリーダー）には、毎秒変わる残り時間ではなく「勉強／休憩の切り替え」だけを知らせる。
 // アプリ版で、端末の読み上げに日本語の音声データが無い等で読めない時だけ理由を出す（ブラウザ版では何も出さない）。
 function NativeTtsWarning() {
+  const snap = engine.useAudioEngine();
   const [problem, setProblem] = useState(null);
+  const [battery, setBattery] = useState(null); // true＝最適化の対象外、false＝対象のまま、null＝分からない
+  const [batteryHidden, setBatteryHidden] = useState(() => {
+    try { return localStorage.getItem('audioBatteryTipHidden') === '1'; } catch (e) { return false; }
+  });
   useEffect(() => {
     let alive = true;
-    nativeTtsProblem().then((p) => { if (alive) setProblem(p); });
-    return () => { alive = false; };
+    const check = () => {
+      nativeTtsProblem().then((p) => { if (alive) setProblem(p); });
+      nativeBatteryIgnoring().then((b) => { if (alive) setBattery(b); });
+    };
+    check();
+    // 設定画面から戻ってきた時に見直す（日本語の音声データを入れた・電池の最適化を外した直後）
+    const onVis = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { alive = false; document.removeEventListener('visibilitychange', onVis); };
   }, []);
-  if (!problem) return null;
+  useEffect(() => {
+    if (!snap.ttsUnavailable) return;
+    nativeTtsProblem().then((p) => setProblem(p || '端末の読み上げを使えませんでした。'));
+    engine.clearTtsUnavailable();
+  }, [snap.ttsUnavailable]);
   return (
-    <div className="card" role="alert" style={{ borderColor: 'var(--wrong)' }}>
-      <strong>🔇 読み上げを使えません</strong>
-      <p className="inline-note" style={{ marginTop: 6 }}>{problem}</p>
-    </div>
+    <>
+      {problem && (
+        <div className="card" role="alert" style={{ borderColor: 'var(--wrong)' }}>
+          <strong>🔇 読み上げを使えません</strong>
+          <p className="inline-note" style={{ marginTop: 6 }}>{problem}</p>
+          <button type="button" className="btn small" style={{ marginTop: 8 }} onClick={() => openNativeTtsSettings()}>
+            ⚙️ 端末の読み上げの設定を開く
+          </button>
+        </div>
+      )}
+      {battery === false && !batteryHidden && (
+        <div className="card">
+          <strong>🔋 画面を消しても聞き続けたい時</strong>
+          <p className="inline-note" style={{ marginTop: 6 }}>
+            このアプリが電池の最適化の対象のままだと、画面を消している間に端末が読み上げを止めることがあります。
+            止まる時は、設定でこのアプリを最適化の対象から外してください（外すかどうかはあなたが決めます）。
+          </p>
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button type="button" className="btn small" onClick={() => openNativeBatterySettings()}>電池の最適化の設定を開く</button>
+            <button type="button" className="btn small ghost" onClick={() => {
+              setBatteryHidden(true);
+              try { localStorage.setItem('audioBatteryTipHidden', '1'); } catch (e) { /* noop */ }
+            }}>表示しない</button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

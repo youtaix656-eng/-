@@ -148,3 +148,16 @@ export async function nativePickTextFile() {
   if (!p || typeof p.pick !== 'function') throw new Error('アプリ版ではありません');
   return p.pick({});
 }
+
+// 電池の最適化の対象外か（アプリ版だけ。分からない・ブラウザ版は null）
+export async function nativeBatteryIgnoring() {
+  const p = plugin();
+  if (!p || typeof p.batteryStatus !== 'function') return null;
+  try { const r = await p.batteryStatus({}); return !!r?.ignoring; } catch (e) { return null; }
+}
+
+export async function openNativeBatterySettings() {
+  const p = plugin();
+  if (!p || typeof p.openBatterySettings !== 'function') return false;
+  try { await p.openBatterySettings({}); return true; } catch (e) { return false; }
+}

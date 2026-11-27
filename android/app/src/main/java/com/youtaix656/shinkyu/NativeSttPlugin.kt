@@ -69,44 +69,49 @@ class NativeSttPlugin : Plugin() {
         }
         activity.runOnUiThread {
             finishCurrent { it.reject("aborted", "aborted") }
+            // 聞き取りのたびに作り直す（前の聞き取りが終わり切る前に次を始めると「使用中」で失敗し、
+            // 前の聞き取りの遅れて来た失敗が新しい聞き取りに当たることがあるため）
+            try { recognizer?.destroy() } catch (e: Exception) { }
+            recognizer = null
             try {
-                if (recognizer == null) {
-                    recognizer = SpeechRecognizer.createSpeechRecognizer(context)
-                    recognizer?.setRecognitionListener(object : RecognitionListener {
-                        override fun onReadyForSpeech(params: Bundle?) {}
-                        override fun onBeginningOfSpeech() {}
-                        override fun onRmsChanged(rmsdB: Float) {}
-                        override fun onBufferReceived(buffer: ByteArray?) {}
-                        override fun onEndOfSpeech() {}
-                        override fun onPartialResults(partialResults: Bundle?) {}
-                        override fun onEvent(eventType: Int, params: Bundle?) {}
-                        override fun onResults(results: Bundle?) {
-                            val list = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            val text = list?.firstOrNull() ?: ""
-                            finishCurrent {
-                                if (text.isBlank()) it.reject("聞き取れませんでした", "no-speech")
-                                else it.resolve(JSObject().put("text", text))
-                            }
-                        }
-                        override fun onError(error: Int) {
-                            val code = when (error) {
-                                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "no-speech"
-                                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "not-allowed"
-                                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "network"
-                                SpeechRecognizer.ERROR_CLIENT -> "aborted"
-                                else -> "error-$error"
-                            }
-                            finishCurrent { it.reject("音声認識に失敗しました（$code）", code) }
-                        }
-                    })
-                }
+                val rec = SpeechRecognizer.createSpeechRecognizer(context)
+                recognizer = rec
                 current = call
+                rec.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {}
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
+                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                    override fun onResults(results: Bundle?) {
+                        if (recognizer !== rec || current !== call) return
+                        val list = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        val text = list?.firstOrNull() ?: ""
+                        finishCurrent {
+                            if (text.isBlank()) it.reject("聞き取れませんでした", "no-speech")
+                            else it.resolve(JSObject().put("text", text))
+                        }
+                    }
+                    override fun onError(error: Int) {
+                        if (recognizer !== rec || current !== call) return
+                        val code = when (error) {
+                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "no-speech"
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "not-allowed"
+                            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "network"
+                            SpeechRecognizer.ERROR_CLIENT -> "aborted"
+                            else -> "error-$error"
+                        }
+                        finishCurrent { it.reject("音声認識に失敗しました（$code）", code) }
+                    }
+                })
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, call.getString("lang") ?: "ja-JP")
                 intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                recognizer?.startListening(intent)
+                rec.startListening(intent)
             } catch (e: Exception) {
                 finishCurrent { it.reject("音声認識を始められませんでした", "error") }
             }
