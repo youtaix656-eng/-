@@ -59,6 +59,10 @@ export function gradeBox(box, qid, kind, now) {
   const stage = cur ? cur.stage : 0;
   let next;
   if (kind === 'maru') {
+    // まだ期限の来ていない問題を○にしても段は進めない（同じ日に3回聞く新しい問題が、
+    // 1日で3段進んで「何度も聞いた」まで行ってしまっていた）
+    if (cur && cur.due != null && cur.due > now) return box;
+    if (cur && cur.stage >= BOX_DONE) return box;
     const s = stage + 1;
     next = s >= BOX_DONE ? { stage: BOX_DONE, due: null, at: now } : { stage: s, due: now + DAYS_TO_NEXT[s - 1] * DAY_MS, at: now };
   } else if (kind === 'sankaku') {
@@ -85,13 +89,16 @@ export function boxDueIds(box, now) {
     .map(([id]) => id);
 }
 
-export function gradeWeak(weak, qid, kind) {
+// 「3回続けて○」は日をまたいで数える（同じ日の○は1回まで。1回の再生の中で3回○にしただけで
+// 苦手から外れていた）。dayKey を渡さない古い呼び方は今までどおり毎回数える。
+export function gradeWeak(weak, qid, kind, dayKey) {
   const next = { ...weak };
   if (kind !== 'maru') next[qid] = { streak: 0 };
   else if (next[qid]) {
+    if (dayKey && next[qid].lastMaru === dayKey) return weak;
     const streak = (next[qid].streak || 0) + 1;
     if (streak >= WEAK_EXIT) delete next[qid];
-    else next[qid] = { streak };
+    else next[qid] = dayKey ? { streak, lastMaru: dayKey } : { streak };
   }
   return next;
 }
@@ -153,10 +160,19 @@ export function pickNewTrack(questions, answeredIds, preferSubjects = [], n = TR
     if (!pool.length) continue;
     const genres = new Map();
     pool.forEach((q) => { const g = q.genre || ''; if (!genres.has(g)) genres.set(g, []); genres.get(g).push(q); });
-    // いちばん多いジャンルではなく、収録順で最初のジャンル（教科書の順に近い）
-    const [genre, list] = [...genres.entries()][0];
-    const ids = list.slice(0, n).map((q) => q.id);
-    const theme = genre ? `${subject}・${genre.split('｜').pop()}` : subject;
+    // 収録順で最初のジャンル（教科書の順に近い）。ジャンルの無い問題（サンプル等）は後回しにする
+    // （以前はジャンルの無い3問だけが「新しい問題」になり、1トラックが10問に満たなかった）。
+    const groups = [...genres.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1));
+    // 1つのジャンルで10問に満たなければ、次のジャンルまでで埋める（テーマは2つまで）
+    const used = [];
+    const ids = [];
+    for (const [genre, list] of groups) {
+      if (ids.length >= n || used.length >= 2) break;
+      used.push(genre);
+      list.slice(0, n - ids.length).forEach((q) => ids.push(q.id));
+    }
+    const names = used.filter(Boolean).map((g) => g.split('｜').pop());
+    const theme = names.length ? `${subject}・${names.join('・')}` : subject;
     return { ids, theme };
   }
   return { ids: [], theme: '' };
@@ -237,6 +253,9 @@ export function twoPass(items) {
 }
 
 export const questionCount = (items) => items.filter(isQ).length;
+// 何問の束か（再登場・2周目・別の形式の出し直しは数えない）。「12問、終わりました」と、
+// 実際は3問なのに出し直しまで数えていたのを直すため。
+export const uniqueQuestionCount = (items) => new Set((items || []).filter((it) => it && it.q).map((it) => it.q.id)).size;
 
 // 自信の度合い。たぶん・勘は「間違い扱い」（たぶん＝△、勘＝✕として記録する）
 export const CONFIDENCE = [

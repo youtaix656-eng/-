@@ -28,13 +28,16 @@ export default function RecStudyCard({
   const trackMin = Math.max(1, Math.round((secPerItem * rs.TRACK_SIZE) / 60));
   const eyeDays = lastEyeAt ? Math.floor((now - lastEyeAt) / DAY) : null;
   const fullDays = lastFullExamAt ? Math.floor((now - lastFullExamAt) / DAY) : null;
-  const recentReviewOnly = (rec.reviewOnlyDays || []).filter((d) => Date.parse(d) > now - 7 * DAY).length;
+  // 日付は端末の日付の文字列どうしで比べる（Date.parse('YYYY-MM-DD') は UTC として読まれ、朝は前日になる）
+  const ymd = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const weekAgo = ymd(now - 7 * DAY);
+  const recentReviewOnly = (rec.reviewOnlyDays || []).filter((d) => d > weekAgo).length;
   const slotRows = [
     { id: 'weak', icon: '🧩', label: '苦手', ids: slots.weak, note: `△✕で入り、3回続けて○で外れます（${slots.weak.length}問）` },
     { id: 'box', icon: '📦', label: '箱の復習', ids: slots.boxDue.slice(0, rs.TRACK_SIZE), note: `今日の分 ${slots.boxDue.length}問。段ごとに速さと考える間が変わります（翌日＝等速・4秒 … 1か月後＝1.5倍・2秒）` },
     { id: 'review', icon: '🔁', label: '復習', ids: slots.reviewIds, note: `箱の日程で今日の分 ${slots.boxDue.length}問＋期限の来た復習` },
     { id: 'known', icon: '🛁', label: '何度も聞いた', ids: slots.known, note: '箱の3段目より先まで進んだ問題。入浴・家事の間に' },
-    { id: 'new', icon: '🆕', label: '新しい', ids: slots.newIds, note: `${slots.newTheme ? `テーマ「${slots.newTheme}」・` : ''}今日 ${Math.min(rs.NEW_LISTENS_PER_DAY, day.newListens)} / ${rs.NEW_LISTENS_PER_DAY}回（同じ10問を1日3回・毎回並びを変える）`, hidden: reviewOnly },
+    { id: 'new', icon: '🆕', label: '新しい', ids: slots.newIds, note: `${slots.newTheme ? `テーマ「${slots.newTheme}」・` : ''}今日 ${Math.min(rs.NEW_LISTENS_PER_DAY, day.newListens)} / ${rs.NEW_LISTENS_PER_DAY}回（同じ10問を1日3回・毎回並びを変える）${day.newListens >= rs.NEW_LISTENS_PER_DAY ? '。今日の3回は聞き終えました（もう一度聞いてもかまいません）' : ''}`, hidden: reviewOnly },
   ].sort((a, b) => (a.id === recommended ? -1 : b.id === recommended ? 1 : 0));
 
   return (

@@ -14,7 +14,8 @@ test('箱方式：○で次の段（翌日→3日後…）、△は同じ間隔�
   b = rs.gradeBox(b, 'q', 'batsu', 5 * D);
   assert.equal(b.q.stage, 1); assert.equal(b.q.due, 6 * D);
   let c = {};
-  for (let i = 0; i < 6; i += 1) c = rs.gradeBox(c, 'x', 'maru', i);
+  // 期限が来るたびに○（期限前の○では進まない）
+  for (let i = 0; i < 6; i += 1) c = rs.gradeBox(c, 'x', 'maru', c.x ? c.x.due : 0);
   assert.equal(c.x.stage, rs.BOX_DONE); assert.equal(c.x.due, null);
   assert.deepEqual(rs.boxDueIds({ ...b, x: c.x }, 6 * D), ['q']);
   assert.deepEqual(rs.boxDueIds(b, 5 * D), []);
@@ -27,6 +28,19 @@ test('苦手トラック：△✕で入り、3回続けて○で外れる', () =
   w = rs.gradeWeak(w, 'q', 'maru');
   assert.equal(w.q, undefined);
   assert.deepEqual(rs.gradeWeak({}, 'z', 'maru'), {}); // 入っていない問題は○で入らない
+});
+
+test('同じ日に何度○にしても、箱は1段・苦手は1回しか進まない', () => {
+  let b = rs.gradeBox({}, 'q', 'maru', 0);
+  b = rs.gradeBox(b, 'q', 'maru', 1000); b = rs.gradeBox(b, 'q', 'maru', 2000);
+  assert.equal(b.q.stage, 1);
+  b = rs.gradeBox(b, 'q', 'batsu', 3000); // ✕は期限前でも翌日へ
+  assert.equal(b.q.due, 3000 + D);
+  let w = rs.gradeWeak({}, 'q', 'batsu', '2026-11-27');
+  w = rs.gradeWeak(w, 'q', 'maru', '2026-11-27'); w = rs.gradeWeak(w, 'q', 'maru', '2026-11-27'); w = rs.gradeWeak(w, 'q', 'maru', '2026-11-27');
+  assert.equal(w.q.streak, 1);
+  w = rs.gradeWeak(w, 'q', 'maru', '2026-11-28'); w = rs.gradeWeak(w, 'q', 'maru', '2026-11-29');
+  assert.equal(w.q, undefined);
 });
 
 test('耳用の四択は四択の5問に1問だけ・2周目は進捗を除いて問題だけ', () => {
@@ -77,8 +91,12 @@ test('新しい問題は1つのテーマから・全部の再登場・別の形�
     { id: 'a1', subject: 'S', genre: 'G1｜x' }, { id: 'a2', subject: 'S', genre: 'G2｜y' }, { id: 'a3', subject: 'S', genre: 'G1｜x' },
   ];
   const t = rs.pickNewTrack(qs, new Set(), ['S']);
-  assert.deepEqual(t.ids, ['a1', 'a3']);
-  assert.equal(t.theme, 'S・x');
+  // 1つのジャンルで10問に満たなければ次のジャンルで埋める。ジャンルの無い問題は後回し
+  assert.deepEqual(t.ids, ['a1', 'a3', 'a2']);
+  assert.equal(t.theme, 'S・x・y');
+  const t2 = rs.pickNewTrack([{ id: 'n1', subject: 'S' }, ...qs], new Set(), ['S'], 2);
+  assert.deepEqual(t2.ids, ['a1', 'a3']);
+  assert.equal(rs.uniqueQuestionCount([{ q: { id: 'a' } }, { kind: 'intro' }, { q: { id: 'a' }, reappear: true }, { q: { id: 'b' } }]), 2);
   const items = Array.from({ length: 5 }, (_, i) => ({ kind: 'question', q: { id: `q${i}` } }));
   const ra = rs.reappearAll(items, 3);
   assert.equal(ra.length, 10);

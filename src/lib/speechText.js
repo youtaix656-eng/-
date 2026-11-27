@@ -128,6 +128,8 @@ export function readSymbols(text) {
   t = t.replace(/\s*[／/]\s*/g, '、');
   // 「＝」（左心室＝体循環の起点・1寸＝親指の幅）は「は」と読む（「イコール」と声に出さない）
   t = t.replace(/\s*[＝=]\s*/g, 'は');
+  // 組み合わせの「─」「—」（魄 ─ 腹）は区切りとして読む（端末によっては「ダッシュ」「横線」と声に出る）
+  t = t.replace(/\s*[─━―—]+\s*/g, '、');
   // 数どうしの × はかける
   t = t.replace(/(\d)\s*[×✕]\s*(\d)/g, '$1かける$2');
   // 矢印・比べる記号
@@ -382,7 +384,10 @@ export function annotateGlossHomophones(text, notes) {
     if (at < 0) continue;
     // すでに添えた長い語の中にある時は添えない
     if (used.some(([s, e]) => at >= s && at < e)) continue;
-    const add = `、${notes[term]}のほう、`;
+    // 後ろが句読点なら読点を重ねない（「精気、…のほう、。」と読点が続いていた）
+    const after = t.charAt(at + term.length);
+    const tail = after === '' || /[。、！？!?」』）)]/.test(after) ? '' : '、';
+    const add = `、${notes[term]}のほう${tail}`;
     t = t.slice(0, at + term.length) + add + t.slice(at + term.length);
     used.forEach((u) => { if (u[0] > at) { u[0] += add.length; u[1] += add.length; } });
     used.push([at, at + term.length + add.length]);
