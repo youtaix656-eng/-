@@ -65,6 +65,18 @@ class BackgroundAudioPlugin : Plugin() {
             }
         }
         controlReceiver = null
+        // 画面（Activity）が本当に終わった時は、残ったサービスと通知も片付ける
+        // （画面の回転などの作り直しでは止めない）。読み上げる WebView が無いのに
+        // 「再生中」の通知が残り、ボタンを押しても何も起きなかった。
+        val act = activity
+        if (act != null && !act.isChangingConfigurations && BackgroundAudioService.running) {
+            try {
+                val i = Intent(context, BackgroundAudioService::class.java).setAction(BackgroundAudioService.ACTION_STOP)
+                context.startService(i)
+            } catch (e: Exception) {
+                // noop（裏で起動できない時は onTaskRemoved が片付ける）
+            }
+        }
     }
 
     @PluginMethod

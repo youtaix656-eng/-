@@ -6469,6 +6469,13 @@ QR・クラウド自動同期・ファイル復元を読み直して動かし、
    アプリ版は `BackgroundAudio.keepAwake`（`FLAG_KEEP_SCREEN_ON`）で代える（`nativeBridge.js` の `nativeKeepAwake`、
    `audioEngine.js` の `requestWakeLock`／`releaseWakeLock`）。止めた・聞き終えた時は必ず外す。設定でオフにしていれば何もしない。
 
+## アプリ版（WebView）の音声学習・第5回で直した1件（2026-11-27追加）
+同じ依頼の5回目。前の回で直した所は除き、実際に見つけた1件だけを直した（水増ししない）。**実機では未確認**。
+- **最近使ったアプリの一覧からスワイプで閉じると、「再生中」の通知と押しても何も起きないボタンが残っていた**
+  （画面＝WebView は無くなるのに、フォアグラウンドサービスだけ動き続けていた）。`BackgroundAudioService.onTaskRemoved` で止め、
+  `BackgroundAudioPlugin.handleOnDestroy` も画面が本当に終わった時（回転などの作り直しでなければ）サービスを止める。
+  続きの位置は1問ごとに保存済みなので、開き直すと前回の続きから再開できる。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

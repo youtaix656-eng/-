@@ -245,6 +245,19 @@ class BackgroundAudioService : Service() {
         return START_STICKY
     }
 
+    // 最近使ったアプリの一覧からスワイプで閉じた時：画面（WebView）ごと無くなり読み上げは続かないので、
+    // 「再生中」の通知と押しても何も起きないボタンを残さず、サービスも止める。
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        running = false
+        releaseWakeLock()
+        abandonFocus()
+        unregisterNoisy()
+        releaseMediaSession()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         running = false
         releaseWakeLock()
