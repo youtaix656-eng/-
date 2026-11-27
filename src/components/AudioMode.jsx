@@ -66,7 +66,8 @@ import { recordRephrase } from '../lib/rephraseLog.js';
 import { setBreakResumePending, clearBreakResumePending, loadBreakResumePending } from '../lib/audioBreakResumeFlag.js';
 import { BODY_LOCATION_SETS } from '../data/bodyLocationMethod.js';
 import { useKeiketsuCards } from '../lib/keiketsuCardsLoader.js';
-import { resolveDailySubjectIndex, dailyWrongPickWithFallback, subjectAt } from '../lib/audioDailySubject.js';
+import { resolveDailySubjectIndex, subjectAt, manualSubjectFor, pillPick, wrongCountBySubject } from '../lib/audioDailySubject.js';
+import { COURSE_PHASES, catchUpCourse, coursePhaseOrdinal, courseScheduledEnd } from '../lib/pomoCourse.js';
 import { CONFUSING_PAIRS } from '../lib/confusingPairsChecklist.js';
 import { findIfThenScenario } from '../lib/ifThenScenarios.js';
 import { readingOrderHintFor } from '../lib/subjectReadingTemplates.js';
@@ -246,10 +247,19 @@ export default function AudioMode({
     if (!dailySubjectState.changed) return;
     updateSettings({ audioDailySubjectRotation: { index: dailySubjectState.index, dateKey: dailySubjectState.dateKey } });
   }, [dailySubjectState.changed, dailySubjectState.index, dailySubjectState.dateKey, updateSettings]);
+  // 手動で選んだ科目（その日のうちだけ。日替わりの順番は変えない）
+  const manualPillSubject = manualSubjectFor(settings.audioDailyManualSubject);
   const dailyWrongPick = useMemo(
-    () => dailyWrongPickWithFallback(questions, srs, dailySubjectState.index),
-    [questions, srs, dailySubjectState.index]
+    () => pillPick(questions, srs, dailySubjectState.index, manualPillSubject),
+    [questions, srs, dailySubjectState.index, manualPillSubject]
   );
+  const pillCounts = useMemo(() => wrongCountBySubject(questions, srs), [questions, srs]);
+  const choosePillSubject = (subject) => {
+    const autoSubject = subjectAt(dailySubjectState.index);
+    // 自動の今日の科目を選び直した時・選んでいる科目をもう一度押した時は、手動の選択を外す
+    if (subject === autoSubject || subject === manualPillSubject) updateSettings({ audioDailyManualSubject: null });
+    else updateSettings({ audioDailyManualSubject: { subject, dateKey: dateKey() } });
+  };
   const { streak, studiedToday } = useMemo(() => studyStreak(history), [history]);
   const [mood, setMood] = useState(null);
   useEffect(() => { loadTodayMood().then(setMood); }, []);
@@ -3254,11 +3264,20 @@ export default function AudioMode({
   };
   // 一番上の赤い長丸ボタン：「国家試験の科目×過去に間違えたところ」をタップするだけで開始する。
   // インプットに特化（outputModeOn・pureRecallOnを強制的にOFF＝自動で正解まで読み進める）。
-  const startDailyWrongPill = () => {
+  const startDailyWrongPill = (opts = {}) => {
     if (dailyWrongPick.pool.length === 0) return;
     rebuildStop();
     setMode(0);
-    setCustomReviewIds(dailyWrongPick.pool.map((q) => q.id));
+    const pillIds = dailyWrongPick.pool.map((q) => q.id);
+    setCustomReviewIds(pillIds);
+    // 2時間コース：25分のあいだ束を聞き終えても止めずに最初から繰り返す（休憩は無音）
+    if (opts.course) {
+      if (pillCourseRef.current == null) pillLoopBeforeRef.current = loop;
+      setLoop(true);
+      setPillCourse({ ids: pillIds, phaseIndex: 0, endAt: Date.now() + COURSE_PHASES[0].min * 60000 });
+    } else if (pillCourseRef.current) {
+      endPillCourse(false);
+    }
     setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
     setReviewTarget(null);
     setReviewOffsetPersist(0);
@@ -3275,12 +3294,67 @@ export default function AudioMode({
     setVoiceAnswerStats({ attempts: 0, matched: 0 });
     audioSessionKindRef.current = null;
     quickMinuteActiveRef.current = null;
-    onToast?.(dailyWrongPick.fallback
+    onToast?.(`${opts.course ? '⏱️ 2時間コース（25分×4回）・' : ''}${dailyWrongPick.manual
+      ? `🔴 選んだ科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`
+      : dailyWrongPick.fallback
       ? `🔴 今日の科目「${dailyWrongPick.todaySubject}」には誤答が無いので、「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`
-      : `🔴 今日の科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`);
+      : `🔴 今日の科目「${dailyWrongPick.subject}」の誤答・△✕問題（${dailyWrongPick.pool.length}問）を始めます`}`);
     if (switchedStyle) setTimeout(() => onToast?.('📻 赤い丸は「聞くだけ」で始めます（自分で答えたい時はプレーヤーの「✋ 自分で答える」へ）'), 2600);
     requestAutoPlay();
   };
+  // ===== 赤い長丸の2時間コース（25分勉強＋5分休憩×4回。2026-11-27・ユーザー指定） =====
+  // 勉強の25分は音声学習を再生、休憩の5分は無音（止める）、休憩が終わったら止めた所から自動で続きを再生する。
+  // 時刻は「終わる時刻」から毎回求める（1秒ずつ減らさない。裏に回って遅れても追いつく＝pomoCourse.js）。
+  // ※ アプリを閉じている間は進まない・鳴らない。閉じて開き直すとコースは終わっている（再生の続きは残る）。
+  // ※ 休憩明けの再開はボタンを押さずに始まるので、端末によっては音が出ないことがある（その時は▶で続き）。
+  const [pillCourse, setPillCourse] = useState(null); // { ids, phaseIndex, endAt }
+  const pillCourseRef = useRef(null);
+  pillCourseRef.current = pillCourse;
+  const pillLoopBeforeRef = useRef(false);
+  const [, setCourseTick] = useState(0);
+  const endPillCourse = (finished) => {
+    setPillCourse(null);
+    setLoop(pillLoopBeforeRef.current);
+    if (finished) {
+      engine.stop();
+      try { beep(3, 1320, 140); } catch (e) { /* noop */ }
+      onToast?.('🔔 2時間コースが終わりました。おつかれさまでした');
+    }
+  };
+  const advancePillCourse = () => {
+    const c = pillCourseRef.current;
+    if (!c || Date.now() < c.endAt) return;
+    const next = catchUpCourse(c.phaseIndex, c.endAt, Date.now());
+    if (next.finished) { endPillCourse(true); return; }
+    const type = COURSE_PHASES[next.phaseIndex].type;
+    const ord = coursePhaseOrdinal(next.phaseIndex);
+    setPillCourse({ ...c, phaseIndex: next.phaseIndex, endAt: next.endAt });
+    if (type === 'break') {
+      engine.stop();
+      onToast?.(`☕ 休憩 ${ord.n}/${ord.total}（5分・無音）。終わったら続きから再生します`);
+    } else {
+      onToast?.(`📖 勉強 ${ord.n}/${ord.total}。続きから再生します`);
+      if (!engine.getSnapshot().playing) engine.play();
+    }
+  };
+  const advancePillCourseRef = useRef(advancePillCourse);
+  advancePillCourseRef.current = advancePillCourse;
+  const pillCourseOn = !!pillCourse;
+  useEffect(() => {
+    if (!pillCourseOn) return undefined;
+    const t = setInterval(() => { advancePillCourseRef.current(); setCourseTick((n) => n + 1); }, 1000);
+    const onVis = () => { if (document.visibilityState === 'visible') advancePillCourseRef.current(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, [pillCourseOn]);
+  // ほかの束へ切り替えたら、コースは終える（休憩明けに別の束が勝手に始まらないように）
+  useEffect(() => {
+    if (pillCourse && customReviewIds !== pillCourse.ids) {
+      endPillCourse(false);
+      onToast?.('⏱️ ほかの読み上げに切り替えたので、2時間コースを終えました');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customReviewIds]);
   // ===== 録音学習の型：今日の再生リスト（新しい／復習／苦手、各1トラック10問） =====
   const todayKey = dateKey();
   const dayNow = rs.ensureDay(recDay, todayKey);
@@ -3805,9 +3879,9 @@ export default function AudioMode({
         type="button"
         className="daily-wrong-pill"
         disabled={dailyWrongPick.pool.length === 0}
-        onClick={startDailyWrongPill}
+        onClick={() => startDailyWrongPill()}
       >
-        <span className="daily-wrong-pill-main">🔴 今日の科目で誤答・△✕を聞く</span>
+        <span className="daily-wrong-pill-main">{dailyWrongPick.manual ? '🔴 選んだ科目で誤答・△✕を聞く' : '🔴 今日の科目で誤答・△✕を聞く'}</span>
         <span className="daily-wrong-pill-sub">
           {dailyWrongPick.pool.length === 0
             ? `${dailyWrongPick.subject}・まだ誤答がありません`
@@ -3816,6 +3890,56 @@ export default function AudioMode({
             : `${dailyWrongPick.subject}・${dailyWrongPick.pool.length}問`}
         </span>
       </button>
+
+      {/* 2時間コース（25分勉強＋5分休憩×4回）と、科目を手で選ぶ箱（2026-11-27・ユーザー指定） */}
+      {pillCourse ? (() => {
+        const ph = COURSE_PHASES[pillCourse.phaseIndex];
+        const ord = coursePhaseOrdinal(pillCourse.phaseIndex);
+        const left = Math.max(0, Math.ceil((pillCourse.endAt - Date.now()) / 1000));
+        const end = new Date(courseScheduledEnd(pillCourse.phaseIndex, pillCourse.endAt));
+        const hm = `${end.getHours()}:${String(end.getMinutes()).padStart(2, '0')}`;
+        return (
+          <div className={`pill-course${ph.type === 'break' ? ' break' : ''}`} role="status" aria-live="polite">
+            <span className="pill-course-main">
+              {ph.type === 'break' ? '☕ 休憩（無音）' : '📖 勉強（再生中）'} {ord.n}/{ord.total}・残り {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
+            </span>
+            <span className="pill-course-sub">2時間コース・終了予定 {hm}{ph.type === 'break' ? '・休憩が終わると続きから再生します' : ''}</span>
+            <button type="button" className="btn ghost sm" onClick={() => { endPillCourse(false); onToast?.('⏱️ 2時間コースをやめました（再生はそのまま）'); }}>コースをやめる</button>
+          </div>
+        );
+      })() : (
+        <button
+          type="button"
+          className="btn block pill-course-start"
+          disabled={dailyWrongPick.pool.length === 0}
+          onClick={() => startDailyWrongPill({ course: true })}
+        >
+          ⏱️ 2時間コースで聞く（25分勉強＋5分休憩×4回）
+        </button>
+      )}
+      <div className="pill-subjects" role="group" aria-label="科目を選ぶ（誤答・△✕の数）">
+        {SUBJECT_TAG_NAMES.map((subj, i) => {
+          const isAuto = subj === subjectAt(dailySubjectState.index);
+          const selected = subj === dailyWrongPick.subject;
+          const n = pillCounts.get(subj) || 0;
+          return (
+            <button
+              key={subj}
+              type="button"
+              className={`pill-subject${selected ? ' active' : ''}`}
+              aria-pressed={selected}
+              onClick={() => choosePillSubject(subj)}
+            >
+              <span className="pill-subject-no">{i + 1}{isAuto ? '・今日' : ''}</span>
+              <span className="pill-subject-name">{subj}</span>
+              <span className="pill-subject-n">{n ? `${n}問` : '誤答なし'}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="inline-note" style={{ marginTop: 4 }}>
+        今日の科目は1日ごとに1▶2▶3…と進みます。箱を押すとその科目の誤答・△✕に切り替わります（今日のあいだだけ。「今日」の箱を押すと自動に戻ります）。
+      </p>
 
       {/* 録音学習の型（2026-11-27）：今日の再生リスト・安全の注意・目で解く日・設定 */}
       <Suspense fallback={null}>

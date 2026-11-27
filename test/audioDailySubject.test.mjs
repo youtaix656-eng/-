@@ -102,3 +102,21 @@ test('dailyWrongPickWithFallback：今日の科目に誤答が無い日は、順
   assert.equal(none.fallback, false);
   assert.equal(none.pool.length, 0);
 });
+
+import { manualSubjectFor, pillPick, wrongCountBySubject } from '../src/lib/audioDailySubject.js';
+
+test('手で選んだ科目はその日だけ効き、誤答が無くても他の科目へ回さない', () => {
+  const now = new Date(2026, 10, 27, 10);
+  const key = '2026-11-27';
+  assert.equal(manualSubjectFor({ subject: '解剖学', dateKey: key }, now), '解剖学');
+  assert.equal(manualSubjectFor({ subject: '解剖学', dateKey: '2026-11-26' }, now), null);
+  assert.equal(manualSubjectFor({ subject: 'ない科目', dateKey: key }, now), null);
+  const qs = [{ id: 'a', subject: '解剖学' }, { id: 'b', subject: '生理学' }];
+  const srs = { b: { wrongCount: 1, correctStreak: 0, due: 0 } };
+  const m = pillPick(qs, srs, 3, '解剖学');
+  assert.equal(m.subject, '解剖学'); assert.equal(m.pool.length, 0); assert.equal(m.manual, true);
+  const auto = pillPick(qs, srs, 3, null); // 解剖学（添字3）に誤答なし → 生理学へ回す
+  assert.equal(auto.subject, '生理学'); assert.equal(auto.fallback, true);
+  const c = wrongCountBySubject(qs, srs);
+  assert.equal(c.get('生理学'), 1); assert.equal(c.get('解剖学'), 0); assert.equal(c.size, 14);
+});

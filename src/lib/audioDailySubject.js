@@ -73,3 +73,28 @@ export function dailyWrongPickWithFallback(questions, srs, index) {
   }
   return { ...today, todaySubject: today.subject, fallback: false };
 }
+
+// 手動で選んだ科目（2026-11-27・ユーザー指定「下に1〜14科目の箱を横に並べ、タップすると誤答・△✕が選ばれる」）。
+// settings.audioDailyManualSubject = { dateKey, subject }。その日のうちだけ効き、日付が変わったら
+// 自動の「今日の科目」へ戻る。日替わりの順番（1▶2▶3…）は手動で選んでも変えない。
+export function manualSubjectFor(stored, now = new Date()) {
+  if (!stored || typeof stored.subject !== 'string' || !SUBJECT_TAG_NAMES.includes(stored.subject)) return null;
+  return stored.dateKey === dateKey(now) ? stored.subject : null;
+}
+
+// 赤い長丸で使う束。手動で選んだ科目があればその科目だけ（誤答が無くても他の科目へ回さない＝
+// 選んだ科目と違う問題が始まらないように）、無ければ今日の科目（無ければ次の誤答がある科目へ回す）。
+export function pillPick(questions, srs, index, manualSubject) {
+  if (manualSubject) {
+    const p = subjectWrongPool(questions, srs, manualSubject);
+    return { ...p, todaySubject: subjectAt(index), fallback: false, manual: true };
+  }
+  return { ...dailyWrongPickWithFallback(questions, srs, index), manual: false };
+}
+
+// 科目ごとの誤答・△✕の数（箱に出す数）
+export function wrongCountBySubject(questions, srs) {
+  const m = new Map(SUBJECT_TAG_NAMES.map((s) => [s, 0]));
+  questions.forEach((q) => { if (m.has(q.subject) && isInReview(srs[q.id])) m.set(q.subject, m.get(q.subject) + 1); });
+  return m;
+}
