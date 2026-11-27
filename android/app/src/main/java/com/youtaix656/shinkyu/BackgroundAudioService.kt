@@ -5,7 +5,16 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -38,6 +47,152 @@ class BackgroundAudioService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var playing = true
+    private var mediaSession: MediaSession? = null
+    private var focusRequest: AudioFocusRequest? = null
+    private var hasFocus = false
+    // 電話などで一時的に音の出口を取られて止めた時だけ、戻った時に続きを再生する
+    private var pausedByFocus = false
+    private var noisyReceiver: BroadcastReceiver? = null
+
+    // JS 側（audioEngine.js の initNativeControl）へ、通知のボタンと同じ道で操作を伝える
+    private fun sendControl(action: String) {
+        val intent = Intent(ACTION_CONTROL)
+        intent.setPackage(packageName)
+        intent.putExtra(EXTRA_ACTION, action)
+        sendBroadcast(intent)
+    }
+
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            // 電話・音声アシスタントなど。止めて、戻ったら続きから
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (playing) { pausedByFocus = true; sendControl("pause") }
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (pausedByFocus) { pausedByFocus = false; sendControl("play") }
+            }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                // ほかのアプリ（音楽など）が鳴り始めた。ポモドーロの曲と一緒に聞く使い方を
+                // 止めないよう、ここでは止めない（音が重なる時は自分で止める）。
+                hasFocus = false
+            }
+        }
+    }
+
+    private fun requestFocus() {
+        if (hasFocus) return
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        try {
+            val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val req = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setOnAudioFocusChangeListener(focusListener)
+                    .build()
+                focusRequest = req
+                am.requestAudioFocus(req)
+            } else {
+                @Suppress("DEPRECATION")
+                am.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+            }
+            hasFocus = r == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } catch (e: Exception) {
+            // noop
+        }
+    }
+
+    private fun abandonFocus() {
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                focusRequest?.let { am.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                am.abandonAudioFocus(focusListener)
+            }
+        } catch (e: Exception) {
+            // noop
+        }
+        hasFocus = false
+        pausedByFocus = false
+    }
+
+    // イヤホン（Bluetooth を含む）が外れたら止める（スピーカーから急に鳴り出さないように）
+    private fun registerNoisy() {
+        if (noisyReceiver != null) return
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY && playing) sendControl("pause")
+            }
+        }
+        noisyReceiver = r
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(r, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(r, filter)
+            }
+        } catch (e: Exception) {
+            noisyReceiver = null
+        }
+    }
+
+    private fun unregisterNoisy() {
+        noisyReceiver?.let { try { unregisterReceiver(it) } catch (e: Exception) { } }
+        noisyReceiver = null
+    }
+
+    // イヤホンのボタン（再生・一時停止・次へ・前へ）とロック画面の表示。WebView の
+    // navigator.mediaSession は端末のボタンに届かないため、ここで受ける。
+    private fun ensureMediaSession(): MediaSession {
+        mediaSession?.let { return it }
+        val s = MediaSession(this, "shinkyu-audio")
+        s.setCallback(object : MediaSession.Callback() {
+            override fun onPlay() { pausedByFocus = false; sendControl("play") }
+            override fun onPause() { pausedByFocus = false; sendControl("pause") }
+            override fun onSkipToNext() { sendControl("next") }
+            override fun onSkipToPrevious() { sendControl("prev") }
+            override fun onStop() { sendControl("pause") }
+        })
+        s.isActive = true
+        mediaSession = s
+        return s
+    }
+
+    private fun updateMediaSession(title: String, body: String) {
+        try {
+            val s = ensureMediaSession()
+            val st = if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+            s.setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(
+                        PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
+                            PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT or
+                            PlaybackState.ACTION_SKIP_TO_PREVIOUS or PlaybackState.ACTION_STOP
+                    )
+                    .setState(st, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
+                    .build()
+            )
+            s.setMetadata(
+                MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, body)
+                    .build()
+            )
+        } catch (e: Exception) {
+            // noop
+        }
+    }
+
+    private fun releaseMediaSession() {
+        try { mediaSession?.release() } catch (e: Exception) { }
+        mediaSession = null
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -47,6 +202,9 @@ class BackgroundAudioService : Service() {
         val body = intent?.getStringExtra(EXTRA_BODY) ?: ""
         if (intent?.hasExtra(EXTRA_PLAYING) == true) {
             playing = intent.getBooleanExtra(EXTRA_PLAYING, true)
+        } else if (action == ACTION_START) {
+            // 一時停止（playing=false）のあとに再開した時、通知が「再生」のボタンのまま残っていた
+            playing = true
         }
 
         // どのactionでも、まず（再）起動直後にstartForegroundを呼ぶ
@@ -64,16 +222,24 @@ class BackgroundAudioService : Service() {
             ACTION_START -> {
                 running = true
                 acquireWakeLock()
+                requestFocus()
+                registerNoisy()
+                updateMediaSession(title, body)
             }
             ACTION_STOP -> {
                 running = false
                 releaseWakeLock()
+                abandonFocus()
+                unregisterNoisy()
+                releaseMediaSession()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
             }
             else -> {
-                // ACTION_UPDATE：通知の差し替えのみ（上のstartForegroundで既に反映済み）
+                // ACTION_UPDATE：通知の差し替え（上のstartForegroundで既に反映済み）と、
+                // ロック画面・イヤホンのボタン向けの再生状態
+                updateMediaSession(title, body)
             }
         }
         return START_STICKY
@@ -82,6 +248,9 @@ class BackgroundAudioService : Service() {
     override fun onDestroy() {
         running = false
         releaseWakeLock()
+        abandonFocus()
+        unregisterNoisy()
+        releaseMediaSession()
         super.onDestroy()
     }
 

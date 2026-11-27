@@ -129,14 +129,21 @@ function initNativeControl() {
   // （プレーンなWeb版では何も起きない。android/のBackgroundAudioPlugin.ktが送る）。
   onNativeAudioControl(({ action } = {}) => {
     if (action === 'playPause') toggle();
+    // 電話がかかってきた・イヤホンが外れた・イヤホンのボタン（BackgroundAudioService.kt）
+    else if (action === 'pause') { if (state.playing) stop(); }
+    else if (action === 'play') { if (!state.playing) play(); }
     else if (action === 'next') skip(1);
     else if (action === 'prev') skip(-1);
   });
 }
 
 function startKeepAlive() {
-  ensureSilentAudio();
-  try { silentAudio?.play().catch(() => {}); } catch (e) { /* noop */ }
+  // アプリ版は端末のフォアグラウンドサービスが再生を保つので、無音の audio は鳴らさない
+  // （WebView の audio が音の出口を取り合い、電話の時の一時停止などの判断を乱さないように）
+  if (!isNativeApp()) {
+    ensureSilentAudio();
+    try { silentAudio?.play().catch(() => {}); } catch (e) { /* noop */ }
+  }
   setupMediaSession();
   initNativeControl();
   const { title, artist } = mediaLabels(state.display);

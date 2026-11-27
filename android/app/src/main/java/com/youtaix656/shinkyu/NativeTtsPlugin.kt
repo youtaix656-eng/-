@@ -35,26 +35,44 @@ class NativeTtsPlugin : Plugin() {
     private val pending = ConcurrentHashMap<String, PluginCall>()
     private var seq = 0L
 
+    // 日本語の読み上げデータが無かった（あとから入れられる）か、エンジンそのものが使えなかったか
+    private var langMissing = false
+    private var restarting = false
+
     override fun load() {
+        initEngine()
+    }
+
+    private fun audioAttrs(): AudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
+
+    // 日本語にできるかを試す。できれば ready。設定で日本語の音声データを入れて戻った時にも使う
+    // （以前は起動した時の結果を持ち続け、データを入れてもアプリを開き直すまで読めなかった）。
+    private fun applyLanguage(): Boolean {
+        val r = tts?.setLanguage(Locale.JAPAN) ?: TextToSpeech.LANG_NOT_SUPPORTED
+        if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
+            ready = false
+            langMissing = true
+            initError = "日本語の読み上げデータがありません。端末の設定（ユーザー補助 → テキスト読み上げ）で日本語の音声データを入れてください。"
+            return false
+        }
+        ready = true
+        langMissing = false
+        initError = null
+        // 「メディアの音量」で鳴らす（着信音・通知の音量にならないように）
+        try { tts?.setAudioAttributes(audioAttrs()) } catch (e: Exception) { }
+        return true
+    }
+
+    private fun initEngine() {
+        ready = false
+        initError = null
+        langMissing = false
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                val r = tts?.setLanguage(Locale.JAPAN) ?: TextToSpeech.LANG_NOT_SUPPORTED
-                if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    initError = "日本語の読み上げデータがありません。端末の設定（ユーザー補助 → テキスト読み上げ）で日本語の音声データを入れてください。"
-                } else {
-                    ready = true
-                    // 「メディアの音量」で鳴らす（着信音・通知の音量にならないように）
-                    try {
-                        tts?.setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
-                        )
-                    } catch (e: Exception) {
-                        // noop
-                    }
-                }
+                applyLanguage()
             } else {
                 initError = "端末の読み上げエンジンを使えませんでした。端末の設定（ユーザー補助 → テキスト読み上げ）を確認してください。"
             }
@@ -69,25 +87,47 @@ class NativeTtsPlugin : Plugin() {
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
                     utteranceId?.let { pending.remove(it)?.reject("読み上げに失敗しました（$errorCode）") }
+                    // 読み上げエンジンが落ちた（ほかのアプリの更新・メモリ不足で切られた等）。作り直す
+                    if (errorCode == TextToSpeech.ERROR_SERVICE) restartEngine()
                 }
                 override fun onStop(utteranceId: String?, interrupted: Boolean) {
                     utteranceId?.let { pending.remove(it)?.resolve(JSObject().put("canceled", true)) }
                 }
             })
+            restarting = false
             val list = synchronized(waitingInit) { waitingInit.toList().also { waitingInit.clear() } }
             list.forEach { it() }
         }
     }
 
+    // エンジンが落ちた時は作り直し、待っている呼び出しはその後に続ける（1問ずつ飛ばし続けない）
+    private fun restartEngine() {
+        synchronized(waitingInit) {
+            if (restarting) return
+            restarting = true
+        }
+        activity.runOnUiThread {
+            try { tts?.shutdown() } catch (e: Exception) { }
+            tts = null
+            initEngine()
+        }
+    }
+
     private fun whenInit(fn: () -> Unit) {
         val run = synchronized(waitingInit) {
-            if (ready || initError != null) true else { waitingInit.add(fn); false }
+            if (!restarting && (ready || initError != null)) true else { waitingInit.add(fn); false }
         }
-        if (run) fn()
+        if (run) {
+            // 日本語のデータが無かった時は、呼ばれるたびに入ったかを確かめ直す
+            if (!ready && langMissing && tts != null) applyLanguage()
+            fn()
+        }
     }
 
     @PluginMethod
     fun isAvailable(call: PluginCall) {
+        // 読み上げエンジンそのものが使えなかった時は、設定から戻った時などに作り直して確かめ直す
+        if (!ready && !langMissing && initError != null && !restarting) restartEngine()
         whenInit {
             val ret = JSObject()
             ret.put("available", ready)
@@ -121,7 +161,14 @@ class NativeTtsPlugin : Plugin() {
             val r = engine.speak(text, TextToSpeech.QUEUE_ADD, params, id)
             if (r != TextToSpeech.SUCCESS) {
                 pending.remove(id)
-                call.reject("読み上げを始められませんでした")
+                if (call.getBoolean("_retried") != true) {
+                    // エンジンが切られていた時は作り直してから1回だけ読み直す
+                    call.data.put("_retried", true)
+                    restartEngine()
+                    speak(call)
+                } else {
+                    call.reject("読み上げを始められませんでした")
+                }
             }
         }
     }
