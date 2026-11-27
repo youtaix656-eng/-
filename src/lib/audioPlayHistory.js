@@ -1,3 +1,4 @@
+import { mirrorToNative } from './nativeMirror.js';
 // 音声学習の「再生履歴」（2026-11-15・ユーザー指定）。下部のミニプレーヤーが使う。
 // 科目・ジャンル・キーワード・回の組み合わせごとに1件だけ持ち、「どこまで聞いたか」を上書きしていく
 // （同じ科目を聞くたびに行が増えないように）。新しい順、最大12件。端末内（localStorage）だけ。
@@ -155,7 +156,9 @@ export function loadAudioHistory() {
   } catch { return []; }
 }
 function saveAudioHistory(list) {
-  try { localStorage.setItem(AUDIO_HISTORY_KEY, JSON.stringify(list)); } catch { /* 保存できなくても再生は続ける */ }
+  const raw = JSON.stringify(list);
+  try { localStorage.setItem(AUDIO_HISTORY_KEY, raw); } catch { /* 保存できなくても再生は続ける */ }
+  mirrorToNative(AUDIO_HISTORY_KEY, raw); // アプリ版：急に閉じても残るよう端末にも書く
   listeners.forEach((fn) => { try { fn(list); } catch { /* noop */ } });
 }
 export function recordAudioHistory(entry) {

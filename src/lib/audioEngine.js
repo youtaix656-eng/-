@@ -204,7 +204,7 @@ export function getSettings() {
   return { ...settings };
 }
 
-function itemKey(it) {
+export function itemKey(it) {
   const d = it?.display;
   if (!d) return '';
   return `${d.kind || ''}|${d.q?.id || ''}|${d.keyword || ''}|${d.comp?.title || ''}|${d.num?.topic || ''}`;

@@ -86,10 +86,15 @@ function audioCandidate(p) {
   }
   const remaining = p.total - p.index;
   if (remaining <= 0) return null;
+  const st = p.st && typeof p.st === 'object' ? p.st : null;
   return {
     key: 'audio', ...RESUME_FEATURES.audio,
-    subject: p.subject || null, genre: p.genre || null, keyword: p.keyword || null,
-    remaining, at: p.at || 0, round: p.round || null,
+    subject: p.subject || st?.subject || null, genre: p.genre || st?.genre || null,
+    keyword: p.keyword || st?.keyword || st?.selectedKeywordLabel || null,
+    remaining, at: p.at || 0, round: p.round || st?.round || null,
+    // 読み方（連結学習モードなど）ごと保存してある続き：はいでそのまま戻して再生する
+    fromProgress: !!st,
+    modeLabel: st?.modeLabel || '',
   };
 }
 

@@ -247,6 +247,8 @@ export default function App() {
       if (rev) setAudioResumeFilters({ ...rev, exact: true, autoPlay: true });
       // 束の履歴が消されていた時は、題から取った科目名（「3科目」など）で絞り込まない
       else if (c.reviewKey) showToast('この誤答・△✕の続きは履歴から消されていたため、音声学習の画面だけ開きます');
+      // 読み方（連結学習モード・件数など）ごと保存してある時は、それをそのまま戻して続きから再生
+      else if (c.fromProgress) setAudioResumeFilters({ fromProgress: true });
       else setAudioResumeFilters({ subject: c.subject, genre: c.genre, keyword: c.keyword, round: c.round });
     }
     setView(c.view);
@@ -1230,6 +1232,7 @@ export default function App() {
             <p>②ジャンル名：{resumeCandidate.genre || 'なし'}</p>
             <p>③キーワード名：{resumeCandidate.keyword || 'なし'}</p>
             <p>④残り{resumeCandidate.remaining}問</p>
+            {resumeCandidate.modeLabel && <p className="muted" style={{ fontSize: 13 }}>読み方：{resumeCandidate.modeLabel}</p>}
             <p style={{ marginTop: 10, fontWeight: 700 }}>続きから始めますか？</p>
             <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
               <button className="btn primary block" onClick={resumeDialogYes}>はい</button>

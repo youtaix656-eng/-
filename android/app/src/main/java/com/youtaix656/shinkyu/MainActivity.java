@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeTtsPlugin.class);
         // 音声認識（WebView には SpeechRecognition が無いため、Android 本体の SpeechRecognizer を使う）
         registerPlugin(NativeSttPlugin.class);
+        registerPlugin(NativePrefsPlugin.class);
         super.onCreate(savedInstanceState);
 
         // 音量ボタンで「メディアの音量」（読み上げの音量）を変えられるようにする

@@ -184,6 +184,8 @@ const PHASES = { KEYWORD: 'keyword', QUESTION: 'question', GAP: 'gap', ANSWER: '
 const GRADE_PREV_WINDOW_MS = 6000;
 // 何も選ばずに▶を押した時の最初の件数（1セット＝60問。SESSION_TARGETSの60と同じ）
 const AUTO_FIRST_TARGET = 60;
+// 閉じて開き直した時に、読み方ごと戻せる読み上げの種類（同じ条件で同じ並びを作り直せるもの）
+const RESTORABLE_SOURCES = ['all', 'filter', 'tagged', 'keyword', 'daily', 'weak'];
 // プレーヤーの中に出す速さ（詳細設定の再生速度と同じ値を使う）
 const PLAYER_RATES = [1.0, 1.3, 1.5, 1.75, 2.0];
 const ALL_KW = '__all__';
@@ -659,6 +661,17 @@ export default function AudioMode({
     // 同じ内容を効かせる（最初からresumeFilters付きで新規マウントした場合は、遅延初期化と
     // この効果の両方が同じ値を適用するだけで無害）。
     if (!resumeFilters) return;
+    // 前回の続きから（はい）：保存した読み方（連結学習モード・読み上げ方・件数）ごと戻し、その問題から再生
+    if (resumeFilters.fromProgress) {
+      const p = loadAudioProgressSync();
+      if (p && p.st && applySavedState(p.st)) {
+        resumeAudioRef.current = p;
+        resumeFirstLoadRef.current = true;
+        requestAutoPlay();
+        onConsumeResumeFilters?.();
+        return;
+      }
+    }
     if (resumeFilters.exact && resumeFilters.kind === 'review') {
       applyReviewEntry(resumeFilters, !!resumeFilters.autoPlay);
       onConsumeResumeFilters?.();
@@ -1870,11 +1883,40 @@ export default function AudioMode({
   // 件数（plan.length）以外の条件だけの署名（件数だけ変わったかを見分ける）
   const loadedBaseRef = useRef('');
   const planSigBase = (sig) => { try { const a = JSON.parse(sig); a[PLAN_LEN_AT] = null; return JSON.stringify(a); } catch { return sig; } };
+  // 収録数・件数を除いた署名（問題が追加されても「同じ読み方」と見なす）
+  const looseSig = (sig) => { try { const a = JSON.parse(sig); a[PLAN_LEN_AT] = null; a[PLAN_LEN_AT - 1] = null; return JSON.stringify(a); } catch { return sig; } };
   // 保存済みの再生位置（続きから）。マウント時に一度だけ読み込む。
   const [audioReady, setAudioReady] = useState(false);
   const resumeAudioRef = useRef(null);
   // 別の画面から問題を渡されて開いたか（下の reviewPreset の効果で立てる。自動の復元より優先）
   const handoffRef = useRef(!!reviewPreset);
+  // 開き直した最初の1回だけ、番号ではなく「同じ問題」を探して続きにする（並び替え・問題の追加で番号がずれても）
+  const resumeFirstLoadRef = useRef(true);
+  // 保存した読み方を戻す（2026-11-27）。以前は科目などの絞り込みしか戻さず、連結学習モード・
+  // 「すべて読む」・まず60問の自動の件数・10問ごとの知らせを使っていると、開き直すたびに署名が
+  // 合わず1問目に戻っていた。戻せない種類（体の場所法・宿題など）は false を返して何もしない。
+  const applySavedState = (st) => {
+    if (!st || !RESTORABLE_SOURCES.includes(st.source)) return false;
+    const m = Number(st.mode);
+    setSource(st.source);
+    setMode(Number.isFinite(m) && m >= 0 && m <= 10 ? m : 0);
+    setSelectedKeyword(typeof st.selectedKeyword === 'string' ? st.selectedKeyword : '');
+    if (typeof st.chain === 'boolean') setChain(st.chain);
+    if (typeof st.summary === 'boolean') setSummary(st.summary);
+    if (typeof st.flashcard === 'boolean') setFlashcard(st.flashcard);
+    if (typeof st.shuffleOn === 'boolean') setShuffleOn(st.shuffleOn);
+    if (typeof st.newOnly === 'boolean') setNewOnly(st.newOnly);
+    if (typeof st.progressAnnounceOn === 'boolean') setProgressAnnounceOn(st.progressAnnounceOn);
+    setFilterSubject(st.subject || '');
+    setFilterGenre(st.genre || '');
+    setFilterKeyword(st.keyword || '');
+    setFilterRound(st.round || '');
+    const t = Number(st.reviewTarget);
+    setReviewTarget(Number.isFinite(t) && t > 0 ? t : null);
+    const o = Number(st.reviewOffset);
+    setReviewOffset(Number.isFinite(o) && o > 0 ? o : 0);
+    return true;
+  };
   useEffect(() => {
     let alive = true;
     storage.loadAudioProgress().then((idbP) => {
@@ -1895,6 +1937,8 @@ export default function AudioMode({
       if (revEntry) {
         applyReviewEntry(revEntry, false);
         cameFromResumeRef.current = false;
+      } else if (!handedOff && !resumeFilters && !pendingJumpRef.current && p && p.st && applySavedState(p.st)) {
+        // 連結学習モード・読み上げ方・件数まで、前回と同じに戻す（勝手に再生はしない）
       } else if (!handedOff && !resumeFilters && !pendingJumpRef.current && p && (p.subject || p.genre || p.keyword || p.round)) {
         setSource('filter');
         if (p.subject) setFilterSubject(p.subject);
@@ -1912,7 +1956,19 @@ export default function AudioMode({
   useEffect(() => {
     if (!audioReady) return;
     const saved = resumeAudioRef.current;
-    const startIndex = saved && sigMatches(saved.sig) ? saved.index : 0;
+    let startIndex = saved && sigMatches(saved.sig) ? saved.index : 0;
+    // 開き直した最初の読み込みだけ：問題が追加された（署名の件数だけ違う）・並びが変わった時も、
+    // 保存した「聞いていた問題」を探してそこから続ける（以前は番号で合わせるか、1問目に戻っていた）
+    if (saved && resumeFirstLoadRef.current && saved.itemKey && builtPlan.length > 0
+      && (sigMatches(saved.sig) || looseSig(saved.sig) === looseSig(planSig))) {
+      const here = builtPlan[Math.min(startIndex, builtPlan.length - 1)];
+      if (engine.itemKey(here) !== saved.itemKey) {
+        const at = builtPlan.findIndex((it) => engine.itemKey(it) === saved.itemKey);
+        if (at >= 0) startIndex = at;
+        else if (!sigMatches(saved.sig)) startIndex = Math.min(saved.index || 0, builtPlan.length - 1);
+      }
+    }
+    if (builtPlan.length > 0) resumeFirstLoadRef.current = false;
     // 間違えた問題（△✕）を聞いている最中に自己採点すると、マスターした問題が復習対象から外れる・
     // 念のため確認が増える等で「件数だけ」が変わる。以前はこれで計画が読み込み直され、
     // 再生が途中で止まっていた（実際のバグ）。条件は同じで件数だけ変わった時は、聞いている束をそのまま続ける。
@@ -2268,6 +2324,17 @@ export default function AudioMode({
       genre: source === 'filter' ? (filterGenre || null) : null,
       keyword: source === 'filter' ? (filterKeyword || null) : null,
       round: source === 'filter' ? (filterRound || null) : null,
+      // 聞いていた問題（並びが変わっても同じ問題から続けるため）と、読み方の全部（2026-11-27）
+      itemKey: engine.itemKey(builtPlan[snap.index || 0]) || '',
+      ...(RESTORABLE_SOURCES.includes(source) && !customReviewIds ? {
+        st: {
+          source, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, newOnly, progressAnnounceOn,
+          subject: filterSubject || '', genre: filterGenre || '', keyword: filterKeyword || '', round: filterRound || '',
+          reviewTarget: reviewTarget || null, reviewOffset: reviewOffset || 0,
+          modeLabel: mode > 0 ? (MODES.find((x) => x.id === mode)?.title || '') : '',
+          selectedKeywordLabel: source === 'keyword' ? (selectedKeyword || '') : '',
+        },
+      } : {}),
       // 誤答・△✕の束：閉じて開き直した時・前回の続きからダイアログで同じ束へ戻るための目印
       ...(source === 'review' && mode === 0 && reviewSessionRef.current ? {
         reviewKey: reviewSessionRef.current.key,
@@ -2278,7 +2345,7 @@ export default function AudioMode({
     saveAudioProgressSync(prog); // 閉じる直前でも残るよう、同期で先に書く
     storage.saveAudioProgress(prog);
     // 自己採点した直後にも書く（以前は次の問題へ進むまで書かず、採点してすぐ閉じると二重記録防止が消えていた）
-  }, [snap.index, planSig, audioReady, builtPlan.length, source, filterSubject, filterGenre, filterKeyword, filterRound, sessionGradedCount]);
+  }, [snap.index, planSig, audioReady, builtPlan.length, source, filterSubject, filterGenre, filterKeyword, filterRound, sessionGradedCount, mode, selectedKeyword, chain, summary, flashcard, shuffleOn, newOnly, progressAnnounceOn, reviewTarget, reviewOffset]);
 
   // 設定画面で変えた速度・間をこの画面にも反映する。再生中は画面を閉じても残るので、
   // 以前は設定画面で変えても、ここで▶を押した瞬間に古い値で設定を書き戻していた。

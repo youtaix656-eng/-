@@ -2,16 +2,21 @@
 // storage.js の保存（IndexedDB）は400msまとめてから書くので、問題が切り替わった直後に
 // アプリを閉じると前の位置のまま残ることがある。localStorageは同期で書けるので、同じ内容を
 // ここにも即時に残し、読み込み時は新しい方（at）を使う。端末内だけ。
+import { mirrorToNative } from './nativeMirror.js';
+
 export const AUDIO_PROGRESS_SYNC_KEY = 'shinkyu:audioProgressSync';
 
 export function saveAudioProgressSync(p) {
-  try { localStorage.setItem(AUDIO_PROGRESS_SYNC_KEY, JSON.stringify(p)); } catch { /* 書けなくても再生は続ける */ }
+  const raw = JSON.stringify(p);
+  try { localStorage.setItem(AUDIO_PROGRESS_SYNC_KEY, raw); } catch { /* 書けなくても再生は続ける */ }
+  mirrorToNative(AUDIO_PROGRESS_SYNC_KEY, raw); // アプリ版：急に閉じても残るよう端末にも書く（nativeMirror.js）
 }
 
 // 「最初から（リセット）」の時に同期の控えも消す（消さないと、開き直した時に
 // IndexedDBより新しい控えとして古い続き・記録済みの印が戻ってきていた）
 export function clearAudioProgressSync() {
   try { localStorage.removeItem(AUDIO_PROGRESS_SYNC_KEY); } catch { /* noop */ }
+  mirrorToNative(AUDIO_PROGRESS_SYNC_KEY, null);
 }
 
 export function loadAudioProgressSync() {

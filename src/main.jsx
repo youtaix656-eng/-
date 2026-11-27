@@ -1,5 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { restoreFromNative } from './lib/nativeMirror.js';
 import App from './App.jsx';
 import './styles/index.css';
 import { installErrorHandlers } from './lib/errorLog.js';
@@ -18,11 +19,16 @@ if (typeof window !== 'undefined' && !import.meta.env.DEV) {
   }, 8000);
 }
 
-createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// アプリ版：音声学習の「続きから」・再生履歴を、端末に残した控えから先に戻してから画面を出す
+// （急に閉じて localStorage に残らなかった時でも、開いた直後のダイアログ・下部バーに出るように）。
+// ブラウザ版はすぐ終わる。最大1.2秒だけ待つ。
+restoreFromNative().catch(() => 0).then(() => {
+  createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+});
 
 // Service Worker 登録（オフライン起動・ホーム画面追加・自動更新のため）
 // dev サーバーでは登録しない（HMR と競合するため）。

@@ -11,6 +11,7 @@
 // 自動で IndexedDB へ移行する。IndexedDB が使えない環境では localStorage に
 // フォールバックする。
 
+import { mirrorToNative, MIRRORED_KEYS } from './nativeMirror.js';
 import { idbGet, idbSet, idbSetMany, idbDelete, idbGetAll, isIdbSupported } from './db.js';
 import { loadFlashcardSrs, saveFlashcardSrsRaw } from './flashcardSrs.js';
 export { loadFlashcardSrs, saveFlashcardSrsRaw };
@@ -522,6 +523,7 @@ export async function resetProgress() {
   for (const k of PROGRESS_KEYS) await remove(k);
   for (const k of PROGRESS_LS_KEYS) {
     try { localStorage.removeItem(k); } catch (e) { /* noop */ }
+    mirrorToNative(k, null); // アプリ版の端末の控えも消す（残すと次に開いた時に戻ってくる）
   }
   await flushNow();
 }
@@ -582,6 +584,7 @@ async function restoreExtras(extras) {
   for (const [k, v] of Object.entries(ls)) {
     if (!isExtraKey(k) || typeof v !== 'string') continue;
     try { localStorage.setItem(k, v); } catch (e) { /* noop */ }
+    if (MIRRORED_KEYS.includes(k)) mirrorToNative(k, v);
   }
 }
 
@@ -602,7 +605,11 @@ async function removeExtrasMissingFrom(extras) {
   try {
     const lsKeys = [];
     for (let i = 0; i < localStorage.length; i++) lsKeys.push(localStorage.key(i));
-    for (const k of lsKeys) if (!keep(k)) localStorage.removeItem(k);
+    for (const k of lsKeys) {
+      if (keep(k)) continue;
+      localStorage.removeItem(k);
+      if (MIRRORED_KEYS.includes(k)) mirrorToNative(k, null);
+    }
   } catch (e) { /* noop */ }
 }
 
