@@ -23,7 +23,8 @@ import { SESSION_TARGETS, sessionTargetLabel, estimateAudioSeconds, formatEstima
 import { loadTodayMood } from '../lib/mood.js';
 import { detectBrokenYesterday, loadStreakBreakLog, breakReasonLabel } from '../lib/streakBreak.js';
 import { roundKey, formatRound, isSameRound } from '../lib/round.js';
-import { beep, vibrate } from '../lib/sound.js';
+import { beep, vibrate, bellRing } from '../lib/sound.js';
+import { startTicker } from '../lib/pomoTicker.js';
 import { isVoiceCommandSupported, parseVoiceCommand, listenOnce } from '../lib/voiceCommand.js';
 import { detectHeadphoneHint } from '../lib/headphones.js';
 import {
@@ -3274,9 +3275,10 @@ export default function AudioMode({
     if (opts.course) {
       if (pillCourseRef.current == null) pillLoopBeforeRef.current = loop;
       setLoop(true);
-      setPillCourse({ ids: pillIds, phaseIndex: 0, endAt: Date.now() + COURSE_PHASES[0].min * 60000 });
+      setPillCourse({ ids: pillIds, subject: dailyWrongPick.subject, phaseIndex: 0, endAt: Date.now() + COURSE_PHASES[0].min * 60000 });
     } else if (pillCourseRef.current) {
       endPillCourse(false);
+      setTimeout(() => onToast?.('⏱️ 2時間コースを終えて、ふつうの読み上げにしました'), 2600);
     }
     setFilterSubject(''); setFilterGenre(''); setFilterKeyword(''); setFilterRound('');
     setReviewTarget(null);
@@ -3311,13 +3313,13 @@ export default function AudioMode({
   const pillCourseRef = useRef(null);
   pillCourseRef.current = pillCourse;
   const pillLoopBeforeRef = useRef(false);
-  const [, setCourseTick] = useState(0);
   const endPillCourse = (finished) => {
+    pillCourseRef.current = null;
     setPillCourse(null);
     setLoop(pillLoopBeforeRef.current);
     if (finished) {
       engine.stop();
-      try { beep(3, 1320, 140); } catch (e) { /* noop */ }
+      try { bellRing(85); } catch (e) { /* noop */ }
       onToast?.('🔔 2時間コースが終わりました。おつかれさまでした');
     }
   };
@@ -3328,7 +3330,10 @@ export default function AudioMode({
     if (next.finished) { endPillCourse(true); return; }
     const type = COURSE_PHASES[next.phaseIndex].type;
     const ord = coursePhaseOrdinal(next.phaseIndex);
-    setPillCourse({ ...c, phaseIndex: next.phaseIndex, endAt: next.endAt });
+    const nc = { ...c, phaseIndex: next.phaseIndex, endAt: next.endAt };
+    // Worker と本体のタイマーの両方から起こされるので、描き直しを待たずに ref も進める（同じ切り替えを2回しない）
+    pillCourseRef.current = nc;
+    setPillCourse(nc);
     if (type === 'break') {
       engine.stop();
       onToast?.(`☕ 休憩 ${ord.n}/${ord.total}（5分・無音）。終わったら続きから再生します`);
@@ -3340,12 +3345,15 @@ export default function AudioMode({
   const advancePillCourseRef = useRef(advancePillCourse);
   advancePillCourseRef.current = advancePillCourse;
   const pillCourseOn = !!pillCourse;
+  // 画面を消した・裏に回した時もなるべく遅れないよう、Web Worker のタイマーからも起こす（ポモドーロと同じ pomoTicker）。
+  // 残り時間の表示は小さな部品（PillCourseStatus）が自分で1秒ごとに描き直す（以前はこの画面全体を毎秒描き直していた）。
   useEffect(() => {
     if (!pillCourseOn) return undefined;
-    const t = setInterval(() => { advancePillCourseRef.current(); setCourseTick((n) => n + 1); }, 1000);
+    const stopTicker = startTicker(() => advancePillCourseRef.current());
     const onVis = () => { if (document.visibilityState === 'visible') advancePillCourseRef.current(); };
     document.addEventListener('visibilitychange', onVis);
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+    window.addEventListener('focus', onVis);
+    return () => { stopTicker(); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', onVis); };
   }, [pillCourseOn]);
   // ほかの束へ切り替えたら、コースは終える（休憩明けに別の束が勝手に始まらないように）
   useEffect(() => {
@@ -3892,22 +3900,17 @@ export default function AudioMode({
       </button>
 
       {/* 2時間コース（25分勉強＋5分休憩×4回）と、科目を手で選ぶ箱（2026-11-27・ユーザー指定） */}
-      {pillCourse ? (() => {
-        const ph = COURSE_PHASES[pillCourse.phaseIndex];
-        const ord = coursePhaseOrdinal(pillCourse.phaseIndex);
-        const left = Math.max(0, Math.ceil((pillCourse.endAt - Date.now()) / 1000));
-        const end = new Date(courseScheduledEnd(pillCourse.phaseIndex, pillCourse.endAt));
-        const hm = `${end.getHours()}:${String(end.getMinutes()).padStart(2, '0')}`;
-        return (
-          <div className={`pill-course${ph.type === 'break' ? ' break' : ''}`} role="status" aria-live="polite">
-            <span className="pill-course-main">
-              {ph.type === 'break' ? '☕ 休憩（無音）' : '📖 勉強（再生中）'} {ord.n}/{ord.total}・残り {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
-            </span>
-            <span className="pill-course-sub">2時間コース・終了予定 {hm}{ph.type === 'break' ? '・休憩が終わると続きから再生します' : ''}</span>
-            <button type="button" className="btn ghost sm" onClick={() => { endPillCourse(false); onToast?.('⏱️ 2時間コースをやめました（再生はそのまま）'); }}>コースをやめる</button>
-          </div>
-        );
-      })() : (
+      {pillCourse ? (
+        <PillCourseStatus
+          course={pillCourse}
+          playing={playing}
+          onStop={() => {
+            const onBreak = COURSE_PHASES[pillCourse.phaseIndex]?.type === 'break';
+            endPillCourse(false);
+            onToast?.(onBreak ? '⏱️ 2時間コースをやめました（▶で続きから再生できます）' : '⏱️ 2時間コースをやめました（再生はそのまま）');
+          }}
+        />
+      ) : (
         <button
           type="button"
           className="btn block pill-course-start"
@@ -6387,3 +6390,35 @@ export default function AudioMode({
     </div>
   );
 }
+
+// 赤い長丸の2時間コースの表示。残り時間はここだけが1秒ごとに描き直す（音声学習の画面全体を毎秒描き直さないため）。
+// 画面の読み上げ（スクリーンリーダー）には、毎秒変わる残り時間ではなく「勉強／休憩の切り替え」だけを知らせる。
+function PillCourseStatus({ course, playing, onStop }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const ph = COURSE_PHASES[course.phaseIndex];
+  if (!ph) return null;
+  const ord = coursePhaseOrdinal(course.phaseIndex);
+  const left = Math.max(0, Math.ceil((course.endAt - Date.now()) / 1000));
+  const end = new Date(courseScheduledEnd(course.phaseIndex, course.endAt));
+  const hm = `${end.getHours()}:${String(end.getMinutes()).padStart(2, '0')}`;
+  const isBreak = ph.type === 'break';
+  const state = isBreak ? '☕ 休憩（無音）' : (playing ? '📖 勉強（再生中）' : '📖 勉強（一時停止中）');
+  return (
+    <div className={`pill-course${isBreak ? ' break' : ''}`}>
+      <span className="sr-only" role="status" aria-live="polite">{`${isBreak ? '休憩' : '勉強'} ${ord.n}/${ord.total}`}</span>
+      <span className="pill-course-main" aria-hidden="true">
+        {state} {ord.n}/{ord.total}・残り {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
+      </span>
+      <span className="pill-course-sub">
+        2時間コース{course.subject ? `（${course.subject}の誤答・△✕）` : ''}・終了予定 {hm}
+        {isBreak ? '・休憩が終わると続きから再生します' : ''}
+      </span>
+      <button type="button" className="btn ghost sm" onClick={onStop}>コースをやめる</button>
+    </div>
+  );
+}
+
