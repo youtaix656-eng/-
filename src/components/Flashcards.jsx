@@ -4,6 +4,7 @@ import { figureFor } from '../data/figures.jsx';
 import { CHOICE_QUIZ_SUBJECTS, subjectMatches } from '../data/examScope.js';
 import { loadFlashcardSrs, gradeFlashcard, weakCardIds, cardMastered, cardWrongCount } from '../lib/flashcardSrs.js';
 import { effectiveTags } from '../lib/query.js';
+import { speak, cancelSpeech, getVoices, isSpeechSupported } from '../lib/speech.js';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -52,7 +53,7 @@ export default function Flashcards({ store, onNavigate, focusKeyword, onConsumeK
 
   // カードを離れる・切り替える時は読み上げ中の音声を止める（前のカードの声が被らないように）
   useEffect(() => {
-    return () => { if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel(); };
+    return () => cancelSpeech();
   }, [idx, mode]);
 
   // 語呂合わせノートからの連携：指定キーワードに関連する問題の科目へ切り替える
@@ -114,23 +115,16 @@ export default function Flashcards({ store, onNavigate, focusKeyword, onConsumeK
   // AudioMode.jsxとは独立の最小実装（フラッシュカードは単発の読み上げで、
   // AudioMode.jsxのような連続再生・一時停止の状態管理までは必要としないため）。
   const speakText = (text) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !text) return;
+    if (!isSpeechSupported() || !text) return;
     const fixes = settings.pronunciationFixes || {};
     let t = text;
     for (const term of Object.keys(fixes)) {
       if (!term) continue;
       t = t.split(term).join(fixes[term]);
     }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(t);
-    u.lang = 'ja-JP';
-    u.rate = settings.speechRate || 1.0;
-    u.pitch = settings.speechPitch || 1.0;
-    if (settings.voiceURI) {
-      const voice = window.speechSynthesis.getVoices().find((v) => v.voiceURI === settings.voiceURI);
-      if (voice) u.voice = voice;
-    }
-    window.speechSynthesis.speak(u);
+    cancelSpeech();
+    const voice = settings.voiceURI ? getVoices().find((v) => v.voiceURI === settings.voiceURI) || null : null;
+    speak(t, { rate: settings.speechRate || 1.0, pitch: settings.speechPitch || 1.0, voice }).catch(() => {});
   };
 
   const speakCurrent = () => {

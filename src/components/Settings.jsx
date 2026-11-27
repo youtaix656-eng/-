@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { importFile, exportCsv, exportJson, dedupeAgainst } from '../lib/importer.js';
 import { canNativeSaveFile } from '../lib/nativeBridge.js';
 import { flushNow } from '../lib/storage.js';
-import { loadVoices, speak, cancelSpeech, isSpeechSupported } from '../lib/speech.js';
+import { loadVoices, speak, cancelSpeech, isSpeechSupported, nativeTts } from '../lib/speech.js';
 import {
   validateEmail,
   validatePassword,
@@ -787,7 +787,9 @@ export default function Settings({ store, onToast, onOpenOcr, importText, onCons
         )}
         {voicesLoaded && voices.length === 0 && (
           <p className="inline-note" style={{ marginBottom: 0 }}>
-            日本語の音声が見つかりませんでした。端末の設定で日本語の音声合成データを追加すると、より自然に読み上げられます。
+            {nativeTts()
+              ? 'アプリ版は端末の読み上げ（ユーザー補助 → テキスト読み上げ）の声で読みます。声はそちらで選んでください。'
+              : '日本語の音声が見つかりませんでした。端末の設定で日本語の音声合成データを追加すると、より自然に読み上げられます。'}
           </p>
         )}
       </div>

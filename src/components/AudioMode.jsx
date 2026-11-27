@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { isSpeechSupported, loadVoices, speak, cancelSpeech } from '../lib/speech.js';
+import { isSpeechSupported, loadVoices, speak, cancelSpeech, nativeTtsProblem } from '../lib/speech.js';
 import * as storage from '../lib/storage.js';
 import * as engine from '../lib/audioEngine.js';
 import { useAudioEngine } from '../lib/audioEngine.js';
@@ -3825,8 +3825,8 @@ export default function AudioMode({
         <h2 className="view-title">音声学習</h2>
         <div className="empty">
           <div className="ico">🔇</div>
-          <p>お使いのブラウザは音声合成（Web Speech API）に対応していません。</p>
-          <p className="inline-note">iOS / Android の Safari・Chrome など、最新のブラウザでお試しください。</p>
+          <p>この端末では読み上げを使えません。</p>
+          <p className="inline-note">アプリ版で出ている時は、最新のアプリに更新してください。ブラウザ版なら Chrome・Safari など最新のブラウザでお試しください。</p>
         </div>
       </div>
     );
@@ -3878,6 +3878,7 @@ export default function AudioMode({
   return (
     <div className="view">
       <h2 className="view-title">音声学習 × 連結学習</h2>
+      <NativeTtsWarning />
       <p className="view-desc">
         「問題 →（間）→ 正解と解説」を自動で読み上げます。連結の工夫で、ひとつの言葉を
         いろいろな角度から耳で覚えられます。
@@ -6393,6 +6394,23 @@ export default function AudioMode({
 
 // 赤い長丸の2時間コースの表示。残り時間はここだけが1秒ごとに描き直す（音声学習の画面全体を毎秒描き直さないため）。
 // 画面の読み上げ（スクリーンリーダー）には、毎秒変わる残り時間ではなく「勉強／休憩の切り替え」だけを知らせる。
+// アプリ版で、端末の読み上げに日本語の音声データが無い等で読めない時だけ理由を出す（ブラウザ版では何も出さない）。
+function NativeTtsWarning() {
+  const [problem, setProblem] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    nativeTtsProblem().then((p) => { if (alive) setProblem(p); });
+    return () => { alive = false; };
+  }, []);
+  if (!problem) return null;
+  return (
+    <div className="card" role="alert" style={{ borderColor: 'var(--wrong)' }}>
+      <strong>🔇 読み上げを使えません</strong>
+      <p className="inline-note" style={{ marginTop: 6 }}>{problem}</p>
+    </div>
+  );
+}
+
 function PillCourseStatus({ course, playing, onStop }) {
   const [, setTick] = useState(0);
   useEffect(() => {

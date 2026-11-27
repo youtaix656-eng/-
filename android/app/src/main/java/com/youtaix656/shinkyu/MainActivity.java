@@ -11,6 +11,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BackgroundAudioPlugin.class);
         // バックアップなどのファイル書き出し（WebView では <a download> が効かないため）
         registerPlugin(BackupFilePlugin.class);
+        // 読み上げ（WebView には speechSynthesis が無いため、Android 本体の TextToSpeech を使う）
+        registerPlugin(NativeTtsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

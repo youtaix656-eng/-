@@ -6357,6 +6357,23 @@ QR・クラウド自動同期・ファイル復元を読み直して動かし、
   検証：Playwright（幅320px・`page.clock`）で、一時停止中の表示・25分で休憩・休憩中は無音・30分で再開・コース中に箱を押しても科目名つきのまま続く・
   2時間で終わる・横にはみ出さない、を確認（エラー0件）。起動時JS 823KB/824KB（余裕1KB）。
 
+## アプリ版（Android）で音声学習が「音声合成に対応していません」と出ていた（2026-11-27追加）
+ユーザー報告（アプリ版の画面写真つき）。**Android の WebView には speechSynthesis（Web Speech API）が無い**ため、
+音声学習・フラッシュカード・ハリオ等の読み上げがアプリ版ではすべて使えなかった（下部バーは再生中に見えるのに無音）。
+- **`android/.../NativeTtsPlugin.kt`（新設、MainActivity で登録）**：Android 本体の TextToSpeech で読む。
+  `speak`（後ろに並べる＝QUEUE_ADD、読み終わったら resolve、止められたら `{canceled:true}`）・`stop`（並んでいる分も返す）・
+  `isAvailable`（日本語の音声データが無い等の理由）。Android 11 以上で読み上げエンジンを見つけるため
+  `AndroidManifest.xml` に `<queries>`（TTS_SERVICE）を足した。
+- **`src/lib/speech.js` が単一の正**：`nativeTts()`（`window.Capacitor.Plugins.NativeTts`、@capacitor/core は import しない）が
+  あればそちらで読む（`speakOneNative`）。`isSpeechSupported` はどちらかがあれば true。アプリ版では声の一覧は空
+  （端末の読み上げの声を使う。設定画面にそう書いた）。一時停止は無いので止める。
+- `window.speechSynthesis` を直に使っていた Flashcards.jsx・Pomodoro.jsx を speech.js 経由にした
+  （**読み上げは必ず speech.js を通す**。直に使うとアプリ版で鳴らない）。
+- 音声学習の画面の上に、アプリ版で日本語が読めない時だけ理由を出す（`NativeTtsWarning`）。
+- 起動時JSの予算を824→832KBへ（実測824KB）。
+- 検証：`npm test` 2757件・build・validate 通過。Playwright で `window.Capacitor` を差し替え、読み上げがネイティブ側へ渡る・
+  日本語が読めない時に理由が出る、を確認（エラー0件）。**実機（Kotlin のビルドと実際の声）は GitHub Actions のビルドが通るところまで。**
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。

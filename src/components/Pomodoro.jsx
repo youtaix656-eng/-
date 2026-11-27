@@ -4,7 +4,7 @@ import { createYoutubePlayer } from '../lib/pomoYoutube.js';
 import { setPomoRunning } from '../lib/runtimeFlags.js';
 import { bellRing, beep } from '../lib/sound.js';
 import * as audioEngine from '../lib/audioEngine.js';
-import { isSpeechSupported, speak } from '../lib/speech.js';
+import { isSpeechSupported, speak, cancelSpeech, resumeSpeech } from '../lib/speech.js';
 import { COURSE_PHASES, catchUpCourse, courseScheduledEnd, coursePhaseOrdinal, courseCountdownText, hhmmOf } from '../lib/pomoCourse.js';
 import { startTicker } from '../lib/pomoTicker.js';
 import { loadPomoRun, savePomoRun, clearPomoRun, restorePomoRun } from '../lib/pomoRunState.js';
@@ -252,7 +252,7 @@ export default function Pomodoro({ store, onToast }) {
         }
       }
       // 前の読み上げが列に残っていたら捨ててから数え始める
-      try { window.speechSynthesis?.cancel(); window.speechSynthesis?.resume?.(); } catch (e) { /* noop */ }
+      try { cancelSpeech(); resumeSpeech(); } catch (e) { /* noop */ }
     }
     const fallback = () => beep(1, first ? 1320 : 880, 70);
     if (!isSpeechSupported()) { fallback(); return; }

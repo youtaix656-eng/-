@@ -5,20 +5,50 @@
 
 import { synthesizeSpeech } from './voiceClone.js';
 
-export function isSpeechSupported() {
+// アプリ版（Android の WebView）には speechSynthesis が無い。その時は Android 本体の
+// 読み上げ（android/ の NativeTtsPlugin.kt）を使う。@capacitor/core は import しない
+// （nativeBridge.js と同じく、実行時の window.Capacitor だけを見る）。
+export function nativeTts() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const cap = window.Capacitor;
+    if (!cap || typeof cap.isNativePlatform !== 'function' || !cap.isNativePlatform()) return null;
+    return cap.Plugins?.NativeTts || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function hasWebSpeech() {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
 
-// 利用可能な音声一覧を取得（日本語を優先して返す）
+export function isSpeechSupported() {
+  return !!nativeTts() || hasWebSpeech();
+}
+
+// 端末の読み上げ（アプリ版）で日本語が読めない時の理由。読める・ブラウザ版なら null。
+export async function nativeTtsProblem() {
+  const p = nativeTts();
+  if (!p || typeof p.isAvailable !== 'function') return null;
+  try {
+    const r = await p.isAvailable({});
+    return r?.available ? null : r?.error || '端末の読み上げを使えません';
+  } catch (e) {
+    return e?.message || '端末の読み上げを使えません';
+  }
+}
+
+// 利用可能な音声一覧を取得（日本語を優先して返す）。アプリ版は端末の読み上げの声を使うので空。
 export function getVoices() {
-  if (!isSpeechSupported()) return [];
+  if (nativeTts() || !hasWebSpeech()) return [];
   return window.speechSynthesis.getVoices();
 }
 
 // 音声リストは非同期で読み込まれることがあるため、準備完了を待つ
 export function loadVoices() {
   return new Promise((resolve) => {
-    if (!isSpeechSupported()) return resolve([]);
+    if (nativeTts() || !hasWebSpeech()) return resolve([]);
     const existing = window.speechSynthesis.getVoices();
     if (existing.length > 0) return resolve(existing);
     const handler = () => {
@@ -72,8 +102,34 @@ export function splitForSpeech(text, max = SPEECH_CHUNK_MAX) {
   return out;
 }
 
+// アプリ版：Android 本体の読み上げで1つの文を読む。止められたら 'canceled' を返す。
+function speakOneNative(p, text, { rate, pitch, volume, signal }) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const finish = (fn, arg) => {
+      if (done) return;
+      done = true;
+      if (signal) signal.removeEventListener('abort', onAbort);
+      fn(arg);
+    };
+    const onAbort = () => {
+      try { p.stop({}); } catch (e) { /* noop */ }
+      finish(reject, new DOMException('aborted', 'AbortError'));
+    };
+    if (signal) {
+      if (signal.aborted) return onAbort();
+      signal.addEventListener('abort', onAbort);
+    }
+    Promise.resolve(p.speak({ text, rate, pitch, volume: Math.max(0, Math.min(1, volume)) }))
+      .then((r) => finish(resolve, r?.canceled ? 'canceled' : undefined))
+      .catch((e) => finish(reject, new Error(e?.message || '読み上げに失敗しました')));
+  });
+}
+
 // 1つの発話を読み上げる（内部用）。onend が来ないまま止まった時の見張りつき。
 function speakOne(text, { rate, pitch, volume, voice, signal }) {
+  const p = nativeTts();
+  if (p) return speakOneNative(p, text, { rate, pitch, volume, signal });
   return new Promise((resolve, reject) => {
     const synth = window.speechSynthesis;
     const u = new SpeechSynthesisUtterance(text);
@@ -147,13 +203,21 @@ export async function speak(text, { rate = 1, pitch = 1, volume = 1, voice = nul
 }
 
 export function cancelSpeech() {
-  if (isSpeechSupported()) window.speechSynthesis.cancel();
+  const p = nativeTts();
+  if (p) {
+    try { p.stop({}); } catch (e) { /* noop */ }
+    return;
+  }
+  if (hasWebSpeech()) window.speechSynthesis.cancel();
 }
+// アプリ版の端末の読み上げには一時停止が無いので、止める（続きは呼び出し側が読み直す）
 export function pauseSpeech() {
-  if (isSpeechSupported()) window.speechSynthesis.pause();
+  if (nativeTts()) return cancelSpeech();
+  if (hasWebSpeech()) window.speechSynthesis.pause();
 }
 export function resumeSpeech() {
-  if (isSpeechSupported()) window.speechSynthesis.resume();
+  if (nativeTts()) return;
+  if (hasWebSpeech()) window.speechSynthesis.resume();
 }
 
 // ---- ボイスクローン（BYOK・ElevenLabs）による読み上げ ----
