@@ -10,7 +10,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { speak, cancelSpeech, wait, speakCloned, cancelClonedSpeech, nativeTts } from './speech.js';
-import { nativeAudioStart, nativeAudioUpdate, nativeAudioStop, onNativeAudioControl, isNativeApp } from './nativeBridge.js';
+import { nativeAudioStart, nativeAudioUpdate, nativeAudioStop, onNativeAudioControl, isNativeApp, nativeKeepAwake } from './nativeBridge.js';
 import { setAudioPlaying } from './runtimeFlags.js';
 import { beep } from './sound.js';
 
@@ -490,6 +490,7 @@ function clearSleep() {
 
 async function requestWakeLock() {
   if (!settings.wakeLockEnabled) return; // バッテリーを気にする人向けにオフにできる（設定）
+  if (nativeKeepAwake(true)) return; // アプリ版は端末の画面の設定で保つ
   try {
     if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && !wakeLock) {
       wakeLock = await navigator.wakeLock.request('screen');
@@ -502,6 +503,7 @@ async function requestWakeLock() {
   }
 }
 function releaseWakeLock() {
+  nativeKeepAwake(false);
   try {
     wakeLock?.release();
   } catch (e) {

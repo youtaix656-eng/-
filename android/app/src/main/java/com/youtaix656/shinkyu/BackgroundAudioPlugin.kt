@@ -152,6 +152,23 @@ class BackgroundAudioPlugin : Plugin() {
         }
     }
 
+    // 再生中は画面を消さない（WebView の navigator.wakeLock の代わり。止めたら必ず外す）
+    @PluginMethod
+    fun keepAwake(call: PluginCall) {
+        val on = call.getBoolean("on") ?: false
+        val act = activity
+        if (act == null) { call.resolve(); return }
+        act.runOnUiThread {
+            try {
+                if (on) act.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else act.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } catch (e: Exception) {
+                // noop
+            }
+        }
+        call.resolve()
+    }
+
     // 電池の最適化の対象外になっているか（対象のままだと、画面を消している間に止められやすい）
     @PluginMethod
     fun batteryStatus(call: PluginCall) {

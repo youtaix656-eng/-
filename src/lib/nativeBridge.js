@@ -65,6 +65,19 @@ export function nativeAudioStop() {
   }
 }
 
+// 画面を消さないようにする（アプリ版）。WebView の navigator.wakeLock は使えない端末があるので、
+// 端末の画面の設定（FLAG_KEEP_SCREEN_ON）で代える。戻り値：アプリ版で渡せたら true。
+export function nativeKeepAwake(on) {
+  const p = plugin();
+  if (!p || typeof p.keepAwake !== 'function') return false;
+  try {
+    Promise.resolve(p.keepAwake({ on: !!on })).catch(() => {});
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 // 束を聞き終えた等を、ふつうの通知で1回知らせる（アプリ版だけ。WebView には Notification API が無い）。
 export function nativeNotifyDone({ title, body } = {}) {
   const p = plugin();

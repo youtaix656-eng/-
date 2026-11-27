@@ -6460,6 +6460,15 @@ QR・クラウド自動同期・ファイル復元を読み直して動かし、
   数値まとめ読みを28/167まで聞いて開き直すと28/167・モードも選ばれたまま、localStorage を消してから開いても端末の控えから戻りダイアログの
   はいで28/167から再生、を確認（エラー0件）。
 
+## アプリ版（WebView）の音声学習・第4回で直した2件（2026-11-27追加）
+同じ依頼「Android版の WebView で音声学習×連結学習ができるようにしたい。改善最大30こ」の4回目。前の3回（14件・5件・6件）と
+続きの保存（5件）は除き、実際に見つけた2件だけを直した（水増ししない）。**どちらも実機では未確認**（ビルドが通るところまで）。
+1. **振動が鳴っていなかった**——WebView の `navigator.vibrate` は `android.permission.VIBRATE` が無いと何もしない。
+   `AndroidManifest.xml` に足した（音声学習の振動ティック・ポモドーロの振動）。
+2. **「画面を消さない」設定がアプリ版で効かないことがあった**（WebView では `navigator.wakeLock` が使えない端末がある）。
+   アプリ版は `BackgroundAudio.keepAwake`（`FLAG_KEEP_SCREEN_ON`）で代える（`nativeBridge.js` の `nativeKeepAwake`、
+   `audioEngine.js` の `requestWakeLock`／`releaseWakeLock`）。止めた・聞き終えた時は必ず外す。設定でオフにしていれば何もしない。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
