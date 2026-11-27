@@ -4115,3 +4115,9 @@ code.block {
 .rec-opt-desc { display: block; font-size: 12px; opacity: 0.8; }
 .rec-opt-select { display: block; margin: 4px 0 8px 26px; font-size: 13px; }
 .rec-eye { margin-top: 10px; }
+.rec-later-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.rec-later-list li { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.rec-later-no { font-weight: bold; min-width: 3.5em; }
+.rec-later-text { flex: 1 1 10em; font-size: 13px; }
+.rec-later-btns { display: flex; gap: 4px; }
+.rec-later-btns .sg-btn { min-width: 40px; padding: 6px 8px; }

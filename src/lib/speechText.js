@@ -369,3 +369,23 @@ export function homophoneDrillItems(info) {
   }
   return items;
 }
+
+// 同じ読みの用語（正気・精気・清気など）の聞き分け：1つの文につき、各語の最初の1回だけ
+// 「正気、体の生命力や抵抗力のほう、」と意味を添える。長い語から当てる（短い語が長い語の一部に重ならないように）。
+export function annotateGlossHomophones(text, notes) {
+  let t = String(text || '');
+  if (!notes) return t;
+  const terms = Object.keys(notes).sort((a, b) => b.length - a.length);
+  const used = [];
+  for (const term of terms) {
+    const at = t.indexOf(term);
+    if (at < 0) continue;
+    // すでに添えた長い語の中にある時は添えない
+    if (used.some(([s, e]) => at >= s && at < e)) continue;
+    const add = `、${notes[term]}のほう、`;
+    t = t.slice(0, at + term.length) + add + t.slice(at + term.length);
+    used.forEach((u) => { if (u[0] > at) { u[0] += add.length; u[1] += add.length; } });
+    used.push([at, at + term.length + add.length]);
+  }
+  return t;
+}

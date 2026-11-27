@@ -1,4 +1,6 @@
-import { toyoSpeechReadings } from './toyoGlossaryTerms.js';
+import { toyoSpeechReadings, toyoHomophoneNotes } from './toyoGlossaryTerms.js';
+
+export const TOYO_HOMOPHONE_NOTES = toyoHomophoneNotes();
 
 // 読み上げで誤読されやすい医学・東洋医学の言葉と、その読み（音声の対策案3）。
 // 画面の文字は変えず、声に出す直前にだけ置き換える（src/lib/speechText.js）。

@@ -57,8 +57,42 @@ test('自信の度合い：たぶん・勘は当たっても○にしない', ()
 
 test('今日の記録は日付が変わると作り直す・名前は日付_テーマ_回数', () => {
   const d = rs.ensureDay({ date: '2026-11-26', newIds: ['a'], newListens: 2 }, '2026-11-27');
-  assert.deepEqual(d, { date: '2026-11-27', newIds: [], newListens: 0, reviewOnly: false });
+  assert.deepEqual(d, { date: '2026-11-27', newIds: [], newTheme: '', newListens: 0, reviewOnly: false, listenSec: 0 });
   assert.equal(rs.trackName('2026-11-27', '新しい問題', 2), '2026-11-27_新しい問題_2回目');
   assert.equal(rs.slotForHour(5).slot, 'weak');
   assert.equal(rs.slotForHour(22).slot, 'new');
+});
+
+test('同じ読みの用語に意味を添える・意味が同じ組は添えない', async () => {
+  const { TOYO_HOMOPHONE_NOTES } = await import('../src/data/speechReadings.js');
+  const { annotateGlossHomophones } = await import('../src/lib/speechText.js');
+  assert.ok(TOYO_HOMOPHONE_NOTES['正気'] && TOYO_HOMOPHONE_NOTES['清気']);
+  assert.equal(TOYO_HOMOPHONE_NOTES['矢気'], undefined);
+  const t = annotateGlossHomophones('正気が虚すと正気が弱る。', TOYO_HOMOPHONE_NOTES);
+  assert.equal(t.split('のほう').length - 1, 1);
+});
+
+test('新しい問題は1つのテーマから・全部の再登場・別の形式・数字の読み・起きてからの時間', () => {
+  const qs = [
+    { id: 'a1', subject: 'S', genre: 'G1｜x' }, { id: 'a2', subject: 'S', genre: 'G2｜y' }, { id: 'a3', subject: 'S', genre: 'G1｜x' },
+  ];
+  const t = rs.pickNewTrack(qs, new Set(), ['S']);
+  assert.deepEqual(t.ids, ['a1', 'a3']);
+  assert.equal(t.theme, 'S・x');
+  const items = Array.from({ length: 5 }, (_, i) => ({ kind: 'question', q: { id: `q${i}` } }));
+  const ra = rs.reappearAll(items, 3);
+  assert.equal(ra.length, 10);
+  assert.equal(ra[4].q.id, 'q0'); assert.ok(ra[4].reappear);
+  const sib = { id: 'x1b', type: 'ox' };
+  const mixed = rs.mixFormats([{ kind: 'question', q: { id: 'x1', type: 'choice' } }], () => false, () => sib);
+  assert.equal(mixed[1].q.id, 'x1b'); assert.ok(mixed[1].mixed);
+  assert.equal(rs.baseIdOf('tk-a-1b'), 'tk-a-1');
+  assert.equal(rs.baseIdOf('kk-keiraku-a1'), 'kk-keiraku-a1');
+  assert.equal(rs.firstNumberReading('21日', (n) => `k${n}`), 'k21');
+  assert.equal(rs.firstNumberReading('なし', (n) => `k${n}`), '');
+  const now = new Date(2026, 10, 27, 3, 0).getTime();
+  assert.ok(Math.abs(rs.hoursSinceWake('22:00', now) - 5) < 0.01);
+  assert.equal(rs.slotForElapsed(0.5).slot, 'weak');
+  assert.equal(rs.slotForHour(20).slot, 'known');
+  assert.deepEqual(rs.knownIds({ a: { stage: 3 }, b: { stage: 1 } }), ['a']);
 });

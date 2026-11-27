@@ -67,6 +67,8 @@ export function normalizeEntry(e) {
   entry.key = historyKeyOf(entry);
   if (e.pinned) {
     entry.pinned = true;
+    // 保存したものの名前「日付_テーマ_回数」（録音学習の型のファイル名の決まり）
+    if (e.pinName) entry.pinName = str(e.pinName).slice(0, 60);
     entry.pinId = String(e.pinId || entry.at || Date.now());
     entry.key = `pin|${entry.pinId}`;
   }
@@ -106,6 +108,7 @@ export function removeFromHistory(list, key) {
 
 // 履歴の1行の見出し（「病理学概論」「すべての問題」など）
 export function historyTitle(e) {
+  if (e?.pinName) return e.pinName;
   if (e?.kind === 'review') return e.title || '誤答・△✕';
   const parts = [e?.subject, e?.genre, e?.keyword, e?.round ? `${String(e.round).replace(/^第|回$/g, '')}回` : ''].filter(Boolean);
   return parts.length ? parts.join('・') : 'すべての問題';
@@ -182,9 +185,14 @@ export function saveCurrentAsPinned(now = Date.now()) {
   let ctx = null;
   try { ctx = currentContextProvider ? currentContextProvider() : null; } catch { ctx = null; }
   if (!ctx) return null;
-  const entry = normalizeEntry({ ...ctx, pinned: true, pinId: String(now), at: now });
+  const list = loadAudioHistory();
+  const theme = historyTitle(normalizeEntry({ ...ctx, pinName: '' }) || ctx).replace(/\s+/g, '・').replace(/_/g, '・');
+  const d = new Date(now);
+  const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const n = list.filter((x) => x && x.pinned && typeof x.pinName === 'string' && x.pinName.split('_')[1] === theme).length + 1;
+  const entry = normalizeEntry({ ...ctx, pinned: true, pinId: String(now), at: now, pinName: `${ymd}_${theme}_${n}回目` });
   if (!entry) return null;
-  saveAudioHistory(upsertHistory(loadAudioHistory(), entry));
+  saveAudioHistory(upsertHistory(list, entry));
   return entry;
 }
 export function subscribeAudioHistory(fn) { listeners.add(fn); return () => listeners.delete(fn); }

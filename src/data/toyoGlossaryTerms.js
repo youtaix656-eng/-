@@ -227,3 +227,26 @@ export function toyoSpeechReadings(rows = TOYO_GLOSSARY_ROWS) {
   }
   return out;
 }
+
+// 同じ読みになる言葉（2文字以上）の、聞き分けのための短い意味（「せいき」＝正気・精気・清気など）。
+// 声に出す時だけ、最初に出てきた所のあとへ「〜のほう」と添える（speechText.js の annotateGlossHomophones）。
+// 1文字の言葉（恐・驚など）は文章中のどこにでも当たってしまうので対象にしない。
+export function toyoHomophoneNotes(rows = TOYO_GLOSSARY_ROWS) {
+  const byReading = new Map();
+  for (const [title, reading, meaning] of rows) {
+    if (title.length < 2 || !reading) continue;
+    if (!byReading.has(reading)) byReading.set(reading, []);
+    byReading.get(reading).push([title, meaning]);
+  }
+  const out = {};
+  for (const list of byReading.values()) {
+    if (list.length < 2) continue;
+    // 意味が同じ言葉どうし（矢気・失気＝どちらも「おなら」）は聞き分ける必要が無いので添えない
+    if (new Set(list.map(([, m]) => String(m || '').split(/[。（]/)[0].trim())).size < 2) continue;
+    for (const [title, meaning] of list) {
+      const short = String(meaning || '').split(/[。（]/)[0].trim();
+      if (short) out[title] = short.length > 24 ? `${short.slice(0, 24)}…` : short;
+    }
+  }
+  return out;
+}

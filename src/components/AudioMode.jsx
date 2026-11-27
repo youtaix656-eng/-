@@ -8,7 +8,7 @@ import { effectiveTags, shuffle } from '../lib/query.js';
 import { dateKey } from '../lib/connect.js';
 import { SUBJECT_TAG_NAMES } from '../data/examScope.js';
 import { useMindmapData } from '../lib/mindmapDataLoader.js';
-import { buildKanaIndex, foldKana, TERM_READINGS } from '../lib/yomi.js';
+import { buildKanaIndex, foldKana, TERM_READINGS, numberToKana } from '../lib/yomi.js';
 import { useSpeechText } from '../lib/speechTextLoader.js';
 
 const SpeechStyleCard = lazy(() => import('./SpeechStyleCard.jsx'));
@@ -66,7 +66,7 @@ import { recordRephrase } from '../lib/rephraseLog.js';
 import { setBreakResumePending, clearBreakResumePending, loadBreakResumePending } from '../lib/audioBreakResumeFlag.js';
 import { BODY_LOCATION_SETS } from '../data/bodyLocationMethod.js';
 import { useKeiketsuCards } from '../lib/keiketsuCardsLoader.js';
-import { resolveDailySubjectIndex, dailyWrongPickWithFallback } from '../lib/audioDailySubject.js';
+import { resolveDailySubjectIndex, dailyWrongPickWithFallback, subjectAt } from '../lib/audioDailySubject.js';
 import { CONFUSING_PAIRS } from '../lib/confusingPairsChecklist.js';
 import { findIfThenScenario } from '../lib/ifThenScenarios.js';
 import { readingOrderHintFor } from '../lib/subjectReadingTemplates.js';
@@ -1006,7 +1006,7 @@ export default function AudioMode({
   const [pfReading, setPfReading] = useState('');
   // 読み上げ方の工夫（2026-11-23）。誤読の対策（readFix）と図の説明は既定オン、聞きやすさの工夫は既定オフ。
   // 録音学習の型（2026-11-27）。既定オンは読み方の小さな工夫と記録だけ。流れを大きく変えるもの（2周・再登場など）は既定オフ
-  const rec = { themeIntro: true, oxCorrect: true, number3: true, beepCloze: true, compareIppou: true, box: true, weak: true, ...(settings.audioRec || {}) };
+  const rec = { themeIntro: true, qBeep: true, oxCorrect: true, number3: true, beepCloze: true, compareIppou: true, box: true, weak: true, ...(settings.audioRec || {}) };
   const updateRec = (patch) => updateSettings({ audioRec: { ...(settings.audioRec || {}), ...patch } });
   const [recBox, setRecBox] = useState(() => rs.loadBox());
   const [recWeak, setRecWeak] = useState(() => rs.loadWeak());
@@ -1014,6 +1014,7 @@ export default function AudioMode({
   // 今の束が「今日の再生リスト」のどの枠か（customReviewIds と同じ配列の時だけ有効）
   const [trackMeta, setTrackMeta] = useState(null);
   const [answerConf, setAnswerConf] = useState('sure');
+  const [, setLaterTick] = useState(0); // あとでまとめて印を付けた時に一覧を描き直す
   const [confStats, setConfStats] = useState({ unsure: 0, unsureHit: 0 });
   const speechStyle = { readFix: true, figureDesc: true, homophoneMeridian: true, homophoneKanji: true, ...(settings.audioSpeech || {}) };
   const setSpeechStyle = (patch) => updateSettings({ audioSpeech: { ...(settings.audioSpeech || {}), ...patch } });
@@ -1379,6 +1380,15 @@ export default function AudioMode({
   // 録音学習の型：束の頭でテーマと問題数を言う・同じ論点を穴埋めでもう一度・耳用の四択（2割まで）・
   // 箱の段ごとの速さと間・1回の中で2周。並べ方を決める条件なので、ここを通したものを「束」とする。
   const trackActive = trackMeta && customReviewIds && trackMeta.ids === customReviewIds ? trackMeta : null;
+  // 同じ過去問から作った別の形式の問題（id の末尾の英字だけ違うもの）。種類（○×／四択）が違うものを優先
+  const siblingOf = useMemo(() => {
+    const byBase = new Map();
+    questions.forEach((q) => { const b = rs.baseIdOf(q.id); if (!byBase.has(b)) byBase.set(b, []); byBase.get(b).push(q); });
+    return (q) => {
+      const list = (byBase.get(rs.baseIdOf(q.id)) || []).filter((x) => x.id !== q.id);
+      return list.find((x) => x.type !== q.type) || list[0] || null;
+    };
+  }, [questions]);
   const canCloze = (q) => q.type !== 'ox' && Array.isArray(q.choices) && !!q.choices[q.answer] && (q.explanation || '').includes(q.choices[q.answer]);
   const themeTitle = trackActive?.title
     || [filterSubject, filterGenre ? filterGenre.split('｜').pop() : '', filterKeyword].filter(Boolean).join('・')
@@ -1387,14 +1397,15 @@ export default function AudioMode({
     let items = planBase;
     if (!items.length) return items;
     const qn = rs.questionCount(items);
-    if (rec.mixFormats) items = rs.mixFormats(items, canCloze);
+    if (rec.mixFormats) items = rs.mixFormats(items, canCloze, siblingOf);
+    if (rec.reappearAll) items = rs.reappearAll(items, 3);
     if (rec.earChoices) items = rs.flagEarChoices(items, isFourChoice);
     if (trackActive?.kind === 'box') items = items.map((it) => (it.q ? { ...it, boxStage: rs.boxStageOf(recBox, it.q.id) } : it));
     if (rec.twoPass) items = rs.twoPass(items);
-    if (rec.themeIntro && qn > 0) items = [{ kind: 'intro', text: `${themeTitle}。${qn}問です。` }, ...items];
+    if (rec.themeIntro && qn > 0) items = [{ kind: 'intro', text: `${themeTitle}。${qn}問です。答えが聞こえる前に、頭の中で答えてみましょう。` }, ...items];
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planBase, rec.mixFormats, rec.earChoices, rec.twoPass, rec.themeIntro, trackActive, themeTitle]);
+  }, [planBase, rec.mixFormats, rec.reappearAll, rec.earChoices, rec.twoPass, rec.themeIntro, trackActive, themeTitle, siblingOf]);
 
   const [rate, setRate] = useState(settings.speechRate);
   const rateRef = useRef(rate);
@@ -1449,6 +1460,8 @@ export default function AudioMode({
         meridian: !!speechStyle.homophoneMeridian, kanji: !!speechStyle.homophoneKanji, location: !!speechStyle.homophoneLocation,
       });
     }
+    // 経穴以外の同じ読みの用語（正気・精気・清気など）にも、聞き分けの意味を添える
+    if (rec.glossHomophone !== false && st.annotateGlossHomophones) t = st.annotateGlossHomophones(t, st.TOYO_HOMOPHONE_NOTES);
     if (speechStyle.bodyWords) t = st.addBodyWords(t);
     // 誤読の対策がオフの時は、今までどおり本人の手動補正だけをかける
     t = speechStyle.readFix ? st.toSpeechText(t, readingDict) : st.applyReadingDict(t, st.buildReadingDict({ userFixes: settings.pronunciationFixes || {} }));
@@ -1517,9 +1530,11 @@ export default function AudioMode({
       steps.push({ phase: G, waitGap: 'cap2' });
       if (rec.number3) {
         // 数値は3回：数字→繰り返し→説明のあとにもう一度
+        // 数値は3回：数字→読み方→（説明）→もう一度
+        const yomiN = rs.firstNumberReading(n.value, numberToKana);
         steps.push({ phase: A, say: `${n.value}。` });
         steps.push({ wait: 300 });
-        steps.push({ phase: A, say: `繰り返します。${n.value}。${n.note || ''}` });
+        steps.push({ phase: A, say: yomiN ? `読み方は、${yomiN}。${n.note || ''}` : `繰り返します。${n.value}。${n.note || ''}` });
         steps.push({ phase: A, say: `もう一度、${n.value}。` });
       } else {
         steps.push({ phase: A, say: `${n.value}。${n.note || ''}` });
@@ -1591,6 +1606,8 @@ export default function AudioMode({
     const q = item.q;
     // 表（問題）
     const front = [];
+    if (item.reappear) { front.push({ phase: K, say: 'もう一度出ます。' }); front.push({ wait: 300 }); }
+    if (item.mixed) { front.push({ phase: K, say: '同じ所を別の形で。' }); front.push({ wait: 300 }); }
     if (item.intro) {
       front.push({ phase: K, say: item.intro });
       // #4：ストーリー法向けに、キーワード（場面）が変わる所の間を長めに取る（既定オフ）。
@@ -1624,10 +1641,15 @@ export default function AudioMode({
     const slowNew = newSlowdownOn && !answeredIds.has(q.id) ? Math.min(1, rate) : undefined;
     back.push({ phase: A, say: scFront ? answerTextFor(q, scFront.choices, scFront.answerIdx) : answerText(q), rate: slowNew });
     // 一問一答は答えを2回（数字が入る答えは3回）。記憶定着モードは自分で「もう一度」を読むので重ねない
-    if (rec.answerTwice && !(recallMode || pureRecallOn) && q.type !== 'ox' && shortAnswer(q)) {
-      const sa = shortAnswer(q);
-      back.push({ phase: A, say: `もう一度。${sa}。`, rate: slowNew });
-      if (rec.number3 && /[0-9０-９]/.test(sa)) back.push({ phase: A, say: `最後にもう一度、${sa}。`, rate: slowNew });
+    {
+      const sa = q.type !== 'ox' ? shortAnswer(q) : '';
+      const hasNum = !!sa && /[0-9０-９]/.test(sa);
+      if (sa && !(recallMode || pureRecallOn) && (rec.answerTwice || (rec.number3 && hasNum))) {
+        // 一問一答は答えを2回。数字が入る答えは「数字→読み方→もう一度」の3回（答えを2回がオフでも数字は3回）
+        const yomiA = hasNum && rec.number3 ? rs.firstNumberReading(sa, numberToKana) : '';
+        back.push({ phase: A, say: yomiA ? `数字の読み方は、${yomiA}。` : `もう一度。${sa}。`, rate: slowNew });
+        if (rec.number3 && hasNum) back.push({ phase: A, say: `もう一度、${sa}。`, rate: slowNew });
+      }
     }
     {
       const tags = effectiveTags(q, links);
@@ -1658,6 +1680,7 @@ export default function AudioMode({
     // #14：正解時にも理解を確認する一言を加える（既定オフ。誤答時の自己説明ステップとは別に、
     // 正解・誤答に関わらず毎回添える）。
     if (whyOnAnswerOn) back.push({ phase: N, say: 'なぜこの答えか、自分の言葉でもう一度言ってみましょう。' });
+    if (rec.workLink) back.push({ phase: N, say: 'この内容を、施術や仕事のどの場面で使うか、思い浮かべてみましょう。' });
     // #15：「もし〜なら」の逆シナリオ（既定オフ。curTagsと同じeffectiveTagsから検索）。
     if (ifThenOn) {
       const scenario = findIfThenScenario(effectiveTags(q, links));
@@ -1736,7 +1759,10 @@ export default function AudioMode({
       return x;
     });
   };
-  const buildSteps = (item, prev = null) => withPace(buildStepsRaw(item, prev), item).flatMap((s) => {
+  // 問題の前の効果音（録音学習の型：効果音→問題→無音→答え）。問題を読む種類の項目だけ
+  const withQBeep = (steps, item) => (rec.qBeep && item && item.q && ['question', 'choices', 'cloze'].includes(item.kind) && !skipQuestionText
+    ? [{ phase: PHASES.QUESTION, tone: 880 }, ...steps] : steps);
+  const buildSteps = (item, prev = null) => withPace(withQBeep(buildStepsRaw(item, prev), item), item).flatMap((s) => {
     // 対策案16・17：長い解答・解説は文ごとに区切り、間を入れる
     if (st && speechStyle.sentencePause && s.say && (s.phase === PHASES.ANSWER || s.phase === PHASES.NOTE)) {
       const parts = st.splitSentences(s.say);
@@ -2029,7 +2055,10 @@ export default function AudioMode({
       const subjects = [...new Set(builtPlan.map((it) => it.display?.q?.subject).filter(Boolean))];
       const subjLabel = subjects.length === 0 ? '' : subjects.length <= 2 ? subjects.join('・') : `${subjects.length}科目`;
       const kind = audioSessionKindRef.current || '';
-      const title = `${REVIEW_TITLE_PREFIX[kind] || '誤答・△✕'}${subjLabel ? ` ${subjLabel}` : ''}`;
+      // 今日の再生リストのトラックなら、トラックの題（箱の復習・苦手・新しい問題のテーマなど）を使う
+      const title = trackActive?.title
+        ? `${trackActive.title}${subjLabel && !trackActive.title.includes(subjLabel) ? ` ${subjLabel}` : ''}`
+        : `${REVIEW_TITLE_PREFIX[kind] || '誤答・△✕'}${subjLabel ? ` ${subjLabel}` : ''}`;
       const key = historyKeyOf({ kind: 'review', title });
       // 同じ題の束が組み直されただけ（自己採点で復習対象から外れた等）なら、聞いた印を引き継ぐ
       // （閉じて開き直した直後に同じボタンから始め直した時も、12時間以内の同じ題の記録なら引き継ぐ）
@@ -3251,22 +3280,27 @@ export default function AudioMode({
   const recSlots = useMemo(() => {
     const now = Date.now();
     const exists = (id) => questionsById.has(id);
-    const newIds = (dayNow.newIds.length ? dayNow.newIds : rs.pickNewIds(questions, answeredIds, filterSubject)).filter(exists);
+    // 新しい問題は1つのテーマ（ジャンル）から10問。科目を選んでいればその科目、無ければ今日の科目から
+    const picked = dayNow.newIds.length
+      ? { ids: dayNow.newIds, theme: dayNow.newTheme || '新しい問題' }
+      : rs.pickNewTrack(questions, answeredIds, [filterSubject, subjectAt(dailySubjectState.index)]);
+    const newIds = picked.ids.filter(exists);
     const boxDue = rs.boxDueIds(recBox, now).filter(exists);
     const reviewIds = [...new Set([...boxDue, ...reviewPool.map((q) => q.id)])].slice(0, rs.TRACK_SIZE);
     const weak = rs.weakIds(recWeak).filter(exists).slice(0, rs.TRACK_SIZE);
-    return { newIds, reviewIds, boxDue, weak };
+    const known = rs.knownIds(recBox).filter(exists).slice(0, rs.TRACK_SIZE);
+    return { newIds, newTheme: picked.theme, reviewIds, boxDue, weak, known };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayNow.newIds, questions, answeredIds, filterSubject, recBox, recWeak, reviewPool, questionsById]);
+  }, [dayNow.newIds, dayNow.newTheme, questions, answeredIds, filterSubject, recBox, recWeak, reviewPool, questionsById, dailySubjectState.index]);
   const startRecTrack = (slot) => {
-    const ids = slot === 'new' ? recSlots.newIds : slot === 'review' ? recSlots.reviewIds : slot === 'box' ? recSlots.boxDue.slice(0, rs.TRACK_SIZE) : recSlots.weak;
+    const ids = { new: recSlots.newIds, review: recSlots.reviewIds, box: recSlots.boxDue.slice(0, rs.TRACK_SIZE), weak: recSlots.weak, known: recSlots.known }[slot] || [];
     if (!ids.length) { onToast?.('この枠に入る問題がまだありません'); return; }
     // 新しい問題は、その日のうちは同じ10問を3回聞く（日付が変わったら選び直す）
     if (slot === 'new' && !dayNow.newIds.length) {
-      const nd = { ...dayNow, newIds: ids };
+      const nd = { ...dayNow, newIds: ids, newTheme: recSlots.newTheme };
       setRecDay(nd); rs.saveDay(nd);
     }
-    const theme = { new: '新しい問題', review: '復習', box: '箱の復習', weak: '苦手' }[slot];
+    const theme = { new: recSlots.newTheme || '新しい問題', review: '復習', box: '箱の復習', weak: '苦手', known: '何度も聞いた問題' }[slot];
     const n = slot === 'new' ? Math.min(rs.NEW_LISTENS_PER_DAY, dayNow.newListens + 1) : 1;
     rebuildStop();
     setMode(0);
@@ -3275,7 +3309,8 @@ export default function AudioMode({
     setReviewTarget(null);
     setReviewOffsetPersist(0);
     setSource('review');
-    const arr = [...ids];
+    // 聞くたびに並びを変える（同じ10問を1日3回聞くので、順番で答えを覚えてしまわないように）
+    const arr = shuffle([...ids]);
     setCustomReviewIds(arr);
     setTrackMeta({ ids: arr, kind: slot, title: theme, name: rs.trackName(todayKey, theme, n) });
     setSessionGradedCount(0); setSessionWrong([]); setSessionWrongKinds({}); setSessionLatencies([]);
@@ -3301,6 +3336,14 @@ export default function AudioMode({
     if (!just || trackActive?.kind !== 'new') return;
     setRecDay((d) => { const base = rs.ensureDay(d, dateKey()); const nd = { ...base, newListens: base.newListens + 1 }; rs.saveDay(nd); return nd; });
   }, [snap.finished, trackActive]);
+  // 今日聞いた時間（再生している間だけ数える。1日の合計40〜50分の目安と比べる）
+  useEffect(() => {
+    if (!playing) return undefined;
+    const t = setInterval(() => {
+      setRecDay((d) => { const base = rs.ensureDay(d, dateKey()); const nd = { ...base, listenSec: (base.listenSec || 0) + 15 }; rs.saveDay(nd); return nd; });
+    }, 15000);
+    return () => clearInterval(t);
+  }, [playing]);
   // 目で解く日：最後に模試を受けた日・「目で解く」を押した日から何日たったか
   const lastEyeAt = Math.max(rec.lastEyeAt || 0, ...((examResults || []).map((r) => r.at || r.date || 0).map((x) => (typeof x === 'number' ? x : Date.parse(x) || 0))), 0);
   const lastFullExamAt = Math.max(0, ...((examResults || []).filter((r) => ['am', 'pm', 'full'].includes(r.mode)).map((r) => (typeof (r.at || r.date) === 'number' ? (r.at || r.date) : Date.parse(r.at || r.date) || 0))));
@@ -3426,7 +3469,7 @@ export default function AudioMode({
   const [detailSettingsOpen, setDetailSettingsOpen] = useState(false);
   // #10 聞きながら自己採点／キーワード追加（○＝できた, △・✕＝復習へ）
   const gradeCurrent = (kind, opts = {}) => {
-    let q = current;
+    let q = opts.q || current;
     if (!q) return;
     // 解説を読み終えて次の問題の問題文が流れ始めた直後（GRADE_PREV_WINDOW_MS以内）に押した時は、
     // 答えを聞き終えた前の問題に付ける。以前はその時に読んでいる次の問題に付けていたため、
@@ -3764,6 +3807,7 @@ export default function AudioMode({
           lastEyeAt={lastEyeAt}
           lastFullExamAt={lastFullExamAt}
           secPerItem={estimateAudioSeconds(1, { rate, gapSeconds: gap, nextGapSeconds: nextGap, pace: audioPace })}
+          measured={!!(audioPace && audioPace.n >= 5)}
           onEye={(target) => { updateRec({ lastEyeAt: Date.now() }); onNavigate && onNavigate(target); }}
         />
       </Suspense>
@@ -3840,6 +3884,33 @@ export default function AudioMode({
               )}
               <button className="btn sm" onClick={replayFromStart}>▶ 最初からもう一度聞く</button>
             </div>
+            {/* 聞いている最中は番号だけ覚えておき、あとでまとめて○△✕を付ける（録音学習の型） */}
+            {(() => {
+              const rows = engine.getPlanDisplays().filter((d) => d && d.q && !d.reappear && !d.mixed && d.pass !== 2)
+                .map((d, i) => ({ q: d.q, no: i + 1 })).filter((r) => !gradedIdsRef.current.has(r.q.id));
+              const seen = new Set();
+              const uniq = rows.filter((r) => (seen.has(r.q.id) ? false : (seen.add(r.q.id), true)));
+              if (!uniq.length) return null;
+              return (
+                <details className="rec-later" style={{ marginTop: 10, textAlign: 'left' }}>
+                  <summary>📝 まだ印を付けていない{uniq.length}問に、まとめて○△✕を付ける</summary>
+                  <p className="inline-note">聞いている間は番号だけ覚えておき、ここでまとめて付けられます。「たぶん」「勘」は△・✕にしましょう。</p>
+                  <ol className="rec-later-list">
+                    {uniq.slice(0, 40).map((r) => (
+                      <li key={r.q.id}>
+                        <span className="rec-later-no">{r.no}問目</span>
+                        <span className="rec-later-text">{(r.q.question || '（図の問題）').slice(0, 34)}</span>
+                        <span className="rec-later-btns">
+                          <button type="button" className="sg-btn ok" aria-label={`${r.no}問目を○`} onClick={() => { gradeCurrent('maru', { q: r.q, forceCurrent: true }); setLaterTick((n) => n + 1); }}>○</button>
+                          <button type="button" className="sg-btn mid" aria-label={`${r.no}問目を△`} onClick={() => { gradeCurrent('sankaku', { q: r.q, forceCurrent: true }); setLaterTick((n) => n + 1); }}>△</button>
+                          <button type="button" className="sg-btn ng" aria-label={`${r.no}問目を✕`} onClick={() => { gradeCurrent('batsu', { q: r.q, forceCurrent: true }); setLaterTick((n) => n + 1); }}>✕</button>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              );
+            })()}
             {/* 派生#41：直前が「◯分だけ」のミニセッションだった時だけ出す */}
             {quickMinuteActiveRef.current != null && (
               <button

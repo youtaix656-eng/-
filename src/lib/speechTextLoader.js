@@ -8,7 +8,7 @@ let promise = null;
 export function loadSpeechText() {
   if (!promise) {
     promise = Promise.all([import('./speechText.js'), import('../data/speechReadings.js')])
-      .then(([st, sr]) => ({ ...st, SPEECH_READINGS: sr.SPEECH_READINGS, HOMOPHONE_KANJI_HINTS: sr.HOMOPHONE_KANJI_HINTS }));
+      .then(([st, sr]) => ({ ...st, SPEECH_READINGS: sr.SPEECH_READINGS, HOMOPHONE_KANJI_HINTS: sr.HOMOPHONE_KANJI_HINTS, TOYO_HOMOPHONE_NOTES: sr.TOYO_HOMOPHONE_NOTES || {} }));
   }
   return promise;
 }

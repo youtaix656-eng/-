@@ -100,7 +100,7 @@ export const weakIds = (weak) => Object.keys(weak);
 // 今日の記録（日付が変わったら作り直す）
 export function ensureDay(day, todayKey) {
   if (day && day.date === todayKey) return day;
-  return { date: todayKey, newIds: [], newListens: 0, reviewOnly: false };
+  return { date: todayKey, newIds: [], newTheme: '', newListens: 0, reviewOnly: false, listenSec: 0 };
 }
 
 // 時間帯ごとのおすすめ（元の資料の表を、時刻だけで当てはめた目安。勤務に合わせて選べばよい）
@@ -108,8 +108,58 @@ export function slotForHour(h) {
   if (h >= 4 && h < 8) return { slot: 'weak', label: '起きてすぐは苦手から' };
   if (h >= 8 && h < 11) return { slot: 'review', label: '移動中は復習の分（翌日〜3日後）' };
   if (h >= 11 && h < 17) return { slot: 'new', label: '昼〜午後は新しい問題（1回目・2回目）' };
-  if (h >= 17 && h < 21) return { slot: 'review', label: '帰りは復習の分（1週間〜1か月後）' };
+  if (h >= 17 && h < 19) return { slot: 'review', label: '帰りは復習の分（1週間〜1か月後）' };
+  if (h >= 19 && h < 22) return { slot: 'known', label: '入浴・家事の間は何度も聞いた問題' };
   return { slot: 'new', label: '寝る前は新しい問題の3回目' };
+}
+
+// 起きた時刻から何時間たったかで決める（夜勤・交代勤務向け。時計の時刻ではなく自分の1日の流れで見る）
+export function slotForElapsed(hours) {
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h < 0) return null;
+  if (h < 1.5) return { slot: 'weak', label: '起きた直後は苦手から' };
+  if (h < 3) return { slot: 'review', label: '移動中は復習の分（翌日〜3日後）' };
+  if (h < 9) return { slot: 'new', label: '起きて数時間〜は新しい問題（1回目・2回目）' };
+  if (h < 11) return { slot: 'review', label: '帰りは復習の分（1週間〜1か月後）' };
+  if (h < 14) return { slot: 'known', label: '入浴・家事の間は何度も聞いた問題' };
+  return { slot: 'new', label: '寝る前は新しい問題の3回目' };
+}
+
+// 起きた時刻（"HH:MM"）から今までの時間。起きた時刻より前なら前日に起きたとみなす
+export function hoursSinceWake(wakeHHMM, now) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(wakeHHMM || ''));
+  if (!m) return null;
+  const d = new Date(now);
+  const wake = new Date(d.getFullYear(), d.getMonth(), d.getDate(), Number(m[1]), Number(m[2])).getTime();
+  const diff = now - wake;
+  return (diff >= 0 ? diff : diff + DAY_MS) / 3600000;
+}
+
+// 何度も聞いた問題（箱の3段目以上＝3日後より先まで進んだもの）。入浴・家事の間に流す枠
+export function knownIds(box) {
+  return Object.entries(box)
+    .filter(([, e]) => e && e.stage >= 3)
+    .sort((a, b) => (b[1].stage - a[1].stage) || ((a[1].at || 0) - (b[1].at || 0)))
+    .map(([id]) => id);
+}
+
+// 新しい問題の1トラック：1つのテーマ（出題基準のジャンル）から10問。科目が決まっていればその科目、
+// 無ければ preferSubjects の順で、まだ解いていない問題があるものを選ぶ
+export function pickNewTrack(questions, answeredIds, preferSubjects = [], n = TRACK_SIZE) {
+  const fresh = questions.filter((q) => !answeredIds.has(q.id));
+  const subjects = [...preferSubjects.filter(Boolean), ...new Set(fresh.map((q) => q.subject))];
+  for (const subject of subjects) {
+    const pool = fresh.filter((q) => q.subject === subject);
+    if (!pool.length) continue;
+    const genres = new Map();
+    pool.forEach((q) => { const g = q.genre || ''; if (!genres.has(g)) genres.set(g, []); genres.get(g).push(q); });
+    // いちばん多いジャンルではなく、収録順で最初のジャンル（教科書の順に近い）
+    const [genre, list] = [...genres.entries()][0];
+    const ids = list.slice(0, n).map((q) => q.id);
+    const theme = genre ? `${subject}・${genre.split('｜').pop()}` : subject;
+    return { ids, theme };
+  }
+  return { ids: [], theme: '' };
 }
 
 // まだ一度も解いていない問題から1トラック分を選ぶ（科目があればその科目から、収録順）
@@ -134,18 +184,49 @@ export function flagEarChoices(items, isFourChoice) {
   });
 }
 
-// 同じ論点を別の形式でもう一度：問題のあと3問おいて、同じ問題を穴埋めで出す
+// 同じ論点を別の形式でもう一度：問題のあと3問おいて同じ問題を穴埋めで、さらに3問おいて
+// 同じ過去問から作った別の形式（一問一答・○×）を1つ出す＝1つの論点を2〜3形式で聞く
 // （穴埋めにできる問題＝正解の語が解説に出てくる問題だけ。○×は穴埋めにならないので出さない）
-export function mixFormats(items, canCloze) {
+export function mixFormats(items, canCloze, siblingOf = () => null) {
   const out = [];
   const pending = [];
+  const inPlan = new Set(items.filter((it) => it && it.q).map((it) => it.q.id));
+  const push = (at, item) => { pending.push({ at, item }); pending.sort((a, b) => a.at - b.at); };
   items.forEach((it) => {
     out.push(it);
-    if (it && it.kind === 'question' && it.q && canCloze(it.q)) pending.push({ at: out.length + 3, item: { kind: 'cloze', q: it.q, mixed: true } });
+    if (it && it.kind === 'question' && it.q) {
+      if (canCloze(it.q)) push(out.length + 3, { kind: 'cloze', q: it.q, mixed: true });
+      const sib = siblingOf(it.q);
+      if (sib && !inPlan.has(sib.id)) { inPlan.add(sib.id); push(out.length + 6, { kind: 'question', q: sib, mixed: true }); }
+    }
     while (pending.length && pending[0].at <= out.length) out.push(pending.shift().item);
   });
   pending.forEach((p) => out.push(p.item));
   return out;
+}
+
+// 同じ過去問から作った問題の組（id の末尾の英字を除いたものが同じ。例：tk-x-1 と tk-x-1b）
+export const baseIdOf = (id) => String(id || '').replace(/^(.*\d)[a-z]+$/, '$1');
+
+// 全部の問題を、3〜4問あけてもう一度出す（同じ問題は1回まで）
+export function reappearAll(items, gap = 3) {
+  const out = [];
+  const pending = [];
+  items.forEach((it) => {
+    out.push(it);
+    if (it && it.kind === 'question' && it.q && !it.mixed) pending.push({ at: out.length + gap, item: { ...it, reappear: true, intro: undefined } });
+    while (pending.length && pending[0].at <= out.length) out.push(pending.shift().item);
+  });
+  pending.forEach((p) => out.push(p.item));
+  return out;
+}
+
+// 数字の読み方（「21日」→「にじゅういち」）。数字が無ければ空
+export function firstNumberReading(text, toKana) {
+  const m = /[0-9０-９]+/.exec(String(text || ''));
+  if (!m) return '';
+  const n = Number(m[0].replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)));
+  return Number.isFinite(n) ? toKana(n) : '';
 }
 
 // 1回の中で2周：1周目のあとに「2周目です」を挟み、問題だけをもう一度（2周目は速く・間を短く）

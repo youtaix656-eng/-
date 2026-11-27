@@ -243,8 +243,9 @@ async function playOne(item, signal) {
     }
     // 穴埋めの「ピー」：言葉で「ピー」と読まず、本物の短い音を鳴らす
     if (step.tone) {
-      beep(1, 740, 60);
-      await wait(450, signal);
+      // step.tone が数値ならその高さ（問題の前の合図など）、true なら穴埋めの「ピー」
+      beep(1, typeof step.tone === 'number' ? step.tone : 740, 60);
+      await wait(typeof step.tone === 'number' ? 350 : 450, signal);
     }
     if (step.wait) await wait(step.wait, signal);
     if (step.waitGap) {
