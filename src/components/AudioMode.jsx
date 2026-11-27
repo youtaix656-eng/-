@@ -26,6 +26,7 @@ import { roundKey, formatRound, isSameRound } from '../lib/round.js';
 import { beep, vibrate, bellRing } from '../lib/sound.js';
 import { startTicker } from '../lib/pomoTicker.js';
 import { isVoiceCommandSupported, parseVoiceCommand, listenOnce } from '../lib/voiceCommand.js';
+import { isNativeApp, nativeNotifyDone } from '../lib/nativeBridge.js';
 import { detectHeadphoneHint } from '../lib/headphones.js';
 import {
   loadAudioReviewLog, recordAudioReviewStart, recordAudioReviewFinish,
@@ -356,6 +357,7 @@ export default function AudioMode({
   const [notifyOn, setNotifyOn] = useState(false);
   const toggleNotify = async () => {
     if (!notifyOn) {
+      if (isNativeApp()) { setNotifyOn(true); return; } // アプリ版は端末の通知で知らせる（許可は再生を始めた時に求めている）
       if (typeof Notification === 'undefined') { onToast?.('この端末・ブラウザは通知に対応していません'); return; }
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') { onToast?.('通知が許可されませんでした'); return; }
@@ -526,7 +528,18 @@ export default function AudioMode({
   // （voiceControlOn・voiceAnswerOnの両方の聞き取りで共用）。
   const noSpeechCountRef = useRef(0);
   const noSpeechHintShownRef = useRef(false);
-  const noteNoSpeech = () => {
+  const micDeniedShownRef = useRef(false);
+  const noteNoSpeech = (e) => {
+    // マイクが許可されていない・この端末で音声認識が使えない時は、何度も聞き取りに失敗し続けるだけに
+    // ならないよう理由を1回だけ知らせる（アプリ版で初めて使う時に出やすい）
+    const code = e?.error || '';
+    if ((code === 'not-allowed' || code === 'service-not-allowed' || code === 'not-supported') && !micDeniedShownRef.current) {
+      micDeniedShownRef.current = true;
+      onToast?.(code === 'not-supported'
+        ? '🎙️ この端末では音声認識を使えません'
+        : '🎙️ マイクが許可されていません。端末の設定 → アプリ → 鍼灸国試対策 → 権限 から許可してください');
+      return;
+    }
     noSpeechCountRef.current += 1;
     if (noSpeechCountRef.current >= 3 && !noSpeechHintShownRef.current) {
       noSpeechHintShownRef.current = true;
@@ -2665,7 +2678,7 @@ export default function AudioMode({
         // 新しい読み直しの仕組みは作らずそのまま再利用する。
         else if (cmd.type === 'nav' && cmd.kind === 'replay') { skip(0); onToast?.('🔁 もう一度読み上げます'); }
       },
-      onError: () => noteNoSpeech(),
+      onError: (e) => noteNoSpeech(e),
     });
     return () => handle?.stop?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2743,9 +2756,9 @@ export default function AudioMode({
           }
           finishTurn();
         },
-        onError: () => {
+        onError: (e) => {
           if (stopped) return;
-          noteNoSpeech();
+          noteNoSpeech(e);
           setVoiceAnswerHeard({ questionId: q.id, heard: '', matched: false });
           finishTurn();
         },
@@ -2880,7 +2893,9 @@ export default function AudioMode({
     speak(msg, { rate, pitch: settings.speechPitch || 1, voice: selectedVoice() }).catch(() => {});
     recordAudioReviewFinish({ target: batchTarget, subject: subj, genre: gen, round: rnd, n, graded: gradedN, wrong: wrongN }).then(setAudioLog);
     // バックグラウンド時のローカル通知（既定オフのオプトイン。タブが生きている間だけ）。
-    if (notifyOn && typeof document !== 'undefined' && document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    if (notifyOn && typeof document !== 'undefined' && document.hidden && isNativeApp()) {
+      nativeNotifyDone({ title: '音声学習', body: `${n}問、終わりました。${accuracyPct != null ? `正答率約${accuracyPct}%` : ''}` });
+    } else if (notifyOn && typeof document !== 'undefined' && document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try { new Notification('音声学習', { body: `${n}問、終わりました。${accuracyPct != null ? `正答率約${accuracyPct}%` : ''}` }); } catch (e) { /* noop */ }
     }
     if (autoRequeueWrongOn && wrongN > 0 && !requeuedRef.current && source === 'review') {
@@ -5606,7 +5621,9 @@ export default function AudioMode({
             on={notifyOn}
             onToggle={toggleNotify}
             title="📣 タブを離れていても、束が終わったら通知で知らせる"
-            desc="この端末がこのタブを閉じずバックグラウンドにある間だけ通知します。アプリを閉じている時や画面OFF時は届きません（ブラウザの仕様）。既定オフで、ONにする時だけ通知の許可を求めます。"
+            desc={isNativeApp()
+              ? 'アプリ版：裏に回っている・画面を消している間に聞き終えたら、端末の通知で知らせます。'
+              : 'この端末がこのタブを閉じずバックグラウンドにある間だけ通知します。アプリを閉じている時や画面OFF時は届きません（ブラウザの仕様）。既定オフで、ONにする時だけ通知の許可を求めます。'}
           />
           <label className="autokw-row" style={{ marginTop: 6 }}>
             <input
@@ -5620,11 +5637,11 @@ export default function AudioMode({
             on={voiceControlOn}
             onToggle={() => setVoiceControlOn((v) => !v)}
             title="🎙️ 声で自己採点・操作する（○/△/✕・次へ/前へ/止めて/全部できた/◯問目へ/詳細設定を開いて）"
-            desc="正解・解説を読み終えたタイミングで一度だけ聞き取ります。「全部できた」で残りをまとめて○に、「53問目へ」で直接その番号へ、「詳細設定を開いて」で詳細設定を開けます。この端末のブラウザの音声認識機能を使うため、認識のために音声データが音声認識サーバーへ送られる場合があります（端末内保存方針の明示的な例外）。スピーカー再生中はマイクに読み上げ自体が混ざり誤認識することがあるため、イヤホン使用がおすすめです。"
+            desc="正解・解説を読み終えたタイミングで一度だけ聞き取ります。「全部できた」で残りをまとめて○に、「53問目へ」で直接その番号へ、「詳細設定を開いて」で詳細設定を開けます。この端末の音声認識機能（アプリ版は Android の音声認識、初めて使う時にマイクの許可を求めます）を使うため、認識のために音声データが音声認識サーバーへ送られる場合があります（端末内保存方針の明示的な例外）。スピーカー再生中はマイクに読み上げ自体が混ざり誤認識することがあるため、イヤホン使用がおすすめです。"
             disabled={!isVoiceCommandSupported()}
           />
           {!isVoiceCommandSupported() && (
-            <p className="inline-note">この端末・ブラウザは音声認識（SpeechRecognition）に対応していません。</p>
+            <p className="inline-note">この端末・ブラウザは音声認識に対応していません。</p>
           )}
           {/* 盲目の受験生からの改善提案#4：聞き取り開始時は専用の合図音（高い二連音）が
               beepOnの設定に関わらず鳴るようになったため、案内文を更新した。 */}

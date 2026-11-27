@@ -67,6 +67,7 @@ const liveUtterances = new Set();
 
 // 長い文を句点・読点で区切る（Chrome は1つの発話が長いと15秒前後で黙って打ち切ることがある）。
 export const SPEECH_CHUNK_MAX = 120;
+export const NATIVE_CHUNK_MAX = 600;
 export function splitForSpeech(text, max = SPEECH_CHUNK_MAX) {
   const t = String(text || '').trim();
   if (!t) return [];
@@ -120,9 +121,16 @@ function speakOneNative(p, text, { rate, pitch, volume, signal }) {
       if (signal.aborted) return onAbort();
       signal.addEventListener('abort', onAbort);
     }
+    // 見張り：端末の読み上げが終わりの知らせを返さないまま止まった時、黙って止まり続けない
+    const expectMs = (text.length * 300) / Math.max(0.3, rate || 1) + 15000;
+    const watch = setTimeout(() => {
+      if (done) return;
+      try { p.stop({}); } catch (e) { /* noop */ }
+      finish(resolve);
+    }, expectMs * 2);
     Promise.resolve(p.speak({ text, rate, pitch, volume: Math.max(0, Math.min(1, volume)) }))
-      .then((r) => finish(resolve, r?.canceled ? 'canceled' : undefined))
-      .catch((e) => finish(reject, new Error(e?.message || '読み上げに失敗しました')));
+      .then((r) => { clearTimeout(watch); finish(resolve, r?.canceled ? 'canceled' : undefined); })
+      .catch((e) => { clearTimeout(watch); finish(reject, new Error(e?.message || '読み上げに失敗しました')); });
   });
 }
 
@@ -193,7 +201,8 @@ function speakOne(text, { rate, pitch, volume, voice, signal }) {
 export async function speak(text, { rate = 1, pitch = 1, volume = 1, voice = null, signal } = {}) {
   if (!isSpeechSupported()) throw new Error('speechSynthesis 未対応');
   if (!text || !text.trim()) return;
-  for (const chunk of splitForSpeech(text)) {
+  // 端末の読み上げ（アプリ版）は長い文でも途中で打ち切らないので、大きめに区切る（区切りの間の小さな途切れを減らす）
+  for (const chunk of splitForSpeech(text, nativeTts() ? NATIVE_CHUNK_MAX : SPEECH_CHUNK_MAX)) {
     if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
     const r = await speakOne(chunk, { rate, pitch, volume, voice, signal });
     // 止められた（cancelSpeech・別の読み上げに割り込まれた）時は、残りの区切りを読まない。
@@ -278,8 +287,49 @@ export function cancelClonedSpeech() {
   }
 }
 
-// 中断可能な待機（音声の「間」に使用）
+// 中断可能な待機（音声の「間」に使用）。
+// アプリ版は端末の読み上げの列の中で無音を取る（画面を消している間に WebView の setTimeout が
+// 間引かれて、間が何十秒にも延びるのを防ぐ）。途中で読み上げが止められた（ポモドーロの
+// カウントダウン等）時は、残りの時間だけふつうに待つ。
 export function wait(ms, signal) {
+  const p = nativeTts();
+  if (p && typeof p.silence === 'function' && ms >= 200) return waitNative(p, ms, signal);
+  return waitTimer(ms, signal);
+}
+
+function waitNative(p, ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) return reject(new DOMException('aborted', 'AbortError'));
+    const start = Date.now();
+    let done = false;
+    const onAbort = () => {
+      if (done) return;
+      done = true;
+      try { p.stop({}); } catch (e) { /* noop */ }
+      reject(new DOMException('aborted', 'AbortError'));
+    };
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    const fallback = () => {
+      if (done) return;
+      done = true;
+      if (signal) signal.removeEventListener('abort', onAbort);
+      const left = ms - (Date.now() - start);
+      if (left <= 50) resolve();
+      else waitTimer(left, signal).then(resolve, reject);
+    };
+    Promise.resolve(p.silence({ ms }))
+      .then((r) => {
+        if (r?.canceled) return fallback();
+        if (done) return;
+        done = true;
+        if (signal) signal.removeEventListener('abort', onAbort);
+        resolve();
+      })
+      .catch(fallback);
+  });
+}
+
+function waitTimer(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal && signal.aborted) return reject(new DOMException('aborted', 'AbortError'));
     const t = setTimeout(resolve, ms);

@@ -5,7 +5,7 @@
 // （腰痛ナビ・腸の音声メモ入力と同じ扱い）。
 
 export function isVoiceCommandSupported() {
-  return typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  return !!nativeStt() || (typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition));
 }
 
 const GRADE_WORDS = {
@@ -91,6 +91,8 @@ export function parseVoiceCommand(text, customWords = []) {
 // 戻り値のstop()で途中でも止められる（問題が切り替わった時のクリーンアップ用）。
 export function listenOnce({ onResult, onError, lang = 'ja-JP' } = {}) {
   if (!isVoiceCommandSupported()) return null;
+  const native = nativeStt();
+  if (native) return listenOnceNative(native, { onResult, onError, lang });
   const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec;
   try {
@@ -128,4 +130,42 @@ export function listenOnce({ onResult, onError, lang = 'ja-JP' } = {}) {
     return null;
   }
   return { stop: () => { try { rec.stop(); } catch (e) { /* noop */ } } };
+}
+
+// アプリ版（Android の WebView）には SpeechRecognition が無いので、Android 本体の音声認識
+// （android/ の NativeSttPlugin.kt）で聞き取る。@capacitor/core は import しない。
+function nativeStt() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const cap = window.Capacitor;
+    if (!cap || typeof cap.isNativePlatform !== 'function' || !cap.isNativePlatform()) return null;
+    return cap.Plugins?.NativeStt || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function listenOnceNative(p, { onResult, onError, lang }) {
+  let done = false;
+  Promise.resolve(p.listen({ lang }))
+    .then((r) => {
+      if (done) return;
+      done = true;
+      const text = r?.text || '';
+      if (text) onResult?.(text);
+      else onError?.({ error: 'no-speech' });
+    })
+    .catch((e) => {
+      if (done) return;
+      done = true;
+      // ブラウザの SpeechRecognitionErrorEvent と同じ形（error に理由）で渡す
+      onError?.({ error: e?.code || 'error', message: e?.message || '' });
+    });
+  return {
+    stop: () => {
+      if (done) return;
+      done = true;
+      try { p.stop({}); } catch (e) { /* noop */ }
+    },
+  };
 }

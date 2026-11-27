@@ -93,8 +93,15 @@ class BackgroundAudioPlugin : Plugin() {
         intent.action = BackgroundAudioService.ACTION_START
         intent.putExtra(BackgroundAudioService.EXTRA_TITLE, title)
         intent.putExtra(BackgroundAudioService.EXTRA_BODY, body)
-        ContextCompat.startForegroundService(context, intent)
-        call.resolve()
+        try {
+            if (BackgroundAudioService.running) context.startService(intent)
+            else ContextCompat.startForegroundService(context, intent)
+            call.resolve()
+        } catch (e: Exception) {
+            // Android 12 以上は、裏に回っている間にフォアグラウンドサービスを新しく始められない
+            // （例外で落とさず、知らせるだけにする）
+            call.reject("裏に回っている間は再生の表示を始められませんでした")
+        }
     }
 
     @PluginMethod
@@ -107,15 +114,60 @@ class BackgroundAudioPlugin : Plugin() {
         intent.putExtra(BackgroundAudioService.EXTRA_TITLE, title)
         intent.putExtra(BackgroundAudioService.EXTRA_BODY, body)
         intent.putExtra(BackgroundAudioService.EXTRA_PLAYING, playing)
-        ContextCompat.startForegroundService(context, intent)
+        // 動いていない時は起こさない（見出しの更新のためにサービスを始めない）
+        if (BackgroundAudioService.running) {
+            try { context.startService(intent) } catch (e: Exception) { }
+        }
         call.resolve()
+    }
+
+    // 束を聞き終えた等を、ふつうの通知で1回知らせる（WebView には Notification API が無いため）
+    @PluginMethod
+    fun notifyDone(call: PluginCall) {
+        val title = call.getString("title") ?: "音声学習"
+        val body = call.getString("body") ?: ""
+        try {
+            val nm = context.getSystemService(android.app.NotificationManager::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                nm.getNotificationChannel(DONE_CHANNEL) == null) {
+                nm.createNotificationChannel(android.app.NotificationChannel(
+                    DONE_CHANNEL, "音声学習のお知らせ", android.app.NotificationManager.IMPORTANCE_DEFAULT))
+            }
+            val open = Intent(context, MainActivity::class.java)
+            open.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            val pflags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            else android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            val n = androidx.core.app.NotificationCompat.Builder(context, DONE_CHANNEL)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setSmallIcon(R.drawable.ic_stat_play)
+                .setAutoCancel(true)
+                .setContentIntent(android.app.PendingIntent.getActivity(context, 11, open, pflags))
+                .build()
+            nm.notify(4202, n)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("通知を出せませんでした")
+        }
+    }
+
+    companion object {
+        const val DONE_CHANNEL = "shinkyu_audio_done"
     }
 
     @PluginMethod
     fun stop(call: PluginCall) {
         val intent = Intent(context, BackgroundAudioService::class.java)
         intent.action = BackgroundAudioService.ACTION_STOP
-        ContextCompat.startForegroundService(context, intent)
+        // 動いていないサービスを止めるために起こさない（裏で起こすと Android 12 以上は例外になる）
+        if (BackgroundAudioService.running) {
+            try {
+                context.startService(intent)
+            } catch (e: Exception) {
+                try { context.stopService(Intent(context, BackgroundAudioService::class.java)) } catch (e2: Exception) { }
+            }
+        }
         call.resolve()
     }
 }

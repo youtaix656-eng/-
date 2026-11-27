@@ -61,8 +61,12 @@ class BackgroundAudioService : Service() {
         ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(title, body), type)
 
         when (action) {
-            ACTION_START -> acquireWakeLock()
+            ACTION_START -> {
+                running = true
+                acquireWakeLock()
+            }
             ACTION_STOP -> {
+                running = false
                 releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -76,6 +80,7 @@ class BackgroundAudioService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         releaseWakeLock()
         super.onDestroy()
     }
@@ -124,6 +129,18 @@ class BackgroundAudioService : Service() {
         return PendingIntent.getBroadcast(this, code, intent, flags)
     }
 
+    // 通知そのものを押したらアプリを開く（以前は何も起きなかった）
+    private fun openAppIntent(): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        return PendingIntent.getActivity(this, 10, intent, flags)
+    }
+
     private fun buildNotification(title: String, body: String): Notification {
         val playPauseIcon = if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         val playPauseLabel = if (playing) "一時停止" else "再生"
@@ -135,6 +152,7 @@ class BackgroundAudioService : Service() {
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setContentIntent(openAppIntent())
             .addAction(android.R.drawable.ic_media_previous, "前へ", controlPendingIntent("prev", 1))
             .addAction(playPauseIcon, playPauseLabel, controlPendingIntent("playPause", 2))
             .addAction(android.R.drawable.ic_media_next, "次へ", controlPendingIntent("next", 3))
@@ -142,6 +160,11 @@ class BackgroundAudioService : Service() {
     }
 
     companion object {
+        // サービスが動いているか（MainActivity が裏に回った時に WebView を止めないかの判断、
+        // プラグインが「動いていない時は起こさない」判断に使う）
+        @Volatile
+        @JvmStatic
+        var running = false
         const val CHANNEL_ID = "shinkyu_background_audio"
         const val NOTIF_ID = 4201
         const val ACTION_START = "com.youtaix656.shinkyu.action.START"

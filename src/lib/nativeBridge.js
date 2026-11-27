@@ -65,6 +65,18 @@ export function nativeAudioStop() {
   }
 }
 
+// 束を聞き終えた等を、ふつうの通知で1回知らせる（アプリ版だけ。WebView には Notification API が無い）。
+export function nativeNotifyDone({ title, body } = {}) {
+  const p = plugin();
+  if (!p || typeof p.notifyDone !== 'function') return false;
+  try {
+    Promise.resolve(p.notifyDone({ title: title || '音声学習', body: body || '' })).catch(() => {});
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 // 通知のボタン（前へ/再生・一時停止/次へ）が押された時にネイティブ側（Androidの
 // BackgroundAudioPlugin.kt）から送られてくるイベントを受け取る。
 // handler は ({action}) => void（actionは 'playPause' | 'next' | 'prev'）。

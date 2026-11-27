@@ -1,5 +1,9 @@
 package com.youtaix656.shinkyu
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -39,6 +43,17 @@ class NativeTtsPlugin : Plugin() {
                     initError = "日本語の読み上げデータがありません。端末の設定（ユーザー補助 → テキスト読み上げ）で日本語の音声データを入れてください。"
                 } else {
                     ready = true
+                    // 「メディアの音量」で鳴らす（着信音・通知の音量にならないように）
+                    try {
+                        tts?.setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                    } catch (e: Exception) {
+                        // noop
+                    }
                 }
             } else {
                 initError = "端末の読み上げエンジンを使えませんでした。端末の設定（ユーザー補助 → テキスト読み上げ）を確認してください。"
@@ -109,6 +124,52 @@ class NativeTtsPlugin : Plugin() {
                 call.reject("読み上げを始められませんでした")
             }
         }
+    }
+
+    // 無音の間（問題と答えの間など）も読み上げの列の中で取る。WebView の setTimeout は
+    // 画面を消している間に間引かれるが、ここは端末の読み上げが数えるので遅れない。
+    @PluginMethod
+    fun silence(call: PluginCall) {
+        val ms = (call.getInt("ms") ?: 0).coerceIn(0, 120000)
+        if (ms <= 0) {
+            call.resolve(JSObject().put("canceled", false))
+            return
+        }
+        whenInit {
+            val engine = tts
+            if (!ready || engine == null) {
+                call.reject(initError ?: "読み上げを使えません")
+                return@whenInit
+            }
+            val id = "s" + (++seq)
+            pending[id] = call
+            val r = engine.playSilentUtterance(ms.toLong(), TextToSpeech.QUEUE_ADD, id)
+            if (r != TextToSpeech.SUCCESS) {
+                pending.remove(id)
+                call.reject("無音を入れられませんでした")
+            }
+        }
+    }
+
+    // イヤホン（有線・Bluetooth・USB）がつながっているか。WebView では機器の名前が取れないため。
+    @PluginMethod
+    fun headphones(call: PluginCall) {
+        var found = false
+        try {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val types = setOf(
+                AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_USB_HEADSET,
+                26 // TYPE_BLE_HEADSET（Android 12 以上）
+            )
+            found = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in types }
+        } catch (e: Exception) {
+            // noop
+        }
+        call.resolve(JSObject().put("connected", found))
     }
 
     @PluginMethod

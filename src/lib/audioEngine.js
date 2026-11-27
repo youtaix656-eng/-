@@ -9,8 +9,8 @@
 //    Web Speech API が停止する（アプリ内での画面遷移のみ継続可能）。
 
 import { useSyncExternalStore } from 'react';
-import { speak, cancelSpeech, wait, speakCloned, cancelClonedSpeech } from './speech.js';
-import { nativeAudioStart, nativeAudioUpdate, nativeAudioStop, onNativeAudioControl } from './nativeBridge.js';
+import { speak, cancelSpeech, wait, speakCloned, cancelClonedSpeech, nativeTts } from './speech.js';
+import { nativeAudioStart, nativeAudioUpdate, nativeAudioStop, onNativeAudioControl, isNativeApp } from './nativeBridge.js';
 import { setAudioPlaying } from './runtimeFlags.js';
 import { beep } from './sound.js';
 
@@ -139,14 +139,32 @@ function startKeepAlive() {
   setupMediaSession();
   initNativeControl();
   const { title, artist } = mediaLabels(state.display);
+  clearNativeHold();
   nativeAudioStart({ title, body: artist });
+}
+// アプリ版：一時停止しただけで通知（＝フォアグラウンドサービス）を消すと、通知・ロック画面から
+// 再開できず、2時間コースの休憩明けにも裏から再開できなかった（Android 12 以上は裏に回っている間に
+// 新しく始められない）。一時停止の間は「一時停止中」の通知のまま10分残し、聞き終えた・閉じた時は
+// すぐ消す。※アプリ内部の目安で、ブラウザ版では何もしない。
+const NATIVE_PAUSE_HOLD_MS = 10 * 60 * 1000;
+let nativeHoldTimer = null;
+function clearNativeHold() {
+  if (nativeHoldTimer) { clearTimeout(nativeHoldTimer); nativeHoldTimer = null; }
+}
+function endNativeService() {
+  clearNativeHold();
+  nativeAudioStop();
 }
 function stopKeepAlive() {
   try { silentAudio?.pause(); } catch (e) { /* noop */ }
   try {
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   } catch (e) { /* noop */ }
-  nativeAudioStop();
+  if (!isNativeApp()) { nativeAudioStop(); return; }
+  const { title, artist } = mediaLabels(state.display);
+  nativeAudioUpdate({ title, body: artist ? `一時停止中・${artist}` : '一時停止中', playing: false });
+  clearNativeHold();
+  nativeHoldTimer = setTimeout(() => { nativeHoldTimer = null; if (!running) nativeAudioStop(); }, NATIVE_PAUSE_HOLD_MS);
 }
 
 function emit(patch) {
@@ -327,6 +345,7 @@ async function runFrom(start) {
     }
     if (!settings.loop && i >= plan.length && running) {
       stop();
+      endNativeService();
       emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true, finishedBy: 'end' });
     }
   } catch (e) {
@@ -374,6 +393,7 @@ export function stop() {
 // ✕で閉じると聞いていた位置まで消えていた。位置はそのまま残し、「再生中の束」だけを終える。
 export function close() {
   stop();
+  endNativeService();
   emit({ started: false, finished: false });
 }
 
@@ -417,6 +437,7 @@ export function resetToStart() {
 // （新規#9）。自然に最後まで読み終えた時と同じ emit にして、終了検知の効果をそのまま使う。
 export function finishNow() {
   stop();
+  endNativeService();
   emit({ index: 0, phase: 'question', display: plan[0]?.display || null, started: false, finished: true, finishedBy: 'now' });
 }
 
@@ -494,7 +515,9 @@ function initVisibility() {
     // 「再生中のまま」に見せかけない**——`stop()`で状態を正直に「一時停止」へ戻し、
     // 今の位置（`state.index`）はそのまま保つ。実際に音を鳴らすのは、
     // ユーザーが▶を押す（＝正真正銘のユーザー操作）時のことにする。
-    if (running && state.playing && hiddenAt && Date.now() - hiddenAt > 1200) {
+    // アプリ版は端末の読み上げ（裏でも止まらない）で読んでいるので止めない。止めると、画面を
+    // つけるたびに聞いていた音声が一時停止になってしまう。
+    if (running && state.playing && hiddenAt && Date.now() - hiddenAt > 1200 && !nativeTts()) {
       recoverFromBackground();
     }
     hiddenAt = 0;

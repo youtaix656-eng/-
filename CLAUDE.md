@@ -6374,6 +6374,37 @@ QR・クラウド自動同期・ファイル復元を読み直して動かし、
 - 検証：`npm test` 2757件・build・validate 通過。Playwright で `window.Capacitor` を差し替え、読み上げがネイティブ側へ渡る・
   日本語が読めない時に理由が出る、を確認（エラー0件）。**実機（Kotlin のビルドと実際の声）は GitHub Actions のビルドが通るところまで。**
 
+## アプリ版（Android の WebView）で音声学習×連結学習を使えるようにした14件（2026-11-27追加）
+ユーザー指示「Android版の WebView で音声学習×連結学習ができるようにしたい。改善最大30こ」。WebView に無い・効かないものを
+洗い出して実際に直した14件（水増ししない）。**どれも実機では未確認**（GitHub Actions のビルドが通るところまで）。
+1. **声で自己採点・声で解答・読み方の声入力が使えなかった**（WebView に SpeechRecognition が無い）。
+   `android/.../NativeSttPlugin.kt`（SpeechRecognizer で1回聞き取る。マイクの許可は初めて使う時に求める）＋
+   `src/lib/voiceCommand.js` の `listenOnceNative`（エラーはブラウザと同じ `{error}` の形で返す）。
+2. マイクの許可（RECORD_AUDIO・MODIFY_AUDIO_SETTINGS）が無く、録音（自分の声で言い直す）も使えなかった。
+   音声認識サービスを見つける `<queries>`（RecognitionService）も足した。
+3. マイクが許可されていない・音声認識が無い時は、聞き取りに失敗し続けるだけにせず理由を1回知らせる（`noteNoSpeech(e)`）。
+4. **問題と答えの間などの「間」を端末の読み上げの列の中で取る**（`NativeTts.silence`＝playSilentUtterance。
+   `speech.js` の `wait` がアプリ版ならこちら）。画面を消している間に WebView の setTimeout が間引かれて間が延びるのを防ぐ。
+   途中で読み上げが止められたら残りの時間だけふつうに待つ。
+5. **画面をつけて戻るたびに再生が一時停止になっていた**（ブラウザ向けの「裏に回ったら止める」処理）。
+   アプリ版（端末の読み上げ）では止めない（`audioEngine.js` の visibilitychange）。
+6. 再生中に裏へ回った時、WebView の JS を止めない（`MainActivity.onPause` でサービスが動いている間は `onResume`/`resumeTimers`）。
+7. **戻るボタンでアプリが閉じ、再生が止まっていた**（画面の切り替えを履歴に積まないため）。戻れない時は裏に回すだけにする。
+8. 音量ボタンが着信音の音量を変えていた（`setVolumeControlStream(STREAM_MUSIC)`）。読み上げも「メディアの音量」で鳴らす
+   （`setAudioAttributes(USAGE_MEDIA)`）。
+9. ボタンを押さずに鳴らす音（休憩明けの再開・合図音）が止められないよう `setMediaPlaybackRequiresUserGesture(false)`。
+10. **一時停止すると通知ごと消え、通知・ロック画面から再開できなかった**。2時間コースの休憩明けも、裏に回っている間は
+   Android 12 以上がサービスを新しく始められず再開できなかった。一時停止の間は「一時停止中」の通知を10分残す
+   （`NATIVE_PAUSE_HOLD_MS`、アプリ内部の目安）。聞き終えた・閉じた時はすぐ消す。
+11. 通知の見出しの更新・止める処理が、動いていないサービスを `startForegroundService` で起こしていた
+   （裏では例外になる）。動いている時だけ `startService`（`BackgroundAudioService.running`）。
+12. 通知を押しても何も起きなかった（アプリを開く）。
+13. イヤホンの確認：WebView では機器の名前が取れずいつも「分からない」だった（`NativeTts.headphones`＝AudioManager）。
+14. 「聞き終えたら通知で知らせる」は WebView に Notification が無く使えなかった（`BackgroundAudio.notifyDone`）。
+   あわせて端末の読み上げの見張り（終わりの知らせが来ない時に止まり続けない）・区切りを600字に（区切りの途切れを減らす）。
+- 検証：`npm test` 2757件・build・validate・サイズ（827KB/832KB）通過。Playwright で `window.Capacitor` を差し替え、
+  無音が端末側で取られる・裏から戻っても再生が続く・音声認識の「対応していません」が出ない、を確認（エラー0件）。
+
 ## ミス防止ルール（2026-08-17 追加・失敗の再発防止）
 - **新機能を「無い」と判断する前に必ず調査する** — 上の機能一覧に加え、
   `grep -rln "<関連語>" src/components/*.jsx src/lib/*.js` で横断検索してから回答・実装する。
