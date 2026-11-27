@@ -12,6 +12,7 @@ import { useSyncExternalStore } from 'react';
 import { speak, cancelSpeech, wait, speakCloned, cancelClonedSpeech } from './speech.js';
 import { nativeAudioStart, nativeAudioUpdate, nativeAudioStop, onNativeAudioControl } from './nativeBridge.js';
 import { setAudioPlaying } from './runtimeFlags.js';
+import { beep } from './sound.js';
 
 const listeners = new Set();
 let state = {
@@ -195,6 +196,7 @@ export function load(newPlan, { sig = null, startIndex = 0 } = {}) {
   }
   stop();
   plan = newPlan || [];
+  requeued = new Set();
   const i = plan.length ? Math.min(Math.max(0, startIndex), plan.length - 1) : 0;
   emit({
     planSig: sig,
@@ -225,18 +227,24 @@ async function playOne(item, signal) {
           } catch (e) {
             if (e?.name === 'AbortError') throw e;
             // クローン音声が使えない時は、端末の声で読む
-            await speak(step.say, { rate: step.rate ?? settings.rate, pitch: settings.pitch, volume: settings.volume, voice: settings.voice, signal });
+            await speak(step.say, { rate: step.rate ?? settings.rate, pitch: step.pitch ?? settings.pitch, volume: settings.volume, voice: step.voice ?? settings.voice, signal });
           }
         } else {
           // step.rate：まだ解いていない新しい問題は等速以下で読む（#27）等、1ステップだけ
           // 速度を上書きしたい時に使う（省略時は設定どおりの速度）。
-          await speak(step.say, { rate: step.rate ?? settings.rate, pitch: settings.pitch, volume: settings.volume, voice: settings.voice, signal });
+          // step.voice／step.pitch：答えだけ別の声（声B）で読む時に使う（録音学習の型）
+          await speak(step.say, { rate: step.rate ?? settings.rate, pitch: step.pitch ?? settings.pitch, volume: settings.volume, voice: step.voice ?? settings.voice, signal });
         }
       } catch (e) {
         if (e?.name === 'AbortError') throw e;
         console.warn('読み上げを1つ飛ばしました', e);
         await wait(400, signal);
       }
+    }
+    // 穴埋めの「ピー」：言葉で「ピー」と読まず、本物の短い音を鳴らす
+    if (step.tone) {
+      beep(1, 740, 60);
+      await wait(450, signal);
     }
     if (step.wait) await wait(step.wait, signal);
     if (step.waitGap) {
@@ -268,6 +276,28 @@ async function playOne(item, signal) {
 }
 
 let completedSeq = 0;
+let requeued = new Set();
+
+// トラック内で再登場：△✕にした問題を、今の位置から ahead 問あとにもう一度入れる（1問につき1回まで）。
+// 画面側の束（AudioMode の plan）は変えず、エンジンが読んでいる束にだけ差し込む。
+export function requeue(qid, ahead = 3) {
+  if (!qid || requeued.has(qid) || !plan.length) return false;
+  let src = -1;
+  for (let i = Math.min(state.index, plan.length - 1); i >= 0; i -= 1) {
+    if (plan[i]?.display?.q?.id === qid && !plan[i].display.reappear) { src = i; break; }
+  }
+  if (src < 0) return false;
+  requeued.add(qid);
+  const it = plan[src];
+  const copy = {
+    steps: [{ phase: 'keyword', say: 'もう一度出ます。' }, { wait: 300 }, ...it.steps.filter((s) => s.phase !== 'keyword' || !s.say)],
+    display: { ...it.display, reappear: true, intro: undefined },
+  };
+  const at = Math.min(plan.length, state.index + ahead + 1);
+  plan = [...plan.slice(0, at), copy, ...plan.slice(at)];
+  emit({ total: plan.length });
+  return true;
+}
 
 async function runFrom(start) {
   const controller = new AbortController();
