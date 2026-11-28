@@ -66,7 +66,8 @@ class BackgroundAudioService : Service() {
         when (change) {
             // 電話・音声アシスタントなど。止めて、戻ったら続きから
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                if (playing) { pausedByFocus = true; sendControl("pause") }
+                // このアプリ自身の聞き取り（声で採点・声で解答）が音の出口を取った時は止めない
+                if (playing && !NativeSttPlugin.isListening()) { pausedByFocus = true; sendControl("pause") }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 if (pausedByFocus) { pausedByFocus = false; sendControl("play") }

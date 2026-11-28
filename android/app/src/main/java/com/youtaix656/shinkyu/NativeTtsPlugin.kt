@@ -106,6 +106,10 @@ class NativeTtsPlugin : Plugin() {
             if (restarting) return
             restarting = true
         }
+        // 落ちたエンジンに並んでいた分（無音の間など）は二度と終わりの知らせが来ない。
+        // 返さずに作り直すと、JS 側がその1つを待ったまま止まり続けていた。止められた扱いで返す
+        val ids = pending.keys.toList()
+        ids.forEach { pending.remove(it)?.resolve(JSObject().put("canceled", true)) }
         activity.runOnUiThread {
             try { tts?.shutdown() } catch (e: Exception) { }
             tts = null

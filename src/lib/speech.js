@@ -315,14 +315,20 @@ function waitNative(p, ms, signal) {
     if (signal && signal.aborted) return reject(new DOMException('aborted', 'AbortError'));
     const start = Date.now();
     let done = false;
+    let watch = null;
     const onAbort = () => {
+      clearTimeout(watch);
       if (done) return;
       done = true;
       try { p.stop({}); } catch (e) { /* noop */ }
       reject(new DOMException('aborted', 'AbortError'));
     };
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    // 見張り：端末の読み上げが無音の終わりを知らせないまま止まった時（エンジンが切られた等）、
+    // 間のあとも待ち続けて再生ごと止まらないよう、決めた時間＋5秒で先へ進む
+    watch = setTimeout(() => fallback(), ms + 5000);
     const fallback = () => {
+      clearTimeout(watch);
       if (done) return;
       done = true;
       if (signal) signal.removeEventListener('abort', onAbort);
@@ -333,6 +339,7 @@ function waitNative(p, ms, signal) {
     Promise.resolve(p.silence({ ms }))
       .then((r) => {
         if (r?.canceled) return fallback();
+        clearTimeout(watch);
         if (done) return;
         done = true;
         if (signal) signal.removeEventListener('abort', onAbort);

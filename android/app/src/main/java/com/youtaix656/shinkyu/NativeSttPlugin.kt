@@ -59,7 +59,21 @@ class NativeSttPlugin : Plugin() {
     private fun finishCurrent(fn: (PluginCall) -> Unit) {
         val c = current ?: return
         current = null
+        // 聞き取りが終わってすぐ来る知らせも、自分の聞き取りの分として扱う（少しだけ猶予）
+        listeningUntil = System.currentTimeMillis() + 1500
         fn(c)
+    }
+
+    companion object {
+        // 自分の聞き取り（声で採点・声で解答）をしている間か。音声認識は音の出口（オーディオフォーカス）を
+        // 一時的に取るので、BackgroundAudioService がそれを電話などと取り違えて再生を一時停止し、
+        // 聞き取りが終わると問題を最初から読み直していた。その間の一時的な取り上げは無視させる。
+        @JvmStatic
+        @Volatile
+        var listeningUntil: Long = 0
+
+        @JvmStatic
+        fun isListening(): Boolean = System.currentTimeMillis() < listeningUntil
     }
 
     private fun startListening(call: PluginCall) {
@@ -77,6 +91,7 @@ class NativeSttPlugin : Plugin() {
                 val rec = SpeechRecognizer.createSpeechRecognizer(context)
                 recognizer = rec
                 current = call
+                listeningUntil = System.currentTimeMillis() + 60000
                 rec.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {}
                     override fun onBeginningOfSpeech() {}
